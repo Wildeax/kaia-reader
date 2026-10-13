@@ -119,7 +119,7 @@ impl StickerState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::anchor::{Offset, TextQuote};
+    use crate::anchor::{Offset, Placement, TextQuote};
 
     const MD5: &str = "0123456789abcdef0123456789abcdef";
 
@@ -139,6 +139,7 @@ mod tests {
                     suffix: " b".into(),
                 },
                 offset: Offset { dx: 0.0, dy: -1.2 },
+                placement: Placement::Margin,
             },
             asset: None,
             text: Some("hello".into()),

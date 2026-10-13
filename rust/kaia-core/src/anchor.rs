@@ -13,6 +13,10 @@ pub enum Anchor {
         locator: String,
         quote: TextQuote,
         offset: Offset,
+        /// Where the image is drawn relative to the text. Missing in older
+        /// data, which reads as `margin`.
+        #[serde(default)]
+        placement: Placement,
     },
     /// PDF, DjVu, CBZ and other paged formats.
     Fixed {
@@ -44,6 +48,18 @@ impl Anchor {
             Anchor::Book {} => Ok(()),
         }
     }
+}
+
+/// Where a reflowable sticker is drawn.
+///
+/// `Margin` puts the image in the page margin beside the anchor line. `Inline`
+/// draws it over the text at the anchor line.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Placement {
+    #[default]
+    Margin,
+    Inline,
 }
 
 /// Text around a reflowable anchor, used to re-anchor after reflow.
@@ -112,6 +128,7 @@ mod tests {
             locator: "/body/p[1]".into(),
             quote: q,
             offset: Offset { dx, dy },
+            placement: Placement::Margin,
         }
     }
 
@@ -251,5 +268,36 @@ mod tests {
     #[test]
     fn rejects_unknown_type_tag() {
         assert!(serde_json::from_str::<Anchor>(r#"{"type":"pdf"}"#).is_err());
+    }
+    #[test]
+    fn placement_defaults_to_margin_for_old_json() {
+        let old = r#"{"type":"reflowable","locator":"/body/p[1]","quote":{"exact":"hi","prefix":"","suffix":""},"offset":{"dx":0.0,"dy":-1.1}}"#;
+        let anchor: Anchor = serde_json::from_str(old).unwrap();
+        match anchor {
+            Anchor::Reflowable { placement, .. } => assert_eq!(placement, Placement::Margin),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn placement_round_trips_both_values() {
+        for (placement, text) in [(Placement::Margin, "margin"), (Placement::Inline, "inline")] {
+            let anchor = Anchor::Reflowable {
+                locator: "/body/p[1]".into(),
+                quote: quote("hi", "a", "b"),
+                offset: Offset { dx: 0.0, dy: -1.1 },
+                placement,
+            };
+            let json = serde_json::to_string(&anchor).unwrap();
+            assert!(json.contains(&format!(r#""placement":"{text}""#)), "{json}");
+            let back: Anchor = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, anchor);
+        }
+    }
+
+    #[test]
+    fn placement_rejects_unknown_value() {
+        let bad = r#"{"type":"reflowable","locator":"/body/p[1]","quote":{"exact":"hi","prefix":"","suffix":""},"offset":{"dx":0.0,"dy":-1.1},"placement":"beside"}"#;
+        assert!(serde_json::from_str::<Anchor>(bad).is_err());
     }
 }

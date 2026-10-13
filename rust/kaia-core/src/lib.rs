@@ -12,7 +12,7 @@ mod error;
 pub mod quote;
 mod sticker;
 
-pub use anchor::{Anchor, Offset, TextQuote};
+pub use anchor::{Anchor, Offset, Placement, TextQuote};
 pub use asset::{is_sha256, AssetRef};
 pub use document::{is_partial_md5, DocumentId};
 pub use error::ValidationError;

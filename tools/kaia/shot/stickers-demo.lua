@@ -5,8 +5,9 @@
 --   tools/kaia/screenshot.sh /tmp/stickers-demo.png tools/kaia/shot/stickers-demo.lua 12
 --
 -- It opens 1342.epub (or the first EPUB) from the test library, moves to a page
--- of text, and adds two bundled stickers through the plugin API, each above a
--- line of text. It only runs through screenshot.sh, which sets KAIA_SHOT_*.
+-- of text, and adds three stickers through the plugin API: two in the margin
+-- beside their lines, and one drawn inline over its line.
+-- It only runs through screenshot.sh, which sets KAIA_SHOT_*.
 
 local Screen = require("device").screen
 local ReaderUI = require("apps/reader/readerui")
@@ -48,17 +49,29 @@ local function selectionAtRow(readerui, y, words)
     return word.pos0, pos1
 end
 
+-- Margin stickers are the default. The third sticker is moved over the text.
+local PLACEMENTS = { "margin", "margin", "inline" }
+local ASSETS = {
+    "resources/kaia/stickers/star.png",
+    "resources/kaia/stickers/heart.png",
+    "resources/kaia/stickers/check.png",
+}
+
 local function addDemoStickers(readerui)
     -- Render the page first, so the engine can report word boxes.
     readerui.view:paintTo(Screen.bb, 0, 0)
-    local rows = { Screen:getHeight() * 0.35, Screen:getHeight() * 0.62 }
-    local assets = { "resources/kaia/stickers/star.png", "resources/kaia/stickers/heart.png" }
+    local rows = { Screen:getHeight() * 0.30, Screen:getHeight() * 0.52, Screen:getHeight() * 0.74 }
     for i, row in ipairs(rows) do
         local pos0, pos1 = selectionAtRow(readerui, row, 4)
         if pos0 then
-            local record, msg = readerui.kaiastickers:addStickerAt(pos0, pos1, "", assets[i])
+            local record, msg = readerui.kaiastickers:addStickerAt(pos0, pos1, "", ASSETS[i])
             if not record then
                 io.stderr:write("kaia-shot stickers: ", tostring(msg), "\n")
+            elseif PLACEMENTS[i] == "inline" then
+                local sticker = readerui.kaiastickers:findSticker(record.id)
+                sticker.anchor.placement = "inline"
+                sticker.anchor.offset.dy = -1.1
+                readerui.kaiastickers:putSticker(sticker)
             end
         else
             io.stderr:write("kaia-shot stickers: no text on row ", tostring(row), "\n")
@@ -76,7 +89,9 @@ end
 ReaderUI:showReader(book)
 
 -- Opening is asynchronous. Wait for the reader, jump to a text page, let the
--- layout settle, then add the stickers.
+-- layout settle, then add the stickers. The default margins leave room for
+-- the margin stickers. Margin changes are not used here, because they move the
+-- view while the stickers are placed.
 local function waitForReader(tries)
     local readerui = ReaderUI.instance
     if readerui and readerui.kaiastickers and readerui.kaiastickers.store then

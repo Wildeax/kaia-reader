@@ -59,6 +59,7 @@ Reflowable {                      # EPUB, FB2, HTML and other CREngine formats
   locator:   string               # CREngine xpointer, stored verbatim, never parsed as CFI
   quote:     { exact: string, prefix: string, suffix: string }
   offset:    { dx: f32, dy: f32 } # placement relative to the anchor rect, in units of the rect height
+  placement: "margin" | "inline"  # default "margin"; see below
 }
 Fixed {                           # PDF, DjVu, CBZ and other paged formats
   page:      u32                  # 1-based page number
@@ -66,6 +67,8 @@ Fixed {                           # PDF, DjVu, CBZ and other paged formats
 }
 Book {}                           # attached to the book, shown on the book's notes view
 ```
+
+`placement` says where the reader draws the image. `margin` (the default) puts it in the page margin beside the anchor line. `inline` draws it over the text. The field lives inside `anchor_json`, so it needs no SQL migration. JSON without the field reads as `margin`. The store keeps the value as written and does not check it against the layout.
 
 Limits enforced by `kaia-core` validation: `exact` 1..=1000 chars, `prefix` and `suffix` 0..=64 chars each, all floats finite, fractions in [0, 1], `dx` and `dy` in [-50, 50].
 
@@ -149,7 +152,7 @@ CREATE TABLE library_cache (
   "app_version": "kaia-0.1.0",
   "documents": [ { "partial_md5": "...", "file_size": 123, "title": "..." } ],
   "assets":    [ { "sha256": "...", "mime": "image/png", "width": 64, "height": 64, "bytes": 2048, "source_name": "star.png", "license": "" } ],
-  "stickers":  [ { "id": "...", "doc": "...", "anchor": { "type": "reflowable", "locator": "...", "quote": { "exact": "...", "prefix": "...", "suffix": "..." }, "offset": { "dx": 0, "dy": -1.2 } }, "asset": "...", "text": null, "size": { "w": 0.1, "h": 0.07 }, "rotation": 0, "state": "attached", "created_at": 0, "updated_at": 0 } ]
+  "stickers":  [ { "id": "...", "doc": "...", "anchor": { "type": "reflowable", "locator": "...", "quote": { "exact": "...", "prefix": "...", "suffix": "..." }, "offset": { "dx": 0, "dy": -1.2 }, "placement": "margin" }, "asset": "...", "text": null, "size": { "w": 0.1, "h": 0.07 }, "rotation": 0, "state": "attached", "created_at": 0, "updated_at": 0 } ]
 }
 ```
 

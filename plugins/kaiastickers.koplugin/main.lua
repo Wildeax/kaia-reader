@@ -32,8 +32,10 @@ local util = require("util")
 local T = require("ffi/util").template
 local _ = require("gettext")
 
-local DEFAULT_WIDTH = 0.12 -- fraction of the screen width
-local DEFAULT_DY = -1.1 -- line heights, the sticker sits just above the line
+local DEFAULT_WIDTH = 0.07 -- fraction of the screen width
+-- Line heights from the anchor line. A margin sticker is centred on its line.
+-- An inline sticker sits just above the line.
+local DEFAULT_DY = { margin = 0, inline = -1.1 }
 local QUOTE_MAX_CHARS = 1000
 local CONTEXT_MAX_CHARS = 32
 local CONTEXT_WORDS = 4
@@ -518,7 +520,8 @@ function KaiaStickers:anchorFor(pos0, pos1)
         type = "reflowable",
         locator = pos0,
         quote = quote,
-        offset = { dx = 0, dy = DEFAULT_DY },
+        offset = { dx = 0, dy = DEFAULT_DY.margin },
+        placement = "margin",
     }
 end
 
@@ -622,9 +625,23 @@ function KaiaStickers:showStickerMenu(id)
         },
     }
     if sticker.anchor.type == "reflowable" then
+        local in_margin = sticker.anchor.placement ~= "inline"
         table.insert(buttons, {
             { text = _("Move up"), callback = function() edit(function(s) move(s, -MOVE_STEP) end) end },
             { text = _("Move down"), callback = function() edit(function(s) move(s, MOVE_STEP) end) end },
+        })
+        table.insert(buttons, {
+            {
+                text = in_margin and _("Place over text") or _("Place in margin"),
+                callback = function()
+                    edit(function(s)
+                        -- Each placement starts from its own default offset.
+                        local next_placement = s.anchor.placement == "inline" and "margin" or "inline"
+                        s.anchor.placement = next_placement
+                        s.anchor.offset.dy = DEFAULT_DY[next_placement]
+                    end)
+                end,
+            },
         })
     end
     table.insert(buttons, {

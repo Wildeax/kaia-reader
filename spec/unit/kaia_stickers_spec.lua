@@ -20,11 +20,12 @@ end
 
 describe("kaia stickers", function()
     local DataStorage, DocumentRegistry, ReaderUI, UIManager, Screen, Geom
-    local NotesData, RustLib, Store, util, lfs, ffi
+    local NotesData, RustLib, Store, util, lfs, ffi, Bidi
     local lib_path
     local base_dir
     local store_dir
     local original_default_dir
+    local original_mirrored
     local counter = 0
 
     local function setenv(name, value)
@@ -102,6 +103,15 @@ describe("kaia stickers", function()
         return record
     end
 
+    -- Sets the placement of a sticker, the way the tap dialog does, and saves it.
+    local function setPlacement(readerui, id, placement)
+        local sticker = assert(readerui.kaiastickers:findSticker(id))
+        sticker.anchor.placement = placement
+        sticker.anchor.offset.dy = placement == "inline" and -1.1 or 0
+        local saved = assert(readerui.kaiastickers:putSticker(sticker))
+        return saved
+    end
+
     local function layerOf(readerui)
         return readerui.view.view_modules.kaia_stickers
     end
@@ -149,6 +159,8 @@ describe("kaia stickers", function()
         Store = require("kaia/store")
         RustLib = require("kaia/rustlib")
         NotesData = require("kaia/notesdata")
+        Bidi = require("ui/bidi")
+        original_mirrored = Bidi._mirrored_ui_layout
         original_default_dir = Store.defaultDir
         Store.defaultDir = function()
             return store_dir
@@ -164,6 +176,7 @@ describe("kaia stickers", function()
         end
         Store.defaultDir = original_default_dir
         NotesData.stickerProvider = nil
+        Bidi._mirrored_ui_layout = original_mirrored
     end)
 
     teardown(function()
@@ -194,7 +207,8 @@ describe("kaia stickers", function()
         assert.are.equal("reflowable", record.anchor.type)
         assert.are.equal(pos0, record.anchor.locator)
         assert.is_true(#record.anchor.quote.exact > 0)
-        assert.are.equal(-1.1, record.anchor.offset.dy)
+        assert.are.equal("margin", record.anchor.placement)
+        assert.are.equal(0, record.anchor.offset.dy)
         assert.are.equal("a star", record.text)
         closeBook(readerui)
 
@@ -232,6 +246,86 @@ describe("kaia stickers", function()
         assert.is_true(ids[record.id] == true)
         readerui.font:onSetFontSize(readerui.font.configurable.font_size - 6)
         assert.are.equal("attached", readerui.kaiastickers.store:get(record.id).state)
+        closeBook(readerui)
+    end)
+
+    it("keeps the placement across a reopen", function()
+        local readerui = openBook()
+        local record = addStar(readerui)
+        setPlacement(readerui, record.id, "inline")
+        closeBook(readerui)
+
+        readerui = openBook()
+        local stored = assert(readerui.kaiastickers:findSticker(record.id))
+        assert.are.equal("inline", stored.anchor.placement)
+        assert.are.equal(-1.1, stored.anchor.offset.dy)
+        setPlacement(readerui, record.id, "margin")
+        closeBook(readerui)
+
+        readerui = openBook()
+        stored = assert(readerui.kaiastickers:findSticker(record.id))
+        assert.are.equal("margin", stored.anchor.placement)
+        closeBook(readerui)
+    end)
+
+    it("draws a margin sticker outside the text column", function()
+        local readerui = openBook()
+        addStar(readerui)
+        local ids = paintedIds(readerui)
+        local layer = layerOf(readerui)
+        assert.is_true(next(ids) ~= nil)
+        local hit = layer.hits[1]
+        local _, text_right = layer:textColumn()
+        assert.is_true(hit.x >= text_right, "sticker starts at " .. hit.x .. ", text ends at " .. text_right)
+        assert.is_true(hit.x + hit.w <= Screen:getWidth())
+        assert.is_true(hit.w > 0 and hit.h > 0)
+        closeBook(readerui)
+    end)
+
+    it("draws a margin sticker on the left side when the layout is right-to-left", function()
+        Bidi._mirrored_ui_layout = true
+        local readerui = openBook()
+        addStar(readerui)
+        paintedIds(readerui)
+        local layer = layerOf(readerui)
+        local text_left = layer:textColumn()
+        local hit = layer.hits[1]
+        assert.is_true(hit.x + hit.w <= text_left, "sticker ends at " .. (hit.x + hit.w) .. ", text starts at " .. text_left)
+        assert.is_true(hit.x >= 0)
+        closeBook(readerui)
+    end)
+
+    it("draws over the end of the line, faded, when the margin is too narrow", function()
+        local readerui = openBook()
+        addStar(readerui)
+        local layer = layerOf(readerui)
+        -- Stub the measured text column so the room beside it is about 10 px.
+        layer.textColumn = function()
+            return 0, Screen:getWidth() - 10
+        end
+        paintedIds(readerui)
+        local hit = assert(layer.hits[1], "sticker not drawn")
+        local _, text_right = layer:textColumn()
+        assert.is_true(hit.x < text_right, "faded sticker should sit over the text")
+        assert.is_true(hit.x + hit.w <= Screen:getWidth())
+        local faded = false
+        for key in pairs(layer.images) do
+            if key:find(":faded", 1, true) then
+                faded = true
+            end
+        end
+        assert.is_true(faded)
+        closeBook(readerui)
+    end)
+
+    it("draws an inline sticker at its own size over the text", function()
+        local readerui = openBook()
+        local record = addStar(readerui)
+        setPlacement(readerui, record.id, "inline")
+        paintedIds(readerui)
+        local layer = layerOf(readerui)
+        local hit = assert(layer.hits[1], "sticker not drawn")
+        assert.are.equal(math.floor(record.size.w * Screen:getWidth() + 0.5), hit.w)
         closeBook(readerui)
     end)
 

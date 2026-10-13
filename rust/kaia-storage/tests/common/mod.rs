@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use kaia_core::{Anchor, DocumentId, Offset, Sticker, StickerSize, StickerState, TextQuote};
+use kaia_core::{Anchor, DocumentId, Offset, Placement, Sticker, StickerSize, StickerState, TextQuote};
 use tempfile::TempDir;
 
 pub const MD5_A: &str = "0123456789abcdef0123456789abcdef";
@@ -77,6 +77,7 @@ pub fn reflowable(md5: &str, exact: &str, prefix: &str, suffix: &str) -> Sticker
                 suffix: suffix.to_string(),
             },
             offset: Offset { dx: 0.0, dy: -1.2 },
+            placement: Placement::Margin,
         },
         asset: None,
         text: Some("caption".to_string()),
