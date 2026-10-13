@@ -75,6 +75,12 @@ impl From<String> for Key {
     }
 }
 
+impl From<&String> for Key {
+    fn from(s: &String) -> Self {
+        Key::Str(s.clone())
+    }
+}
+
 impl From<i64> for Key {
     fn from(i: i64) -> Self {
         Key::Int(i)

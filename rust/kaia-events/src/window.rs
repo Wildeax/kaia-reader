@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use crate::ctx::{Ctx, WindowRequest};
-use crate::dirty::{DirtyQueue, Refresh};
+use crate::dirty::{DirtyQueue, Refresh, RefreshMode};
 use crate::handler::EventHandler;
 use crate::Event;
 
@@ -47,6 +47,7 @@ struct Entry {
     id: WindowId,
     opts: ShowOpts,
     window: Window,
+    dithered: bool,
 }
 
 /// Windows from bottom (index 0) to top.
@@ -89,6 +90,20 @@ impl WindowStack {
     pub fn window_mut(&mut self, id: WindowId) -> Option<&mut Window> {
         let index = self.index_of(id)?;
         Some(&mut self.entries[index].window)
+    }
+
+    /// Sets KOReader's per-window `dithered` hint.
+    pub fn set_dithered(&mut self, id: WindowId, dithered: bool) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        self.entries[index].dithered = dithered;
+        true
+    }
+
+    pub fn is_dithered(&self, id: WindowId) -> bool {
+        self.index_of(id)
+            .is_some_and(|index| self.entries[index].dithered)
     }
 
     /// `UIManager:show(widget, refreshtype, refreshregion)`.
@@ -134,10 +149,42 @@ impl WindowStack {
     /// Marks the window for repaint when it is on the stack. The refresh is
     /// queued either way, as KOReader does when the widget is not a window.
     pub fn set_dirty(&self, window: Option<WindowId>, refresh: Option<Refresh>, ctx: &mut Ctx) {
+        let dithered = match window {
+            Some(id) => self.is_dithered(id),
+            None => {
+                refresh.is_some_and(|refresh| refresh.mode == RefreshMode::Full)
+                    && self.entries.iter().any(|entry| entry.dithered)
+            }
+        };
+        let refresh = refresh.map(|mut refresh| {
+            refresh.dither |= dithered;
+            refresh
+        });
         match window {
             Some(id) if self.contains(id) => ctx.dirty.set_dirty(Some(id), refresh),
             _ => ctx.dirty.set_dirty(None, refresh),
         }
+    }
+
+    /// Defers the refresh choice until after painting, as KOReader's function
+    /// form of `setDirty` does.
+    pub fn set_dirty_with(
+        &self,
+        window: Option<WindowId>,
+        refresh: impl Fn() -> Option<Refresh> + 'static,
+        ctx: &mut Ctx,
+    ) {
+        let dithered = match window {
+            Some(id) => self.is_dithered(id),
+            None => self.entries.iter().any(|entry| entry.dithered),
+        };
+        let window = window.filter(|id| self.contains(*id));
+        ctx.dirty.set_dirty_with(window, move || {
+            refresh().map(|mut request| {
+                request.dither |= dithered && (window.is_some() || request.mode == RefreshMode::Full);
+                request
+            })
+        });
     }
 
     /// `UIManager:setDirty("all", refreshtype, refreshregion)`: marks every window.
@@ -145,6 +192,10 @@ impl WindowStack {
         for entry in &self.entries {
             ctx.dirty.mark(entry.id);
         }
+        let refresh = refresh.map(|mut request| {
+            request.dither |= self.entries.iter().any(|entry| entry.dithered);
+            request
+        });
         ctx.dirty.set_dirty(None, refresh);
     }
 
@@ -219,6 +270,9 @@ impl WindowStack {
             if painting || dirty.is_marked(entry.id) {
                 painting = true;
                 dirty.unmark(entry.id);
+                if entry.dithered {
+                    dirty.painted_dithered();
+                }
                 plan.push(entry.id);
             }
         }
@@ -279,7 +333,15 @@ impl WindowStack {
 
     fn insert(&mut self, id: WindowId, window: Window, opts: ShowOpts, ctx: &mut Ctx) {
         let position = self.insert_position(&opts);
-        self.entries.insert(position, Entry { id, opts, window });
+        self.entries.insert(
+            position,
+            Entry {
+                id,
+                opts,
+                window,
+                dithered: false,
+            },
+        );
         ctx.dirty.set_dirty(Some(id), opts.refresh);
         self.entries[position].window.handle(&Event::new("Show"), ctx);
     }
@@ -301,8 +363,59 @@ impl WindowStack {
             ctx.dirty.mark(uncovered.id);
         }
         if let Some(refresh) = refresh {
-            ctx.dirty.refresh(refresh.mode, refresh.region, refresh.dither);
+            let dithered = self.entries[start..].iter().any(|entry| entry.dithered);
+            ctx.dirty
+                .refresh(refresh.mode, refresh.region, refresh.dither || dithered);
         }
         Some(entry.window)
+    }
+}
+
+#[cfg(test)]
+mod dither_tests {
+    use super::*;
+    use crate::geom::Rect;
+    use crate::handler::Handlers;
+    use crate::scheduler::ManualClock;
+
+    fn ctx() -> Ctx {
+        let mut ctx = Ctx::new(Box::new(ManualClock::new()), Rect::new(0, 0, 600, 800));
+        ctx.dirty.hw_dithering = true;
+        ctx
+    }
+
+    #[test]
+    fn window_dither_applies_to_dirty_and_deferred_refresh() {
+        let mut ctx = ctx();
+        let mut stack = WindowStack::new();
+        let id = stack.show(Handlers::new(), ShowOpts::default(), &mut ctx);
+        assert!(stack.set_dithered(id, true));
+        stack.set_dirty(Some(id), Some(Refresh::new(RefreshMode::Ui)), &mut ctx);
+        assert!(ctx.dirty.take_frame(true)[0].dither);
+        stack.set_dirty_with(Some(id), || Some(Refresh::new(RefreshMode::Ui)), &mut ctx);
+        assert!(ctx.dirty.take_frame(true)[0].dither);
+    }
+
+    #[test]
+    fn close_uses_dither_of_uncovered_window() {
+        let mut ctx = ctx();
+        let mut stack = WindowStack::new();
+        let lower = stack.show(Handlers::new(), ShowOpts::default(), &mut ctx);
+        stack.set_dithered(lower, true);
+        let upper = stack.show(Handlers::new(), ShowOpts::default(), &mut ctx);
+        stack.close(upper, Some(Refresh::new(RefreshMode::Ui)), &mut ctx);
+        assert!(ctx.dirty.take_frame(true)[0].dither);
+    }
+
+    #[test]
+    fn painted_window_dither_applies_to_refresh_from_another_window() {
+        let mut ctx = ctx();
+        let mut stack = WindowStack::new();
+        let lower = stack.show(Handlers::new(), ShowOpts::default(), &mut ctx);
+        let upper = stack.show(Handlers::new(), ShowOpts::default(), &mut ctx);
+        stack.set_dithered(upper, true);
+        stack.set_dirty(Some(lower), Some(Refresh::new(RefreshMode::Ui)), &mut ctx);
+        assert_eq!(stack.paint_plan(&mut ctx.dirty), vec![lower, upper]);
+        assert!(ctx.dirty.take_frame(true)[0].dither);
     }
 }

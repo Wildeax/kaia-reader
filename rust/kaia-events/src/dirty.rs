@@ -3,6 +3,7 @@
 //! (`frontend/ui/uimanager.lua`).
 
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use crate::geom::Rect;
 use crate::settings::Settings;
@@ -116,6 +117,8 @@ pub struct DirtyQueue {
     screen: Rect,
     queue: Vec<Refresh>,
     marked: BTreeSet<WindowId>,
+    deferred: Vec<DeferredRefresh>,
+    painted_dithered: bool,
     refresh_count: i64,
     refresh_counted: bool,
     /// `FULL_REFRESH_COUNT`. Zero or less disables promotion of partial refreshes.
@@ -128,6 +131,15 @@ pub struct DirtyQueue {
     pub hw_dithering: bool,
 }
 
+#[derive(Clone)]
+struct DeferredRefresh(Rc<dyn Fn() -> Option<Refresh>>);
+
+impl std::fmt::Debug for DeferredRefresh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DeferredRefresh")
+    }
+}
+
 /// `DEFAULT_FULL_REFRESH_COUNT` in `uimanager.lua`.
 pub const DEFAULT_FULL_REFRESH_COUNT: i64 = 6;
 
@@ -138,6 +150,8 @@ impl DirtyQueue {
             screen,
             queue: Vec::new(),
             marked: BTreeSet::new(),
+            deferred: Vec::new(),
+            painted_dithered: false,
             refresh_count: 0,
             refresh_counted: false,
             full_refresh_count: DEFAULT_FULL_REFRESH_COUNT,
@@ -175,6 +189,11 @@ impl DirtyQueue {
         self.marked.contains(&id)
     }
 
+    /// Records a dithered window in the current paint plan.
+    pub fn painted_dithered(&mut self) {
+        self.painted_dithered = true;
+    }
+
     /// `setDirty(widget, refreshtype, region)`. Marks the window when given,
     /// then enqueues the refresh when one is requested.
     pub fn set_dirty(&mut self, window: Option<WindowId>, refresh: Option<Refresh>) {
@@ -184,6 +203,19 @@ impl DirtyQueue {
         if let Some(refresh) = refresh {
             self.refresh(refresh.mode, refresh.region, refresh.dither);
         }
+    }
+
+    /// The function form of `setDirty`. The callback runs in `take_frame`,
+    /// after the caller has painted the windows.
+    pub fn set_dirty_with(
+        &mut self,
+        window: Option<WindowId>,
+        refresh: impl Fn() -> Option<Refresh> + 'static,
+    ) {
+        if let Some(id) = window {
+            self.mark(id);
+        }
+        self.deferred.push(DeferredRefresh(Rc::new(refresh)));
     }
 
     /// The refreshes queued so far, in queue order.
@@ -264,6 +296,11 @@ impl DirtyQueue {
     /// When windows were painted but nothing was queued, a partial refresh of
     /// the whole screen is added, as KOReader does.
     pub fn take_frame(&mut self, painted: bool) -> Vec<Refresh> {
+        for callback in std::mem::take(&mut self.deferred) {
+            if let Some(refresh) = callback.0() {
+                self.refresh(refresh.mode, refresh.region, refresh.dither);
+            }
+        }
         if painted && self.queue.is_empty() {
             self.refresh(RefreshMode::Partial, None, false);
         }
@@ -272,7 +309,12 @@ impl DirtyQueue {
             for refresh in &mut frame {
                 refresh.dither = false;
             }
+        } else if self.painted_dithered {
+            for refresh in &mut frame {
+                refresh.dither = true;
+            }
         }
+        self.painted_dithered = false;
         self.refresh_counted = false;
         frame
     }
@@ -436,5 +478,19 @@ mod tests {
         q.set_dirty(Some(id), Some(Refresh::new(RefreshMode::Ui)));
         assert!(q.is_marked(id));
         assert_eq!(q.queued().len(), 1);
+    }
+
+    #[test]
+    fn deferred_refresh_runs_after_paint() {
+        let mut q = DirtyQueue::new(screen());
+        let painted = Rc::new(std::cell::Cell::new(false));
+        let callback_painted = Rc::clone(&painted);
+        q.set_dirty_with(None, move || {
+            assert!(callback_painted.get());
+            Some(Refresh::region(RefreshMode::Ui, Rect::new(1, 2, 3, 4)))
+        });
+        assert!(q.queued().is_empty());
+        painted.set(true);
+        assert_eq!(q.take_frame(false)[0].region, Some(Rect::new(1, 2, 3, 4)));
     }
 }

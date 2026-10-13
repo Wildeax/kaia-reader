@@ -28,11 +28,13 @@ pub mod settings;
 pub mod value;
 pub mod window;
 
-pub use actions::{Action, ActionCategory, ActionRegistry, Section};
+pub use actions::{
+    Action, ActionCategory, ActionContext, ActionRegistry, ConfigurableAction, DispatchEvent, Section,
+};
 pub use ctx::Ctx;
 pub use dirty::{DirtyQueue, Refresh, RefreshMode};
 pub use geom::Rect;
-pub use gestures::{GestureBinding, GestureBindings};
+pub use gestures::{GestureBinding, GestureBindings, KoreaderGestures};
 pub use handler::{Container, EventHandler, Handlers};
 pub use menu::{MenuBuild, MenuItem, MenuKind, MenuOrder, MenuRegistry};
 pub use scheduler::{Clock, ManualClock, Scheduler, SystemClock, Task, TaskId};

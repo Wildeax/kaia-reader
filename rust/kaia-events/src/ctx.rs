@@ -76,14 +76,14 @@ impl Ctx {
         WindowId::from_raw(self.next_window)
     }
 
-    /// Runs every task due at `now`. Tasks scheduled while they run wait for
-    /// the next call. Returns the number of tasks run. Window changes they
+    /// Runs every task due at `now`, checking the queue after each task.
+    /// Returns the number of tasks run. Window changes they
     /// queue are applied by `WindowStack::apply_requests`.
     pub fn run_due(&mut self, now: Duration) -> usize {
-        let tasks = self.scheduler.run_due(now);
-        let count = tasks.len();
-        for task in tasks {
+        let mut count = 0;
+        while let Some(task) = self.scheduler.pop_due(now) {
             task(self);
+            count += 1;
         }
         count
     }

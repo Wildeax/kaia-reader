@@ -130,12 +130,11 @@ impl Settings {
         self.data.get(&key).unwrap_or(&NIL)
     }
 
-    /// `readSetting(key, default)`. When the key is unset, stores `default`
-    /// first (with nil entries removed) and returns it, so the reference
-    /// belongs to the store.
+    /// `readSetting(key, default)`. A false or nil default leaves the key
+    /// unset. Other defaults are stored when the key is absent.
     pub fn read_or_init(&mut self, key: impl Into<Key>, default: Value) -> &Value {
         let key: Key = key.into();
-        if default.is_nil() {
+        if !default.truthy() {
             return self.data.get(&key).unwrap_or(&NIL);
         }
         self.data.entry(key).or_insert_with(|| prune(default))
@@ -318,6 +317,15 @@ mod tests {
         assert!(stored.as_table().unwrap().is_empty());
         s.save("count", Value::from(9i64));
         assert_eq!(s.read_or_init("count", Value::from(3i64)), &Value::from(9i64));
+    }
+
+    #[test]
+    fn false_default_does_not_initialize_missing_key() {
+        let mut s = Settings::new();
+        assert_eq!(s.read_or_init("flag", Value::Bool(false)), &Value::Nil);
+        assert!(!s.has("flag"));
+        s.save("flag", Value::Bool(true));
+        assert_eq!(s.read_or_init("flag", Value::Bool(false)), &Value::Bool(true));
     }
 
     #[test]

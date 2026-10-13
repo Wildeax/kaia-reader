@@ -5,13 +5,11 @@
 //! Ordering guarantees, as in `UIManager`:
 //! - Tasks run in order of due time.
 //! - Tasks with the same due time run in the order they were scheduled.
-//! - A task scheduled while `run_due` runs is not returned by that call, even
-//!   when it is already due. It runs on the next `run_due` call, which is the
-//!   next loop iteration.
+//! - A task scheduled while due tasks run can run in the same pass when due.
 //!
 //! Tasks are boxed closures that receive `&mut Ctx`. `run_due` removes the due
-//! tasks from the queue and returns them, so a task can schedule and
-//! unschedule other tasks without borrowing the queue.
+//! tasks from the queue and returns them. `Ctx::run_due` pops one task at a
+//! time so a task can unschedule another due task.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -157,19 +155,18 @@ impl Scheduler {
         }
     }
 
-    /// `UIManager:_checkTasks()`: removes and returns every task due at `now`,
-    /// in due-time order. Tasks scheduled after this call are left for the next call.
+    /// Returns at most one due task. The vector return type keeps existing
+    /// callers source compatible. Call again after running the task, since it
+    /// may change the queue.
     pub fn run_due(&mut self, now: Duration) -> Vec<Task> {
-        let limit = self.next_id;
-        let due: Vec<Key> = self
-            .queue
-            .range(..=(now, u64::MAX))
-            .filter(|(key, _)| key.1 < limit)
-            .map(|(key, _)| *key)
-            .collect();
-        due.into_iter()
-            .filter_map(|key| self.queue.remove(&key))
-            .collect()
+        self.pop_due(now).into_iter().collect()
+    }
+
+    /// Removes the next due task. Call again after running it, since that task
+    /// may change the queue.
+    pub fn pop_due(&mut self, now: Duration) -> Option<Task> {
+        let key = self.queue.range(..=(now, u64::MAX)).next().map(|(key, _)| *key)?;
+        self.queue.remove(&key)
     }
 
     /// The earliest due time, for sizing the wait in a loop. `UIManager:getNextTaskTime`.
@@ -242,14 +239,46 @@ mod tests {
     }
 
     #[test]
-    fn next_tick_waits_for_the_next_loop_iteration() {
+    fn due_task_can_unschedule_another_due_task() {
+        let clock = ManualClock::new();
+        let mut ctx = ctx(&clock);
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let b_id = Rc::new(Cell::new(None));
+        let a_log = Rc::clone(&log);
+        let a_b_id = Rc::clone(&b_id);
+        ctx.scheduler.schedule_at(
+            Duration::ZERO,
+            Box::new(move |ctx| {
+                a_log.borrow_mut().push("a");
+                assert!(ctx.scheduler.unschedule(a_b_id.get().unwrap()));
+            }),
+        );
+        b_id.set(Some(
+            ctx.scheduler.schedule_at(Duration::ZERO, log_task(&log, "b")),
+        ));
+        assert_eq!(ctx.run_due(Duration::ZERO), 1);
+        assert_eq!(*log.borrow(), vec!["a"]);
+        assert!(!ctx.scheduler.unschedule(b_id.get().unwrap()));
+    }
+
+    #[test]
+    fn scheduler_run_due_leaves_later_due_tasks_queued() {
+        let mut scheduler = Scheduler::new(Box::new(ManualClock::new()));
+        scheduler.schedule_at(Duration::ZERO, Box::new(|_| {}));
+        let second = scheduler.schedule_at(Duration::ZERO, Box::new(|_| {}));
+        assert_eq!(scheduler.run_due(Duration::ZERO).len(), 1);
+        assert!(scheduler.unschedule(second));
+        assert!(scheduler.is_empty());
+    }
+
+    #[test]
+    fn task_scheduled_due_during_a_pass_runs_in_that_pass() {
         let clock = ManualClock::new();
         let mut ctx = ctx(&clock);
         let log = Rc::new(RefCell::new(Vec::new()));
         let outer = Rc::clone(&log);
         let inner = Rc::clone(&log);
-        // The first task schedules a tick. The clock is frozen, so the tick is
-        // due at the same instant, but it must not run in the same run_due call.
+        // The frozen clock makes the new task due during the same pass.
         ctx.scheduler.schedule_in(
             0.0,
             Box::new(move |ctx: &mut Ctx| {
@@ -257,14 +286,12 @@ mod tests {
                 ctx.scheduler.next_tick(log_task(&inner, "tick"));
             }),
         );
-        assert_eq!(ctx.run_due(clock.now()), 1);
-        assert_eq!(*log.borrow(), vec!["first"]);
-        assert_eq!(ctx.run_due(clock.now()), 1);
+        assert_eq!(ctx.run_due(clock.now()), 2);
         assert_eq!(*log.borrow(), vec!["first", "tick"]);
     }
 
     #[test]
-    fn tick_after_next_runs_after_one_extra_loop() {
+    fn tick_after_next_runs_when_its_wrapper_is_due() {
         let clock = ManualClock::new();
         let mut ctx = ctx(&clock);
         let log = Rc::new(RefCell::new(Vec::new()));
@@ -274,8 +301,7 @@ mod tests {
             loops += 1;
             ctx.run_due(clock.now());
         }
-        // Stage one runs in the first loop and schedules stage two, which runs in the second.
-        assert_eq!(loops, 2);
+        assert_eq!(loops, 1);
         assert_eq!(*log.borrow(), vec!["after"]);
     }
 
