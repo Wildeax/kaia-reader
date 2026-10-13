@@ -1,0 +1,528 @@
+--- calibre_metadata.lua
+---
+--- VENDORED FILE. Byte-identical copies live at:
+---   bookends.koplugin/calibre_metadata.lua
+---   bookshelf.koplugin/lib/calibre_metadata.lua
+--- Never edit one without the other. tools/check_token_parity.sh fails on drift.
+---
+--- Reads Calibre's metadata.calibre and exposes each book's fields by absolute
+--- filepath. Extracted from bookshelf's book repository so bookends can share
+--- it rather than reimplement it, which matters for one specific reason: both
+--- plugins write the calibre.bookshelf.json harvest sidecar, and bookends needs
+--- a strict SUBSET of the fields (it has no use for author_sort or the extra
+--- series columns). A subset writer would silently clobber bookshelf's richer
+--- harvest and break author-sort ordering for anyone running both. Identical
+--- code writes an identical file, so either plugin can write it safely.
+---
+--- Keyed by absolute filepath, so a caller with one open document (bookends)
+--- pays no library-scan cost.
+---
+--- The gate is a PARAMETER, not a settings read: see entryFor below.
+
+-- Lazily and defensively required, like lfs and rapidjson below: it keeps this
+-- module loadable under a standalone `lua`, which is what makes it testable
+-- outside KOReader at all. Only used for one debug line.
+local function _dbg(msg)
+    local ok, logger = pcall(require, "logger")
+    if ok and logger and logger.dbg then logger.dbg(msg) end
+end
+
+-- Local copy: the repository this was extracted from still needs its own for
+-- directory walking, so this is a deliberate duplicate of four trivial lines
+-- rather than a new cross-module dependency.
+-- Collapse repeated slashes. KOReader stores home_dir however it was set, and
+-- a trailing slash there used to reach all the way through: the library root
+-- kept it, every map key became "<root>//<lpath>", and no book's own path ever
+-- matched one. The file was still FOUND (POSIX is happy with "//"), so it
+-- parsed, the harvest sidecar was written with every column in it, and not one
+-- book resolved -- which is precisely what issue 372 reported.
+local function _normPath(p)
+    if type(p) ~= "string" then return p end
+    return (p:gsub("//+", "/"))
+end
+
+local function _joinPath(parent, child)
+    if parent == "/" then return "/" .. child end
+    return _normPath(parent .. "/" .. child)
+end
+
+-- ─── Calibre metadata.calibre loader ─────────────────────────────────────────
+-- Calibre desktop, when syncing books to a device, drops a JSON file
+-- ("metadata.calibre" or ".metadata.calibre") at the library root with
+-- one entry per book — title, authors, tags, series, series_index, etc.
+-- For libraries managed via Calibre this gives us full metadata coverage
+-- for every book without waiting on BIM extraction. We parse it lazily
+-- and cache the resulting filepath→metadata map, refreshing when the
+-- file's mtime changes (Calibre just re-synced) or after a 60s TTL.
+-- Forward-declared: the loader below reads CalibreMeta.notify, and the
+-- table itself is populated further down.
+local CalibreMeta = {}
+
+local CALIBRE_TTL = 60
+
+-- ── calibre.bookshelf.json: our own sidecar KOReader will not touch ─────────
+--
+-- KOReader's calibre plugin rewrites metadata.calibre after a wireless sync
+-- from load_calibre's whitelisted fields, permanently deleting everything
+-- else. What survives, measured by running KOReader's own
+-- CalibreMetadata:init + cleanUnused over a genuine Calibre file: its
+-- used_metadata list only (uuid, lpath, last_modified, size, title, authors,
+-- author_sort, tags, series, series_index), every one written as
+-- `book[k] or rapidjson.null` - and author_sort arrives as null anyway, its
+-- value already dropped by load_calibre. So title_sort, pubdate, publisher,
+-- rating, keywords, languages, comments and user_metadata are all gone after
+-- a sync, and the keys that remain can be null. So when a
+-- calibre-written file passes through here, the two fields with NO other
+-- source anywhere -- author_sort (the old wipe, NiLuJe/lua-rapidjson#1 still
+-- dormant) and the custom series columns (issue 299) -- are HARVESTED into a
+-- sidecar of our own, beside metadata.calibre, keyed by lpath. When a
+-- KOReader-rewritten file comes through instead, the harvest is merged back
+-- over it. languages and comments are deliberately not harvested: both fall
+-- back to the book's own embedded metadata through BIM, so the sidecar stays
+-- a few KB instead of duplicating every description in the library.
+--
+-- WHICH KIND OF FILE is decided by evidence, not mtime: a calibre-written
+-- file carries user_metadata or author_sort keys on its entries (calibre
+-- writes them for every book once the columns exist); a file where NO entry
+-- has either has been through KOReader's plugin. Trusting a calibre-written
+-- file wholly is what lets a user genuinely clearing a column see it clear.
+local HARVEST_NAME = "calibre.bookshelf.json"
+
+local function _harvestPath(meta_path)
+    return meta_path:gsub("/[^/]+$", "") .. "/" .. HARVEST_NAME
+end
+
+local function _loadHarvest(meta_path)
+    local ok_json, rapidjson = pcall(require, "rapidjson")
+    if not ok_json then return nil end
+    local ok, data = pcall(rapidjson.load, _harvestPath(meta_path))
+    if ok and type(data) == "table" and type(data.books) == "table" then
+        return data.books
+    end
+    return nil
+end
+
+-- Deep equality over plain JSON-shaped values. The harvest used to be compared
+-- field by field (author_sort, extra_series, calibre), which meant a change to
+-- any field added later - title_sort, or one only a newer copy of this module
+-- knows - never counted as a change and was never written.
+local function _sameHarvestEntry(a, b)
+    if a == b then return true end
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+    for k, v in pairs(a) do
+        if not _sameHarvestEntry(v, b[k]) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+-- The fields THIS copy of the module harvests. Both plugins carry a copy and
+-- users update one without the other, so a field missing from this list may
+-- simply be newer than this copy: it is carried forward, never dropped. Add a
+-- field here and to slim(); the restore below needs no change.
+local HARVEST_OWNED = { "author_sort", "title_sort", "extra_series", "calibre" }
+
+local function _saveHarvest(meta_path, books, previous)
+    -- Only on change: this runs inside the metadata reload, and a JSON write
+    -- per reload would be flash wear for nothing.
+    local changed = false
+    if not previous then
+        changed = next(books) ~= nil
+    else
+        for k, v in pairs(books) do
+            if not _sameHarvestEntry(v, previous[k]) then changed = true break end
+        end
+        if not changed then
+            for k in pairs(previous) do
+                if books[k] == nil then changed = true break end
+            end
+        end
+    end
+    if not changed then return end
+    local ok_json, rapidjson = pcall(require, "rapidjson")
+    if not ok_json or type(rapidjson.dump) ~= "function" then return end
+    pcall(rapidjson.dump, { version = 1, books = books },
+          _harvestPath(meta_path), { pretty = true })
+    _dbg("[bookshelf] calibre harvest written: " .. _harvestPath(meta_path))
+end
+
+local _calibre_state = {
+    last_check = 0,
+    file_path  = nil,
+    file_mtime = 0,
+    map        = nil,
+}
+
+local function _calibreMetadataFor(filepath, enabled)
+    if not filepath then return nil end
+    -- The gate is the CALLER's, not a settings read, because the two plugins
+    -- gate differently and both are right. Bookshelf hides this behind a beta
+    -- setting because its calibre data overrides title, authors, series,
+    -- language and description across the whole library. Bookends consumes it
+    -- ONLY through %calibre{...}, and its needs("calibre") check already means
+    -- this file is never probed unless a template names the token - so the
+    -- token IS the gate there, and a second switch would earn nothing but
+    -- another thing to discover, document and translate.
+    -- Default OFF still holds for non-Calibre users: no probe, no JSON parse.
+    if not enabled then return nil end
+    local now = os.time()
+    if (now - _calibre_state.last_check) <= CALIBRE_TTL
+            and _calibre_state.map ~= nil then
+        return _calibre_state.map[_normPath(filepath)]
+    end
+    _calibre_state.last_check = now
+    local home = G_reader_settings:readSetting("home_dir") or "/"
+    local lfs  = require("libs/libkoreader-lfs")
+    -- Home first, then the folder above it: Calibre sends metadata.calibre to
+    -- the root of the device, and a home set to a Books folder under that
+    -- root found nothing (issue 475). The lpaths are relative to the file,
+    -- and lib_root below is taken from wherever it was found.
+    local dirs = { home }
+    local parent = _normPath(home):gsub("/+$", ""):match("^(.*)/[^/]+$")
+    if parent then dirs[#dirs + 1] = (parent == "" and "/" or parent) end
+    local meta_path
+    for _d, dir in ipairs(dirs) do
+        for _i, name in ipairs({ "metadata.calibre", ".metadata.calibre" }) do
+            local p = _joinPath(dir, name)
+            if lfs.attributes(p, "mode") == "file" then
+                meta_path = p
+                break
+            end
+        end
+        if meta_path then break end
+    end
+    if not meta_path then
+        _calibre_state.file_path = nil
+        _calibre_state.map       = nil
+        return nil
+    end
+    local attr  = lfs.attributes(meta_path)
+    local mtime = attr and attr.modification or 0
+    if _calibre_state.file_path == meta_path
+            and _calibre_state.file_mtime == mtime
+            and _calibre_state.map then
+        return _calibre_state.map[_normPath(filepath)]
+    end
+    -- (Re)parse the JSON file. Calibre's bundled rapidjson exposes
+    -- load_calibre for the metadata.calibre format; fall back to the
+    -- generic loader if that's missing.
+    local ok_json, rapidjson = pcall(require, "rapidjson")
+    if not ok_json then
+        _calibre_state.map = nil
+        return nil
+    end
+    -- JSON null decodes to rapidjson.null, a TRUTHY sentinel, not to nil. It
+    -- matters here more than anywhere: KOReader's calibre plugin rewrites this
+    -- file through a slim() that writes every field it keeps as
+    -- `book[k] or rapidjson.null`, so a synced file says "author_sort": null
+    -- rather than leaving the key out. Tested as `~= nil`, that null made
+    -- every synced file look freshly written by Calibre (see the detection
+    -- below). present() is the test to use for any value read from the file.
+    local NULL = rapidjson.null
+    local function present(v)
+        return v ~= nil and (NULL == nil or v ~= NULL)
+    end
+    local function val(v)
+        if present(v) then return v end
+    end
+    -- WHICH PARSER, and why it matters (issue 299): rapidjson.load_calibre is
+    -- KOReader's slimming parser -- fast and memory-light because it KEEPS
+    -- ONLY the fields its calibre plugin needs, and user_metadata (where a
+    -- Calibre custom series column lives) is not one of them. Verified
+    -- empirically: load_calibre drops it, plain load keeps it. So secondary
+    -- series need the plain parse -- but a plain parse builds the WHOLE file
+    -- as Lua tables, and a big library's metadata.calibre (long comments, one
+    -- entry per book) can be tens of MB, which is a real transient spike on a
+    -- 256MB Kindle. The gate: plain-parse only under the size cap, slim each
+    -- entry immediately to the fields this file actually reads, and above the
+    -- cap fall back to load_calibre -- exactly today's behaviour, minus
+    -- secondary series.
+    --
+    -- KNOWN FRAGILITY, the author_sort wipe all over again: KOReader's OWN
+    -- calibre plugin loads this file through load_calibre and its
+    -- saveBookList() dumps those slimmed tables straight back -- so the first
+    -- WIRELESS calibre sync rewrites metadata.calibre without user_metadata,
+    -- permanently, and secondary series silently degrade to the primary until
+    -- a USB sync regenerates the file. Reading here cannot defend against a
+    -- writer elsewhere; the durable fix is upstream, adding user_metadata to
+    -- load_calibre's whitelist beside author_sort (NiLuJe/lua-rapidjson#1,
+    -- dormant). USB-sync libraries -- where calibre writes the file and the
+    -- wireless plugin never does -- are unaffected.
+    -- MEASURED, 2026-09-05, so these are not guesses. On a PW5 a plain parse
+    -- costs about 100ms per MB and the map it leaves behind is ~0.37x the
+    -- file's size, held for as long as the plugin is loaded. The peak is
+    -- barely above that (~0.41x): slimming keeps `comments`, which is most of
+    -- the bulk, so there is no large transient to fear and little to reclaim.
+    --
+    -- The old cap was 8MB, justified as "a real transient spike on a 256MB
+    -- Kindle". The measurements do not support that: 8MB costs ~3.1MB held and
+    -- needed no new pages at all on device, and a PW5 has 485MB. What it did
+    -- do was silently drop every custom column for an ordinary library -- 8MB
+    -- is only about 2,000 books once a few custom columns are on, because
+    -- calibre repeats each column's whole definition on EVERY book (~412
+    -- bytes per column per book, measured against calibre's own JsonCodec).
+    --
+    -- So the cap is now a backstop against the genuinely pathological rather
+    -- than a limit on the ordinary: 64MB is ~26MB held and ~6s of parsing, and
+    -- past that the slim parser still gives everything except custom columns,
+    -- which beats a minute-long stall. Loads expected to be perceptible
+    -- announce themselves through CalibreMeta.notify (see below).
+    local CALIBRE_FULL_PARSE_MAX = 64 * 1024 * 1024
+    local CALIBRE_NOTICE_MIN     = 16 * 1024 * 1024
+    local size = (attr and attr.size or 0)
+    local data, full
+    if size <= CALIBRE_FULL_PARSE_MAX then
+        local slow = size >= CALIBRE_NOTICE_MIN
+        if slow and CalibreMeta.notify then
+            pcall(CalibreMeta.notify, "start", size)
+        end
+        local ok, d = pcall(rapidjson.load, meta_path)
+        if ok and type(d) == "table" then data, full = d, true end
+        if slow and CalibreMeta.notify then
+            pcall(CalibreMeta.notify, "done", size)
+        end
+    end
+    if not data and rapidjson.load_calibre then
+        local ok, d = pcall(rapidjson.load_calibre, meta_path)
+        if ok then data = d end
+    end
+    if not data then
+        local ok, d = pcall(rapidjson.load, meta_path)
+        if ok then data = d end
+    end
+    if type(data) ~= "table" then
+        _calibre_state.map = nil
+        return nil
+    end
+    -- Slim a full-parse entry down to what the readers of this map use
+    -- (grep cb%. for the list), plus extra_series extracted from any Calibre
+    -- custom column of datatype "series" -- reduced here to bare name/number
+    -- pairs so the retained map never holds the user_metadata blobs.
+    local function slim(book)
+        local out = {
+            lpath        = book.lpath,
+            title        = val(book.title),
+            -- calibre's own sort title ("Locked Tomb, The"), which it computes
+            -- with its language-aware rules -- so a "sort by title" that
+            -- ignores leading articles uses the user's metadata rather than us
+            -- guessing at English grammar. In PUBLICATION_METADATA_FIELDS, so
+            -- calibre serialises it to the device file. Sibling of author_sort
+            -- below, harvested the same way.
+            title_sort   = val(book.title_sort),
+            authors      = val(book.authors),
+            author_sort  = val(book.author_sort),
+            series       = val(book.series),
+            series_index = val(book.series_index),
+            tags         = val(book.tags),
+            keywords     = val(book.keywords),
+            languages    = val(book.languages),
+            comments     = val(book.comments),
+        }
+        if type(book.user_metadata) == "table" then
+            local extras
+            for _col, def in pairs(book.user_metadata) do
+                if type(def) == "table" and def.datatype == "series"
+                        and type(def["#value#"]) == "string"
+                        and def["#value#"] ~= "" then
+                    extras = extras or {}
+                    extras[#extras + 1] = {
+                        name = def["#value#"],
+                        num  = type(def["#extra#"]) == "number"
+                               and tostring(def["#extra#"]) or nil,
+                    }
+                end
+            end
+            out.extra_series = extras
+        end
+        -- Arbitrary calibre fields for the %calibre{name} token: a flat map
+        -- of display-ready STRINGS keyed by lowercased lookup name without
+        -- the leading '#', built here so the retained map holds a few short
+        -- strings per book and never the user_metadata blobs. Dates reduce
+        -- to the year (the driving request is publication year); rating
+        -- halves from the file's 0-10 to calibre's star scale; columns of
+        -- datatype "comments" are skipped outright -- long-form HTML is the
+        -- wrong shape for a one-line token and a real memory cost when
+        -- multiplied by every book in the library.
+        local fields
+        local function put(key, value)
+            if value == nil or value == "" then return end
+            fields = fields or {}
+            fields[key] = value
+        end
+        local function yearOf(v)
+            local y = type(v) == "string" and v:match("^(%d%d%d%d)")
+            -- calibre writes 0100/0101-01-01 for "no date set".
+            if y and y:sub(1, 1) ~= "0" then return y end
+        end
+        local function displayValue(v, datatype)
+            if datatype == "comments" then return nil end
+            if datatype == "datetime" then return yearOf(v) end
+            local t = type(v)
+            if t == "string" then return v ~= "" and v or nil end
+            if t == "number" then
+                -- Whole numbers in full. %g switches to exponential at 1e6, so
+                -- a word-count column -- the case this was asked for -- showed
+                -- "1.23457e+06" for a long book. %.0f rather than %d because
+                -- %d rejects a float with a fractional part on some builds,
+                -- and this value comes straight from JSON. The bound keeps
+                -- absurd magnitudes on %g rather than printing 300 digits.
+                if v == math.floor(v) and math.abs(v) < 1e15 then
+                    return string.format("%.0f", v)
+                end
+                return string.format("%g", v)
+            end
+            -- false maps to nil, not "no": it keeps [if:calibre{col}]
+            -- truthiness honest, since any non-empty string reads truthy.
+            if t == "boolean" then return v and "yes" or nil end
+            if t == "table" then
+                local parts = {}
+                for _j, item in ipairs(v) do
+                    if type(item) == "string" and item ~= "" then
+                        parts[#parts + 1] = item
+                    end
+                end
+                if #parts > 0 then return table.concat(parts, ", ") end
+            end
+        end
+        put("pubdate", yearOf(book.pubdate))
+        put("publisher", displayValue(book.publisher))
+        if type(book.rating) == "number" and book.rating > 0 then
+            put("rating", string.format("%g", book.rating / 2))
+        end
+        if type(book.user_metadata) == "table" then
+            for col, def in pairs(book.user_metadata) do
+                if type(def) == "table" then
+                    local key = tostring(col):gsub("^#", ""):lower()
+                    if fields == nil or fields[key] == nil then
+                        put(key, displayValue(def["#value#"], def.datatype))
+                    end
+                end
+            end
+        end
+        out.calibre = fields
+        return out
+    end
+    local lib_root = meta_path:gsub("/[^/]+$", "")
+    local map = {}
+    local calibre_written = false
+    for _i, book in ipairs(data) do
+        if type(book) == "table" and book.lpath then
+            -- present(), not ~= nil: a synced file carries "author_sort": null.
+            if present(book.user_metadata) or present(book.author_sort) then
+                calibre_written = true
+            end
+            map[_normPath(lib_root .. "/" .. book.lpath)] = full and slim(book) or book
+        end
+    end
+    if full and calibre_written then
+        -- A calibre-written file: harvest everything with no other source.
+        -- Each entry starts from what is already on disk, so a field written
+        -- by a NEWER copy of this module survives this copy's rewrite, and
+        -- then every field this copy owns is replaced with the live value -
+        -- nil included, so a field Calibre has cleared is cleared here too.
+        -- A book no longer in the file is dropped, as before: carrying
+        -- forward is per field, never per book.
+        local previous = _loadHarvest(meta_path)
+        local harvest = {}
+        for _i, book in ipairs(data) do
+            if type(book) == "table" and book.lpath then
+                local entry = map[_normPath(lib_root .. "/" .. book.lpath)]
+                if entry then
+                    local merged = {}
+                    local prev = previous and previous[book.lpath]
+                    if type(prev) == "table" then
+                        for k, v in pairs(prev) do merged[k] = v end
+                    end
+                    for _j, k in ipairs(HARVEST_OWNED) do merged[k] = entry[k] end
+                    if next(merged) ~= nil then harvest[book.lpath] = merged end
+                end
+            end
+        end
+        _saveHarvest(meta_path, harvest, previous)
+    elseif not calibre_written then
+        -- KOReader's plugin has rewritten the file: merge what was harvested
+        -- back over the survivors, by lpath.
+        local harvest = _loadHarvest(meta_path)
+        if harvest then
+            for lpath, saved in pairs(harvest) do
+                -- Normalised like every other lookup into this map, which is
+                -- keyed through _normPath: an lpath with a leading slash
+                -- would otherwise miss and drop the whole restore silently.
+                local entry = map[_normPath(lib_root .. "/" .. lpath)]
+                if entry and type(saved) == "table" then
+                    -- EVERY harvested field, not a list of them, so a field a
+                    -- newer copy added is restored too and adding one to
+                    -- HARVEST_OWNED needs no change here. A value still present
+                    -- in the file always wins.
+                    for k, v in pairs(saved) do
+                        if not present(v) then
+                            -- A null saved by the bug this fixes; nothing to
+                            -- restore. Skip rather than write it back as a value.
+                        elseif k == "calibre" then
+                            -- Per-KEY merge, not all-or-nothing, so any key
+                            -- still present in the file wins over the harvest.
+                            -- (An earlier all-or-nothing check was fixed for
+                            -- books whose pubdate/publisher/rating survived a
+                            -- strip. KOReader's REAL rewrite keeps none of
+                            -- those - see the header - so on a genuinely synced
+                            -- file entry.calibre starts empty and per-key and
+                            -- whole-table agree. Per-key stays: it is the
+                            -- correct rule for any file that keeps some.)
+                            if type(v) == "table" then
+                                entry.calibre = entry.calibre or {}
+                                for ck, cv in pairs(v) do
+                                    if present(cv) and not present(entry.calibre[ck]) then
+                                        entry.calibre[ck] = cv
+                                    end
+                                end
+                            end
+                        elseif not present(entry[k]) then
+                            entry[k] = v
+                        end
+                    end
+                end
+            end
+        end
+    end
+    _calibre_state.file_path  = meta_path
+    _calibre_state.file_mtime = mtime
+    _calibre_state.map        = map
+    return map[_normPath(filepath)]
+end
+
+-- notify(state, bytes): optional host hook, called with "start" before a parse
+-- big enough for the reader to notice and "done" after it. Deliberately a
+-- callback and not a widget: this file is vendored byte-identical into
+-- bookends and must not reach for a UI stack. A host that sets it owns
+-- painting BEFORE returning (UIManager:show + forceRePaint), since the parse
+-- that follows is synchronous and nothing repaints until it is over.
+--
+-- The table itself is forward-declared at the top of the file, because the
+-- loader above reads this field.
+CalibreMeta.notify = nil
+
+CalibreMeta.HARVEST_NAME = HARVEST_NAME
+
+--- The slimmed per-book entry, or nil.
+--- `enabled` is the caller's gate; falsy returns nil without touching the
+--- filesystem. See the module header for why it is a parameter.
+function CalibreMeta.entryFor(filepath, enabled)
+    return _calibreMetadataFor(filepath, enabled)
+end
+
+--- Just the flat map of calibre field name to display string, which is all
+--- %calibre{...} needs. Keys are lowercased and carry no leading '#'.
+function CalibreMeta.fieldsFor(filepath, enabled)
+    local entry = _calibreMetadataFor(filepath, enabled)
+    return entry and entry.calibre or nil
+end
+
+--- Force the next call to reparse. Called when the library is refreshed.
+function CalibreMeta.invalidate()
+    _calibre_state.last_check = 0
+    _calibre_state.file_mtime = -1
+end
+
+return CalibreMeta

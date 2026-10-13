@@ -1,0 +1,2283 @@
+[
+  {
+    "repo": "mysticknits/pencil.koplugin",
+    "sha": "f4e58b315c972a3ff663380cf6e186c32bc339d2",
+    "date": "2026-05-14T21:13:30Z",
+    "stars": 158,
+    "forks": 26,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "pencil",
+    "source_dir": "pencil.koplugin",
+    "files": [
+      {
+        "path": "_meta.lua",
+        "source": "pencil.koplugin/_meta.lua",
+        "sha256": "65d3c6b2eadc4bd540469edb92d0a6213edf8e0d11501284c234d4c33f5cb959"
+      },
+      {
+        "path": "lib/geometry.lua",
+        "source": "pencil.koplugin/lib/geometry.lua",
+        "sha256": "ed28a3d2f4522f8edc0150db4a4d495261a4f44ad6e779091b09dfcc7016a207"
+      },
+      {
+        "path": "main.lua",
+        "source": "pencil.koplugin/main.lua",
+        "sha256": "f1898d62b74a332aeb9ced20709ac9a753869bc120e89f3230498c3a573d7a1b"
+      },
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "4ce981bb8cd975fc520b415db484cc0c64055a057526098980fa80f1d54e23d5"
+      }
+    ],
+    "omitted": []
+  },
+  {
+    "repo": "toastiez/pagenotes.koplugin",
+    "sha": "5876d17ad38af09dc12c20a3b30aead1b9bf579b",
+    "date": "2026-09-13T20:06:17Z",
+    "stars": 23,
+    "forks": 1,
+    "archived": false,
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit",
+      "node_id": "MDc6TGljZW5zZTEz"
+    },
+    "name": "pagenotes",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "1b3a88ca1f8ddab3195fa1286e4c42db3987fca737f9561d9eadbfb9362b922b"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "9822604d971fc67984e78bcfb989152dcfa061722b33767695b39797509d9394"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "506506874d962295ed175141216f90beae438b6ebadcfda12a3053c47a4086a6"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "fbc2b98ea962d8662d12b4d0ffd70ddedc73cb6ca355dcefce5fd98764144119"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0000_01.png",
+        "source": "packs/Emojis/CuteEmoji_0000_01.png",
+        "sha256": "eed962da7c5ca1a195399d76770fef5dca96cd010d8d4a3a06e046bfed374510"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0001_02.png",
+        "source": "packs/Emojis/CuteEmoji_0001_02.png",
+        "sha256": "48db458550d73c4e3b05611272bb9ec0b6bc58664bd545594ea56d808eb11271"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0002_03.png",
+        "source": "packs/Emojis/CuteEmoji_0002_03.png",
+        "sha256": "dd41c506adccad28831e52c465aa3f8f54939743e26aa8b7cecd2a310b3ea62f"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0003_04.png",
+        "source": "packs/Emojis/CuteEmoji_0003_04.png",
+        "sha256": "0de4755c0e0b7a3f5fda7a87ba5bde9c47b1ba090b3e9fe904ea8edd4ad03e75"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0004_05.png",
+        "source": "packs/Emojis/CuteEmoji_0004_05.png",
+        "sha256": "5a6d518630564f7d73276c20385f9508151eebb93c3fdbf8321b8d6fdcf7ef46"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0005_06.png",
+        "source": "packs/Emojis/CuteEmoji_0005_06.png",
+        "sha256": "716229b951c34339b65dcdd3d1b18ccf4c5b20a19895e3f9d1eb5e4e47ab7a22"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0006_07.png",
+        "source": "packs/Emojis/CuteEmoji_0006_07.png",
+        "sha256": "c5074dfc672175a9498a1c6998d4b6d9d56454ea2ee94d8968fd2bcf1791f3dc"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0007_08.png",
+        "source": "packs/Emojis/CuteEmoji_0007_08.png",
+        "sha256": "54028b3d37859d51e2f7a388c5428b6e2cb8c945d8422596bbf811c40726f977"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0008_09.png",
+        "source": "packs/Emojis/CuteEmoji_0008_09.png",
+        "sha256": "fb479773f7276a932ab375ab23dbcaf3b74f298ef4c92eaef0bc83585e4629d1"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0009_10.png",
+        "source": "packs/Emojis/CuteEmoji_0009_10.png",
+        "sha256": "17ca85508a58735bea673f5b550f3fcd1e695071c516342b7de8bd097449634e"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0010_11.png",
+        "source": "packs/Emojis/CuteEmoji_0010_11.png",
+        "sha256": "39c37f1e210d279e4941ffc7078eec0e1418298a09a650377be96a059b173de5"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0011_12.png",
+        "source": "packs/Emojis/CuteEmoji_0011_12.png",
+        "sha256": "4fab87a8401e738c1b72c85432b20f76c08eaf7c69596ab6b2374c2954b7bac6"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0012_13.png",
+        "source": "packs/Emojis/CuteEmoji_0012_13.png",
+        "sha256": "c0eaf01862b7e0dd4153afa4daf3b70bda000628cad46d4d7f4a2c0267e9ae41"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0013_14.png",
+        "source": "packs/Emojis/CuteEmoji_0013_14.png",
+        "sha256": "e69461e518d7ebc177d2032ffbba70900ad3ad3293668adb0d50e06004bf68da"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0014_15.png",
+        "source": "packs/Emojis/CuteEmoji_0014_15.png",
+        "sha256": "dcf14cfa3ab4ac0fac46222d4af166d8f526e1cbb3e2683c24cca6fed4da63e0"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0015_16.png",
+        "source": "packs/Emojis/CuteEmoji_0015_16.png",
+        "sha256": "ffbd5e368126069fbeef03485d99e547f226e7e1a1569f38e2dcd87f3bcafaa0"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0016_17.png",
+        "source": "packs/Emojis/CuteEmoji_0016_17.png",
+        "sha256": "59aaa2a8814543b65a8b0caf0e837eb9bcd4bfcb631f6dd49a6897f742dbd7bb"
+      },
+      {
+        "path": "packs/Emojis/CuteEmoji_0017_18.png",
+        "source": "packs/Emojis/CuteEmoji_0017_18.png",
+        "sha256": "6bac0a3c6eab488cad531f3a32c7b699ad72ff22be7da8fa4c3ac9945f6a6914"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0006_Layer-62.png",
+        "source": "packs/Emojis/Emoji__0006_Layer-62.png",
+        "sha256": "df78468732982fc0c1807a2aecf61e20cedf842082f194f23450e1b0ae6140b4"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0007_Layer-63.png",
+        "source": "packs/Emojis/Emoji__0007_Layer-63.png",
+        "sha256": "a299d2179b1304c5881f52b11b7eff649b696995a54dd513f24aaa6de5b45ea5"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0008_Layer-64.png",
+        "source": "packs/Emojis/Emoji__0008_Layer-64.png",
+        "sha256": "ef53e1e75f2489dbc87e090ead7a31692e0163b2e4c751e2c69b6775319ba468"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0009_Layer-11-copy.png",
+        "source": "packs/Emojis/Emoji__0009_Layer-11-copy.png",
+        "sha256": "00660d65e586189abba89181379bcbedd6356c93bf1dbdfb045f2e96023f694b"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0011_Layer-47.png",
+        "source": "packs/Emojis/Emoji__0011_Layer-47.png",
+        "sha256": "f2e4a8ff12d3b83bddbd6983f30ff8b18c82a47e8acfe0b8ea26a85da104c377"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0012_Layer-48.png",
+        "source": "packs/Emojis/Emoji__0012_Layer-48.png",
+        "sha256": "757fb2eb273c509c33e654f4593d85bb2f7f21f6764e15cb8a70af6ccb4ce363"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0020_Layer-37.png",
+        "source": "packs/Emojis/Emoji__0020_Layer-37.png",
+        "sha256": "6e9297b25b84ce7a97d80aacc849eb84d685dc8f07447018fd4b24e5c3bb58f1"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0021_Layer-38.png",
+        "source": "packs/Emojis/Emoji__0021_Layer-38.png",
+        "sha256": "cae92da9ab73219ade8429e9152956ce806cd9ebff88ae0836fb47570c91cff0"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0022_Layer-39.png",
+        "source": "packs/Emojis/Emoji__0022_Layer-39.png",
+        "sha256": "7dbee45a16c2f7fc0c0afc9bf0944f834088ee8f8d23f00766dccb33d9c5ef40"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0023_Layer-40.png",
+        "source": "packs/Emojis/Emoji__0023_Layer-40.png",
+        "sha256": "2ce6f10658cc1e03888e77e404e7e5a755afcb697bacd69e158bd9838f008d46"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0024_Layer-41.png",
+        "source": "packs/Emojis/Emoji__0024_Layer-41.png",
+        "sha256": "5b9e42d578c5da4d9b5fc59ad851da38ab1acbc0f190eb33193b426c82282a5f"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0025_Layer-42.png",
+        "source": "packs/Emojis/Emoji__0025_Layer-42.png",
+        "sha256": "bb652c884142b4ef2c7b1415205e32033d703caabaebff23b15121143ff51db5"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0026_Layer-43.png",
+        "source": "packs/Emojis/Emoji__0026_Layer-43.png",
+        "sha256": "ac2208fe170cb43e5504611741bffc71ae59b853958a904170f284910715c283"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0027_Layer-44.png",
+        "source": "packs/Emojis/Emoji__0027_Layer-44.png",
+        "sha256": "237cbbce0cd503e705d829749b07b5a3a3cefc4bdbdecd5495685ea2c536a811"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0028_Layer-45.png",
+        "source": "packs/Emojis/Emoji__0028_Layer-45.png",
+        "sha256": "95576d7b5d5f0356f80ea18d330b8be0b1bbd63c101d001cc46dd151577fdbd5"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0033_Layer-32.png",
+        "source": "packs/Emojis/Emoji__0033_Layer-32.png",
+        "sha256": "b47180c780b558542bc5c3ce99b40278d3874c7524fb60bdfc8279149f2950f4"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0034_Layer-33.png",
+        "source": "packs/Emojis/Emoji__0034_Layer-33.png",
+        "sha256": "df040a5e8b7fafd250a8a3a66a32c86c849195aa2e58cd65dd57f89a64cc2491"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0035_Layer-34.png",
+        "source": "packs/Emojis/Emoji__0035_Layer-34.png",
+        "sha256": "3395ed31f4ce8036a50830c892f5906c70e36c78b4101771105056c5422c5304"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0036_Layer-35.png",
+        "source": "packs/Emojis/Emoji__0036_Layer-35.png",
+        "sha256": "ee330885dc3fc204d4eb5dee1eb2866d1b510e0008cfd466de32c848365e8ea6"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0037_Layer-36.png",
+        "source": "packs/Emojis/Emoji__0037_Layer-36.png",
+        "sha256": "17405bba1a7613643250a8371664ada8c485f91f67145ad4d65dfcdf71e46a01"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0038_Layer-129-copy-15.png",
+        "source": "packs/Emojis/Emoji__0038_Layer-129-copy-15.png",
+        "sha256": "78c87621f7da99d1daf975ff806f7436739c352b9160aa356618b91e51d53d0c"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0039_Layer-20.png",
+        "source": "packs/Emojis/Emoji__0039_Layer-20.png",
+        "sha256": "35be1bf0e6be6c12c4c33e98a7a35a04be6840a5b108557275f426ef2c39473a"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0040_Layer-21.png",
+        "source": "packs/Emojis/Emoji__0040_Layer-21.png",
+        "sha256": "e196504837cb240ff8d7130423e21ea4b73c633eb63a9f1bd5b84cfef48a320b"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0041_Layer-22.png",
+        "source": "packs/Emojis/Emoji__0041_Layer-22.png",
+        "sha256": "c93b0c982c60c87def5183099f004aaaaefd06a96b62e8f8538299b00e981ba5"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0042_Layer-23.png",
+        "source": "packs/Emojis/Emoji__0042_Layer-23.png",
+        "sha256": "33a4356d6ff97423f0a7f2dc03eac7309151135902db32826519950e32c14f50"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0043_Layer-24.png",
+        "source": "packs/Emojis/Emoji__0043_Layer-24.png",
+        "sha256": "688a025fd381ad4c2cf4df0ac72a43ffe7b311529d335980b597667a4f5ec452"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0044_Layer-25.png",
+        "source": "packs/Emojis/Emoji__0044_Layer-25.png",
+        "sha256": "51720ae4091f42b6cacfe7413d080502b35563de6cbfde7e005b4099b226eb40"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0045_Layer-26.png",
+        "source": "packs/Emojis/Emoji__0045_Layer-26.png",
+        "sha256": "a201374ef79aebf771b213e61e075097d70b6f173f3af1a9c19fe645d254921c"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0046_Layer-27.png",
+        "source": "packs/Emojis/Emoji__0046_Layer-27.png",
+        "sha256": "8b5de3bfb2ee67fd99e1c79559cd50028e2597d394dff790f98b01f6fd3beb63"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0047_Layer-10.png",
+        "source": "packs/Emojis/Emoji__0047_Layer-10.png",
+        "sha256": "92c232b3c553c6d5606edcd17d7de4613777cc5da0cd29382770a6965d177809"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0048_Layer-12.png",
+        "source": "packs/Emojis/Emoji__0048_Layer-12.png",
+        "sha256": "0e2c17a1c778c454ed73c2864d716eab087e1e9fc87cc205bbf45c97021df220"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0049_Layer-13.png",
+        "source": "packs/Emojis/Emoji__0049_Layer-13.png",
+        "sha256": "6981427655c63c9dc756a554fa9924cb5f7da5aee3599a47fc032dbc0a399d0e"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0050_Layer-14.png",
+        "source": "packs/Emojis/Emoji__0050_Layer-14.png",
+        "sha256": "2d264cc05f253bd08e3cc2cef63ad042c167e4fe3ea8fbec3d3d1e7731f27b57"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0051_Layer-15.png",
+        "source": "packs/Emojis/Emoji__0051_Layer-15.png",
+        "sha256": "c83dfb5899316e1a5dfabda7fed67be95c479c4b56a5ae9cc1f477ddabe38e30"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0052_Layer-16.png",
+        "source": "packs/Emojis/Emoji__0052_Layer-16.png",
+        "sha256": "5429d683f63eb6d96d8cb1c4f8a269123d07546b39f873dc9d19fa0232b1ef4a"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0053_Layer-17.png",
+        "source": "packs/Emojis/Emoji__0053_Layer-17.png",
+        "sha256": "58d208793553aa6996f771e92e87e59eedd8c3fcf53fe4af08a6aebb89471879"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0054_Layer-18.png",
+        "source": "packs/Emojis/Emoji__0054_Layer-18.png",
+        "sha256": "f737cdbd852c8409d7c6695d128229aa1659753115d2f4433cf62ed44c99fb89"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0055_Layer-19.png",
+        "source": "packs/Emojis/Emoji__0055_Layer-19.png",
+        "sha256": "43c38fd7bb89425a22592119bc759d7d3057199e2c64869649f1497ec9e46a2d"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0056_Layer-120-copy-13.png",
+        "source": "packs/Emojis/Emoji__0056_Layer-120-copy-13.png",
+        "sha256": "e8b9a48ffb41e510d8963d1c86e1c119d5067675ffaef940a63ceb360a6c8f12"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0057_Layer-1.png",
+        "source": "packs/Emojis/Emoji__0057_Layer-1.png",
+        "sha256": "c713e6031745b9d71bd824678fda4350b29a96a056c7bbe9fbd56f5f57ddd03b"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0058_Layer-2.png",
+        "source": "packs/Emojis/Emoji__0058_Layer-2.png",
+        "sha256": "99dc3f507bccbfde0b1f286c121863617fffcb6ed43c521e6c1b736cd6409067"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0059_Layer-3.png",
+        "source": "packs/Emojis/Emoji__0059_Layer-3.png",
+        "sha256": "8600dfc635ec5a3b1b6246743a6f91baf681b1855204e667f0d2e270349f9166"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0060_Layer-4.png",
+        "source": "packs/Emojis/Emoji__0060_Layer-4.png",
+        "sha256": "6d318183568f33cfa0d226f50c0590e3b26cf7a54abc44302b87ecef1c1dafb3"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0061_Layer-5.png",
+        "source": "packs/Emojis/Emoji__0061_Layer-5.png",
+        "sha256": "ec20f9e36768f848ef8c441ea026ea0a1f3a09da1249a5284fa668dafcd40490"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0062_Layer-6.png",
+        "source": "packs/Emojis/Emoji__0062_Layer-6.png",
+        "sha256": "4e511493b0939ff9208920a07e1f1040ba30188d96ea9e3fba6632721e6620bb"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0063_Layer-7.png",
+        "source": "packs/Emojis/Emoji__0063_Layer-7.png",
+        "sha256": "e8e4194489cb0d84d51bec7b632583af381fefce37829710b213f6dfdff8d765"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0064_Layer-8.png",
+        "source": "packs/Emojis/Emoji__0064_Layer-8.png",
+        "sha256": "3e47bb7ca13a93b58deca77d98de2fbb0dcb2c229eb020655a914ccc8cabea41"
+      },
+      {
+        "path": "packs/Emojis/Emoji__0065_Layer-9.png",
+        "source": "packs/Emojis/Emoji__0065_Layer-9.png",
+        "sha256": "daf47ba030c3408874556804e101af1d45e22a115a365592074e3fb944b4eb1e"
+      },
+      {
+        "path": "packs/Emojis/Meme-Sticker_01.png",
+        "source": "packs/Emojis/Meme-Sticker_01.png",
+        "sha256": "1e003994b1ee17314826145318851a8de5e9231b1ccc2bb1d846c26d3e19b9a2"
+      },
+      {
+        "path": "packs/Emojis/Meme-Sticker_02.png",
+        "source": "packs/Emojis/Meme-Sticker_02.png",
+        "sha256": "5d14420cb2747a191b7a307ff470c7613cdb0cfebfd6c3faa1d6c5e90fa48e2c"
+      },
+      {
+        "path": "packs/Emojis/Quby_01.png",
+        "source": "packs/Emojis/Quby_01.png",
+        "sha256": "34813ed30d133cab42eda6eebdb4f49a0a1f3b0de84660a8cb2f41d1d2b01ba9"
+      },
+      {
+        "path": "packs/Emojis/Quby_02.png",
+        "source": "packs/Emojis/Quby_02.png",
+        "sha256": "a62a577b1bdb5581ee75debdfcca237aac5175333c79e39764b0daed3cc146cb"
+      },
+      {
+        "path": "packs/Emojis/Quby_03.png",
+        "source": "packs/Emojis/Quby_03.png",
+        "sha256": "3395041b0a25c956fd20f57af485f1b0495e83eee343d81128c7576a300c8fe1"
+      },
+      {
+        "path": "packs/Emojis/Quby_04.png",
+        "source": "packs/Emojis/Quby_04.png",
+        "sha256": "9fb7734112bc65621d9c2f09c9424b00bf03de1c81581f1a6a863db60adae33d"
+      },
+      {
+        "path": "packs/Emojis/Quby_05.png",
+        "source": "packs/Emojis/Quby_05.png",
+        "sha256": "33643d0bac93f71eec3073a428704d59401465dee6ad128807a702d3e3e1a667"
+      },
+      {
+        "path": "packs/Emojis/Quby_06.png",
+        "source": "packs/Emojis/Quby_06.png",
+        "sha256": "379bda6f510bedbc1cd5ae4087e3575dcc38852a98b0f04763b94b325c59ba7b"
+      },
+      {
+        "path": "packs/Emojis/Quby_07.png",
+        "source": "packs/Emojis/Quby_07.png",
+        "sha256": "4b7b56b4ec04573156c1bb80a5f851116cd35f1cc2bf90ac5ef3601581730d98"
+      },
+      {
+        "path": "packs/Emojis/Quby_08.png",
+        "source": "packs/Emojis/Quby_08.png",
+        "sha256": "ae8e57afc1ece04dfaed89e33bcdcc2ca3dabd9fba68fb3791cf468b0d45c9e3"
+      },
+      {
+        "path": "packs/Emojis/Quby_09.png",
+        "source": "packs/Emojis/Quby_09.png",
+        "sha256": "8f6045fc853f5551fa839395c5574748fa56df92a29b500d186ac4947d8bab2a"
+      },
+      {
+        "path": "packs/Emojis/Quby_10.png",
+        "source": "packs/Emojis/Quby_10.png",
+        "sha256": "21d63dd01118fed2f66ddbf55f5bf5f82ae0f850c8ea5dbd390493f098ef7963"
+      },
+      {
+        "path": "packs/Emojis/Quby_11.png",
+        "source": "packs/Emojis/Quby_11.png",
+        "sha256": "551b93383adf3d4ba59f3928a5873d188e194a0d91dff8fcb4c78ce4240821d8"
+      },
+      {
+        "path": "packs/Emojis/Quby_12.png",
+        "source": "packs/Emojis/Quby_12.png",
+        "sha256": "f675c1566270c189517087547270c43cf199cb1fe4f3338a747fbf2764c64ad8"
+      },
+      {
+        "path": "packs/Emojis/Quby_13.png",
+        "source": "packs/Emojis/Quby_13.png",
+        "sha256": "0662680bca6d256a82f77cede1fafd1b914560fa291e6bf0795e81767d20d474"
+      },
+      {
+        "path": "packs/Emojis/Quby_14.png",
+        "source": "packs/Emojis/Quby_14.png",
+        "sha256": "e59edc645d574a3c5a76887e47c1902fedaf4ee71a7db88dd90efaedf83f2ef4"
+      },
+      {
+        "path": "packs/Emojis/Quby_15.png",
+        "source": "packs/Emojis/Quby_15.png",
+        "sha256": "bf804c87f224ef60f11d3b729167a576df0347b73fe2ebf1ee2de8c4bea0e3c6"
+      },
+      {
+        "path": "packs/Emojis/Quby_16.png",
+        "source": "packs/Emojis/Quby_16.png",
+        "sha256": "e3483a4c51d1b83d55a0cb1acc64d85fc068e180e10847cf2f461b4a072c0210"
+      },
+      {
+        "path": "packs/basic/01_star.png",
+        "source": "packs/basic/01_star.png",
+        "sha256": "9660e0a12ea3fb548d4ca40ebfed84ef59cf93d1dcdc5357930caa02a6d194e8"
+      },
+      {
+        "path": "packs/basic/02_heart.png",
+        "source": "packs/basic/02_heart.png",
+        "sha256": "1d157e73a47948b937420cd0f9a5fc9f06e59609cd6a8882153022dd35b869c6"
+      },
+      {
+        "path": "packs/basic/03_sparkle.png",
+        "source": "packs/basic/03_sparkle.png",
+        "sha256": "6a0e927e380596dd2e768b5d1a092d099248dd712f039b21f460d228d3712710"
+      },
+      {
+        "path": "packs/basic/04_bang.png",
+        "source": "packs/basic/04_bang.png",
+        "sha256": "30261d2d25d3699b932c8e351bdefebb364f4f65f7bc4f66d97f4def8296c3f7"
+      },
+      {
+        "path": "packs/basic/05_question.png",
+        "source": "packs/basic/05_question.png",
+        "sha256": "be330f4d397336bb299266fc30a6b716337195fdd2ce4dabef813d00c14e5c4c"
+      },
+      {
+        "path": "packs/basic/06_arrow.png",
+        "source": "packs/basic/06_arrow.png",
+        "sha256": "79ac43be04a6ed740be0b875192bf6542d3c8102f404deb279f80b1efc248c92"
+      },
+      {
+        "path": "packs/basic/07_check.png",
+        "source": "packs/basic/07_check.png",
+        "sha256": "2d94425a5133e8782b314e9fd81bd1739fd834ea75282faa6df443aaad13d7ed"
+      },
+      {
+        "path": "packs/basic/08_cross.png",
+        "source": "packs/basic/08_cross.png",
+        "sha256": "ccd9a46cfb54c711d703c0add8499faa98682cc831fc0dbc8242c0275c3a840b"
+      },
+      {
+        "path": "packs/basic/09_smile.png",
+        "source": "packs/basic/09_smile.png",
+        "sha256": "88bb88e4a1d349d41f73d656b9311a817b557114f0c745e37623a032b8e80184"
+      },
+      {
+        "path": "packs/basic/10_flame.png",
+        "source": "packs/basic/10_flame.png",
+        "sha256": "2c0a39f25129b39edc0484756ca10fb5160106167368fb0dcaed12ebfefaced0"
+      },
+      {
+        "path": "packs/basic/11_drop.png",
+        "source": "packs/basic/11_drop.png",
+        "sha256": "4d0f29a48524c1cd1ac7fc4efae3996f42973dd82625666190e051161e2bd0a7"
+      },
+      {
+        "path": "packs/basic/12_bubble.png",
+        "source": "packs/basic/12_bubble.png",
+        "sha256": "0ad4125cff5632f54b81f9c7c36b596975b0159b6c6f784634af55543d39eaf1"
+      }
+    ],
+    "omitted": [
+      ".gitattributes",
+      "Stickers-FULL.png"
+    ]
+  },
+  {
+    "repo": "Fank1/foot-cream",
+    "sha": "9d4edc4c08664f133b7064ba2cb3a7991feb914f",
+    "date": "2026-09-08T16:48:34Z",
+    "stars": 105,
+    "forks": 3,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "footcream",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "source": "CHANGELOG.md",
+        "sha256": "91a5b6fc435e0e4708ae94ac3fc9bfe51a784a54b9cfbd7ff325c9ccaee16e6b"
+      },
+      {
+        "path": "CONTRIBUTING.md",
+        "source": "CONTRIBUTING.md",
+        "sha256": "693679b6c819b6a569506e0de3f74b3ffa04c38dda84dc8f03fab6cf54ede1cc"
+      },
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "8d56b405468aad11f87ab5763f901e276e08d9646ff5c8481b1762b6b789e9ed"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "778e6d223cfeaccfdf9350c1ecdb56057ca9398d04820651e9f5cbbf5e95c469"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "d83df60b30f03e556187753cec4f40913b8d25c12ab1daceb15facfd9234bd15"
+      },
+      {
+        "path": "assets/loader/0%.svg",
+        "source": "assets/loader/0%.svg",
+        "sha256": "16fce7a5e3473beaf324f433227fe483e551970e238fb086e260bbb4df006db1"
+      },
+      {
+        "path": "assets/loader/10%.svg",
+        "source": "assets/loader/10%.svg",
+        "sha256": "8e212225eeae70603b2de53859524f6c5b0eaa9443694b7c7f196f21d312651b"
+      },
+      {
+        "path": "assets/loader/100%.svg",
+        "source": "assets/loader/100%.svg",
+        "sha256": "124fc781d2d836c13eccdea1814e7b70879acb84c93891eb1c3fa7b8f64e7009"
+      },
+      {
+        "path": "assets/loader/15%.svg",
+        "source": "assets/loader/15%.svg",
+        "sha256": "46119260789c81e5731e0d93c90db6579b753edb0dd102248991ea8266fa4f14"
+      },
+      {
+        "path": "assets/loader/20%-1.svg",
+        "source": "assets/loader/20%-1.svg",
+        "sha256": "13697545e8b5178b68df584c89768abd83e455f323c028ee86930286ea104e7d"
+      },
+      {
+        "path": "assets/loader/20%.svg",
+        "source": "assets/loader/20%.svg",
+        "sha256": "07db08d9d7aa296b02c0f7074e3fa07fe31a197be477a77e450f682cce0993b2"
+      },
+      {
+        "path": "assets/loader/25%.svg",
+        "source": "assets/loader/25%.svg",
+        "sha256": "d37484b6599acb140014ca5bf790716f1c4a8d10e92e65c7cb4ab9fe209ca213"
+      },
+      {
+        "path": "assets/loader/30%.svg",
+        "source": "assets/loader/30%.svg",
+        "sha256": "b46405d17d8d2ea412c7f9091cd7713a34e639c3312cece3514db192d8117480"
+      },
+      {
+        "path": "assets/loader/35%.svg",
+        "source": "assets/loader/35%.svg",
+        "sha256": "bcdb89477314c3c07e869feb55bfb4302ee542758429d32be462a75d7f8e8fba"
+      },
+      {
+        "path": "assets/loader/40%.svg",
+        "source": "assets/loader/40%.svg",
+        "sha256": "e2ec79a144b3d501f7aad22ddcc0f2e51e60aea312e0ec41a8ca761f0275c7b4"
+      },
+      {
+        "path": "assets/loader/45%.svg",
+        "source": "assets/loader/45%.svg",
+        "sha256": "bff9f6e0cc6241aed1ad0a18f40181320f52fc92a6b027b70b31e53ca05332e8"
+      },
+      {
+        "path": "assets/loader/5%.svg",
+        "source": "assets/loader/5%.svg",
+        "sha256": "8b455764d6cf98e8ad1209ca3dd0294f0d5450352177b3d55b154c78da86571f"
+      },
+      {
+        "path": "assets/loader/50%.svg",
+        "source": "assets/loader/50%.svg",
+        "sha256": "c196b3732fc12fc43b8f09ed7e9d60c390354da37d5ed024a55beecc4017ac03"
+      },
+      {
+        "path": "assets/loader/55%.svg",
+        "source": "assets/loader/55%.svg",
+        "sha256": "7b5beecb3dd5a83020a0d37e4bb1bc08f2aa52b465eb54325f9eba234ab4f7a1"
+      },
+      {
+        "path": "assets/loader/60%.svg",
+        "source": "assets/loader/60%.svg",
+        "sha256": "e1cd8d24073f6cfecad52da26d54ef0d2d14dc907597a6cc285ff580583af814"
+      },
+      {
+        "path": "assets/loader/65%.svg",
+        "source": "assets/loader/65%.svg",
+        "sha256": "5d43bb6484691413f9556d8c60ca7a5abba2c8e36b762a3f989d3ad84093a901"
+      },
+      {
+        "path": "assets/loader/70%.svg",
+        "source": "assets/loader/70%.svg",
+        "sha256": "e45eba329476f2301f52a1bd7e2d4c0c86fcacab123ca9132814e339216b4896"
+      },
+      {
+        "path": "assets/loader/75%.svg",
+        "source": "assets/loader/75%.svg",
+        "sha256": "e70116be8fc1316ae4f65c1e64a9f8c8881b65a2239b669cca5b4b62d93dc637"
+      },
+      {
+        "path": "assets/loader/80%.svg",
+        "source": "assets/loader/80%.svg",
+        "sha256": "bbd64f413a00e5f9d64d2c9c59c0e463961542e79b6a70da425ca078abae517d"
+      },
+      {
+        "path": "assets/loader/85%.svg",
+        "source": "assets/loader/85%.svg",
+        "sha256": "a231e1d7aa16475719e1ea81900cb79a98ca9bd7d291a03cfbbaafb24e46a0c1"
+      },
+      {
+        "path": "assets/loader/90%.svg",
+        "source": "assets/loader/90%.svg",
+        "sha256": "a7f7175d4d6d5049b99cdae73b9d56703284897b95605393f958a48c412b5d5b"
+      },
+      {
+        "path": "assets/loader/95%.svg",
+        "source": "assets/loader/95%.svg",
+        "sha256": "df758a41beafae51d33bb5bcb473dbc98bc7ca46aa42e94eeac9acb66fb419c0"
+      },
+      {
+        "path": "assets/wiggly-line.svg",
+        "source": "assets/wiggly-line.svg",
+        "sha256": "373f63415de865b8cae8f4dfcb225aec326ba6e5620e90473a471269c4c9932e"
+      },
+      {
+        "path": "l10n/CROWDIN-LANGUAGES.txt",
+        "source": "l10n/CROWDIN-LANGUAGES.txt",
+        "sha256": "835b8b8894d7dac512c3229037bfa4b1c4dabdb14db7be3fc7e40b1315b1ddf0"
+      },
+      {
+        "path": "l10n/README.md",
+        "source": "l10n/README.md",
+        "sha256": "fa67796f68fa8260f757379d72bf89de34c09488b8969f51831e49f1dcc4cad7"
+      },
+      {
+        "path": "l10n/af_ZA/help.po",
+        "source": "l10n/af_ZA/help.po",
+        "sha256": "abf290be0585301552fc4d579bf79a09c82f2aeb7f293212e6f74d50eb5bd110"
+      },
+      {
+        "path": "l10n/af_ZA/labels.po",
+        "source": "l10n/af_ZA/labels.po",
+        "sha256": "2f79c5f8fe4e1c3f9292a54284b2367ebf7148ed0e67781cbe2c689ddcdba404"
+      },
+      {
+        "path": "l10n/ar/help.po",
+        "source": "l10n/ar/help.po",
+        "sha256": "fa2246c420b843649449a2b66eb86c4c25401a5884c23f17b92ebc768e885cfc"
+      },
+      {
+        "path": "l10n/ar/labels.po",
+        "source": "l10n/ar/labels.po",
+        "sha256": "7433e5f7f69656f399320eec65736266ce73c10f7cf453472a69eac3bcc57223"
+      },
+      {
+        "path": "l10n/be/help.po",
+        "source": "l10n/be/help.po",
+        "sha256": "f74b105755c5a8387e6958d2ee1c96546edabfc2507020dc530880a60919ebf7"
+      },
+      {
+        "path": "l10n/be/labels.po",
+        "source": "l10n/be/labels.po",
+        "sha256": "9292d4276dc71062cab15252ee81cdc74fa81e15e333ed377b0b6f43b6719147"
+      },
+      {
+        "path": "l10n/bg_BG/help.po",
+        "source": "l10n/bg_BG/help.po",
+        "sha256": "b8223b1a7d5141bf7064e22d0d9b78df03554ad6e77ea748292950c0d03d5ab3"
+      },
+      {
+        "path": "l10n/bg_BG/labels.po",
+        "source": "l10n/bg_BG/labels.po",
+        "sha256": "1719af817e481b63bcc9347170a11cbb9742e7359b535fc3e2c48e9c78f19cf1"
+      },
+      {
+        "path": "l10n/bn/help.po",
+        "source": "l10n/bn/help.po",
+        "sha256": "e4a934e6492f2fd8036923d53b2f0b137d7b5adc8c8479bd25a7c0bfb3c6165c"
+      },
+      {
+        "path": "l10n/bn/labels.po",
+        "source": "l10n/bn/labels.po",
+        "sha256": "919180e406c38b31e8e3369217dcecc81aaa84dce6b263d39a6a27016a3c2345"
+      },
+      {
+        "path": "l10n/ca/help.po",
+        "source": "l10n/ca/help.po",
+        "sha256": "ff2a535013a21328ffd11c8736de4469958c3f300521aba818e83796422f4c0e"
+      },
+      {
+        "path": "l10n/ca/labels.po",
+        "source": "l10n/ca/labels.po",
+        "sha256": "bb10bcd8debc051c83408bd0a12eb1e7956f7b47aaa9132267200eeb2ce4413f"
+      },
+      {
+        "path": "l10n/cs/help.po",
+        "source": "l10n/cs/help.po",
+        "sha256": "b115929865ee48d207b03fdb2c3d5cf79988a86dbcbb0964e4abcfdb5eff57bf"
+      },
+      {
+        "path": "l10n/cs/labels.po",
+        "source": "l10n/cs/labels.po",
+        "sha256": "da9c555c60673322c14fa984dff698853b4d32c1bf6e2e6991ce46c751988da8"
+      },
+      {
+        "path": "l10n/cy/help.po",
+        "source": "l10n/cy/help.po",
+        "sha256": "fb25e80013ee8ccede4435ab89b1a1b750f6577c78d7b15a5936a769b71df807"
+      },
+      {
+        "path": "l10n/cy/labels.po",
+        "source": "l10n/cy/labels.po",
+        "sha256": "aea9b896b76f0847bbb115df71974477110ac50c7ddd37e155db72eb3b4e4c3a"
+      },
+      {
+        "path": "l10n/da/help.po",
+        "source": "l10n/da/help.po",
+        "sha256": "ac854637c78eda1b39d0b42a0c0b754ff8bdd5c39a57c3fca7b8d0662ca03f5b"
+      },
+      {
+        "path": "l10n/da/labels.po",
+        "source": "l10n/da/labels.po",
+        "sha256": "70ad45fc03ab3de3fe4ea7bc3bd3fa8673d5a323bf09d0ee81b00da0b0b201c8"
+      },
+      {
+        "path": "l10n/de/help.po",
+        "source": "l10n/de/help.po",
+        "sha256": "8adee480ce9fd89284b9496e386458b9449b7c59779c3e924cc598c37deb047c"
+      },
+      {
+        "path": "l10n/de/labels.po",
+        "source": "l10n/de/labels.po",
+        "sha256": "bbcc05221a659e0bf268cd0770f282dc34a48811c3bffb88de70c8315d8baf91"
+      },
+      {
+        "path": "l10n/el/help.po",
+        "source": "l10n/el/help.po",
+        "sha256": "db31cd94a990f1ee4cf6fc23b78ccc4150db7b2f260760a7240ddac49d128ecd"
+      },
+      {
+        "path": "l10n/el/labels.po",
+        "source": "l10n/el/labels.po",
+        "sha256": "f1c4899512b52da52a3421224bdf3af453401777ba151dc135554737069cd585"
+      },
+      {
+        "path": "l10n/en_GB/help.po",
+        "source": "l10n/en_GB/help.po",
+        "sha256": "858b79dfedfa4c8dbf409651d3480893a8de96a7808b77ea7a0ea788f36ae2cb"
+      },
+      {
+        "path": "l10n/en_GB/labels.po",
+        "source": "l10n/en_GB/labels.po",
+        "sha256": "9ad96dd4009d2e18dbda6826ee0989b5fdb29de209b90aeee88bfd00015f3666"
+      },
+      {
+        "path": "l10n/eo/help.po",
+        "source": "l10n/eo/help.po",
+        "sha256": "c3ffab183aeb82588a7ab5d30f36849faeef89ac67b62c7d7ab5b7aed4bf0899"
+      },
+      {
+        "path": "l10n/eo/labels.po",
+        "source": "l10n/eo/labels.po",
+        "sha256": "4b9d3e8302791940958ffa2a58128b513202b1be2bc32b631c67854a96fd6cc9"
+      },
+      {
+        "path": "l10n/es/help.po",
+        "source": "l10n/es/help.po",
+        "sha256": "30243d4acab7970ee22c2288810ec68b9edc17f9d9fe0737b1b8f2d9985dec52"
+      },
+      {
+        "path": "l10n/es/labels.po",
+        "source": "l10n/es/labels.po",
+        "sha256": "4a213c02ecf4d8fe43729ff17742fca8f1201e74f32657ffc41ea4e3e9d1cb72"
+      },
+      {
+        "path": "l10n/et/help.po",
+        "source": "l10n/et/help.po",
+        "sha256": "5fc00721d7b801b18dc42836b6ea4d547a103043acffe7ec257a4a8dfec3a2d6"
+      },
+      {
+        "path": "l10n/et/labels.po",
+        "source": "l10n/et/labels.po",
+        "sha256": "4940170c2c9d924c884b194e7213c5b63eb500aeea9b338dd7a4e84b787d852f"
+      },
+      {
+        "path": "l10n/eu/help.po",
+        "source": "l10n/eu/help.po",
+        "sha256": "066ddf3e3583d7b7fce6e76b22efb25695201d6bffec25de777d9af788f486ab"
+      },
+      {
+        "path": "l10n/eu/labels.po",
+        "source": "l10n/eu/labels.po",
+        "sha256": "59cef1301b206e52c4960018746d5b454e3dbbaf9a4af59736aa5b6910f3e1c2"
+      },
+      {
+        "path": "l10n/fa/help.po",
+        "source": "l10n/fa/help.po",
+        "sha256": "073ffd31725c58a79c2000d122b2df794abb2a5aec9de3a263daa29bdf94c62d"
+      },
+      {
+        "path": "l10n/fa/labels.po",
+        "source": "l10n/fa/labels.po",
+        "sha256": "f735a0aed0a55163fe87c23e67da9c3410ccfcdc8d21e313179da07f35313a69"
+      },
+      {
+        "path": "l10n/fi/help.po",
+        "source": "l10n/fi/help.po",
+        "sha256": "ad7e924dc4a6dae06a8593fbfc4f970bbbba3665ec9022abbf694185dd193fb3"
+      },
+      {
+        "path": "l10n/fi/labels.po",
+        "source": "l10n/fi/labels.po",
+        "sha256": "1a5aa684a0ff37f7d33c1f5bb303ae86692557d6fcceb0ba9325a43a4c0f028c"
+      },
+      {
+        "path": "l10n/fr/help.po",
+        "source": "l10n/fr/help.po",
+        "sha256": "d61491a36fc25c6938af759970c030ae7988a4f7d4f229f7589ff94c7296d808"
+      },
+      {
+        "path": "l10n/fr/labels.po",
+        "source": "l10n/fr/labels.po",
+        "sha256": "ab7e0d92cb5772393bfeb6807b4b74d39c149035e16a711b79e1c5fe722b09ce"
+      },
+      {
+        "path": "l10n/ga/help.po",
+        "source": "l10n/ga/help.po",
+        "sha256": "bb17d01f2a6af3c58568d1011188b5addd29447905b819c39fa85b795c6c8a03"
+      },
+      {
+        "path": "l10n/ga/labels.po",
+        "source": "l10n/ga/labels.po",
+        "sha256": "238207a94ef9194ffd4d58ce5e4569c37fbd3710c375408c16cca8ce1bf3c39d"
+      },
+      {
+        "path": "l10n/gl/help.po",
+        "source": "l10n/gl/help.po",
+        "sha256": "41fa465d4e8b6adf308605b3b0016613684a933195af29281a44d74078a3416a"
+      },
+      {
+        "path": "l10n/gl/labels.po",
+        "source": "l10n/gl/labels.po",
+        "sha256": "9e48ab307b541dacc9ee207b111d16a734701c8f540cc1af4ea30b64b1f3d89e"
+      },
+      {
+        "path": "l10n/he/help.po",
+        "source": "l10n/he/help.po",
+        "sha256": "02f50faa7113840236d221763f0f9d62bab5b3e27be858e124248ef26194a20c"
+      },
+      {
+        "path": "l10n/he/labels.po",
+        "source": "l10n/he/labels.po",
+        "sha256": "d75fbface92f5e499ff80f0edf266db063c6176356f2f27784baa54b6414825f"
+      },
+      {
+        "path": "l10n/hi/help.po",
+        "source": "l10n/hi/help.po",
+        "sha256": "f08741bc8b051d46ad96d56b66cf467ee8b1758273ee5f996fe301f221f2450a"
+      },
+      {
+        "path": "l10n/hi/labels.po",
+        "source": "l10n/hi/labels.po",
+        "sha256": "d434714a6488ddc2e021f54042f0b1293370e2749563d7b5e596794578c1833b"
+      },
+      {
+        "path": "l10n/hr/help.po",
+        "source": "l10n/hr/help.po",
+        "sha256": "dc49eea3e0eb70e714905759ba1cc8e08ab1d295b3c2e686aac31f37ed7fd2e9"
+      },
+      {
+        "path": "l10n/hr/labels.po",
+        "source": "l10n/hr/labels.po",
+        "sha256": "29c41ef2d4ea91fe955b3065526c68d4b5e3be6ca244d8a56226ce4761e7e431"
+      },
+      {
+        "path": "l10n/hu/help.po",
+        "source": "l10n/hu/help.po",
+        "sha256": "06507005ab7855381331e1c60b42d8a14f8752984d05a98af6257e94bc24f170"
+      },
+      {
+        "path": "l10n/hu/labels.po",
+        "source": "l10n/hu/labels.po",
+        "sha256": "b78ec8a2bcd42875633f94220694efdccb057a784a7e9722ea35a7f078d15589"
+      },
+      {
+        "path": "l10n/id/help.po",
+        "source": "l10n/id/help.po",
+        "sha256": "a90a3ff42318b5f3d734252b7126fecf30cd88bad616b6e6ec0acd136e584858"
+      },
+      {
+        "path": "l10n/id/labels.po",
+        "source": "l10n/id/labels.po",
+        "sha256": "33297210628f9be8d05a776b0df1cbf7528a2e3cd8a3872f92c678d4bf8bd1a3"
+      },
+      {
+        "path": "l10n/it_IT/help.po",
+        "source": "l10n/it_IT/help.po",
+        "sha256": "83f3b306e3c9f781e3b2fd55503e2c82285fe7b805ee7ef22416ab25d73c516d"
+      },
+      {
+        "path": "l10n/it_IT/labels.po",
+        "source": "l10n/it_IT/labels.po",
+        "sha256": "0b10fab3c34548416065c3441478513eb9a4fb585b9e33f9fcd096896dd1fab3"
+      },
+      {
+        "path": "l10n/ja/help.po",
+        "source": "l10n/ja/help.po",
+        "sha256": "6a9af167c0102f1c2fb64863b72900d54cf5c1ca001da9b371a5ba3529a09e97"
+      },
+      {
+        "path": "l10n/ja/labels.po",
+        "source": "l10n/ja/labels.po",
+        "sha256": "ca9eb5e0b6e9a88e36ec32bf8e6bd4273e84b6971b08e5843aed9b8a033ffb5e"
+      },
+      {
+        "path": "l10n/ka/help.po",
+        "source": "l10n/ka/help.po",
+        "sha256": "521a208d6350576c09a88e8b0c4523b3ac64541e8d9357b60bb203fdb4e4d2dd"
+      },
+      {
+        "path": "l10n/ka/labels.po",
+        "source": "l10n/ka/labels.po",
+        "sha256": "6ced07f0da48f75c3bbdbd58c9b1641b51a0b30e227e43cbcd2ce08780b95245"
+      },
+      {
+        "path": "l10n/kab/help.po",
+        "source": "l10n/kab/help.po",
+        "sha256": "3b90c7d8e9b43a5898bf4c14ced4c3f7c7a2113824858f8c5c01a037b8e27710"
+      },
+      {
+        "path": "l10n/kab/labels.po",
+        "source": "l10n/kab/labels.po",
+        "sha256": "34dbeb9479af331e3072c9e2b1bd4ce203b638bfd499feb755bb5b482ddaff36"
+      },
+      {
+        "path": "l10n/kn/help.po",
+        "source": "l10n/kn/help.po",
+        "sha256": "df37ac5f8d7365758abcfb252b517981361d3d17fd9c95c4f7b3f5bd79a2f4d6"
+      },
+      {
+        "path": "l10n/kn/labels.po",
+        "source": "l10n/kn/labels.po",
+        "sha256": "cafb16280371ae9a187597b4519bfd43908abf576e537b34f2a6cac60164cc28"
+      },
+      {
+        "path": "l10n/ko_KR/help.po",
+        "source": "l10n/ko_KR/help.po",
+        "sha256": "de5bb8c1ffe9bb3d09c3a40b923fcebaceda000c82c82f5edf1618ad665d8a0f"
+      },
+      {
+        "path": "l10n/ko_KR/labels.po",
+        "source": "l10n/ko_KR/labels.po",
+        "sha256": "c36dca352bf1b1659ca5950e6bfe8cf9d46c60129db0f56ab2ad053de1ba4f45"
+      },
+      {
+        "path": "l10n/lt_LT/help.po",
+        "source": "l10n/lt_LT/help.po",
+        "sha256": "4dbffdd070d6cb731da8e5a13dacffa56a191df9c24e579406ffc68c2c081f69"
+      },
+      {
+        "path": "l10n/lt_LT/labels.po",
+        "source": "l10n/lt_LT/labels.po",
+        "sha256": "c1d7fffc0c249501dfaea03ffdf5a0c50ac44163d4d0d50b1654e9e85af3d53b"
+      },
+      {
+        "path": "l10n/lv/help.po",
+        "source": "l10n/lv/help.po",
+        "sha256": "3e20300921333f96eff6de64484832aefb87da69341415ca1aa1cf44a9f8496b"
+      },
+      {
+        "path": "l10n/lv/labels.po",
+        "source": "l10n/lv/labels.po",
+        "sha256": "3ef16d32077c9287659ad5d5ef59407912b53a5b9261019fca79d4b824f0d6cc"
+      },
+      {
+        "path": "l10n/mk/help.po",
+        "source": "l10n/mk/help.po",
+        "sha256": "9fa2d42c2e4fcbc23177eeaed966f66c707443e81b762c311bf0c0e80d782dfc"
+      },
+      {
+        "path": "l10n/mk/labels.po",
+        "source": "l10n/mk/labels.po",
+        "sha256": "17ce90578bae95084df7180dcde18f7a16f82ede4ba5062a7fade506caebb3e1"
+      },
+      {
+        "path": "l10n/ms/help.po",
+        "source": "l10n/ms/help.po",
+        "sha256": "c8187e0b214ec92d4aa898087c8c437d25f7df75d4bc5646c859969355ceec01"
+      },
+      {
+        "path": "l10n/ms/labels.po",
+        "source": "l10n/ms/labels.po",
+        "sha256": "b0cf39722f362089abe230fb996cb61eba35916e7b76109d0d026989077fe177"
+      },
+      {
+        "path": "l10n/nb_NO/help.po",
+        "source": "l10n/nb_NO/help.po",
+        "sha256": "b16a3e1f3867228392278ec38d36bed2f2cc17ce21e5777c58425f864a9fc2c8"
+      },
+      {
+        "path": "l10n/nb_NO/labels.po",
+        "source": "l10n/nb_NO/labels.po",
+        "sha256": "844a3288f091bf02dfe2cab6c2785f33261ea2e798fc3576a19bfd635760b250"
+      },
+      {
+        "path": "l10n/nl_NL/help.po",
+        "source": "l10n/nl_NL/help.po",
+        "sha256": "21f35b2bce6202dd7895a3fe1c0680e6a90a638170a9bc9bf7d034dff83c1ca0"
+      },
+      {
+        "path": "l10n/nl_NL/labels.po",
+        "source": "l10n/nl_NL/labels.po",
+        "sha256": "e11c90c35dcf916366b964d6a82f198b2ff9d6234d13423e2682e064a7a99425"
+      },
+      {
+        "path": "l10n/nn/help.po",
+        "source": "l10n/nn/help.po",
+        "sha256": "ecc713aca8c17c6b595e735a821e8d0af479d2f86a5a0f6e4471bb7000506919"
+      },
+      {
+        "path": "l10n/nn/labels.po",
+        "source": "l10n/nn/labels.po",
+        "sha256": "7cf8ff78726afad5dc308b17159499713231e9969f9a46db6ff176140c26df69"
+      },
+      {
+        "path": "l10n/or/help.po",
+        "source": "l10n/or/help.po",
+        "sha256": "7d67aa01aacfea4e891e06cc767ce3ae9b88bb00b6076142908e314b7904fb14"
+      },
+      {
+        "path": "l10n/or/labels.po",
+        "source": "l10n/or/labels.po",
+        "sha256": "6445aa1356f5340b67e30f5924471e139e2789e6f6e777d48772d3376b8985a4"
+      },
+      {
+        "path": "l10n/pl/help.po",
+        "source": "l10n/pl/help.po",
+        "sha256": "8a19dc81d52aa8abb2a2cef86736ca9ee6538e6ea3d605c114d028a9a1ff7a08"
+      },
+      {
+        "path": "l10n/pl/labels.po",
+        "source": "l10n/pl/labels.po",
+        "sha256": "4c03ff8c70a18d4dcc350784b2f69dd49ceba0b31c641abf2a5769fa10ea7380"
+      },
+      {
+        "path": "l10n/pt_BR/help.po",
+        "source": "l10n/pt_BR/help.po",
+        "sha256": "ec03ca872c854301e9d50d07017dba2f62120fd078669d08b789b1f67193c1fe"
+      },
+      {
+        "path": "l10n/pt_BR/labels.po",
+        "source": "l10n/pt_BR/labels.po",
+        "sha256": "c27dac17fbf28d1a49d0af8017dbd2eec8e71b34c4d156093d7fed6a251edf00"
+      },
+      {
+        "path": "l10n/pt_PT/help.po",
+        "source": "l10n/pt_PT/help.po",
+        "sha256": "91effe1ea71487c359ee1460fa39b963b847013afd997a1b443503e34a3e19be"
+      },
+      {
+        "path": "l10n/pt_PT/labels.po",
+        "source": "l10n/pt_PT/labels.po",
+        "sha256": "ff6c65bd6bb9a69d62a9288f55b61ef6e6bbdd1c1ea28698fe7267de05526419"
+      },
+      {
+        "path": "l10n/ro/help.po",
+        "source": "l10n/ro/help.po",
+        "sha256": "dcb19d955e5ff379cbac4cceecc8b88df8f77af66d1534c98cd9d47b78d8c0bf"
+      },
+      {
+        "path": "l10n/ro/labels.po",
+        "source": "l10n/ro/labels.po",
+        "sha256": "55ec453647f7bade05f56cf82d0dd2e59e66ed38261017117ebc09ddf0815261"
+      },
+      {
+        "path": "l10n/ru/help.po",
+        "source": "l10n/ru/help.po",
+        "sha256": "a6a5ac621f8620e4457d3a43338206f2e075b6f892ac5781479db311bad2572d"
+      },
+      {
+        "path": "l10n/ru/labels.po",
+        "source": "l10n/ru/labels.po",
+        "sha256": "c2c7cf94bfc98f21497c3aa703e489387ecb367d55c90304f4a29357066022fb"
+      },
+      {
+        "path": "l10n/si/help.po",
+        "source": "l10n/si/help.po",
+        "sha256": "3395c066721a4a0cd4f702c8b3137de2e4d1b339780ef0d9a35725780fa8dfcd"
+      },
+      {
+        "path": "l10n/si/labels.po",
+        "source": "l10n/si/labels.po",
+        "sha256": "eb9cc0492e225df50a333e3b31456d305492720f5497b937b26aee461e545f7c"
+      },
+      {
+        "path": "l10n/sk/help.po",
+        "source": "l10n/sk/help.po",
+        "sha256": "98fae6133d6cb487c50a162ce9ffe9cbce7090f970597b0fd61f28358c483767"
+      },
+      {
+        "path": "l10n/sk/labels.po",
+        "source": "l10n/sk/labels.po",
+        "sha256": "795e9fb5ee8e3b25272c0e492d8bf355881252c15ad1e786bcf95fd05dd640e3"
+      },
+      {
+        "path": "l10n/sl/help.po",
+        "source": "l10n/sl/help.po",
+        "sha256": "67a6a2e22189d6418af1e354817d9d3cb50cc487d077536fcb3e690a5f5e1e16"
+      },
+      {
+        "path": "l10n/sl/labels.po",
+        "source": "l10n/sl/labels.po",
+        "sha256": "5861e05b884a0ea69f2ffc680716b5026380056a3432910ed37883b77e79779a"
+      },
+      {
+        "path": "l10n/sr/help.po",
+        "source": "l10n/sr/help.po",
+        "sha256": "e8b33e2a24d57a45f289b2825e2b8db455b584e7542d07e6930ee23b4545ded6"
+      },
+      {
+        "path": "l10n/sr/labels.po",
+        "source": "l10n/sr/labels.po",
+        "sha256": "1571ddc210554cad37a8a74b5479518921a9c542361710a1524c125398d8ca2e"
+      },
+      {
+        "path": "l10n/sv/help.po",
+        "source": "l10n/sv/help.po",
+        "sha256": "58a53cf8896b6c149b053273af936ad8a512bf76ea9cfd8876177cdf6c8e53b5"
+      },
+      {
+        "path": "l10n/sv/labels.po",
+        "source": "l10n/sv/labels.po",
+        "sha256": "6d0fb3bfd464490fc934be0b0f9208244407dfaf2397d29edfb963a717707c50"
+      },
+      {
+        "path": "l10n/th/help.po",
+        "source": "l10n/th/help.po",
+        "sha256": "165d19edcc9be1e03effc5e511abcf5eee7b00323ae203973bece1318c7801b8"
+      },
+      {
+        "path": "l10n/th/labels.po",
+        "source": "l10n/th/labels.po",
+        "sha256": "a7abdca08ee536d1e5d6dcb16ad35f511dae4e082f9d0561e3a2cb73f1e7a99c"
+      },
+      {
+        "path": "l10n/tr/help.po",
+        "source": "l10n/tr/help.po",
+        "sha256": "1ae6e3e2d018b92e70d8c7663ca0a26ca2b3d0068c9af6b745cc491a0ec4d54d"
+      },
+      {
+        "path": "l10n/tr/labels.po",
+        "source": "l10n/tr/labels.po",
+        "sha256": "17167fe89ed3b6f301ef136543175f97320d0f9630fdb7bd3f09c58180a06d7a"
+      },
+      {
+        "path": "l10n/uk/help.po",
+        "source": "l10n/uk/help.po",
+        "sha256": "47b3b06b719a0bcf3ab876132c772dcc06a7f890ec73a45dd861222f9c03c484"
+      },
+      {
+        "path": "l10n/uk/labels.po",
+        "source": "l10n/uk/labels.po",
+        "sha256": "1c8132be2c231b326c17e1d556c07dc32ba099a8c3aadc8a88f1569e7216588b"
+      },
+      {
+        "path": "l10n/ur/help.po",
+        "source": "l10n/ur/help.po",
+        "sha256": "83a873182b384d025f92f5df3dfb339d4ac99ef9bfa6fd994e0d5542cc575f3a"
+      },
+      {
+        "path": "l10n/ur/labels.po",
+        "source": "l10n/ur/labels.po",
+        "sha256": "a24e899d42f211165f0e407e24c82a8fb1a5358cdb49de124479d0798707f61a"
+      },
+      {
+        "path": "l10n/uz/help.po",
+        "source": "l10n/uz/help.po",
+        "sha256": "2d23a22f7e205bf8f55425acdce0048cb5b01e65fe8fee58238ae9818d345d29"
+      },
+      {
+        "path": "l10n/uz/labels.po",
+        "source": "l10n/uz/labels.po",
+        "sha256": "be64331d74c0552faa8414649da096570a26876f5f1277c8ffa94260caa3128d"
+      },
+      {
+        "path": "l10n/vi/help.po",
+        "source": "l10n/vi/help.po",
+        "sha256": "1b4b98a13d572c98bf86efb0a12688ca4df72be49cd132323dce11e3332001b2"
+      },
+      {
+        "path": "l10n/vi/labels.po",
+        "source": "l10n/vi/labels.po",
+        "sha256": "dcb73ce1dc9ed808a0c37a1152fad36d19b7680c3b80702455a20122d6489fad"
+      },
+      {
+        "path": "l10n/zh_CN/help.po",
+        "source": "l10n/zh_CN/help.po",
+        "sha256": "a5357609115a6348c2549726213c3afe89806e1bc7ca5294e095ff987969b31a"
+      },
+      {
+        "path": "l10n/zh_CN/labels.po",
+        "source": "l10n/zh_CN/labels.po",
+        "sha256": "355b9dcdd0eeb8e20ff0cadfeed8b622d018479b8adf08d646ca967e9ffd4dbe"
+      },
+      {
+        "path": "l10n/zh_TW/help.po",
+        "source": "l10n/zh_TW/help.po",
+        "sha256": "d8254b9fce1907eb5f146c687cd6bfd43696d7d022716fb1bc4232d1a3a206bf"
+      },
+      {
+        "path": "l10n/zh_TW/labels.po",
+        "source": "l10n/zh_TW/labels.po",
+        "sha256": "1371bc0420572d732bb24c5095dee6bfad7ccc712993114ece7dd2d4fcdca2fb"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "1ab048bdb639a2984a63a2b17a45889c72dd93112f615a1c890fa6b8816628ff"
+      },
+      {
+        "path": "metric_epub.lua",
+        "source": "metric_epub.lua",
+        "sha256": "f1b7a41fedd9caf29b12b697edd02cfd4f5c72cc682218ff792416264e78ce7c"
+      },
+      {
+        "path": "unit-icons/length.svg",
+        "source": "unit-icons/length.svg",
+        "sha256": "19fb4e5d62bb7b9cbe45403035acac9ec0c0f1128faf9b63c01264de5c3fd7e4"
+      },
+      {
+        "path": "unit-icons/speed.svg",
+        "source": "unit-icons/speed.svg",
+        "sha256": "16f38c5bc577d7f850d74af574471cc1867b8e8c98d97cb4b471267dcb167369"
+      },
+      {
+        "path": "unit-icons/temp.svg",
+        "source": "unit-icons/temp.svg",
+        "sha256": "63daccca6796bd7855ef49eaf6c86bf216f26e13d26ecc638987a5878c6655df"
+      },
+      {
+        "path": "unit-icons/volume.svg",
+        "source": "unit-icons/volume.svg",
+        "sha256": "2634cdcdb00bbe1f6bb1b62bb725486dc412a2bb2f7b72fa975807cdacd00751"
+      },
+      {
+        "path": "unit-icons/weight.svg",
+        "source": "unit-icons/weight.svg",
+        "sha256": "2a93664491b20992ca925d5cb61e86416f97a6e8cfaab89cd4964da3376a2d22"
+      }
+    ],
+    "omitted": [
+      ".gitignore",
+      "crowdin.yml",
+      "l10n/LOCALES",
+      "l10n/templates/foot-cream-help.pot",
+      "l10n/templates/foot-cream-labels.pot",
+      "l10n/templates/foot-cream.pot"
+    ]
+  },
+  {
+    "repo": "Ajatt-Tools/anki.koplugin",
+    "sha": "55b07ed93d58f2c578c81a28c6fa782aec31d866",
+    "date": "2026-08-20T18:39:03Z",
+    "stars": 235,
+    "forks": 27,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "anki",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "286db3aa3c374d387e1e1d8ec414705c1931304aab1aa6955b729cca37b2e9d1"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "576d8a6eb34ac7e3f897cbd1e9ff3ded74b023d8756ca132a6b4712d9c5307a2"
+      },
+      {
+        "path": "anki_configuration.lua",
+        "source": "anki_configuration.lua",
+        "sha256": "665dd6f68683110020e093580873ea29cb811141353fb9dd342343aee9fe693d"
+      },
+      {
+        "path": "ankiconnect.lua",
+        "source": "ankiconnect.lua",
+        "sha256": "8667f8796b427107024f3b1763e37ec88163db3e2c855d9591f1b2a600c28139"
+      },
+      {
+        "path": "ankinote.lua",
+        "source": "ankinote.lua",
+        "sha256": "2e1a4dea4f63876dad76cbf555aae4af8187781de375ecdbba69ee132929d0ec"
+      },
+      {
+        "path": "customcontextmenu.lua",
+        "source": "customcontextmenu.lua",
+        "sha256": "914fbe70029acb280609351fcdf5bec8e405f85fe4761f97e7cfcdc6a52ede96"
+      },
+      {
+        "path": "extensions/EXT_dict_edit.lua",
+        "source": "extensions/EXT_dict_edit.lua",
+        "sha256": "ac70e7565a6e8dec964fe15289e8171c01b54f59348a0374e4d571584313deae"
+      },
+      {
+        "path": "extensions/EXT_dict_word_lookup.lua",
+        "source": "extensions/EXT_dict_word_lookup.lua",
+        "sha256": "7ac07a8608af1ba62e6793f67986f78014a0c43b8bd7a099e6fab849a6efa368"
+      },
+      {
+        "path": "extensions/EXT_multi_def.lua",
+        "source": "extensions/EXT_multi_def.lua",
+        "sha256": "7d3dbddc14e0fa7014793045d385391986b53826afe34b4e11d155037b243e52"
+      },
+      {
+        "path": "extensions/EXT_pitch_accent.lua",
+        "source": "extensions/EXT_pitch_accent.lua",
+        "sha256": "9da21d5e824a2551e0af4b0c72f77dc643d40a50d685a0f218296745b1ef5cfd"
+      },
+      {
+        "path": "extensions/README.md",
+        "source": "extensions/README.md",
+        "sha256": "336ea83b80bc44bbb4987a8a7acade5ee30e78ffb71168949384666a69e0ed9d"
+      },
+      {
+        "path": "forvo.lua",
+        "source": "forvo.lua",
+        "sha256": "f0aa41b686b91e319e33b62e72d26a263ce470aa1080522541f5340242224522"
+      },
+      {
+        "path": "langsupport/ja/dictwrapper.lua",
+        "source": "langsupport/ja/dictwrapper.lua",
+        "sha256": "dfbb30573590876c0dc4338a3019234701daebd79434e3c7fd07c8b52bd5614c"
+      },
+      {
+        "path": "lua_utils/list.lua",
+        "source": "lua_utils/list.lua",
+        "sha256": "8b83fe8b2dbb48d62446556c3b7a15f01d3819bd1b804322dc894a578eae6f16"
+      },
+      {
+        "path": "lua_utils/utils.lua",
+        "source": "lua_utils/utils.lua",
+        "sha256": "6c6c397c3257e1ed0981d5e806a3fdd4da556bfd36f5ab6ebad3bf4760f07145"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "59e51658db0572fcbd3ebb6c605eab6709290b6d38d22f79396b119524b364df"
+      },
+      {
+        "path": "menubuilder.lua",
+        "source": "menubuilder.lua",
+        "sha256": "a8346984d8af15a4171bd60925720a513a872a288cfa66cd44bab1420211ce18"
+      },
+      {
+        "path": "profiles/README.md",
+        "source": "profiles/README.md",
+        "sha256": "0981ab7ceef84583338f69916e875e686d98b571d3e1a7aa1700b59b9c549898"
+      }
+    ],
+    "omitted": [
+      ".github/ISSUE_TEMPLATE/issue-report.md"
+    ]
+  },
+  {
+    "repo": "gitalexcampos/highlightsync.koplugin",
+    "sha": "bfaf711e2522a3f5e1b1a0e163e65095af1145c8",
+    "date": "2026-02-12T16:16:02Z",
+    "stars": 236,
+    "forks": 21,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "highlightsync",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "5bd1e6335efeb3572dc807a64fb8de92ffbacb37c6def8d1711915cfa9e1b636"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "be358c2c730cbed1832b07baef5c9f82f79dc4b263df72527982153b918f7084"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "648b19e7e854071b98abbd6751787477ebac15b14584d9b500aa445b733e798d"
+      },
+      {
+        "path": "insert_menu.lua",
+        "source": "insert_menu.lua",
+        "sha256": "8fef048f6c0f2de6db593a328f6175210709e9ba97825d2c5c29a81ec15296b8"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "c29d7ab155362690b51346509f82b59d46c9e37fa320bd56fd113164bab5687e"
+      },
+      {
+        "path": "merge.lua",
+        "source": "merge.lua",
+        "sha256": "28f32f2bf46d6d37c86a891f877d5fc1f54862d1a4280e2542871aa51a01461e"
+      }
+    ],
+    "omitted": []
+  },
+  {
+    "repo": "advokatb/readingstreak.koplugin",
+    "sha": "dea5f707c1f8e6c68d917727f6dc7cc6d121db5b",
+    "date": "2026-09-09T13:58:06Z",
+    "stars": 64,
+    "forks": 3,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "readingstreak",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "source": "CHANGELOG.md",
+        "sha256": "75b933ed1fbced2bbb6e0f5f77224aad65d918321b0a2caca6fb012b3f5eeca1"
+      },
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "91b65277959ec273763d28ef002e83a6b3fba57c7a35436c9e5b66536333d720"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "5a38403d8421435b13cf856d1070b55341795d97034148f919461fcfda39f887"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "f79d50d6c98e90a33f345d4f520cee9db87bc6c4cdd3094c56857a8b5a7db088"
+      },
+      {
+        "path": "daily_progress.lua",
+        "source": "daily_progress.lua",
+        "sha256": "a5033b0d5f07a7c6862f846aa795f7af2eb71242baa74033320ee76c1485e9b2"
+      },
+      {
+        "path": "lib/readingstreak_i18n.lua",
+        "source": "lib/readingstreak_i18n.lua",
+        "sha256": "2d45862bcb683656fa1cec4494d3bc98675f8f2ca991a3e48ec72d7336dfb820"
+      },
+      {
+        "path": "locale/hu.po",
+        "source": "locale/hu.po",
+        "sha256": "138eb75b10d3d8bbe1e3ee39a99c460fd7a089cb727db958d705dfc2b5d7b0d3"
+      },
+      {
+        "path": "locale/pl.po",
+        "source": "locale/pl.po",
+        "sha256": "80187841d60f2caa5ea7ecfe80a316323ac7fd36575cf147fb4ec56b74bef79b"
+      },
+      {
+        "path": "locale/ru.po",
+        "source": "locale/ru.po",
+        "sha256": "9f91deeb40ebe22d622e45332931c13178c60918945824231854bf187d902002"
+      },
+      {
+        "path": "locale/tr.po",
+        "source": "locale/tr.po",
+        "sha256": "60f880415d947da84be736e4966c7c19b417d4ec922d32a1ea7c9cd23789c69d"
+      },
+      {
+        "path": "locale/uk.po",
+        "source": "locale/uk.po",
+        "sha256": "02da8a1365d65fadd8ff0890326eba1f83eeea94d35bc52d999e4b09f45caee7"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "06b0707e611886e4ae1f3713ba1d6c6466479b956ed4b3316ca2b78d784f41e3"
+      },
+      {
+        "path": "projecttitle_integration.lua",
+        "source": "projecttitle_integration.lua",
+        "sha256": "91bb56297d281e5210048a56d213779aed3eaebb4ff27cd2f577ace3547d546b"
+      },
+      {
+        "path": "readingstreak_calendarview.lua",
+        "source": "readingstreak_calendarview.lua",
+        "sha256": "feac8b1c1412892f072e93bc5ae2ae3bd1a15b28c7f07767e0145c203669678a"
+      },
+      {
+        "path": "settings_inline.lua",
+        "source": "settings_inline.lua",
+        "sha256": "600206d2be5108b29b8dae7e355e7c840a877cac6bb21bfddb9358c4fd045cbc"
+      },
+      {
+        "path": "settings_manager.lua",
+        "source": "settings_manager.lua",
+        "sha256": "a368a1008228be2b45566b6116ede9ce3f6ce483e5c1921b88be59d25ba5b7b1"
+      },
+      {
+        "path": "statistics_importer.lua",
+        "source": "statistics_importer.lua",
+        "sha256": "0e892c72264bca56d671b2b55cd043a629a4f8c00d3bcca695157cbb5792ada9"
+      },
+      {
+        "path": "streak_calculator.lua",
+        "source": "streak_calculator.lua",
+        "sha256": "5dbba430d56314b89f15bbcfa022fb1d24b56029d791a691eee728d10b7ba7a3"
+      },
+      {
+        "path": "streak_colors.lua",
+        "source": "streak_colors.lua",
+        "sha256": "ef958b5ae2688d30f8c808847fb3a5024c8ab45b80b66b06cbe2141d5929f6c6"
+      },
+      {
+        "path": "streak_notifications.lua",
+        "source": "streak_notifications.lua",
+        "sha256": "0697e99f2aefd44a01696fc40835a5973f62df1853e9aaac40edae3acb3676a7"
+      },
+      {
+        "path": "time_stats.lua",
+        "source": "time_stats.lua",
+        "sha256": "4720e5d01d9ac7069b71dcf93744ae91c02e678e16325628ba54d68d4e490767"
+      },
+      {
+        "path": "updates.json",
+        "source": "updates.json",
+        "sha256": "56a7d6f9ea5be3fb96cd116834ba3fe77acb364c7fd4714d1c8319f429d3c5c3"
+      }
+    ],
+    "omitted": [
+      ".github/FUNDING.yml",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/workflows/release.yml",
+      "locale/readingstreak.pot",
+      "scripts/po2mo.sh",
+      "scripts/update-pot.sh"
+    ]
+  },
+  {
+    "repo": "AndyHazz/bookends.koplugin",
+    "sha": "217a15e4e1b6d5fad94a0cfa6bee303b81b698b5",
+    "date": "2026-10-06T17:37:20Z",
+    "stars": 500,
+    "forks": 21,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "bookends",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "6cbf9da331afc65ed8bfafdc2f1ba89d7cab21d6ebda100b128bbed8a978c161"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "0c47618f7183dfd7392a054a27156957176f030e9a61b1083010da8dcab457c2"
+      },
+      {
+        "path": "assets/bookends-logo-dark.png",
+        "source": "assets/bookends-logo-dark.png",
+        "sha256": "d1356086b6fed701f52ad8bcdd900c5aa7c513942f0bb76c412ff64e259e5296"
+      },
+      {
+        "path": "assets/bookends-logo.png",
+        "source": "assets/bookends-logo.png",
+        "sha256": "cf1f70c9eb2c0aaede8c20eafaf84bdbca3a7296b66fee49d5b3b5b91af1d50d"
+      },
+      {
+        "path": "assets/bookends-logo.svg",
+        "source": "assets/bookends-logo.svg",
+        "sha256": "f053cf41e971bc7e2c6d34bdcba9bd45db67523f6ed99e5a469af3c350a99621"
+      },
+      {
+        "path": "basic_bookends.lua",
+        "source": "basic_bookends.lua",
+        "sha256": "799bd463e730e9208ec77d47d4e78843e64e3492940f1b0e4ebe339f9a1c33d4"
+      },
+      {
+        "path": "bookends_colour.lua",
+        "source": "bookends_colour.lua",
+        "sha256": "8839ad2a00a56e7a8b3de87e5c28aed321148c69261ffcae82df5aaf67ecc2f5"
+      },
+      {
+        "path": "bookends_colour_palette.lua",
+        "source": "bookends_colour_palette.lua",
+        "sha256": "fd4c3c14facadc7b5306c9f9c1a394255af32062d6d850f02f4df182ff17d12c"
+      },
+      {
+        "path": "bookends_config.lua",
+        "source": "bookends_config.lua",
+        "sha256": "cc1960e73eb70786efc10f30e5854b0a27de11f137e8b5155a10d0c85b3729a1"
+      },
+      {
+        "path": "bookends_dialog_helpers.lua",
+        "source": "bookends_dialog_helpers.lua",
+        "sha256": "dd3f683308965ad6379ecdee7ca5ba7f698d6168a638237fc13bdf5b849adf3a"
+      },
+      {
+        "path": "bookends_i18n.lua",
+        "source": "bookends_i18n.lua",
+        "sha256": "6279f66a403c015f42941a3f943072e18ed5984b53da834c50c35c8f729dc4e9"
+      },
+      {
+        "path": "bookends_line_editor.lua",
+        "source": "bookends_line_editor.lua",
+        "sha256": "b4d39b271fc249e79ef46c4c383c585f49d91ef01db197b695494b46aeadeeff"
+      },
+      {
+        "path": "bookends_localdate.lua",
+        "source": "bookends_localdate.lua",
+        "sha256": "80bbfde994f846f2dad36327ada0c9bc50c81f5e0190af99413358aff4429c09"
+      },
+      {
+        "path": "bookends_migrations.lua",
+        "source": "bookends_migrations.lua",
+        "sha256": "614c48214dd5072be00d27fe3ac0a5df5a4c76b83bd91bd58725bc20b4394c44"
+      },
+      {
+        "path": "bookends_nerdfont_names.lua",
+        "source": "bookends_nerdfont_names.lua",
+        "sha256": "8bc47d6c486ead2f263c8fe818fcd5509f62813608179eace325e5dcc92639c1"
+      },
+      {
+        "path": "bookends_overlay_widget.lua",
+        "source": "bookends_overlay_widget.lua",
+        "sha256": "62f6da43afea3c2da1f98d063432200fc6dc6103c1bf3ffc5bbc5b61ccfc82fe"
+      },
+      {
+        "path": "bookends_pacman_sprite.lua",
+        "source": "bookends_pacman_sprite.lua",
+        "sha256": "39568d90d091dd53951b989b5d223aacbdd851c31f4e2e82715f99b57e968e32"
+      },
+      {
+        "path": "bookends_textwidget_patch.lua",
+        "source": "bookends_textwidget_patch.lua",
+        "sha256": "266a6694adbfb88766132a28dd81b111a39fa940e3be3912628b1f973cdf2831"
+      },
+      {
+        "path": "bookends_tokens.lua",
+        "source": "bookends_tokens.lua",
+        "sha256": "68058a7b7ea781181e7361d934653de3c48eefaba696a44979f9339ab1bc176c"
+      },
+      {
+        "path": "bookends_updater.lua",
+        "source": "bookends_updater.lua",
+        "sha256": "910d422f59edf2cf4025b45424d9fd2b9da4c9dcf40e43a4d8548067935003f5"
+      },
+      {
+        "path": "bookends_utils.lua",
+        "source": "bookends_utils.lua",
+        "sha256": "5f65a7f7aaceb3310946fd29e9297813fb7cbdb9b6ea3f50109edef7b6400b25"
+      },
+      {
+        "path": "calibre_metadata.lua",
+        "source": "calibre_metadata.lua",
+        "sha256": "5eb04567922699877211d8b2eab2a1c29d71d67cfc89296a5508b5eedc21a3ee"
+      },
+      {
+        "path": "locale/bg_BG.po",
+        "source": "locale/bg_BG.po",
+        "sha256": "08de95b4f4d1fbf6700f7c6558c0013d5d8aede6dd75e5530edec660a643af06"
+      },
+      {
+        "path": "locale/de.po",
+        "source": "locale/de.po",
+        "sha256": "7f1f539b545ef7c5a4b64bf50d6b46b2162aea2756a0812f891a3bef253f6dc6"
+      },
+      {
+        "path": "locale/en_GB.po",
+        "source": "locale/en_GB.po",
+        "sha256": "76fda0dd33bf5d63918204052a5b8e22ec676f7434881b4e5d08d6d09b0b60e9"
+      },
+      {
+        "path": "locale/es.po",
+        "source": "locale/es.po",
+        "sha256": "d471efb98690e236b71dba790cdf69cd08a8a3da489d2b57ee76fe1a03e7fd1a"
+      },
+      {
+        "path": "locale/fr.po",
+        "source": "locale/fr.po",
+        "sha256": "1d2a3c3d81348e436cd709010e98be5ba07b2aebcef821f4cf92a6d890c510c5"
+      },
+      {
+        "path": "locale/hu.po",
+        "source": "locale/hu.po",
+        "sha256": "9ddb81a5f202e68d1e11c46ea0b977b1b9823dc7ab7fa2365e1cdba82970c9c9"
+      },
+      {
+        "path": "locale/it.po",
+        "source": "locale/it.po",
+        "sha256": "27336bf5b9222c0a32d25b90f67445ada7a385784366f35b8cc69c6a015cf8fe"
+      },
+      {
+        "path": "locale/pt_BR.po",
+        "source": "locale/pt_BR.po",
+        "sha256": "dfe38b24cd59773ee498a56cdb2b32f256451aad7da2e46cf6c0be5905b0f366"
+      },
+      {
+        "path": "locale/pt_PT.po",
+        "source": "locale/pt_PT.po",
+        "sha256": "1a30e7495cb2de775094991258bb59d90a33658a3a015e1a8fb410b4229906bf"
+      },
+      {
+        "path": "locale/sk.po",
+        "source": "locale/sk.po",
+        "sha256": "54b6638fb948bcf9396ca350e7704914df39dd9a71d9d7e59055e499a0026393"
+      },
+      {
+        "path": "locale/uk.po",
+        "source": "locale/uk.po",
+        "sha256": "8233c643cbc3644c3dba64ad6b9c3cb67224056348edde3b5ebe603bf9fc7db3"
+      },
+      {
+        "path": "locale/zh_CN.po",
+        "source": "locale/zh_CN.po",
+        "sha256": "17b14d8e05ca5852605fb24865ef2fe452db1d355aee56ad671fc8bbe469281c"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "0fb0c0ed155d139a35fca1aeeceb7e5653d0b92bf4d9d7c878b81e8a0108cef6"
+      },
+      {
+        "path": "menu/colours_menu.lua",
+        "source": "menu/colours_menu.lua",
+        "sha256": "afd2754af398b970f1744b6e67d47f436f26e3ef47b42a15150a2c3526047bc8"
+      },
+      {
+        "path": "menu/icons_catalogue.lua",
+        "source": "menu/icons_catalogue.lua",
+        "sha256": "e3213db470e1fe3dc8e3e35e07471a4765689d0e71f11b1a5f0a3fd6e733c5c0"
+      },
+      {
+        "path": "menu/icons_library.lua",
+        "source": "menu/icons_library.lua",
+        "sha256": "65259ca3d7fa063ef2d7d5178837e8ee8a59642eebc2cfdc6d2532866d4f1f44"
+      },
+      {
+        "path": "menu/library_modal.lua",
+        "source": "menu/library_modal.lua",
+        "sha256": "dbc1c29c08bc309b67bb49e3b3d8c8ff36c503e29683dc98c792517e1383bd9d"
+      },
+      {
+        "path": "menu/main_menu.lua",
+        "source": "menu/main_menu.lua",
+        "sha256": "8c4b280dd3d4fc10797591f674a329ea8302d1c2ee68ba57e35821aa037c8139"
+      },
+      {
+        "path": "menu/position_menu.lua",
+        "source": "menu/position_menu.lua",
+        "sha256": "041fe84471ab9412544afeb5c6f246ea74becb00a5164161a3e6831cf2952ae1"
+      },
+      {
+        "path": "menu/preset_manager_modal.lua",
+        "source": "menu/preset_manager_modal.lua",
+        "sha256": "7d6f054e7ef3f74146f98697fe2fc1ae395f22ec34beb791c68fdb43c0e1c756"
+      },
+      {
+        "path": "menu/progress_bar_menu.lua",
+        "source": "menu/progress_bar_menu.lua",
+        "sha256": "21a43af4e62c4bdf7356fd8d220b15cc4316d8731f1e6e21f3753cefbd0d8427"
+      },
+      {
+        "path": "menu/tokens_catalogue.lua",
+        "source": "menu/tokens_catalogue.lua",
+        "sha256": "3e96b2e94319708cb9ecd5eec6c60b60e3968c130753106cca98f5670947cc4a"
+      },
+      {
+        "path": "menu/tokens_library.lua",
+        "source": "menu/tokens_library.lua",
+        "sha256": "1ed6b8f00f3048652cb115f447477c927eec20a7cd69dac88d221f294b5e93a0"
+      },
+      {
+        "path": "preset_gallery.lua",
+        "source": "preset_gallery.lua",
+        "sha256": "80a4a57826c1013e5a71cb483afbd9f08fc10ab03fe15f28d30ac99287bc259e"
+      },
+      {
+        "path": "preset_manager.lua",
+        "source": "preset_manager.lua",
+        "sha256": "bededb5e4959bb4144d6253ad015409e3d6eef270176da26f2b8ddc0d225f7f1"
+      },
+      {
+        "path": "preset_naming.lua",
+        "source": "preset_naming.lua",
+        "sha256": "70daa2178d02cfe311ca35acd4adae58701e9e8a521aacdfd28aaaef05ad7e40"
+      },
+      {
+        "path": "status_line.lua",
+        "source": "status_line.lua",
+        "sha256": "4f53a621a8afaf69b6596758051a727d5c629ad2e27233cc8397ea3b5fbededb"
+      },
+      {
+        "path": "token_conformance.lua",
+        "source": "token_conformance.lua",
+        "sha256": "7b9f750751434ea34643629778f6162217a4c2a51b56eeeab38a06d3e3dd0a66"
+      },
+      {
+        "path": "token_semantics.lua",
+        "source": "token_semantics.lua",
+        "sha256": "f71b2286c203b0cde4616d05134ed48e4a7eedf228924772af397d95d62c3564"
+      }
+    ],
+    "omitted": [
+      ".github/FUNDING.yml",
+      ".gitignore",
+      "locale/bookends.pot",
+      "screenshots/line-editor.png",
+      "screenshots/main-menu.png",
+      "screenshots/preset-gallery.png",
+      "tests/_test_bar_band_position.lua",
+      "tests/_test_bar_markers.lua",
+      "tests/_test_bar_relative_menu.lua",
+      "tests/_test_bg_fill_sections.lua",
+      "tests/_test_bookshelf_status_line.lua",
+      "tests/_test_calibre_token.lua",
+      "tests/_test_chapter_parity.lua",
+      "tests/_test_colour.lua",
+      "tests/_test_conditionals.lua",
+      "tests/_test_covered_repaint.lua",
+      "tests/_test_focus_layout.lua",
+      "tests/_test_folder_position.lua",
+      "tests/_test_folder_shortcut.lua",
+      "tests/_test_font_tag.lua",
+      "tests/_test_format_preset_rules.lua",
+      "tests/_test_format_rule_picker.lua",
+      "tests/_test_gallery_preset_path.lua",
+      "tests/_test_gallery_trending.lua",
+      "tests/_test_genre_tokens.lua",
+      "tests/_test_i18n_fuzzy.lua",
+      "tests/_test_icon_library.lua",
+      "tests/_test_icon_tag.lua",
+      "tests/_test_inline_bar_parity.lua",
+      "tests/_test_inline_colour_nudge.lua",
+      "tests/_test_library_modal.lua",
+      "tests/_test_localdate.lua",
+      "tests/_test_marker_anchors.lua",
+      "tests/_test_menu_host_proxy.lua",
+      "tests/_test_meta.lua",
+      "tests/_test_metadata_tokens.lua",
+      "tests/_test_no_literal_tokens.lua",
+      "tests/_test_nudge_grid_floor.lua",
+      "tests/_test_overlay_fill.lua",
+      "tests/_test_pacman_sprite.lua",
+      "tests/_test_preset_migration.lua",
+      "tests/_test_preset_naming.lua",
+      "tests/_test_refresh_timer.lua",
+      "tests/_test_resume_screensaver.lua",
+      "tests/_test_row_limits.lua",
+      "tests/_test_session_pages_advanced.lua",
+      "tests/_test_spacer.lua",
+      "tests/_test_spacer_layout.lua",
+      "tests/_test_status_strip_shift.lua",
+      "tests/_test_time_left_conditionals.lua",
+      "tests/_test_token_favourites.lua",
+      "tests/_test_token_semantics.lua",
+      "tests/_test_tokens.lua",
+      "tests/_test_updater.lua",
+      "tests/_test_warmth_nil.lua",
+      "tools/build-release.sh",
+      "tools/build_nerdfont_names.py",
+      "tools/check_token_parity.sh",
+      "tools/curate_catalogues.py",
+      "tools/submit-worker/README.md",
+      "tools/submit-worker/package-lock.json",
+      "tools/submit-worker/package.json",
+      "tools/submit-worker/scripts/kv-usage.sh",
+      "tools/submit-worker/src/worker.ts",
+      "tools/submit-worker/test/counts.test.mjs",
+      "tools/submit-worker/tsconfig.json",
+      "tools/submit-worker/wrangler.toml"
+    ]
+  },
+  {
+    "repo": "iceyear/readeck.koplugin",
+    "sha": "a1fba4a59b9731e451a63eea4e927c7c16198d7c",
+    "date": "2026-05-07T15:26:10Z",
+    "stars": 130,
+    "forks": 13,
+    "archived": false,
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit",
+      "node_id": "MDc6TGljZW5zZTEz"
+    },
+    "name": "readeck",
+    "source_dir": "readeck.koplugin",
+    "files": [
+      {
+        "path": "_meta.lua",
+        "source": "readeck.koplugin/_meta.lua",
+        "sha256": "a659f1636d8a1069c2735c8afa5c14123b8c5930440aabf9d054970ee81be816"
+      },
+      {
+        "path": "main.lua",
+        "source": "readeck.koplugin/main.lua",
+        "sha256": "68ab020e03f77e95911a84f68de0d03c67f8a32ce911ec5a78c1dadbf1ee5365"
+      },
+      {
+        "path": "readeck/annotations/export.lua",
+        "source": "readeck.koplugin/readeck/annotations/export.lua",
+        "sha256": "6ede8a2d15fece0ac08ab8ba487fb6740709904fe5af15197b0e756e005b03d2"
+      },
+      {
+        "path": "readeck/annotations/highlights.lua",
+        "source": "readeck.koplugin/readeck/annotations/highlights.lua",
+        "sha256": "51393a5cde952a590c8afcb829aa05a12e77b0356998549e19c29641c316d9c2"
+      },
+      {
+        "path": "readeck/annotations/linked_sync.lua",
+        "source": "readeck.koplugin/readeck/annotations/linked_sync.lua",
+        "sha256": "1e7d2de27d195d1d40f83e2f4335225206022cf1f16be07bf1aef5775bb130ae"
+      },
+      {
+        "path": "readeck/auth/device_polling.lua",
+        "source": "readeck.koplugin/readeck/auth/device_polling.lua",
+        "sha256": "b3f3fc6da800178ca82aa74dbaff7d151a7049e75b61990a081117f2e6c98ed4"
+      },
+      {
+        "path": "readeck/auth/form.lua",
+        "source": "readeck.koplugin/readeck/auth/form.lua",
+        "sha256": "301bd92a40acc311b4dd6b30321bb86135e25574ddbf4ac2f621f599ce5cf0bf"
+      },
+      {
+        "path": "readeck/auth/oauth.lua",
+        "source": "readeck.koplugin/readeck/auth/oauth.lua",
+        "sha256": "c0984e2ed82dce3a714e922553e10289a48282b6de59384127be541b65348db4"
+      },
+      {
+        "path": "readeck/core/dates.lua",
+        "source": "readeck.koplugin/readeck/core/dates.lua",
+        "sha256": "9ac76f27d6b07b8768472f10cfeaf90c9b5e718d68ad750bf6cfa20454cc701c"
+      },
+      {
+        "path": "readeck/core/defaults.lua",
+        "source": "readeck.koplugin/readeck/core/defaults.lua",
+        "sha256": "af142c6561a20217cb0b5e4b935350977cf7e4f52d389e906daf99d085565be9"
+      },
+      {
+        "path": "readeck/core/features.lua",
+        "source": "readeck.koplugin/readeck/core/features.lua",
+        "sha256": "7135754e39910dfbb3f282565fa29de649af6915591fdf4bbfebf51abcab4cf3"
+      },
+      {
+        "path": "readeck/core/helpers.lua",
+        "source": "readeck.koplugin/readeck/core/helpers.lua",
+        "sha256": "d630ee8976377bc88de30720693776b8aeb894d7fbb614b3db80034e2875e865"
+      },
+      {
+        "path": "readeck/core/log.lua",
+        "source": "readeck.koplugin/readeck/core/log.lua",
+        "sha256": "01c7a7a1db274e2550cd5abee65c0432012e9ac5c4dcc4d7a8da2de877e5536f"
+      },
+      {
+        "path": "readeck/core/state.lua",
+        "source": "readeck.koplugin/readeck/core/state.lua",
+        "sha256": "938a484b6c7cbdaeae4e2a79fead3708fd7c1fb59fd7b8befb45f6ee47d78640"
+      },
+      {
+        "path": "readeck/i18n/zh_cn.lua",
+        "source": "readeck.koplugin/readeck/i18n/zh_cn.lua",
+        "sha256": "e9db91b34007acb1f2b288ed628f05185c4cfccf3b89af4e0165b83bee823b23"
+      },
+      {
+        "path": "readeck/i18n.lua",
+        "source": "readeck.koplugin/readeck/i18n.lua",
+        "sha256": "5d057c37fb89e81d52e2ff1a464c17a77a9395490bea9aab5692266fb83e53a1"
+      },
+      {
+        "path": "readeck/net/api.lua",
+        "source": "readeck.koplugin/readeck/net/api.lua",
+        "sha256": "bd22c85c6c6383cf2cf6cf34b8c1283cfd748be2aeb25c7db89cac4d70df76da"
+      },
+      {
+        "path": "readeck/net/client.lua",
+        "source": "readeck.koplugin/readeck/net/client.lua",
+        "sha256": "6bd014880dd62925a531ae54da1f496ba522c1dfa4453be463a3a199fe1daa57"
+      },
+      {
+        "path": "readeck/storage/metadata.lua",
+        "source": "readeck.koplugin/readeck/storage/metadata.lua",
+        "sha256": "df87f766817bf0933937159a55f8368bc99d4db981e1624bcc8ab5117c6ddde6"
+      },
+      {
+        "path": "readeck/storage/settings.lua",
+        "source": "readeck.koplugin/readeck/storage/settings.lua",
+        "sha256": "23cd91191285d32b0bd4b04cd8054c0ef534100c0e36225383bd17247d1c7687"
+      },
+      {
+        "path": "readeck/sync/articles.lua",
+        "source": "readeck.koplugin/readeck/sync/articles.lua",
+        "sha256": "581c8c10906aaf8d99f4282d3d039e61415b9309c69a97f904f81b5c1684bc01"
+      },
+      {
+        "path": "readeck/sync/downloads.lua",
+        "source": "readeck.koplugin/readeck/sync/downloads.lua",
+        "sha256": "16bf7d92a00ea0ba54717a70de7d70f33e3548babf76774acbd2967acee31b90"
+      },
+      {
+        "path": "readeck/sync/local_actions.lua",
+        "source": "readeck.koplugin/readeck/sync/local_actions.lua",
+        "sha256": "3b8503f5bcc6eb88137595cd670f60eddf4d1aadf6bf8bf5d821b43356bd0c9f"
+      },
+      {
+        "path": "readeck/sync/periodic.lua",
+        "source": "readeck.koplugin/readeck/sync/periodic.lua",
+        "sha256": "cbd9e6567febd9f5c31f4455dab1c117f52cbf43b74945a5c09e35e67fe63a4e"
+      },
+      {
+        "path": "readeck/sync/progress.lua",
+        "source": "readeck.koplugin/readeck/sync/progress.lua",
+        "sha256": "d4dbefecfd53c063ecfa8abea730073e90319ddc6d987aebc26d08098cd5744b"
+      },
+      {
+        "path": "readeck/sync/scheduler.lua",
+        "source": "readeck.koplugin/readeck/sync/scheduler.lua",
+        "sha256": "95bac04ef1e57a059bde532c3a25acb85fb4ea2423cd6763bafbd0761b9c9632"
+      },
+      {
+        "path": "readeck/sync/status.lua",
+        "source": "readeck.koplugin/readeck/sync/status.lua",
+        "sha256": "facbb7145e708a86a0083e19b2195c4d4862e4f0a7e8a694676dcae474fe4664"
+      },
+      {
+        "path": "readeck/ui/events.lua",
+        "source": "readeck.koplugin/readeck/ui/events.lua",
+        "sha256": "e0407db31630d278759ac1df072a372477b80986655f40cbe183176171e513d2"
+      },
+      {
+        "path": "readeck/ui/menu/settings/dialogs.lua",
+        "source": "readeck.koplugin/readeck/ui/menu/settings/dialogs.lua",
+        "sha256": "47ccc165837a168cd1354296dce6dfcbcf666c0d8d9af7328f756911a55ff9bb"
+      },
+      {
+        "path": "readeck/ui/menu/settings/items.lua",
+        "source": "readeck.koplugin/readeck/ui/menu/settings/items.lua",
+        "sha256": "e38dea7cbe6c3ca61506f1729353d5d1158c7aa479516eb9c20187700fa74f26"
+      },
+      {
+        "path": "readeck/ui/menu/settings/selectors.lua",
+        "source": "readeck.koplugin/readeck/ui/menu/settings/selectors.lua",
+        "sha256": "91bae2aba2fb84745145dd4248460bb8898f7e8818b5e582360b7421af5b0d46"
+      },
+      {
+        "path": "readeck/ui/menu/settings.lua",
+        "source": "readeck.koplugin/readeck/ui/menu/settings.lua",
+        "sha256": "714fb741ade0b685a2f09a066b6d85b27a3e24837ad2f0de3fd6209507e6e32a"
+      },
+      {
+        "path": "readeck/ui/menu.lua",
+        "source": "readeck.koplugin/readeck/ui/menu.lua",
+        "sha256": "be901fe6f0659a880d520081234a4823b5592ba64487b93a0ec69c148e66d617"
+      },
+      {
+        "path": "readeck/ui/progress_message.lua",
+        "source": "readeck.koplugin/readeck/ui/progress_message.lua",
+        "sha256": "fad8f182588d14f50893ed18fcefc1ed54f01aa8c3edfbd635e7b92870bd513d"
+      },
+      {
+        "path": "readeck/ui/settings.lua",
+        "source": "readeck.koplugin/readeck/ui/settings.lua",
+        "sha256": "b0433ed044991fe41dc871f48b6805005129581e5b88e53ba860c9a1461b6d40"
+      },
+      {
+        "path": "readeck/ui/status_messages.lua",
+        "source": "readeck.koplugin/readeck/ui/status_messages.lua",
+        "sha256": "1321b5fa89a22f51541551838597c974f691adf364c6cfae377cdabeb78d7749"
+      },
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "0a0c8877b029d9b42c58c050cfb341bd30f0f9e559e947baa13d06e7df2410e1"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "70d00577c2652e8bd971195e0ce8d1c937a02ffe55480d124ec076252d3abf27"
+      }
+    ],
+    "omitted": []
+  },
+  {
+    "repo": "Craftwork2720/foldermemory.koplugin",
+    "sha": "022202df58b6c721653ccd5e8bbb5bd90d621341",
+    "date": "2026-10-09T00:13:02Z",
+    "stars": 18,
+    "forks": 0,
+    "archived": false,
+    "license": {
+      "key": "agpl-3.0",
+      "name": "GNU Affero General Public License v3.0",
+      "spdx_id": "AGPL-3.0",
+      "url": "https://api.github.com/licenses/agpl-3.0",
+      "node_id": "MDc6TGljZW5zZTE="
+    },
+    "name": "foldermemory",
+    "source_dir": ".",
+    "files": [
+      {
+        "path": "LICENSE",
+        "source": "LICENSE",
+        "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+      },
+      {
+        "path": "README.md",
+        "source": "README.md",
+        "sha256": "4b7e0aed6a1e5320f29ba1f3e946109bb5e9f2630a5b7147f4d01061c19fabfc"
+      },
+      {
+        "path": "_meta.lua",
+        "source": "_meta.lua",
+        "sha256": "52fe533710b8d140270d1e3ca11f3d53f207c483b3f46951414c9e43b9e40025"
+      },
+      {
+        "path": "foldermemory_config.lua",
+        "source": "foldermemory_config.lua",
+        "sha256": "d73ee86cc6da660a381990f276ebc9b1f72b0775634f380d2fb9bd942b6a128e"
+      },
+      {
+        "path": "foldermemory_hooks.lua",
+        "source": "foldermemory_hooks.lua",
+        "sha256": "d402a4228591cd64fb1062eae4669f4342498ad93f7f578c7993df2b6b7061a3"
+      },
+      {
+        "path": "foldermemory_menu.lua",
+        "source": "foldermemory_menu.lua",
+        "sha256": "ebf44ae466085ef1a75e3e3f23bbd2210f3f9211374e221a48f8782ca43cc53e"
+      },
+      {
+        "path": "main.lua",
+        "source": "main.lua",
+        "sha256": "9c7f11b690b383f49185ec35c1a6d399e44a71a864e79a104c21c0c6e08e4798"
+      }
+    ],
+    "omitted": [
+      ".github/FUNDING.yml",
+      ".github/workflows/release.yml",
+      "screenshots/foldermemory-grids.png"
+    ]
+  }
+]

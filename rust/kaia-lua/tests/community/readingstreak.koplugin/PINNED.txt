@@ -1,0 +1,6 @@
+Repository: https://github.com/advokatb/readingstreak.koplugin
+Commit: dea5f707c1f8e6c68d917727f6dc7cc6d121db5b
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

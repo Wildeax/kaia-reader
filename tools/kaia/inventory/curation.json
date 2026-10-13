@@ -1,15 +1,131 @@
 {
-  "baseline": "Upstream KOReader v2026.07.1 (9192014d8). Plugin tree scanned at b5ad80933, which has no plugin changes since 9192014d8",
+  "baseline": "Upstream KOReader v2026.07.1 (9192014d8), plus Kaia example and stickers plugins. Current plugin tree scanned on 2026-10-13",
   "community": [
     {
       "name": "pencil.koplugin",
       "url": "https://github.com/mysticknits/pencil.koplugin",
-      "pin": "not yet selected"
+      "pin": "f4e58b315c972a3ff663380cf6e186c32bc339d2",
+      "license": "AGPL-3.0",
+      "reason": "Stylus handwriting made for the Kobo Libra Colour. Keeps the original candidate.",
+      "stars": 158,
+      "forks": 26,
+      "last_commit": "2026-05-14T21:13:30Z",
+      "state": "blocked",
+      "test": "pencil_requires_stylus_event_delivery",
+      "workflow": "Open an EPUB, enable Pencil, draw a stroke, erase it and reopen the book.",
+      "missing": "Load stops at ReaderUI.active_widgets. Upstream also requires replacing frontend/device/input.lua. Needs app-owned stylus and eraser events, stroke storage, coordinate transforms and bookmark integration. The input replacement is not applied."
     },
     {
       "name": "pagenotes.koplugin",
       "url": "https://github.com/toastiez/pagenotes.koplugin",
-      "pin": "not yet selected"
+      "pin": "5876d17ad38af09dc12c20a3b30aead1b9bf579b",
+      "license": "MIT",
+      "reason": "Page notes and stickers, including colour artwork. Keeps the original candidate.",
+      "stars": 23,
+      "forks": 1,
+      "last_commit": "2026-09-13T20:06:17Z",
+      "state": "works with limits",
+      "test": "pagenotes_adds_and_paints_a_pdf_note",
+      "workflow": "Open a PDF, use Add note or sticker, type a text note, place it, finish editing and paint the page.",
+      "missing": "Test adds text through the real dialog, checks stored host settings and changed page pixels, then turns a real PDF page and checks that the note disappears. Persistent arbitrary per-book settings need the app host. EPUB word anchors, sticker placement, dragging, rotation and colour output remain untested."
+    },
+    {
+      "name": "footcream.koplugin",
+      "url": "https://github.com/Fank1/foot-cream",
+      "pin": "9d4edc4c08664f133b7064ba2cb3a7991feb914f",
+      "license": "AGPL-3.0-or-later",
+      "reason": "Converts unfamiliar measurements while reading. Provides a reading aid beyond timers and statistics.",
+      "stars": 105,
+      "forks": 3,
+      "last_commit": "2026-09-08T16:48:34Z",
+      "state": "blocked",
+      "test": "footcream_requires_document_text_search",
+      "workflow": "Open an EPUB, scan its measurements and show one metric conversion at the matching text.",
+      "missing": "Loads, then ReaderReady stops at document.findAllText. Needs document-wide search with xpointers, text geometry and reader paint/tap hooks. Its cache uses sidecars, and its in-text modes rewrite EPUB files. Those storage paths need an app-owned design before use."
+    },
+    {
+      "name": "anki.koplugin",
+      "url": "https://github.com/Ajatt-Tools/anki.koplugin",
+      "pin": "55b07ed93d58f2c578c81a28c6fa782aec31d866",
+      "license": "AGPL-3.0",
+      "reason": "Exports dictionary words as study cards and can queue notes offline. Has 27 forks.",
+      "stars": 235,
+      "forks": 27,
+      "last_commit": "2026-08-20T18:39:03Z",
+      "state": "blocked",
+      "test": "anki_requires_dictionary_buttons",
+      "workflow": "Open an EPUB, look up a word, choose Add to Anki and save one card to the offline queue.",
+      "missing": "Load stops at dictionary:addToDictButtons because no dictionary host exists. Needs dictionary popup registration, lookup results, selection context and document metadata. Online AnkiConnect, translation and audio calls are excluded. Profiles are present under the scratch data/plugins/anki.koplugin path, so the test reaches the dictionary failure."
+    },
+    {
+      "name": "highlightsync.koplugin",
+      "url": "https://github.com/gitalexcampos/highlightsync.koplugin",
+      "pin": "bfaf711e2522a3f5e1b1a0e163e65095af1145c8",
+      "license": "AGPL-3.0",
+      "reason": "Merges annotations across devices. Has 236 stars and 21 forks, but its latest default-branch commit is older than the other candidates.",
+      "stars": 236,
+      "forks": 21,
+      "last_commit": "2026-02-12T16:16:02Z",
+      "state": "blocked",
+      "test": "highlightsync_opens_settings_then_rejects_sidecar_sync",
+      "workflow": "Open an EPUB with a host annotation, open Sync Cloud, then invoke Sync Highlights.",
+      "missing": "The cloud settings widget opens. The main action stops at doc_settings.getSidecarDir before network access. The plugin writes JSON beside KOReader sidecars and replaces annotation.annotations without host writes. Needs a host-owned sync/storage adapter and stable annotation updates. Remote sync is excluded by the no-network product rule."
+    },
+    {
+      "name": "readingstreak.koplugin",
+      "url": "https://github.com/advokatb/readingstreak.koplugin",
+      "pin": "dea5f707c1f8e6c68d917727f6dc7cc6d121db5b",
+      "license": "AGPL-3.0",
+      "reason": "Tracks daily reading goals without a server. Adds a reading aid with persistent history.",
+      "stars": 64,
+      "forks": 3,
+      "last_commit": "2026-09-09T13:58:06Z",
+      "state": "works with limits",
+      "test": "readingstreak_tracks_real_page_turns",
+      "workflow": "Open an EPUB, turn a page, view the streak and calendar, then reopen the plugin.",
+      "missing": "Checks one page increment, paints the streak and calendar widgets, and checks the saved streak after reopening. Time thresholds, day rollover, history import, and persistence of page totals after completing a daily goal remain untested."
+    },
+    {
+      "name": "bookends.koplugin",
+      "url": "https://github.com/AndyHazz/bookends.koplugin",
+      "pin": "217a15e4e1b6d5fad94a0cfa6bee303b81b698b5",
+      "license": "AGPL-3.0",
+      "reason": "Custom page text and progress overlays. The most popular selected plugin, with 500 stars and recent commits.",
+      "stars": 500,
+      "forks": 21,
+      "last_commit": "2026-10-06T17:37:20Z",
+      "state": "works with limits",
+      "test": "bookends_paints_an_overlay",
+      "workflow": "Open a PDF, enable Bookends through its menu, paint the default overlay, flush settings and reopen.",
+      "missing": "Checks changed pixels and the plugin's own paint error counter before and after reopening. Tests the default preset on a grayscale frame. Advanced tokens, colour output, font packs, skimming, update downloads and preset sharing remain untested. The app must paint registered overlays."
+    },
+    {
+      "name": "readeck.koplugin",
+      "url": "https://github.com/iceyear/readeck.koplugin",
+      "pin": "a1fba4a59b9731e451a63eea4e927c7c16198d7c",
+      "license": "MIT",
+      "reason": "Read-later articles, annotation export and library sync. Has 130 stars and 13 forks.",
+      "stars": 130,
+      "forks": 13,
+      "last_commit": "2026-05-07T15:26:10Z",
+      "state": "blocked",
+      "test": "readeck_opens_settings_and_requires_a_server",
+      "workflow": "Open a book, configure Readeck and its download folder, then sync and open one article.",
+      "missing": "Settings open. The sync action runs its scheduled callback and reports the missing server and download folder, with sync_in_progress cleared. Article download, authentication and export require server access, excluded by the no-network product rule. Successful transfer is not claimed."
+    },
+    {
+      "name": "foldermemory.koplugin",
+      "url": "https://github.com/Craftwork2720/foldermemory.koplugin",
+      "pin": "022202df58b6c721653ccd5e8bbb5bd90d621341",
+      "license": "AGPL-3.0",
+      "reason": "Remembers sorting and display choices per library folder. A smaller candidate with an October commit.",
+      "stars": 18,
+      "forks": 0,
+      "last_commit": "2026-10-09T00:13:02Z",
+      "state": "blocked",
+      "test": "foldermemory_requires_library_display_hooks",
+      "workflow": "In a library containing an EPUB, save a folder's sort/display settings, leave it and return.",
+      "missing": "Library-mode load stops at FileManager.file_chooser. Reader-mode investigation also reached FileManager.onRefresh. The plugin patches Lua FileChooser and CoverBrowser. Needs app library adapters for sort, filters, display mode, grid size and folder entry/refresh. Lua class patches cannot change the Rust library view."
     }
   ],
   "plugins": {
@@ -285,6 +401,21 @@
       "class": "Plugin using shared widgets",
       "class_basis": "Uses the download manager and the document registry. No core patches.",
       "workflow": "Configure a test Wallabag server and sync. Download one article, mark it read, and open it in the reader. Check the reading position, suspend, resume, close and reopen KOReader, and confirm the article status persists."
+    },
+    "kaiaexample": {
+      "platform": "debug only",
+      "platform_basis": "The DISABLED_BY_DEFAULT gate in main.lua disables this extension API example.",
+      "class": "Not applicable on Kobo",
+      "class_basis": "Disabled developer example. Uses the Kaia extension API when enabled.",
+      "workflow": "Not assessed by the L5 bundled or community tests. In a debug build, enable the example, open its greeting menu, change the shout setting and invoke its command."
+    },
+    "kaiastickers": {
+      "platform": "applicable",
+      "platform_basis": "No platform gate. Needs the Kaia library and store to add stickers to EPUB and PDF documents.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Registers a reader overlay and highlight button, writes stickers through the Kaia store, and uses engine positions and selection geometry.",
+      "workflow": "Not assessed by the L5 bundled or community tests. Open an EPUB and PDF, place a sticker and a text note, move and resize them, turn pages, export them and reopen the book to check storage.",
+      "data_note": "Stores stickers through frontend/kaia/store.lua. The Rust app integration is not assessed here."
     }
   }
 }

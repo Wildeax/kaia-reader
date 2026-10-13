@@ -1,0 +1,6 @@
+Repository: https://github.com/toastiez/pagenotes.koplugin
+Commit: 5876d17ad38af09dc12c20a3b30aead1b9bf579b
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

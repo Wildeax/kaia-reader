@@ -125,13 +125,17 @@ pub fn type_text(ui: &mut LuaUi, text: &str) {
 }
 
 pub fn close_windows(ui: &mut LuaUi) {
-    while ui.window_count() > 0 {
+    for _ in 0..100 {
+        if ui.window_count() == 0 {
+            return;
+        }
         ui.exec(
             "close-window",
-            "local U = require('ui/uimanager'); U:close(U:getTopmostVisibleWidget())",
+            "local U = require('ui/uimanager'); U:close(U:getNthTopWidget(1))",
         )
         .unwrap();
     }
+    panic!("windows did not close");
 }
 
 pub struct Library {

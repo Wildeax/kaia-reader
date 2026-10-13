@@ -1,0 +1,6 @@
+Repository: https://github.com/iceyear/readeck.koplugin
+Commit: a1fba4a59b9731e451a63eea4e927c7c16198d7c
+Date: 2026-10-13
+Source directory: readeck.koplugin
+
+File hashes and omitted repository files are recorded in ../manifest.json.

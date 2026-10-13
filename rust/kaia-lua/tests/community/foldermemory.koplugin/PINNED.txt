@@ -1,0 +1,6 @@
+Repository: https://github.com/Craftwork2720/foldermemory.koplugin
+Commit: 022202df58b6c721653ccd5e8bbb5bd90d621341
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

@@ -343,3 +343,22 @@ No flagged paths outside `test/`, fonts and `base/thirdparty`.
 83. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 84. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 
+
+## Community plugin fixtures
+
+This supplement is maintained by hand. The generator above does not inventory
+`rust/kaia-lua/tests/community`. Preserve this section when regenerating.
+Pins, selection evidence and limitations are in [COMMUNITY_PLUGINS.md](COMMUNITY_PLUGINS.md).
+Each LICENSE below is the unchanged license from the pinned repository.
+
+| Fixture | Repository | Commit | License file | Terms |
+|---|---|---|---|---|
+| `pencil.koplugin` | [mysticknits/pencil.koplugin](https://github.com/mysticknits/pencil.koplugin) | `f4e58b315c972a3ff663380cf6e186c32bc339d2` | [LICENSE](../../../rust/kaia-lua/tests/community/pencil.koplugin/LICENSE) | AGPL-3.0 |
+| `pagenotes.koplugin` | [toastiez/pagenotes.koplugin](https://github.com/toastiez/pagenotes.koplugin) | `5876d17ad38af09dc12c20a3b30aead1b9bf579b` | [LICENSE](../../../rust/kaia-lua/tests/community/pagenotes.koplugin/LICENSE) | MIT |
+| `footcream.koplugin` | [Fank1/foot-cream](https://github.com/Fank1/foot-cream) | `9d4edc4c08664f133b7064ba2cb3a7991feb914f` | [LICENSE](../../../rust/kaia-lua/tests/community/footcream.koplugin/LICENSE) | AGPL-3.0-or-later |
+| `anki.koplugin` | [Ajatt-Tools/anki.koplugin](https://github.com/Ajatt-Tools/anki.koplugin) | `55b07ed93d58f2c578c81a28c6fa782aec31d866` | [LICENSE](../../../rust/kaia-lua/tests/community/anki.koplugin/LICENSE) | AGPL-3.0 |
+| `highlightsync.koplugin` | [gitalexcampos/highlightsync.koplugin](https://github.com/gitalexcampos/highlightsync.koplugin) | `bfaf711e2522a3f5e1b1a0e163e65095af1145c8` | [LICENSE](../../../rust/kaia-lua/tests/community/highlightsync.koplugin/LICENSE) | AGPL-3.0 |
+| `readingstreak.koplugin` | [advokatb/readingstreak.koplugin](https://github.com/advokatb/readingstreak.koplugin) | `dea5f707c1f8e6c68d917727f6dc7cc6d121db5b` | [LICENSE](../../../rust/kaia-lua/tests/community/readingstreak.koplugin/LICENSE) | AGPL-3.0 |
+| `bookends.koplugin` | [AndyHazz/bookends.koplugin](https://github.com/AndyHazz/bookends.koplugin) | `217a15e4e1b6d5fad94a0cfa6bee303b81b698b5` | [LICENSE](../../../rust/kaia-lua/tests/community/bookends.koplugin/LICENSE) | AGPL-3.0 |
+| `readeck.koplugin` | [iceyear/readeck.koplugin](https://github.com/iceyear/readeck.koplugin) | `a1fba4a59b9731e451a63eea4e927c7c16198d7c` | [LICENSE](../../../rust/kaia-lua/tests/community/readeck.koplugin/LICENSE) | MIT |
+| `foldermemory.koplugin` | [Craftwork2720/foldermemory.koplugin](https://github.com/Craftwork2720/foldermemory.koplugin) | `022202df58b6c721653ccd5e8bbb5bd90d621341` | [LICENSE](../../../rust/kaia-lua/tests/community/foldermemory.koplugin/LICENSE) | AGPL-3.0 |

@@ -1,5 +1,5 @@
 {
-  "baseline": "Upstream KOReader v2026.07.1 (9192014d8). Plugin tree scanned at b5ad80933, which has no plugin changes since 9192014d8",
+  "baseline": "Upstream KOReader v2026.07.1 (9192014d8), plus Kaia example and stickers plugins. Current plugin tree scanned on 2026-10-13",
   "generator": "tools/kaia/inventory/plugin_inventory.py",
   "loader": {
     "builtin_plugins": [
@@ -24,6 +24,8 @@
       "hotkeys",
       "httpinspector",
       "japanese",
+      "kaiaexample",
+      "kaiastickers",
       "keepalive",
       "kosync",
       "movetoarchive",
@@ -43,7 +45,7 @@
     ],
     "file": "frontend/pluginloader.lua"
   },
-  "plugin_count": 37,
+  "plugin_count": 39,
   "plugins": [
     {
       "blitbuffer_refs": 0,
@@ -3510,6 +3512,224 @@
           "ui/widget/container/widgetcontainer",
           "ui/widget/infomessage",
           "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if DISABLED_BY_DEFAULT then",
+          "file": "main.lua",
+          "line": 13,
+          "statement": "return { disabled = true, }"
+        },
+        {
+          "enclosing_condition": "if not api then",
+          "file": "main.lua",
+          "line": 24,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 80,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Shows how to use the Kaia extension API. Disabled by default.",
+        "fullname": "Kaia example"
+      },
+      "meta_raw": {
+        "description": "_([[Shows how to use the Kaia extension API. Disabled by default.]])",
+        "fullname": "_(\"Kaia example\")"
+      },
+      "meta_summary": "Shows how to use the Kaia extension API.",
+      "name": "kaiaexample",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/kaiaexample.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 0,
+        "addToMainMenu": 0,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 0
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "gettext",
+          "kaia/api/v1",
+          "logger",
+          "ui/widget/container/widgetcontainer"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/widget/container/widgetcontainer"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 11,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 1,
+        "self.document": 7,
+        "self.ui.document": 4
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 2,
+        "G_reader_settings": 2,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 4
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua",
+        "stickerlayer.lua"
+      ],
+      "lua_line_count": 1663,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Places sticker images on the text of a book. Needs the Kaia library.",
+        "fullname": "Kaia stickers"
+      },
+      "meta_raw": {
+        "description": "_([[Places sticker images on the text of a book. Needs the Kaia library.]])",
+        "fullname": "_(\"Kaia stickers\")"
+      },
+      "meta_summary": "Places sticker images on the text of a book.",
+      "name": "kaiastickers",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "NotesData"
+      ],
+      "path": "plugins/kaiastickers.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 20,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 1,
+        "external": [
+          "datastorage",
+          "device",
+          "docsettings",
+          "ffi/blitbuffer",
+          "ffi/util",
+          "gettext",
+          "kaia/rustlib",
+          "kaia/store",
+          "kaia/theme",
+          "libs/libkoreader-lfs",
+          "logger",
+          "readhistory",
+          "ui/bidi",
+          "ui/geometry",
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer",
+          "util"
+        ],
+        "local": [
+          "stickerlayer"
+        ]
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/geometry",
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer"
+        ],
+        "widgets": [
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer"
         ]
       }
     },

@@ -1,0 +1,6 @@
+Repository: https://github.com/Ajatt-Tools/anki.koplugin
+Commit: 55b07ed93d58f2c578c81a28c6fa782aec31d866
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

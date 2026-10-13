@@ -10,6 +10,10 @@ spec in `docs/kaia/specs/LUA_COMPAT.md`).
   PluginLoader loads plugins, and Kaia records their menus, actions and errors.
 - Stage L5 part 1: desktop bundled-plugin workflows and explicit blockers are in
   `tests/bundled.rs` and `docs/kaia/inventory/PLUGIN_STATUS.md`. L5 is incomplete.
+- Stage L5 part 2: nine pinned community plugins have workflow or blocker tests in
+  `tests/community.rs`. Three work with limits and six are blocked. See
+  [the community inventory](../../docs/kaia/inventory/COMMUNITY_PLUGINS.md) for pins,
+  licenses, tested steps and missing host services.
 
 Run `. rust/kaia-lua/env.sh` (or `source tools/kaia/env.sh`) before cargo. The tests need the
 KOReader emulator tree (`./kodev build`), its fonts and its `libs/`.
@@ -37,7 +41,9 @@ neither crate, so the Rust app can implement the host traits without a cycle.
 | `lua/apps/filemanager/filemanager.lua` | FileManager proxy over `LibraryHost` |
 | `lua/dispatcher.lua` | Dispatcher registration into the Lua action table |
 | `lua/kaia/plugin_runtime.lua` | KOReader PluginLoader setup, plugin instances and event calls |
-| `tests/bundled.rs` | Bundled workflow tests and all 37 load outcomes |
+| `tests/bundled.rs` | Bundled workflow tests and all 37 upstream load outcomes |
+| `tests/community.rs` | Nine community plugin workflows or blockers, plus safe mode |
+| `tests/community/` | Unchanged pinned fixtures, license files and a hash checker |
 | `tests/common/book.rs` | Real EPUB and PDF test hosts, annotation writes and layout changes |
 | `lua/kaia/plugin_menu.lua` | Plugin menu callback and dialog adapter |
 | `lua/kaia/plugin_compat.lua` | Adapter for the directory-defaults editor's reload call |

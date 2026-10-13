@@ -1,0 +1,6 @@
+Repository: https://github.com/mysticknits/pencil.koplugin
+Commit: f4e58b315c972a3ff663380cf6e186c32bc339d2
+Date: 2026-10-13
+Source directory: pencil.koplugin
+
+File hashes and omitted repository files are recorded in ../manifest.json.

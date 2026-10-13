@@ -1,0 +1,243 @@
+# Polish translation for Reading Streak Plugin
+# Copyright (C) 2025
+msgid ""
+msgstr ""
+"Project-Id-Version: Reading Streak\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: pl\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Reading Streak"
+msgstr "Seria czytania"
+
+msgid "Track your daily and weekly reading streaks similar to Kindle Streak. View calendar, set goals, and celebrate milestones."
+msgstr "Śledź swoje codzienne i tygodniowe serie czytania, podobnie jak w Kindle Streak. Przeglądaj kalendarz, wyznaczaj cele i świętuj osiągnięcia."
+
+msgid "Congratulations! You've reached your streak goal of %1 days!"
+msgstr "Gratulacje! Osiągnąłeś swój cel serii: %1 dni!"
+
+msgid "Congratulations! You've met today's streak target!"
+msgstr "Gratulacje! Dzisiejszy cel serii został osiągnięty!"
+
+msgid "Never"
+msgstr "Nigdy"
+
+msgid "Reading streak has been reset!"
+msgstr "Seria czytania została zresetowana!"
+
+msgid "View Streak"
+msgstr "Zobacz serię"
+
+msgid "Calendar View"
+msgstr "Widok kalendarza"
+
+msgid "Settings"
+msgstr "Ustawienia"
+
+msgid "Goals"
+msgstr "Cele"
+
+msgid "Streak Goal"
+msgstr "Cel serii"
+
+msgid "Show streak notifications"
+msgstr "Pokaż powiadomienia o serii"
+
+msgid "Use toast notifications"
+msgstr "Powiadomienia toast (bez dotknięcia)"
+
+msgid "Colors"
+msgstr "Kolory"
+
+msgid "Colour options for toast notifications and calendar. Colour screens only; greyscale and night mode keep stock colours."
+msgstr "Opcje kolorów dla toastów i kalendarza. Tylko ekrany kolorowe; na czarno-białych i w trybie nocnym — kolory domyślne."
+
+msgid "Toast color: %1"
+msgstr "Kolor toasta: %1"
+
+msgid "Background color for toast notifications. Greyscale and night mode keep the stock white toast."
+msgstr "Kolor tła powiadomień toast. Na czarno-białych i w trybie nocnym zostaje biały toast."
+
+msgid "Calendar fill: %1"
+msgstr "Wypełnienie kalendarza: %1"
+
+msgid "Fill color for days with a reading streak in the calendar. Greyscale and night mode keep the stock gray fill."
+msgstr "Kolor wypełnienia dni ze streakiem w kalendarzu. Na czarno-białych i w trybie nocnym zostaje szare wypełnienie."
+
+msgid "Toast color preview"
+msgstr "Podgląd koloru toasta"
+
+msgid "White"
+msgstr "Biały"
+
+msgid "Green"
+msgstr "Zielony"
+
+msgid "Teal"
+msgstr "Morski"
+
+msgid "Blue"
+msgstr "Niebieski"
+
+msgid "Gold"
+msgstr "Złoty"
+
+msgid "Orange"
+msgstr "Pomarańczowy"
+
+msgid "Red"
+msgstr "Czerwony"
+
+msgid "Gray"
+msgstr "Szary"
+
+msgid "Automatically track reading"
+msgstr "Automatycznie śledź czytanie"
+
+msgid "Tracking"
+msgstr "Śledzenie"
+
+msgid "Reset All Data"
+msgstr "Resetuj wszystkie dane"
+
+msgid "Are you sure you want to reset all reading streak data?"
+msgstr "Czy na pewno chcesz zresetować wszystkie dane serii czytania?"
+
+msgid "Reset"
+msgstr "Resetuj"
+
+msgid "1 day"
+msgstr "1 dzień"
+
+msgid "%1 days"
+msgstr "%1 dni"
+
+msgid "1 week"
+msgstr "1 tydzień"
+
+msgid "%1 weeks"
+msgstr "%1 tyg."
+
+msgid "%1 pages"
+msgstr "%1 stron"
+
+msgid "%1 minutes"
+msgstr "%1 min"
+
+msgid "%1 days read out of %2"
+msgstr "%1 dni przeczytanych z %2"
+
+msgid "Data Management"
+msgstr "Zarządzanie danymi"
+
+msgid "Daily page target: %1"
+msgstr "Dzienny cel stron: %1"
+
+msgid "Daily time target: %1"
+msgstr "Dzienny cel czasu: %1"
+
+msgid "Daily Page Target"
+msgstr "Dzienny cel stron"
+
+msgid "Daily Time Target (minutes)"
+msgstr "Dzienny cel czasu (minuty)"
+
+msgid "Off"
+msgstr "Wyłączone"
+
+msgid "Import from Statistics"
+msgstr "Importuj ze statystyk"
+
+msgid "Statistics database not found."
+msgstr "Nie znaleziono bazy danych statystyk."
+
+msgid "No reading statistics found in database."
+msgstr "Nie znaleziono statystyk czytania w bazie danych."
+
+msgid "No new reading statistics found in database."
+msgstr "Nie znaleziono nowych statystyk czytania w bazie danych."
+
+msgid "No days met the configured daily targets."
+msgstr "Żaden dzień nie spełnił ustawionych celów dziennych."
+
+msgid "Imported %1 reading days from statistics database."
+msgstr "Zaimportowano %1 dni czytania z bazy danych statystyk."
+
+msgid "Imported %1 reading days; skipped %2 days below daily targets."
+msgstr "Zaimportowano %1 dni czytania; pominięto %2 dni poniżej celów dziennych."
+
+msgid "Error importing statistics: %1"
+msgstr "Błąd importu statystyk: %1"
+
+msgid "Error showing calendar: %1"
+msgstr "Błąd wyświetlania kalendarza: %1"
+
+msgid "Streak Goal: %1 days"
+msgstr "Cel serii: %1 dni"
+
+msgid "Calendar streak display: %1"
+msgstr "Widok serii w kalendarzu: %1"
+
+msgid "Display"
+msgstr "Wyświetlanie"
+
+msgid "Days"
+msgstr "Dni"
+
+msgid "Weeks"
+msgstr "Tygodnie"
+
+msgid "Both"
+msgstr "Oba"
+
+msgid "Current streak: %1"
+msgstr "Bieżąca seria: %1"
+
+msgid "Current week streak: %1"
+msgstr "Bieżąca seria tygodniowa: %1"
+
+msgid "Longest Streak"
+msgstr "Najdłuższa seria"
+
+msgid "Total Days Read"
+msgstr "Łącznie dni czytania"
+
+msgid "First Read"
+msgstr "Pierwszy raz czytano"
+
+msgid "Last Read"
+msgstr "Ostatni raz czytano"
+
+msgid "Progress to goal"
+msgstr "Postęp celu"
+
+msgid "Current Streak"
+msgstr "Bieżąca seria"
+
+msgid "Current Week Streak"
+msgstr "Bieżąca seria tygodniowa"
+
+msgid "Longest Week Streak"
+msgstr "Najdłuższa seria tygodniowa"
+
+msgid "Today's Pages Read"
+msgstr "Strony przeczytane dzisiaj"
+
+msgid "Today's Reading Time"
+msgstr "Dzisiejszy czas czytania"
+
+msgid "This Week's Reading Time"
+msgstr "Czas czytania w tym tygodniu"
+
+msgid "%1 seconds"
+msgstr "%1 sek."
+
+msgid "UI Integration"
+msgstr "Integracja interfejsu"
+
+msgid "Export to Project Title"
+msgstr "Eksportuj do tytułu projektu"
+
+msgid "No streak"
+msgstr "Brak serii"

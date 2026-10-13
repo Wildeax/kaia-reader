@@ -1,0 +1,6 @@
+Repository: https://github.com/gitalexcampos/highlightsync.koplugin
+Commit: bfaf711e2522a3f5e1b1a0e163e65095af1145c8
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

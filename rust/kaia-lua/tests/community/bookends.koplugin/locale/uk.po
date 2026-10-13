@@ -1,0 +1,2849 @@
+# Bookends — KOReader Plugin
+# Ukrainian translation
+# advokatb <igor.butsky@gmail.com>, 2026.
+msgid ""
+msgstr ""
+"Project-Id-Version: bookends 5.7.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-28 23:26+0100\n"
+"PO-Revision-Date: 2026-08-21 05:07+0200\n"
+"Last-Translator: advokatb <igor.butsky@gmail.com>\n"
+"Language-Team: advokatb <igor.butsky@gmail.com>\n"
+"Language: uk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"X-Generator: Poedit 1.7.5\n"
+
+#: bookends_colour_palette.lua:400 bookends_dialog_helpers.lua:123
+#: bookends_line_editor.lua:792 bookends_line_editor.lua:1058 main.lua:2682
+#: main.lua:3381 menu/main_menu.lua:55 menu/main_menu.lua:95
+#: menu/main_menu.lua:133 menu/main_menu.lua:590
+#: menu/preset_manager_modal.lua:1436 menu/preset_manager_modal.lua:1558
+#: menu/preset_manager_modal.lua:1599 menu/preset_manager_modal.lua:1700
+#: menu/preset_manager_modal.lua:1744 menu/preset_manager_modal.lua:1846
+#: menu/preset_manager_modal.lua:1920 menu/preset_manager_modal.lua:2015
+#: menu/preset_manager_modal.lua:2039 menu/preset_manager_modal.lua:2063
+#: menu/progress_bar_menu.lua:100
+msgid "Cancel"
+msgstr "Скасувати"
+
+#: bookends_colour_palette.lua:402 bookends_dialog_helpers.lua:131
+#: bookends_line_editor.lua:505 bookends_line_editor.lua:632 main.lua:2692
+#: main.lua:2924 menu/colours_menu.lua:73 menu/colours_menu.lua:277
+#: menu/progress_bar_menu.lua:308 menu/progress_bar_menu.lua:561
+#: menu/progress_bar_menu.lua:616
+msgid "Default"
+msgstr "За замовчуванням"
+
+#: bookends_colour_palette.lua:404 bookends_dialog_helpers.lua:138
+#: main.lua:2721 menu/preset_manager_modal.lua:683
+msgid "Apply"
+msgstr "Застосувати"
+
+#: bookends_colour_palette.lua:406 menu/colours_menu.lua:265
+msgid "White"
+msgstr "Білий"
+
+#: bookends_colour_palette.lua:441 bookends_colour_palette.lua:561
+msgid "Pick a color"
+msgstr "Вибрати колір"
+
+#: bookends_colour_palette.lua:529
+msgid "Invalid hex colour (use #RGB or #RRGGBB)"
+msgstr "Невірний HEX-колір (використовуйте #RGB або #RRGGBB)"
+
+#: bookends_line_editor.lua:115 main.lua:1177
+msgid "Regular"
+msgstr "Звичайний"
+
+#: bookends_line_editor.lua:121 bookends_line_editor.lua:448
+#: menu/progress_bar_menu.lua:521
+msgid "Size"
+msgstr "Розмір"
+
+#: bookends_line_editor.lua:128
+msgid "Font"
+msgstr "Шрифт"
+
+#: bookends_line_editor.lua:130
+msgid "Font..."
+msgstr "Шрифт..."
+
+#: bookends_line_editor.lua:142
+msgid "Odd pg"
+msgstr "Непарна стор."
+
+#: bookends_line_editor.lua:143
+msgid "Even pg"
+msgstr "Парна стор."
+
+#: bookends_line_editor.lua:144
+msgid "All pg"
+msgstr "Усі стор."
+
+#: bookends_line_editor.lua:180
+msgid "- Progress bar"
+msgstr "- Смуга прогресу"
+
+#: bookends_line_editor.lua:180
+msgid "+ Progress bar"
+msgstr "+ Смуга прогресу"
+
+#: bookends_line_editor.lua:185
+msgid "Bar style…"
+msgstr "Стиль смуги…"
+
+#: bookends_line_editor.lua:216 bookends_line_editor.lua:567
+#: menu/progress_bar_menu.lua:179
+msgid "Bordered"
+msgstr "З рамкою"
+
+#: bookends_line_editor.lua:216 bookends_line_editor.lua:246
+#: menu/progress_bar_menu.lua:179 menu/progress_bar_menu.lua:180
+#: menu/progress_bar_menu.lua:476
+msgid "Solid"
+msgstr "Суцільна"
+
+#: bookends_line_editor.lua:216 menu/progress_bar_menu.lua:179
+msgid "Rounded"
+msgstr "Заокруглені"
+
+#: bookends_line_editor.lua:217 menu/progress_bar_menu.lua:179
+msgid "Metro"
+msgstr "Метро"
+
+#: bookends_line_editor.lua:217 menu/progress_bar_menu.lua:179
+msgid "Wave"
+msgstr "Хвиля"
+
+#: bookends_line_editor.lua:217 menu/progress_bar_menu.lua:179
+msgid "Radial"
+msgstr "Радіальна"
+
+#: bookends_line_editor.lua:218 menu/progress_bar_menu.lua:179
+msgid "Radial hollow"
+msgstr "Радіальна порожниста"
+
+#: bookends_line_editor.lua:218 menu/progress_bar_menu.lua:179
+msgid "Pacman"
+msgstr "Пакмен"
+
+#: bookends_line_editor.lua:222 menu/progress_bar_menu.lua:160
+msgid "Chapter ticks: off"
+msgstr "Поділки глав: вимкнено"
+
+#: bookends_line_editor.lua:223 menu/progress_bar_menu.lua:162
+msgid "Chapter ticks: top level"
+msgstr "Поділки глав: верхній рівень"
+
+#: bookends_line_editor.lua:224 menu/progress_bar_menu.lua:163
+msgid "Chapter ticks: top 2 levels"
+msgstr "Поділки глав: верхні 2 рівні"
+
+#: bookends_line_editor.lua:225 menu/progress_bar_menu.lua:161
+msgid "Chapter ticks: all levels"
+msgstr "Поділки глав: усі рівні"
+
+#: bookends_line_editor.lua:238 menu/progress_bar_menu.lua:474
+msgid "Off"
+msgstr "Вимкнено"
+
+#: bookends_line_editor.lua:239 menu/progress_bar_menu.lua:474
+msgid "Start of session"
+msgstr "Початок сесії"
+
+#: bookends_line_editor.lua:240 menu/progress_bar_menu.lua:474
+msgid "Book opened"
+msgstr "Відкриття книги"
+
+#: bookends_line_editor.lua:241 menu/progress_bar_menu.lua:474
+msgid "Bookmarks"
+msgstr "Закладки"
+
+#: bookends_line_editor.lua:242 menu/progress_bar_menu.lua:474
+msgid "Today"
+msgstr "Сьогодні"
+
+#: bookends_line_editor.lua:246 menu/progress_bar_menu.lua:476
+msgid "Chevron"
+msgstr "Шеврон"
+
+#: bookends_line_editor.lua:285
+msgid "Disable custom colours"
+msgstr "Вимкнути користувацькі кольори"
+
+#: bookends_line_editor.lua:285
+msgid "Enable custom colours"
+msgstr "Увімкнути користувацькі кольори"
+
+#: bookends_line_editor.lua:338 bookends_line_editor.lua:341
+#: menu/progress_bar_menu.lua:390 menu/progress_bar_menu.lua:395
+msgid "Tick height"
+msgstr "Висота поділки"
+
+#: bookends_line_editor.lua:353 bookends_line_editor.lua:356
+#: menu/progress_bar_menu.lua:416 menu/progress_bar_menu.lua:418
+#: menu/progress_bar_menu.lua:424
+msgid "Tick width"
+msgstr "Ширина поділки"
+
+#: bookends_line_editor.lua:371 bookends_line_editor.lua:398
+#: bookends_line_editor.lua:511
+msgid "Back"
+msgstr "Назад"
+
+#: bookends_line_editor.lua:378
+msgid "Bar colours"
+msgstr "Кольори смуги"
+
+#: bookends_line_editor.lua:392 bookends_line_editor.lua:410
+#: menu/progress_bar_menu.lua:569
+msgid "Top marker"
+msgstr "Верхній маркер"
+
+#: bookends_line_editor.lua:395 bookends_line_editor.lua:410
+#: menu/progress_bar_menu.lua:573
+msgid "Bottom marker"
+msgstr "Нижній маркер"
+
+#: bookends_line_editor.lua:402 bookends_line_editor.lua:650
+#: menu/progress_bar_menu.lua:460
+msgid "Markers"
+msgstr "Маркери"
+
+#: bookends_line_editor.lua:418 bookends_line_editor.lua:543
+#: menu/progress_bar_menu.lua:147 menu/progress_bar_menu.lua:490
+msgid "Type"
+msgstr "Тип"
+
+#: bookends_line_editor.lua:435 bookends_line_editor.lua:567
+#: menu/progress_bar_menu.lua:180 menu/progress_bar_menu.lua:508
+msgid "Style"
+msgstr "Стиль"
+
+#: bookends_line_editor.lua:452
+msgid "size"
+msgstr "розмір"
+
+#: bookends_line_editor.lua:461 menu/progress_bar_menu.lua:532
+msgid "Offset"
+msgstr "Зсув"
+
+#: bookends_line_editor.lua:465
+msgid "offset"
+msgstr "зсув"
+
+#: bookends_line_editor.lua:475 menu/progress_bar_menu.lua:543
+msgid "Colour"
+msgstr "Колір"
+
+#: bookends_line_editor.lua:479
+msgid "colour"
+msgstr "колір"
+
+#: bookends_line_editor.lua:505 menu/progress_bar_menu.lua:561
+msgid "tick colour"
+msgstr "колір поділки"
+
+#: bookends_line_editor.lua:543 menu/progress_bar_menu.lua:147
+#: menu/tokens_catalogue.lua:21
+msgid "Book"
+msgstr "Книга"
+
+#: bookends_line_editor.lua:543 menu/progress_bar_menu.lua:147
+msgid "Chapter"
+msgstr "Глава"
+
+#: bookends_line_editor.lua:579 menu/progress_bar_menu.lua:226
+msgid "Fill: right to left"
+msgstr "Заповнення: справа наліво"
+
+#: bookends_line_editor.lua:579 menu/progress_bar_menu.lua:225
+msgid "Fill: left to right"
+msgstr "Заповнення: зліва направо"
+
+#: bookends_line_editor.lua:595 bookends_line_editor.lua:597
+#: bookends_line_editor.lua:599 menu/progress_bar_menu.lua:264
+msgid "Thickness"
+msgstr "Товщина"
+
+#: bookends_line_editor.lua:595 bookends_line_editor.lua:632
+msgid "auto"
+msgstr "авто"
+
+#: bookends_line_editor.lua:607 menu/progress_bar_menu.lua:276
+msgid "Bar thickness"
+msgstr "Товщина смуги"
+
+#: bookends_line_editor.lua:609 menu/progress_bar_menu.lua:281
+msgid "Read"
+msgstr "Прочитане"
+
+#: bookends_line_editor.lua:610 bookends_tokens.lua:443
+#: menu/progress_bar_menu.lua:282
+msgid "Unread"
+msgstr "Непрочитане"
+
+#: bookends_line_editor.lua:640
+msgid "Custom colours"
+msgstr "Користувацькі кольори"
+
+#: bookends_line_editor.lua:661 bookends_updater.lua:349 main.lua:3219
+#: menu/icons_library.lua:453 menu/preset_manager_modal.lua:657
+#: menu/tokens_library.lua:463
+msgid "Close"
+msgstr "Закрити"
+
+#: bookends_line_editor.lua:666
+msgid "Bar style"
+msgstr "Стиль смуги"
+
+#: bookends_line_editor.lua:687
+msgid "Font size"
+msgstr "Розмір шрифту"
+
+#: bookends_line_editor.lua:687
+msgid "line"
+msgstr "рядок"
+
+#: bookends_line_editor.lua:750
+msgid "Position"
+msgstr "Положення"
+
+#: bookends_line_editor.lua:807
+msgid "Icons"
+msgstr "Іконки"
+
+#: bookends_line_editor.lua:816
+msgid "Tokens"
+msgstr "Токени"
+
+#: bookends_line_editor.lua:826 main.lua:3383 menu/main_menu.lua:57
+#: menu/preset_manager_modal.lua:1440 menu/preset_manager_modal.lua:1600
+#: menu/preset_manager_modal.lua:1701
+msgid "Save"
+msgstr "Зберегти"
+
+#: bookends_line_editor.lua:867 menu/position_menu.lua:44
+msgid "Line"
+msgstr "Рядок"
+
+#: bookends_line_editor.lua:978 menu/progress_bar_menu.lua:82
+msgid "Move up"
+msgstr "Перемістити вгору"
+
+#: bookends_line_editor.lua:988 menu/progress_bar_menu.lua:91
+msgid "Move down"
+msgstr "Перемістити вниз"
+
+#: bookends_line_editor.lua:1042
+msgid "Move to"
+msgstr "Перемістити до"
+
+#: bookends_line_editor.lua:1052
+msgid "Line %1: %2"
+msgstr "Рядок %1: %2"
+
+#: bookends_line_editor.lua:1054 menu/preset_manager_modal.lua:1543
+#: menu/preset_manager_modal.lua:1939
+msgid "Delete"
+msgstr "Видалити"
+
+#: bookends_tokens.lua:444 menu/icons_catalogue.lua:27
+msgid "Reading"
+msgstr "Читання"
+
+#: bookends_tokens.lua:445
+msgid "On hold"
+msgstr "На черзі"
+
+#: bookends_tokens.lua:446
+msgid "Finished"
+msgstr "Прочитано"
+
+#: bookends_tokens.lua:3387
+msgid " and "
+msgstr " і "
+
+#: bookends_tokens.lua:3387
+msgid ", et al."
+msgstr ", та ін."
+
+#: bookends_updater.lua:105
+msgid "Open the releases page in a browser?"
+msgstr "Відкрити сторінку релізів у браузері?"
+
+#: bookends_updater.lua:106
+msgid "Open"
+msgstr "Відкрити"
+
+#: bookends_updater.lua:271
+msgid "Checking for updates..."
+msgstr "Перевірка оновлень..."
+
+#: bookends_updater.lua:283
+msgid "Could not check for updates."
+msgstr "Не вдалося перевірити оновлення."
+
+#: bookends_updater.lua:320
+msgid "Bookends is up to date."
+msgstr "Bookends оновлено до останньої версії."
+
+#: bookends_updater.lua:321
+msgid "Version: "
+msgstr "Версія: "
+
+#: bookends_updater.lua:355
+msgid "Update and restart"
+msgstr "Оновити й перезапустити"
+
+#: bookends_updater.lua:360
+msgid "No download available for this release."
+msgstr "Для цього релізу немає доступного завантаження."
+
+#: bookends_updater.lua:371
+msgid "Update available!"
+msgstr "Доступне оновлення!"
+
+#: bookends_updater.lua:372
+msgid "Installed: "
+msgstr "Встановлено: "
+
+#: bookends_updater.lua:373
+msgid "Latest: "
+msgstr "Останнє: "
+
+#: bookends_updater.lua:396
+msgid "Downloading update..."
+msgstr "Завантаження оновлення..."
+
+#: bookends_updater.lua:476
+msgid "the connection failed"
+msgstr "не вдалося під'єднатися"
+
+#: bookends_updater.lua:479
+msgid "the connection timed out"
+msgstr "минув час очікування з'єднання"
+
+#: bookends_updater.lua:481
+msgid "the secure connection failed"
+msgstr "не вдалося встановити захищене з'єднання"
+
+#: bookends_updater.lua:484
+msgid "there was no response"
+msgstr "не отримано відповіді"
+
+#: bookends_updater.lua:500 bookends_updater.lua:505
+msgid "the file could not be saved"
+msgstr "не вдалося зберегти файл"
+
+#: bookends_updater.lua:543
+msgid "Download failed."
+msgstr "Не вдалося завантажити."
+
+#: bookends_updater.lua:555
+msgid "Installation failed: "
+msgstr "Не вдалося встановити: "
+
+#: bookends_updater.lua:572
+msgid "Bookends updated to v"
+msgstr "Bookends оновлено до v"
+
+#: bookends_updater.lua:573
+msgid "Restart KOReader now?"
+msgstr "Перезапустити KOReader зараз?"
+
+#: bookends_updater.lua:574 main.lua:60
+msgid "Restart"
+msgstr "Перезапустити"
+
+#: bookends_updater.lua:590
+msgid "Could not install branch:"
+msgstr "Не вдалося встановити гілку:"
+
+#: bookends_updater.lua:607
+msgid "Downloading latest release..."
+msgstr "Завантаження останнього релізу..."
+
+#: bookends_updater.lua:618
+msgid "Could not fetch latest release."
+msgstr "Не вдалося отримати останній реліз."
+
+#: bookends_updater.lua:631
+msgid "Latest release has no downloadable zip."
+msgstr "В останньому релізі немає завантажуваного zip."
+
+#: bookends_utils.lua:8 bookends_utils.lua:197
+msgid "UI font"
+msgstr "Шрифт інтерфейсу"
+
+#: bookends_utils.lua:9
+msgid "Serif"
+msgstr "Із засічками"
+
+#: bookends_utils.lua:10
+msgid "Sans-serif"
+msgstr "Без засічок"
+
+#: bookends_utils.lua:11
+msgid "Monospace"
+msgstr "Моноширинний"
+
+#: bookends_utils.lua:12
+msgid "Cursive"
+msgstr "Рукописний"
+
+#: bookends_utils.lua:13
+msgid "Fantasy"
+msgstr "Декоративний"
+
+#: main.lua:61
+msgid "Dismiss"
+msgstr "Закрити"
+
+#: main.lua:153
+msgid "Top-left"
+msgstr "Вгорі зліва"
+
+#: main.lua:154
+msgid "Top-center"
+msgstr "Вгорі по центру"
+
+#: main.lua:155
+msgid "Top-right"
+msgstr "Вгорі справа"
+
+#: main.lua:156
+msgid "Bottom-left"
+msgstr "Внизу зліва"
+
+#: main.lua:157
+msgid "Bottom-center"
+msgstr "Внизу по центру"
+
+#: main.lua:158
+msgid "Bottom-right"
+msgstr "Внизу справа"
+
+#: main.lua:307
+msgid "Bookends presets folder"
+msgstr "Тека пресетів Bookends"
+
+#: main.lua:328
+msgid "Bookends: toggle visibility"
+msgstr "Bookends: перемкнути видимість"
+
+#: main.lua:334
+msgid "Bookends: cycle preset"
+msgstr "Bookends: перебрати пресет"
+
+#: main.lua:340
+msgid "Bookends: set visibility"
+msgstr "Bookends: встановити видимість"
+
+#: main.lua:343
+msgid "on"
+msgstr "увімкнено"
+
+#: main.lua:343 menu/colours_menu.lua:335 menu/colours_menu.lua:342
+#: menu/colours_menu.lua:382 menu/colours_menu.lua:397
+msgid "off"
+msgstr "вимкнено"
+
+#: main.lua:348
+msgid "Bookends: open preset library"
+msgstr "Bookends: відкрити бібліотеку пресетів"
+
+#: main.lua:437 main.lua:475 menu/preset_manager_modal.lua:1807
+msgid "My setup"
+msgstr "Моє налаштування"
+
+#: main.lua:438 main.lua:476 menu/preset_manager_modal.lua:1811
+msgid "Imported from your earlier Bookends settings"
+msgstr "Імпортовано з ваших попередніх налаштувань Bookends"
+
+#: main.lua:647
+msgid "Preset error: %1"
+msgstr "Помилка пресета: %1"
+
+#: main.lua:656
+msgid "Preset: %1"
+msgstr "Пресет: %1"
+
+#: main.lua:1178
+msgid "Bold"
+msgstr "Жирний"
+
+#: main.lua:1179
+msgid "Italic"
+msgstr "Курсив"
+
+#: main.lua:1180
+msgid "Bold italic"
+msgstr "Жирний курсив"
+
+#: main.lua:2940
+msgid "Select font"
+msgstr "Вибрати шрифт"
+
+#: main.lua:2981
+msgid "Font-family fonts"
+msgstr "Шрифти сімейств"
+
+#: main.lua:3046
+msgid "Fonts"
+msgstr "Шрифти"
+
+#: main.lua:3140 menu/library_modal.lua:937
+msgid "Page %1 of %2"
+msgstr "Сторінка %1 з %2"
+
+#: main.lua:3229 main.lua:3403
+msgid "Reset"
+msgstr "Скинути"
+
+#: main.lua:3238
+msgid "Set font"
+msgstr "Встановити шрифт"
+
+#: main.lua:3377 menu/main_menu.lua:502 menu/main_menu.lua:504
+msgid "Development branch"
+msgstr "Гілка розробки"
+
+#: main.lua:3379
+msgid "Branch name (leave empty for stable)"
+msgstr "Назва гілки (залиште порожнім для стабільної)"
+
+#: main.lua:3402
+msgid ""
+"This will clear the development branch setting and install the latest stable "
+"release of Bookends, then restart KOReader. Continue?"
+msgstr ""
+"Це очистить налаштування гілки розробки та встановить останній стабільний "
+"випуск Bookends, потім перезапустить KOReader. Продовжити?"
+
+#: main.lua:3421
+msgid "Bookends update available: v"
+msgstr "Доступне оновлення Bookends: v"
+
+#: main.lua:3429 menu/main_menu.lua:667 menu/progress_bar_menu.lua:335
+#: menu/progress_bar_menu.lua:590
+msgid "Adjust margins"
+msgstr "Налаштувати поля"
+
+#: main.lua:3431 menu/progress_bar_menu.lua:194 menu/progress_bar_menu.lua:595
+msgid "Top"
+msgstr "Верх"
+
+#: main.lua:3432 menu/progress_bar_menu.lua:194 menu/progress_bar_menu.lua:596
+msgid "Bottom"
+msgstr "Низ"
+
+#: main.lua:3433 menu/progress_bar_menu.lua:194 menu/progress_bar_menu.lua:595
+msgid "Left"
+msgstr "Ліворуч"
+
+#: main.lua:3434 menu/progress_bar_menu.lua:194 menu/progress_bar_menu.lua:596
+msgid "Right"
+msgstr "Праворуч"
+
+#: _meta.lua:19 menu/main_menu.lua:18
+msgid "Bookends"
+msgstr "Bookends"
+
+#: _meta.lua:20
+msgid ""
+"Configurable text overlays at screen corners and edges with token expansion "
+"and icon support."
+msgstr ""
+"Налаштовувані текстові накладки в кутах і краях екрана з підтримкою токенів "
+"та іконок."
+
+#: menu/colours_menu.lua:73
+msgid "per style"
+msgstr "за стилем"
+
+#: menu/colours_menu.lua:75
+msgid "Transparent"
+msgstr "Прозорий"
+
+#: menu/colours_menu.lua:90 menu/colours_menu.lua:104 menu/colours_menu.lua:284
+#: menu/colours_menu.lua:291 menu/colours_menu.lua:297
+#: menu/colours_menu.lua:304 menu/progress_bar_menu.lua:418
+msgid "default"
+msgstr "за замовчуванням"
+
+#: menu/colours_menu.lua:91
+msgid "transparent"
+msgstr "прозорий"
+
+#: menu/colours_menu.lua:110
+msgid "Progress bar colour"
+msgstr "Колір смуги прогресу"
+
+#: menu/colours_menu.lua:114
+msgid "Progress bar colour (% black)"
+msgstr "Колір смуги прогресу (% чорного)"
+
+#: menu/colours_menu.lua:123
+msgid "Progress bar track colour"
+msgstr "Колір доріжки прогресу"
+
+#: menu/colours_menu.lua:127
+msgid "Progress bar track colour (% black)"
+msgstr "Колір доріжки прогресу (% чорного)"
+
+#: menu/colours_menu.lua:136
+msgid "Tick color"
+msgstr "Колір поділки"
+
+#: menu/colours_menu.lua:140
+msgid "Tick color (% black)"
+msgstr "Колір поділки (% чорного)"
+
+#: menu/colours_menu.lua:148
+msgid "Invert tick color on read portion"
+msgstr "Інвертувати колір поділки на прочитаній частині"
+
+#: menu/colours_menu.lua:161
+msgid "Border color"
+msgstr "Колір рамки"
+
+#: menu/colours_menu.lua:165
+msgid "Border color (% black)"
+msgstr "Колір рамки (% чорного)"
+
+#: menu/colours_menu.lua:175 menu/colours_menu.lua:177
+#: menu/colours_menu.lua:183
+msgid "Border thickness"
+msgstr "Товщина рамки"
+
+#: menu/colours_menu.lua:197
+msgid "Tick inversion color"
+msgstr "Колір інверсії поділки"
+
+#: menu/colours_menu.lua:201
+msgid "Tick inversion color (% black)"
+msgstr "Колір інверсії поділки (% чорного)"
+
+#: menu/colours_menu.lua:233
+msgid "No background"
+msgstr "Без фону"
+
+#: menu/colours_menu.lua:284 menu/colours_menu.lua:291
+#: menu/colours_menu.lua:352 menu/progress_bar_menu.lua:70
+msgid "book"
+msgstr "книга"
+
+#: menu/colours_menu.lua:297 menu/colours_menu.lua:304
+#: menu/colours_menu.lua:367
+msgid "text"
+msgstr "текст"
+
+#: menu/colours_menu.lua:348 menu/colours_menu.lua:352
+msgid "Text color"
+msgstr "Колір тексту"
+
+#: menu/colours_menu.lua:362 menu/colours_menu.lua:367
+msgid "Icon color"
+msgstr "Колір іконки"
+
+#: menu/colours_menu.lua:364
+msgid ""
+"Applies to Nerd Font and FontAwesome icon glyphs (the Private Use Area "
+"range, e.g. %W, %B, %k). Unicode symbols in the regular text ranges (like "
+"the hourglass \"⌛\") follow the text color instead.\n"
+"\n"
+"An inline [c=#RRGGBB]…[/c] tag in a line overrides the icon colour for any "
+"glyphs inside it."
+msgstr ""
+"Застосовується до гліфів іконок Nerd Font і FontAwesome (діапазон Private "
+"Use Area, напр. %W, %B, %k). Символи Unicode у звичайних текстових "
+"діапазонах (напр., пісочний годинник «⌛») натомість слідують кольору "
+"тексту.\n"
+"\n"
+"Вбудований тег [c=#RRGGBB]…[/c] у рядку перевизначає колір іконки для будь-"
+"яких гліфів усередині нього."
+
+#: menu/colours_menu.lua:377 menu/colours_menu.lua:382
+msgid "Top background"
+msgstr "Верхній фон"
+
+#: menu/colours_menu.lua:379 menu/colours_menu.lua:394
+msgid ""
+"Solid fill drawn behind this overlay region, edge to edge across the screen. "
+"Choose a colour to enable, hold this row or tap Default in the picker to "
+"turn off."
+msgstr ""
+"Суцільна заливка позаду цієї області накладки, від краю до краю екрана. "
+"Виберіть колір, щоб увімкнути, утримуйте цей рядок або торкніться «За "
+"замовчуванням» у палітрі, щоб вимкнути."
+
+#: menu/colours_menu.lua:392 menu/colours_menu.lua:397
+msgid "Bottom background"
+msgstr "Нижній фон"
+
+#: menu/icons_catalogue.lua:24 menu/tokens_catalogue.lua:20
+msgid "All"
+msgstr "Усі"
+
+#: menu/icons_catalogue.lua:25
+msgid "Dynamic"
+msgstr "Динамічні"
+
+#: menu/icons_catalogue.lua:26 menu/tokens_catalogue.lua:25
+msgid "Device"
+msgstr "Пристрій"
+
+#: menu/icons_catalogue.lua:28 menu/tokens_catalogue.lua:23
+msgid "Time"
+msgstr "Час"
+
+#: menu/icons_catalogue.lua:29
+msgid "Symbols"
+msgstr "Символи"
+
+#: menu/icons_catalogue.lua:30
+msgid "Arrows"
+msgstr "Стрілки"
+
+#: menu/icons_catalogue.lua:31
+msgid "Blocks"
+msgstr "Блоки"
+
+#: menu/icons_catalogue.lua:32
+msgid "Separators"
+msgstr "Роздільники"
+
+#: menu/icons_catalogue.lua:33
+msgid "SVG icon folder"
+msgstr "Тека SVG-іконок"
+
+#: menu/icons_catalogue.lua:38
+msgid "Battery"
+msgstr "Батарея"
+
+#: menu/icons_catalogue.lua:39
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+#: menu/icons_catalogue.lua:40
+msgid "Frontlight"
+msgstr "Підсвітка"
+
+#: menu/icons_catalogue.lua:41
+msgid "Warmth"
+msgstr "Теплота"
+
+#: menu/icons_catalogue.lua:42
+msgid "Night mode"
+msgstr "Нічний режим"
+
+#: menu/icons_catalogue.lua:173
+msgid "Sun (outline)"
+msgstr "Сонце (контур)"
+
+#: menu/icons_catalogue.lua:174
+msgid "Hot springs / warmth"
+msgstr "Гарячі джерела / тепло"
+
+#: menu/icons_catalogue.lua:175
+msgid "Spade"
+msgstr "Піки"
+
+#: menu/icons_catalogue.lua:176
+msgid "Club"
+msgstr "Трефи"
+
+#: menu/icons_catalogue.lua:177
+msgid "Heart"
+msgstr "Черви"
+
+#: menu/icons_catalogue.lua:178
+msgid "Diamond suit"
+msgstr "Бубни"
+
+#: menu/icons_catalogue.lua:179
+msgid "Star (filled)"
+msgstr "Зірка (заповнена)"
+
+#: menu/icons_catalogue.lua:180
+msgid "Star (outline)"
+msgstr "Зірка (контур)"
+
+#: menu/icons_catalogue.lua:181
+msgid "Infinity"
+msgstr "Нескінченність"
+
+#: menu/icons_catalogue.lua:182
+msgid "Section sign"
+msgstr "Знак параграфа"
+
+#: menu/icons_catalogue.lua:183
+msgid "Pilcrow / paragraph"
+msgstr "Пілкроу / абзац"
+
+#: menu/icons_catalogue.lua:184
+msgid "Dagger"
+msgstr "Кинжал"
+
+#: menu/icons_catalogue.lua:185
+msgid "Double dagger"
+msgstr "Подвійний кинжал"
+
+#: menu/icons_catalogue.lua:186
+msgid "Numero"
+msgstr "Номер (№)"
+
+#: menu/icons_catalogue.lua:187
+msgid "High voltage"
+msgstr "Висока напруга"
+
+#: menu/icons_catalogue.lua:213
+msgid "Arrow left"
+msgstr "Стрілка ліворуч"
+
+#: menu/icons_catalogue.lua:214
+msgid "Arrow right"
+msgstr "Стрілка праворуч"
+
+#: menu/icons_catalogue.lua:215
+msgid "Arrow up"
+msgstr "Стрілка вгору"
+
+#: menu/icons_catalogue.lua:216
+msgid "Arrow down"
+msgstr "Стрілка вниз"
+
+#: menu/icons_catalogue.lua:217
+msgid "Double arrow left"
+msgstr "Подвійна стрілка ліворуч"
+
+#: menu/icons_catalogue.lua:218
+msgid "Double arrow right"
+msgstr "Подвійна стрілка праворуч"
+
+#: menu/icons_catalogue.lua:219
+msgid "Double arrow up"
+msgstr "Подвійна стрілка вгору"
+
+#: menu/icons_catalogue.lua:220
+msgid "Double arrow down"
+msgstr "Подвійна стрілка вниз"
+
+#: menu/icons_catalogue.lua:221
+msgid "Arrows left-right"
+msgstr "Стрілки ліворуч-праворуч"
+
+#: menu/icons_catalogue.lua:222
+msgid "Double arrows right"
+msgstr "Подвійні стрілки праворуч"
+
+#: menu/icons_catalogue.lua:223
+msgid "Left harpoon with right arrow"
+msgstr "Гарпун ліворуч зі стрілкою праворуч"
+
+#: menu/icons_catalogue.lua:224
+msgid "Curved back arrow"
+msgstr "Вигнута зворотна стрілка"
+
+#: menu/icons_catalogue.lua:225
+msgid "Arrow left with tail"
+msgstr "Стрілка ліворуч із хвостом"
+
+#: menu/icons_catalogue.lua:226
+msgid "Arrow right with tail"
+msgstr "Стрілка праворуч із хвостом"
+
+#: menu/icons_catalogue.lua:227
+msgid "Arrow left to bar"
+msgstr "Стрілка ліворуч до риски"
+
+#: menu/icons_catalogue.lua:228
+msgid "Arrow right to bar"
+msgstr "Стрілка праворуч до риски"
+
+#: menu/icons_catalogue.lua:229
+msgid "Arrow left hooked"
+msgstr "Стрілка ліворуч з гачком"
+
+#: menu/icons_catalogue.lua:230
+msgid "Arrow right hooked"
+msgstr "Стрілка праворуч з гачком"
+
+#: menu/icons_catalogue.lua:231
+msgid "Arrow right then up"
+msgstr "Стрілка праворуч потім вгору"
+
+#: menu/icons_catalogue.lua:232
+msgid "Arrow right then down"
+msgstr "Стрілка праворуч потім вниз"
+
+#: menu/icons_catalogue.lua:233
+msgid "Arrow up then left"
+msgstr "Стрілка вгору потім ліворуч"
+
+#: menu/icons_catalogue.lua:234
+msgid "Arrow up then right"
+msgstr "Стрілка вгору потім праворуч"
+
+#: menu/icons_catalogue.lua:235
+msgid "Arrow down then left"
+msgstr "Стрілка вниз потім ліворуч"
+
+#: menu/icons_catalogue.lua:236
+msgid "Arrow down then right"
+msgstr "Стрілка вниз потім праворуч"
+
+#: menu/icons_catalogue.lua:237
+msgid "Circle arrow left"
+msgstr "Кругова стрілка ліворуч"
+
+#: menu/icons_catalogue.lua:238
+msgid "Circle arrow right"
+msgstr "Кругова стрілка праворуч"
+
+#: menu/icons_catalogue.lua:239
+msgid "Heavy arrow right"
+msgstr "Жирна стрілка праворуч"
+
+#: menu/icons_catalogue.lua:240
+msgid "Heavy round arrow right"
+msgstr "Жирна кругла стрілка праворуч"
+
+#: menu/icons_catalogue.lua:241
+msgid "Triangle-head right"
+msgstr "Трикутна голівка праворуч"
+
+#: menu/icons_catalogue.lua:242
+msgid "Heavy triangle right"
+msgstr "Жирний трикутник праворуч"
+
+#: menu/icons_catalogue.lua:243
+msgid "Arrowhead right"
+msgstr "Наконечник стрілки праворуч"
+
+#: menu/icons_catalogue.lua:244
+msgid "Long arrow left"
+msgstr "Довга стрілка ліворуч"
+
+#: menu/icons_catalogue.lua:245
+msgid "Long arrow right"
+msgstr "Довга стрілка праворуч"
+
+#: menu/icons_catalogue.lua:246
+msgid "Single angle left"
+msgstr "Одинарний кут ліворуч"
+
+#: menu/icons_catalogue.lua:247
+msgid "Single angle right"
+msgstr "Одинарний кут праворуч"
+
+#: menu/icons_catalogue.lua:248
+msgid "Double angle left"
+msgstr "Подвійний кут ліворуч"
+
+#: menu/icons_catalogue.lua:249
+msgid "Double angle right"
+msgstr "Подвійний кут праворуч"
+
+#: menu/icons_catalogue.lua:350
+msgid "Block (full)"
+msgstr "Блок (повний)"
+
+#: menu/icons_catalogue.lua:351
+msgid "Block (dark)"
+msgstr "Блок (темний)"
+
+#: menu/icons_catalogue.lua:352
+msgid "Block (medium)"
+msgstr "Блок (середній)"
+
+#: menu/icons_catalogue.lua:353
+msgid "Block (light)"
+msgstr "Блок (світлий)"
+
+#: menu/icons_catalogue.lua:354
+msgid "Upper half block"
+msgstr "Верхній півблок"
+
+#: menu/icons_catalogue.lua:355
+msgid "Right half block"
+msgstr "Правий півблок"
+
+#: menu/icons_catalogue.lua:356
+msgid "Lower 1/8 block"
+msgstr "Нижній 1/8 блока"
+
+#: menu/icons_catalogue.lua:357
+msgid "Lower 2/8 block"
+msgstr "Нижній 2/8 блока"
+
+#: menu/icons_catalogue.lua:358
+msgid "Lower 3/8 block"
+msgstr "Нижній 3/8 блока"
+
+#: menu/icons_catalogue.lua:359
+msgid "Lower 4/8 block"
+msgstr "Нижній 4/8 блока"
+
+#: menu/icons_catalogue.lua:360
+msgid "Lower 5/8 block"
+msgstr "Нижній 5/8 блока"
+
+#: menu/icons_catalogue.lua:361
+msgid "Lower 6/8 block"
+msgstr "Нижній 6/8 блока"
+
+#: menu/icons_catalogue.lua:362
+msgid "Lower 7/8 block"
+msgstr "Нижній 7/8 блока"
+
+#: menu/icons_catalogue.lua:363
+msgid "Left 1/8 block"
+msgstr "Лівий 1/8 блока"
+
+#: menu/icons_catalogue.lua:364
+msgid "Left 2/8 block"
+msgstr "Лівий 2/8 блока"
+
+#: menu/icons_catalogue.lua:365
+msgid "Left 3/8 block"
+msgstr "Лівий 3/8 блока"
+
+#: menu/icons_catalogue.lua:366
+msgid "Left 4/8 block"
+msgstr "Лівий 4/8 блока"
+
+#: menu/icons_catalogue.lua:367
+msgid "Left 5/8 block"
+msgstr "Лівий 5/8 блока"
+
+#: menu/icons_catalogue.lua:368
+msgid "Left 6/8 block"
+msgstr "Лівий 6/8 блока"
+
+#: menu/icons_catalogue.lua:369
+msgid "Left 7/8 block"
+msgstr "Лівий 7/8 блока"
+
+#: menu/icons_catalogue.lua:370
+msgid "Square (filled)"
+msgstr "Квадрат (заповнений)"
+
+#: menu/icons_catalogue.lua:371
+msgid "Square (empty)"
+msgstr "Квадрат (порожній)"
+
+#: menu/icons_catalogue.lua:372
+msgid "Rectangle (filled)"
+msgstr "Прямокутник (заповнений)"
+
+#: menu/icons_catalogue.lua:373
+msgid "Rectangle (empty)"
+msgstr "Прямокутник (порожній)"
+
+#: menu/icons_catalogue.lua:374
+msgid "Vertical block"
+msgstr "Вертикальний блок"
+
+#: menu/icons_catalogue.lua:375
+msgid "Vertical block (empty)"
+msgstr "Вертикальний блок (порожній)"
+
+#: menu/icons_catalogue.lua:376
+msgid "Slant block"
+msgstr "Похилий блок"
+
+#: menu/icons_catalogue.lua:377
+msgid "Slant block (empty)"
+msgstr "Похилий блок (порожній)"
+
+#: menu/icons_catalogue.lua:378
+msgid "Circle (filled)"
+msgstr "Коло (заповнене)"
+
+#: menu/icons_catalogue.lua:379
+msgid "Circle (empty)"
+msgstr "Коло (порожнє)"
+
+#: menu/icons_catalogue.lua:380
+msgid "Circle (left half)"
+msgstr "Коло (ліва половина)"
+
+#: menu/icons_catalogue.lua:381
+msgid "Circle (right half)"
+msgstr "Коло (права половина)"
+
+#: menu/icons_catalogue.lua:382
+msgid "Circle (lower half)"
+msgstr "Коло (нижня половина)"
+
+#: menu/icons_catalogue.lua:383
+msgid "Circle (upper half)"
+msgstr "Коло (верхня половина)"
+
+#: menu/icons_catalogue.lua:384
+msgid "Diamond (filled)"
+msgstr "Ромб (заповнений)"
+
+#: menu/icons_catalogue.lua:385
+msgid "Diamond (empty)"
+msgstr "Ромб (порожній)"
+
+#: menu/icons_catalogue.lua:388
+msgid "Vertical bar"
+msgstr "Вертикальна риска"
+
+#: menu/icons_catalogue.lua:389
+msgid "Bullet"
+msgstr "Маркер"
+
+#: menu/icons_catalogue.lua:390
+msgid "Middle dot"
+msgstr "Середня крапка"
+
+#: menu/icons_catalogue.lua:391
+msgid "Vertical ellipsis"
+msgstr "Вертикальне багатокрапʼя"
+
+#: menu/icons_catalogue.lua:392
+msgid "Em dash"
+msgstr "Довге тире"
+
+#: menu/icons_catalogue.lua:393
+msgid "En dash"
+msgstr "Коротке тире"
+
+#: menu/icons_catalogue.lua:394
+msgid "Horizontal ellipsis"
+msgstr "Горизонтальне багатокрапʼя"
+
+#: menu/icons_catalogue.lua:395
+msgid "Slash"
+msgstr "Коса риска"
+
+#: menu/icons_catalogue.lua:396
+msgid "Division slash"
+msgstr "Риска ділення"
+
+#: menu/icons_catalogue.lua:397
+msgid "Fraction slash"
+msgstr "Дробова риска"
+
+#: menu/icons_catalogue.lua:398
+msgid "Double fraction slash"
+msgstr "Подвійна дробова риска"
+
+#: menu/icons_catalogue.lua:399
+msgid "Tilde"
+msgstr "Тильда"
+
+#: menu/icons_catalogue.lua:400
+msgid "Triangular bullet"
+msgstr "Трикутний маркер"
+
+#: menu/icons_library.lua:366
+msgid "Icons library"
+msgstr "Бібліотека іконок"
+
+#: menu/icons_library.lua:398
+msgid "Search %1 icons by name…"
+msgstr "Пошук %1 іконок за назвою…"
+
+#: menu/icons_library.lua:435
+msgid "Drop .svg or .png files in koreader/icons/"
+msgstr "Розмістіть файли .svg або .png у koreader/icons/"
+
+#: menu/library_modal.lua:442
+msgid "Search…"
+msgstr "Пошук…"
+
+#: menu/library_modal.lua:478
+msgid "Search"
+msgstr "Пошук"
+
+#: menu/main_menu.lua:51 menu/preset_manager_modal.lua:1432
+msgid "Save preset"
+msgstr "Зберегти пресет"
+
+#: menu/main_menu.lua:53 menu/preset_manager_modal.lua:1434
+msgid "Preset name"
+msgstr "Назва пресета"
+
+#: menu/main_menu.lua:68
+msgid "Saved preset:"
+msgstr "Пресет збережено:"
+
+#: menu/main_menu.lua:92 menu/preset_manager_modal.lua:1555
+msgid "Rename preset"
+msgstr "Перейменувати пресет"
+
+#: menu/main_menu.lua:97 menu/main_menu.lua:635
+#: menu/preset_manager_modal.lua:1559 menu/preset_manager_modal.lua:1746
+msgid "Rename"
+msgstr "Перейменувати"
+
+#: menu/main_menu.lua:129
+msgid "File extension"
+msgstr "Розширення файлу"
+
+#: menu/main_menu.lua:131
+msgid "e.g. CBZ"
+msgstr "напр. CBZ"
+
+#: menu/main_menu.lua:135
+msgid "Next"
+msgstr "Далі"
+
+#: menu/main_menu.lua:158
+msgid "Hidden"
+msgstr "Приховано"
+
+#: menu/main_menu.lua:172 menu/main_menu.lua:174
+msgid "Bookends settings"
+msgstr "Налаштування Bookends"
+
+#: menu/main_menu.lua:172
+msgid "plugin update available"
+msgstr "доступне оновлення плагіна"
+
+#: menu/main_menu.lua:189 menu/main_menu.lua:191
+msgid "Preset"
+msgstr "Пресет"
+
+#: menu/main_menu.lua:241
+msgid "Full width progress bars"
+msgstr "Смуги прогресу на всю ширину"
+
+#: menu/main_menu.lua:253
+msgid "Save current as new preset…"
+msgstr "Зберегти поточний як новий пресет…"
+
+#: menu/main_menu.lua:269
+msgid "Enable bookends"
+msgstr "Увімкнути Bookends"
+
+#: menu/main_menu.lua:280 menu/main_menu.lua:282
+msgid "Disable stock status bar"
+msgstr "Вимкнути стандартну панель статусу"
+
+#: menu/main_menu.lua:280
+msgid "recommended"
+msgstr "рекомендовано"
+
+#: menu/main_menu.lua:285
+msgid ""
+"Hides KOReader's built-in status bar. This simplifies the render pipeline "
+"and can reduce e-ink flicker on some devices. All status bar features are "
+"available as Bookends tokens."
+msgstr ""
+"Приховує вбудовану панель статусу KOReader. Це спрощує конвеєр рендерингу і "
+"може зменшити мерехтіння e-ink на деяких пристроях. Усі функції панелі "
+"статусу доступні як токени Bookends."
+
+#: menu/main_menu.lua:306 menu/main_menu.lua:316
+#: menu/preset_manager_modal.lua:1638
+msgid "Default font"
+msgstr "Шрифт за замовчуванням"
+
+#: menu/main_menu.lua:342
+msgid "Bottom center tap gesture"
+msgstr "Жест дотику внизу по центру"
+
+#: menu/main_menu.lua:344
+msgid "toggle bookends"
+msgstr "перемкнути bookends"
+
+#: menu/main_menu.lua:346
+msgid "cycle presets"
+msgstr "перебрати пресети"
+
+#: menu/main_menu.lua:348
+msgid "preset library"
+msgstr "бібліотека пресетів"
+
+#: menu/main_menu.lua:352
+msgid ""
+"Configure what happens when you tap the centre of the status bar area, and "
+"whether long-pressing a progress bar opens the skim dialog."
+msgstr ""
+"Налаштуйте, що відбувається при дотику в центрі панелі статусу, і чи "
+"відкриває утримання на смузі прогресу діалог швидкого перегляду."
+
+#: menu/main_menu.lua:363
+msgid "Pass through"
+msgstr "Пропустити"
+
+#: menu/main_menu.lua:371
+msgid "Toggle bookends"
+msgstr "Перемкнути bookends"
+
+#: menu/main_menu.lua:385
+msgid "Cycle starred presets"
+msgstr "Перебрати позначені зірочкою пресети"
+
+#: menu/main_menu.lua:399
+msgid "Open preset library"
+msgstr "Відкрити бібліотеку пресетів"
+
+#: menu/main_menu.lua:414
+msgid "Long-press progress bars to skim document"
+msgstr "Утримання на смузі прогресу для швидкого перегляду документа"
+
+#: menu/main_menu.lua:422
+msgid ""
+"Opens the skim dialog when you long-press on a full-width progress bar. "
+"Replaces the stock status bar's long-press to skim feature."
+msgstr ""
+"Відкриває діалог швидкого перегляду при утриманні на смузі прогресу на всю "
+"ширину. Замінює функцію утримання для перегляду стандартної панелі статусу."
+
+#: menu/main_menu.lua:429
+msgid "Include current page in pages-left tokens"
+msgstr "Враховувати поточну сторінку в токенах «сторінок залишилось»"
+
+#: menu/main_menu.lua:430
+msgid ""
+"Affects %L (pages left in book) and %l (pages left in chapter). Off "
+"(default): 'n−1 → 0'. On: 'n → 1'."
+msgstr ""
+"Впливає на %L (сторінок залишилось у книзі) та %l (сторінок залишилось у "
+"главі). Вимкнено (за замовчуванням): «n−1 → 0». Увімкнено: «n → 1»."
+
+#: menu/main_menu.lua:443
+msgid "Disable automatic clock/battery refresh"
+msgstr "Вимкнути автоматичне оновлення годинника/батареї"
+
+#: menu/main_menu.lua:456
+msgid ""
+"Stops the 60-second background timer that keeps the clock, battery, and time-"
+"left tokens updating without a page turn. Useful on devices where this timer "
+"interferes with sleep/wake (e.g. some Pocketbook models)."
+msgstr ""
+"Зупиняє фоновий таймер на 60 секунд, який оновлює токени годинника, батареї "
+"та часу, що залишився, без перегортання сторінки. Корисно на пристроях, де "
+"цей таймер заважає засинанню/пробудженню (напр., деякі моделі Pocketbook)."
+
+#: menu/main_menu.lua:459
+msgid "Notify on wake when update available"
+msgstr "Сповіщати при пробудженні, якщо є оновлення"
+
+#: menu/main_menu.lua:479
+msgid "Update available"
+msgstr "Доступне оновлення"
+
+#: menu/main_menu.lua:481
+msgid "Installed version"
+msgstr "Встановлена версія"
+
+#: menu/main_menu.lua:489
+msgid "Auto preset by file type"
+msgstr "Автопресет за типом файлу"
+
+#: menu/main_menu.lua:490
+msgid ""
+"Automatically hide Bookends, or switch to a specific preset, based on the "
+"document's file extension (e.g. hide for comic archives, use a plainer "
+"preset for PDFs)."
+msgstr ""
+"Автоматично приховує Bookends або перемикає на визначений пресет залежно від "
+"розширення файлу документа (напр., приховати для архівів коміксів, "
+"застосувати простіший пресет для PDF)."
+
+#: menu/main_menu.lua:496
+msgid "Advanced"
+msgstr "Розширені"
+
+#: menu/main_menu.lua:515
+msgid "Check for updates"
+msgstr "Перевірити оновлення"
+
+#: menu/main_menu.lua:517
+msgid "Install branch"
+msgstr "Встановити гілку"
+
+#: menu/main_menu.lua:525
+msgid "Reset to latest stable release"
+msgstr "Скинути до останнього стабільного випуску"
+
+#: menu/main_menu.lua:536 menu/main_menu.lua:539
+msgid "Installed: v"
+msgstr "Встановлено: v"
+
+#: menu/main_menu.lua:570
+msgid "Change"
+msgstr "Змінити"
+
+#: menu/main_menu.lua:580
+msgid "Remove rule"
+msgstr "Вилучити правило"
+
+#: menu/main_menu.lua:599
+msgid "Add rule…"
+msgstr "Додати правило…"
+
+#: menu/main_menu.lua:617
+msgid "Preset library…"
+msgstr "Бібліотека пресетів…"
+
+#: menu/main_menu.lua:649 menu/main_menu.lua:653
+msgid "Font scale"
+msgstr "Масштаб шрифту"
+
+#: menu/main_menu.lua:677
+msgid "Truncation gap between regions"
+msgstr "Проміжок обрізання між областями"
+
+#: menu/main_menu.lua:681
+msgid "Truncation gap"
+msgstr "Проміжок обрізання"
+
+#: menu/main_menu.lua:692
+msgid "Prioritise left/right and truncate long center text"
+msgstr "Пріоритет лівій/правій частині та обрізати довгий центральний текст"
+
+#: menu/position_menu.lua:16
+msgid "Enabled"
+msgstr "Увімкнено"
+
+#: menu/position_menu.lua:58
+msgid "Add line"
+msgstr "Додати рядок"
+
+#: menu/position_menu.lua:58
+msgid "long press lines to manage"
+msgstr "утримуйте рядки, щоб керувати ними"
+
+#: menu/position_menu.lua:71
+msgid "Extra top margin"
+msgstr "Додаткове верхнє поле"
+
+#: menu/position_menu.lua:71
+msgid "Extra bottom margin"
+msgstr "Додаткове нижнє поле"
+
+#: menu/position_menu.lua:94
+msgid "Extra left margin"
+msgstr "Додаткове ліве поле"
+
+#: menu/position_menu.lua:94
+msgid "Extra right margin"
+msgstr "Додаткове праве поле"
+
+#: menu/preset_manager_modal.lua:294
+msgid "+ New blank preset"
+msgstr "+ Новий порожній пресет"
+
+#: menu/preset_manager_modal.lua:310
+msgid "Discover more presets"
+msgstr "Знайти більше пресетів"
+
+#: menu/preset_manager_modal.lua:316
+msgid ""
+"Browse presets others have shared, preview them on your own status bar, and "
+"install the ones you like. Once installed, you can edit each preset freely "
+"on the My presets tab."
+msgstr ""
+"Переглядайте пресети, якими поділилися інші, попередньо переглядайте їх на "
+"власній панелі статусу та встановлюйте ті, що сподобаються. Після "
+"встановлення кожен пресет можна вільно редагувати на вкладці «Мої пресети»."
+
+#: menu/preset_manager_modal.lua:323
+msgid ""
+"Made something worth sharing? Submit it with the Manage button while viewing "
+"one of your own presets."
+msgstr ""
+"Створили щось варте того, щоб поділитися? Надішліть це кнопкою «Керувати», "
+"переглядаючи один із власних пресетів."
+
+#: menu/preset_manager_modal.lua:330
+msgid "Tap Latest or Popular above to load the gallery."
+msgstr "Торкніться «Нові» або «Популярні» вище, щоб завантажити галерею."
+
+#: menu/preset_manager_modal.lua:480
+msgid "Hidden (no overlay)"
+msgstr "Приховано (без накладки)"
+
+#: menu/preset_manager_modal.lua:532
+msgid "Preset for this file type"
+msgstr "Пресет для цього типу файлу"
+
+#: menu/preset_manager_modal.lua:533 menu/preset_manager_modal.lua:618
+msgid "Search my presets by name or author…"
+msgstr "Пошук моїх пресетів за назвою або автором…"
+
+#: menu/preset_manager_modal.lua:550
+msgid "Done"
+msgstr "Готово"
+
+#: menu/preset_manager_modal.lua:562
+msgid "Preset library"
+msgstr "Бібліотека пресетів"
+
+#: menu/preset_manager_modal.lua:564
+msgid "My presets"
+msgstr "Мої пресети"
+
+#: menu/preset_manager_modal.lua:565
+msgid "Gallery"
+msgstr "Галерея"
+
+#: menu/preset_manager_modal.lua:575 menu/preset_manager_modal.lua:587
+msgid "Latest"
+msgstr "Нові"
+
+#: menu/preset_manager_modal.lua:576
+msgid "Starred"
+msgstr "Позначені зірочкою"
+
+#: menu/preset_manager_modal.lua:589
+msgid "Popular"
+msgstr "Популярні"
+
+#: menu/preset_manager_modal.lua:591
+msgid "This week"
+msgstr "Цього тижня"
+
+#: menu/preset_manager_modal.lua:593
+msgid "This month"
+msgstr "Цього місяця"
+
+#: menu/preset_manager_modal.lua:605
+msgid "Loading gallery…"
+msgstr "Завантаження галереї…"
+
+#: menu/preset_manager_modal.lua:620
+msgid "Search gallery presets by name or author…"
+msgstr "Пошук пресетів галереї за назвою або автором…"
+
+#: menu/preset_manager_modal.lua:662
+msgid "Manage…"
+msgstr "Керувати…"
+
+#: menu/preset_manager_modal.lua:680 menu/preset_manager_modal.lua:683
+#: menu/preset_manager_modal.lua:2041
+msgid "Install"
+msgstr "Встановити"
+
+#: menu/preset_manager_modal.lua:1098 menu/preset_manager_modal.lua:1999
+msgid "Could not preview preset"
+msgstr "Не вдалося переглянути пресет"
+
+#: menu/preset_manager_modal.lua:1213
+msgid "by"
+msgstr "від"
+
+#: menu/preset_manager_modal.lua:1493 menu/preset_manager_modal.lua:1808
+msgid "Untitled"
+msgstr "Без назви"
+
+#: menu/preset_manager_modal.lua:1523
+msgid "Rename…"
+msgstr "Перейменувати…"
+
+#: menu/preset_manager_modal.lua:1527
+msgid "Edit description…"
+msgstr "Редагувати опис…"
+
+#: menu/preset_manager_modal.lua:1531
+msgid "Edit author…"
+msgstr "Редагувати автора…"
+
+#: menu/preset_manager_modal.lua:1535
+msgid "Duplicate"
+msgstr "Дублювати"
+
+#: menu/preset_manager_modal.lua:1539
+msgid "Submit to gallery…"
+msgstr "Надіслати до галереї…"
+
+#: menu/preset_manager_modal.lua:1649
+msgid "%1, line %2"
+msgstr "%1, рядок %2"
+
+#: menu/preset_manager_modal.lua:1686
+msgid "Edit description"
+msgstr "Редагувати опис"
+
+#: menu/preset_manager_modal.lua:1690
+msgid "Edit author"
+msgstr "Редагувати автора"
+
+#: menu/preset_manager_modal.lua:1694
+msgid "copy"
+msgstr "копія"
+
+#: menu/preset_manager_modal.lua:1697
+msgid "Duplicate preset"
+msgstr "Дублювати пресет"
+
+#: menu/preset_manager_modal.lua:1740
+msgid "Rename before sharing"
+msgstr "Перейменуйте перед публікацією"
+
+#: menu/preset_manager_modal.lua:1791
+msgid "Who should we credit as the author?"
+msgstr "Кого вказати як автора?"
+
+#: menu/preset_manager_modal.lua:1796
+msgid "One-line description of this preset"
+msgstr "Однорядковий опис цього пресета"
+
+#: menu/preset_manager_modal.lua:1815
+msgid ""
+"'%1' is one of Bookends' default placeholder names. Give your preset "
+"something distinctive — that's how it'll appear in the gallery."
+msgstr ""
+"«%1» — одна зі стандартних заглушкових назв Bookends. Дайте своєму пресету "
+"щось відмінне — саме так він буде показаний у галереї."
+
+#: menu/preset_manager_modal.lua:1821
+msgid ""
+"Write a short description that tells gallery users what your preset shows"
+msgstr ""
+"Напишіть короткий опис, який пояснить користувачам галереї, що показує ваш "
+"пресет"
+
+#: menu/preset_manager_modal.lua:1843
+msgid ""
+"Submit '%1' by %2 to the gallery? A pull request will be opened for review."
+msgstr ""
+"Надіслати «%1» від %2 до галереї? Буде відкрито pull request для перегляду."
+
+#: menu/preset_manager_modal.lua:1845
+msgid "Submit"
+msgstr "Надіслати"
+
+#: menu/preset_manager_modal.lua:1855
+msgid ""
+"A preset called '%1' is already in the gallery. Rename your preset (Manage… "
+"→ Rename…) before submitting, so it doesn't collide with the existing entry."
+msgstr ""
+"Пресет із назвою «%1» вже є в галереї. Перейменуйте свій пресет (Керувати… → "
+"Перейменувати…) перед надсиланням, щоб уникнути конфлікту з наявним записом."
+
+#: menu/preset_manager_modal.lua:1868
+msgid "Submitting to gallery…"
+msgstr "Надсилання до галереї…"
+
+#: menu/preset_manager_modal.lua:1880
+msgid ""
+"Thanks! Your submission is PR #%1.\n"
+"\n"
+"The maintainer will review it before it appears in the Gallery."
+msgstr ""
+"Дякуємо! Ваша заявка — PR #%1.\n"
+"\n"
+"Супровідник перегляне її перед появою в галереї."
+
+#: menu/preset_manager_modal.lua:1889
+msgid ""
+"A preset called '%1' is already in the gallery. Rename your preset (Manage… "
+"→ Rename…) before submitting."
+msgstr ""
+"Пресет із назвою «%1» вже є в галереї. Перейменуйте свій пресет (Керувати… → "
+"Перейменувати…) перед надсиланням."
+
+#: menu/preset_manager_modal.lua:1892
+msgid ""
+"A submission for '%1' is already awaiting review. Wait for that one to be "
+"reviewed, or rename your preset to submit under a different name."
+msgstr ""
+"Заявка для «%1» вже очікує на перегляд. Зачекайте, поки її розглянуть, або "
+"перейменуйте свій пресет, щоб надіслати під іншою назвою."
+
+#: menu/preset_manager_modal.lua:1895
+msgid "Submission failed: %1"
+msgstr "Не вдалося надіслати: %1"
+
+#: menu/preset_manager_modal.lua:1908
+msgid ""
+"This preset uses specific fonts that won't exist on other devices. These "
+"overrides will be stripped from your submission so other users see their own "
+"default font."
+msgstr ""
+"Цей пресет використовує конкретні шрифти, яких немає на інших пристроях. Ці "
+"перевизначення буде видалено з вашої заявки, щоб інші користувачі бачили "
+"свій власний шрифт за замовчуванням."
+
+#: menu/preset_manager_modal.lua:1910
+msgid "Custom fonts in this preset:"
+msgstr "Користувацькі шрифти в цьому пресеті:"
+
+#: menu/preset_manager_modal.lua:1916
+msgid ""
+"Tip: for portable presets, pick a Font-family font (Serif, Sans-serif, etc.) "
+"instead of a specific one — those adapt to each user's font settings."
+msgstr ""
+"Порада: для портативних пресетів обирайте шрифт сімейства (із засічками, без "
+"засічок тощо) замість конкретного — вони підлаштовуються під налаштування "
+"шрифту кожного користувача."
+
+#: menu/preset_manager_modal.lua:1919
+msgid "Submit anyway"
+msgstr "Все одно надіслати"
+
+#: menu/preset_manager_modal.lua:1932
+msgid "Submission failed — details in the KOReader log."
+msgstr "Не вдалося надіслати — деталі в журналі KOReader."
+
+#: menu/preset_manager_modal.lua:1938
+msgid "Delete preset '%1'?"
+msgstr "Видалити пресет «%1»?"
+
+#: menu/preset_manager_modal.lua:1981
+msgid "Offline — connect to preview this preset."
+msgstr "Офлайн — під’єднайтеся, щоб переглянути цей пресет."
+
+#: menu/preset_manager_modal.lua:1983
+msgid "Couldn't download '%1'."
+msgstr "Не вдалося завантажити «%1»."
+
+#: menu/preset_manager_modal.lua:1989
+msgid "This preset appears invalid; skipping."
+msgstr "Цей пресет виглядає недійсним; пропускається."
+
+#: menu/preset_manager_modal.lua:2012
+msgid ""
+"'%1' already exists in your library.\n"
+"\n"
+"Replacing it will overwrite your local copy with the current gallery "
+"version. Any local edits will be lost.\n"
+"\n"
+"Install under a new name to keep both."
+msgstr ""
+"«%1» вже є у вашій бібліотеці.\n"
+"\n"
+"Заміна перезапише вашу локальну копію поточною версією з галереї. Усі "
+"локальні зміни буде втрачено.\n"
+"\n"
+"Встановіть під новою назвою, щоб зберегти обидва."
+
+#: menu/preset_manager_modal.lua:2018
+msgid "Replace"
+msgstr "Замінити"
+
+#: menu/preset_manager_modal.lua:2032
+msgid "Install as new name…"
+msgstr "Встановити під новою назвою…"
+
+#: menu/preset_manager_modal.lua:2036
+msgid "Install as"
+msgstr "Встановити як"
+
+#: menu/progress_bar_menu.lua:68
+msgid "Bar"
+msgstr "Смуга"
+
+#: menu/progress_bar_menu.lua:70
+msgid "chapter"
+msgstr "глава"
+
+#: menu/progress_bar_menu.lua:71
+msgid "top"
+msgstr "вгорі"
+
+#: menu/progress_bar_menu.lua:71
+msgid "bottom"
+msgstr "внизу"
+
+#: menu/progress_bar_menu.lua:71
+msgid "left"
+msgstr "ліворуч"
+
+#: menu/progress_bar_menu.lua:71
+msgid "right"
+msgstr "праворуч"
+
+#: menu/progress_bar_menu.lua:107
+msgid "Bar %1"
+msgstr "Смуга %1"
+
+#: menu/progress_bar_menu.lua:118
+msgid "Long press to change render order"
+msgstr "Утримуйте, щоб змінити порядок відображення"
+
+#: menu/progress_bar_menu.lua:122
+msgid "Inline progress bars can be added via the line editor"
+msgstr "Вбудовані смуги прогресу можна додати через редактор рядка"
+
+#: menu/progress_bar_menu.lua:138
+msgid "Enable"
+msgstr "Увімкнути"
+
+#: menu/progress_bar_menu.lua:195
+msgid "Anchor"
+msgstr "Прив’язка"
+
+#: menu/progress_bar_menu.lua:222
+msgid "Fill: clockwise"
+msgstr "Заповнення: за годинниковою стрілкою"
+
+#: menu/progress_bar_menu.lua:227
+msgid "Fill: top to bottom"
+msgstr "Заповнення: згори вниз"
+
+#: menu/progress_bar_menu.lua:228
+msgid "Fill: bottom to top"
+msgstr "Заповнення: знизу вгору"
+
+#: menu/progress_bar_menu.lua:264 menu/progress_bar_menu.lua:276
+msgid "Diameter"
+msgstr "Діаметр"
+
+#: menu/progress_bar_menu.lua:314
+msgid "Position relative to line text"
+msgstr "Положення відносно тексту рядків"
+
+#: menu/progress_bar_menu.lua:315
+msgid ""
+"Keep the bar a set distance from the lines of text at the top or bottom, so "
+"it stays in place when the text is bigger or smaller, for example on a "
+"different screen. Adjust margins then sets that distance; negative values "
+"move the bar in towards the text."
+msgstr ""
+"Тримає смугу на заданій відстані від рядків тексту вгорі чи внизу, щоб вона "
+"залишалася на місці, коли текст більший або менший, наприклад на іншому "
+"екрані. «Налаштувати поля» потім задає цю відстань; від’ємні значення "
+"зсувають смугу ближче до тексту."
+
+#: menu/progress_bar_menu.lua:349 menu/progress_bar_menu.lua:351
+msgid "Custom colors and tick marks"
+msgstr "Користувацькі кольори та поділки"
+
+#: menu/progress_bar_menu.lua:359
+msgid "Use custom colors"
+msgstr "Використовувати користувацькі кольори"
+
+#: menu/progress_bar_menu.lua:444
+msgid "Reset custom to defaults"
+msgstr "Скинути користувацькі до значень за замовчуванням"
+
+#: menu/progress_bar_menu.lua:526
+msgid "Marker size"
+msgstr "Розмір маркера"
+
+#: menu/progress_bar_menu.lua:537
+msgid "Marker offset"
+msgstr "Зсув маркера"
+
+#: menu/progress_bar_menu.lua:548 menu/progress_bar_menu.lua:557
+msgid "Marker colour"
+msgstr "Колір маркера"
+
+#: menu/progress_bar_menu.lua:592
+msgid "Edge"
+msgstr "Край"
+
+#: menu/progress_bar_menu.lua:592
+msgid "Vertical"
+msgstr "Вертикальний"
+
+#: menu/tokens_catalogue.lua:22
+msgid "Progress"
+msgstr "Прогрес"
+
+#: menu/tokens_catalogue.lua:24
+msgid "Session"
+msgstr "Сесія"
+
+#: menu/tokens_catalogue.lua:26
+msgid "If/else"
+msgstr "Якщо/інакше"
+
+#: menu/tokens_catalogue.lua:27
+msgid "Templates"
+msgstr "Шаблони"
+
+#: menu/tokens_catalogue.lua:31
+msgid "Document title"
+msgstr "Назва документа"
+
+#: menu/tokens_catalogue.lua:32
+msgid "First author"
+msgstr "Перший автор"
+
+#: menu/tokens_catalogue.lua:33
+msgid "All authors"
+msgstr "Усі автори"
+
+#: menu/tokens_catalogue.lua:34
+msgid "Second author (empty if none)"
+msgstr "Другий автор (порожньо, якщо немає)"
+
+#: menu/tokens_catalogue.lua:35
+msgid "Series with index (combined)"
+msgstr "Серія з номером (об’єднано)"
+
+#: menu/tokens_catalogue.lua:36
+msgid "Series name only"
+msgstr "Лише назва серії"
+
+#: menu/tokens_catalogue.lua:37
+msgid "Series number only"
+msgstr "Лише номер серії"
+
+#: menu/tokens_catalogue.lua:38
+msgid "Chapter title (deepest)"
+msgstr "Назва глави (найглибший рівень)"
+
+#: menu/tokens_catalogue.lua:39
+msgid "Chapter title at depth 1"
+msgstr "Назва глави на рівні 1"
+
+#: menu/tokens_catalogue.lua:40
+msgid "Chapter title at depth 2"
+msgstr "Назва глави на рівні 2"
+
+#: menu/tokens_catalogue.lua:41
+msgid "Chapter title at depth 3"
+msgstr "Назва глави на рівні 3"
+
+#: menu/tokens_catalogue.lua:42
+msgid "Chapter title without leading number (when detected)"
+msgstr "Назва глави без номера на початку (якщо визначено)"
+
+#: menu/tokens_catalogue.lua:43
+msgid "Number from chapter title (when detected)"
+msgstr "Номер із назви глави (якщо визначено)"
+
+#: menu/tokens_catalogue.lua:44 menu/tokens_catalogue.lua:164
+msgid "Current chapter number"
+msgstr "Номер поточної глави"
+
+#: menu/tokens_catalogue.lua:45
+msgid "Chapter count"
+msgstr "Кількість глав"
+
+#: menu/tokens_catalogue.lua:46
+msgid "File name"
+msgstr "Ім'я файлу"
+
+#: menu/tokens_catalogue.lua:47
+msgid "File position in folder"
+msgstr "Позиція файлу в теці"
+
+#: menu/tokens_catalogue.lua:48
+msgid "Document files in folder"
+msgstr "Кількість документів у теці"
+
+#: menu/tokens_catalogue.lua:49
+msgid "Number of authors"
+msgstr "Кількість авторів"
+
+#: menu/tokens_catalogue.lua:50
+msgid "Short author list ('A, B, et al.' for 3+)"
+msgstr "Короткий список авторів («А, Б, та ін.» для 3+)"
+
+#: menu/tokens_catalogue.lua:51
+msgid "Reading status value (unread/reading/on_hold/finished)"
+msgstr "Значення статусу читання (unread/reading/on_hold/finished)"
+
+#: menu/tokens_catalogue.lua:52
+msgid "Reading status as a word"
+msgstr "Статус читання словом"
+
+#: menu/tokens_catalogue.lua:53
+msgid "Your rating as stars"
+msgstr "Ваша оцінка зірками"
+
+#: menu/tokens_catalogue.lua:54
+msgid "Your rating as a number"
+msgstr "Ваша оцінка числом"
+
+#: menu/tokens_catalogue.lua:55
+msgid "Book description / blurb"
+msgstr "Опис книги / анотація"
+
+#: menu/tokens_catalogue.lua:56
+msgid "File size"
+msgstr "Розмір файлу"
+
+#: menu/tokens_catalogue.lua:57
+msgid "Date added (file date)"
+msgstr "Дата додавання (дата файлу)"
+
+#: menu/tokens_catalogue.lua:58
+msgid "Date last opened"
+msgstr "Дата останнього відкриття"
+
+#: menu/tokens_catalogue.lua:59
+msgid "Star glyph when the book is a favourite"
+msgstr "Зірка, якщо книга в обраному"
+
+#: menu/tokens_catalogue.lua:60
+msgid "A highlight from this book"
+msgstr "Виділення з цієї книги"
+
+#: menu/tokens_catalogue.lua:61
+msgid "Title and author for the quote"
+msgstr "Назва та автор для цитати"
+
+#: menu/tokens_catalogue.lua:62
+msgid "Book language"
+msgstr "Мова книги"
+
+#: menu/tokens_catalogue.lua:63
+msgid "First genre, from the book's keywords"
+msgstr "Перший жанр, з ключових слів книги"
+
+#: menu/tokens_catalogue.lua:64
+msgid "All genres, comma-separated"
+msgstr "Усі жанри, через кому"
+
+#: menu/tokens_catalogue.lua:65
+msgid "Document format (EPUB, PDF, etc.)"
+msgstr "Формат документа (EPUB, PDF тощо)"
+
+#: menu/tokens_catalogue.lua:66
+#, lua-format
+msgid "Calibre column by name, e.g. %calibre{mood}"
+msgstr "Стовпець Calibre за назвою, напр. %calibre{mood}"
+
+#: menu/tokens_catalogue.lua:67
+msgid "Highlights count"
+msgstr "Кількість виділень"
+
+#: menu/tokens_catalogue.lua:68
+msgid "Notes count"
+msgstr "Кількість нотаток"
+
+#: menu/tokens_catalogue.lua:69
+msgid "Bookmarks count"
+msgstr "Кількість закладок"
+
+#: menu/tokens_catalogue.lua:70
+msgid "Annotations count (bookmarks + highlights + notes)"
+msgstr "Кількість анотацій (закладки + виділення + нотатки)"
+
+#: menu/tokens_catalogue.lua:71
+msgid "Current page number"
+msgstr "Номер поточної сторінки"
+
+#: menu/tokens_catalogue.lua:72
+msgid "Total pages"
+msgstr "Всього сторінок"
+
+#: menu/tokens_catalogue.lua:73
+msgid "Book percentage read"
+msgstr "Відсоток книги прочитано"
+
+#: menu/tokens_catalogue.lua:74
+msgid "Book % with 1 decimal (e.g. 45.3%)"
+msgstr "Відсоток книги, 1 знак після коми (напр. 45.3%)"
+
+#: menu/tokens_catalogue.lua:75
+msgid "Book % with 2 decimal places"
+msgstr "Відсоток книги, 2 знаки після коми"
+
+#: menu/tokens_catalogue.lua:76
+msgid "Book % with 3 decimal places"
+msgstr "Відсоток книги, 3 знаки після коми"
+
+#: menu/tokens_catalogue.lua:77
+msgid "Book % with 4 decimal places"
+msgstr "Відсоток книги, 4 знаки після коми"
+
+#: menu/tokens_catalogue.lua:78
+msgid "Book percentage left"
+msgstr "Відсоток книги залишилось"
+
+#: menu/tokens_catalogue.lua:79
+msgid "Book % left with 1 decimal"
+msgstr "Відсоток книги залишилось, 1 знак після коми"
+
+#: menu/tokens_catalogue.lua:80
+msgid "Book % left with 2 decimals"
+msgstr "Відсоток книги залишилось, 2 знаки після коми"
+
+#: menu/tokens_catalogue.lua:81
+msgid "Book % left with 3 decimals"
+msgstr "Відсоток книги залишилось, 3 знаки після коми"
+
+#: menu/tokens_catalogue.lua:82
+msgid "Book % left with 4 decimals"
+msgstr "Відсоток книги залишилось, 4 знаки після коми"
+
+#: menu/tokens_catalogue.lua:83
+msgid "Chapter percentage read"
+msgstr "Відсоток глави прочитано"
+
+#: menu/tokens_catalogue.lua:84
+msgid "Chapter percentage left"
+msgstr "Відсоток глави залишилось"
+
+#: menu/tokens_catalogue.lua:85
+msgid "Pages read in chapter"
+msgstr "Сторінок прочитано в главі"
+
+#: menu/tokens_catalogue.lua:86
+msgid "Total pages in chapter"
+msgstr "Всього сторінок у главі"
+
+#: menu/tokens_catalogue.lua:87
+msgid "Pages left in chapter"
+msgstr "Сторінок залишилось у главі"
+
+#: menu/tokens_catalogue.lua:88
+msgid "Pages left in book"
+msgstr "Сторінок залишилось у книзі"
+
+#: menu/tokens_catalogue.lua:89
+msgid "Elastic gap: pushes the rest of the line to the far edge"
+msgstr "Гнучкий проміжок: притискає решту рядка до дальнього краю"
+
+#: menu/tokens_catalogue.lua:90
+msgid "Progress bar (configure type in line editor)"
+msgstr "Смуга прогресу (налаштуйте тип у редакторі рядка)"
+
+#: menu/tokens_catalogue.lua:91
+msgid "Fixed-width progress bar (100px)"
+msgstr "Смуга прогресу фіксованої ширини (100 пкс)"
+
+#: menu/tokens_catalogue.lua:92
+msgid "Progress bar, 10px tall"
+msgstr "Смуга прогресу, висота 10 пкс"
+
+#: menu/tokens_catalogue.lua:93
+msgid "Progress bar, 200px wide and 4px tall"
+msgstr "Смуга прогресу, ширина 200 пкс і висота 4 пкс"
+
+#: menu/tokens_catalogue.lua:94
+msgid "Current time (24h, same as %time_24h)"
+msgstr "Поточний час (24г, те саме що %time_24h)"
+
+#: menu/tokens_catalogue.lua:95
+msgid "12-hour clock"
+msgstr "12-годинний годинник"
+
+#: menu/tokens_catalogue.lua:96
+msgid "24-hour clock"
+msgstr "24-годинний годинник"
+
+#: menu/tokens_catalogue.lua:97
+msgid "Date short (28 Mar)"
+msgstr "Дата коротка (28 бер.)"
+
+#: menu/tokens_catalogue.lua:98
+msgid "Date long (28 March 2026)"
+msgstr "Дата повна (28 березня 2026)"
+
+#: menu/tokens_catalogue.lua:99
+msgid "Date numeric (28/03/2026)"
+msgstr "Дата числом (28/03/2026)"
+
+#: menu/tokens_catalogue.lua:100
+msgid "Weekday (Friday)"
+msgstr "День тижня (п’ятниця)"
+
+#: menu/tokens_catalogue.lua:101
+msgid "Weekday short (Fri)"
+msgstr "День тижня коротко (Пт)"
+
+#: menu/tokens_catalogue.lua:102
+msgid "Custom date/time format (strftime spec)"
+msgstr "Користувацький формат дати/часу (специфікація strftime)"
+
+#: menu/tokens_catalogue.lua:103
+msgid "Time left in chapter"
+msgstr "Часу залишилось у главі"
+
+#: menu/tokens_catalogue.lua:104
+msgid "Time left in book"
+msgstr "Часу залишилось у книзі"
+
+#: menu/tokens_catalogue.lua:105
+msgid "Time left in chapter (hours only)"
+msgstr "Часу залишилось у главі (лише години)"
+
+#: menu/tokens_catalogue.lua:106
+msgid "Time left in chapter (minutes only)"
+msgstr "Часу залишилось у главі (лише хвилини)"
+
+#: menu/tokens_catalogue.lua:107
+msgid "Time left in book (hours only)"
+msgstr "Часу залишилось у книзі (лише години)"
+
+#: menu/tokens_catalogue.lua:108
+msgid "Time left in book (minutes only)"
+msgstr "Часу залишилось у книзі (лише хвилини)"
+
+#: menu/tokens_catalogue.lua:109
+msgid "Chapter finish time (clock)"
+msgstr "Час завершення глави (за годинником)"
+
+#: menu/tokens_catalogue.lua:110
+msgid "Book finish time (clock)"
+msgstr "Час завершення книги (за годинником)"
+
+#: menu/tokens_catalogue.lua:111
+msgid "Chapter finish time (custom format)"
+msgstr "Час завершення глави (користувацький формат)"
+
+#: menu/tokens_catalogue.lua:112
+msgid "Book finish date (projected)"
+msgstr "Дата завершення книги (прогнозована)"
+
+#: menu/tokens_catalogue.lua:113
+msgid "Book finish date (custom format)"
+msgstr "Дата завершення книги (користувацький формат)"
+
+#: menu/tokens_catalogue.lua:114
+msgid "Session reading time"
+msgstr "Час читання сесії"
+
+#: menu/tokens_catalogue.lua:115
+msgid "Session pages read"
+msgstr "Сторінок прочитано за сесію"
+
+#: menu/tokens_catalogue.lua:116
+msgid "Pages advanced this session (stable pages when available)"
+msgstr "Сторінок пройдено за сесію (стала нумерація, якщо є)"
+
+#: menu/tokens_catalogue.lua:117
+msgid "Pages read today (all books)"
+msgstr "Сторінок прочитано сьогодні (усі книги)"
+
+#: menu/tokens_catalogue.lua:118
+msgid "Reading time today (all books)"
+msgstr "Час читання сьогодні (усі книги)"
+
+#: menu/tokens_catalogue.lua:119
+msgid "Pages read today (current book)"
+msgstr "Сторінок прочитано сьогодні (поточна книга)"
+
+#: menu/tokens_catalogue.lua:120
+msgid "Reading time today (current book)"
+msgstr "Час читання сьогодні (поточна книга)"
+
+#: menu/tokens_catalogue.lua:121
+msgid "Pages read in last 7 days (current book)"
+msgstr "Сторінок прочитано за останні 7 днів (поточна книга)"
+
+#: menu/tokens_catalogue.lua:122
+msgid "Reading time in last 7 days (current book)"
+msgstr "Час читання за останні 7 днів (поточна книга)"
+
+#: menu/tokens_catalogue.lua:123 menu/tokens_catalogue.lua:174
+msgid "Day streak (any book)"
+msgstr "Серія днів (будь-яка книга)"
+
+#: menu/tokens_catalogue.lua:124 menu/tokens_catalogue.lua:175
+msgid "Day streak (current book)"
+msgstr "Серія днів (поточна книга)"
+
+#: menu/tokens_catalogue.lua:125
+msgid "Lifetime reading time (all books)"
+msgstr "Загальний час читання (усі книги)"
+
+#: menu/tokens_catalogue.lua:126
+msgid "Books finished (lifetime)"
+msgstr "Книг завершено (загалом)"
+
+#: menu/tokens_catalogue.lua:127
+msgid "Reading speed (pages/hour)"
+msgstr "Швидкість читання (сторінок/годину)"
+
+#: menu/tokens_catalogue.lua:128
+msgid "Average time per page"
+msgstr "Середній час на сторінку"
+
+#: menu/tokens_catalogue.lua:129
+msgid "Total reading time for book"
+msgstr "Загальний час читання книги"
+
+#: menu/tokens_catalogue.lua:130
+msgid "Pages read of this book (lifetime)"
+msgstr "Сторінок прочитано цієї книги (загалом)"
+
+#: menu/tokens_catalogue.lua:131
+msgid "Book read percentage (skip-aware)"
+msgstr "Відсоток книги прочитано (з урахуванням пропусків)"
+
+#: menu/tokens_catalogue.lua:132
+msgid "Days reading this book"
+msgstr "Днів читання цієї книги"
+
+#: menu/tokens_catalogue.lua:133
+msgid "Pages per day for this book"
+msgstr "Сторінок на день для цієї книги"
+
+#: menu/tokens_catalogue.lua:134
+msgid "Battery level"
+msgstr "Рівень заряду батареї"
+
+#: menu/tokens_catalogue.lua:135
+msgid "Wi-Fi icon (also answers to %wifi_icon)"
+msgstr "Іконка Wi-Fi (також відповідає на %wifi_icon)"
+
+#: menu/tokens_catalogue.lua:136
+msgid "Wi-Fi icon, Bookshelf's name for it"
+msgstr "Іконка Wi-Fi, за назвою з Bookshelf"
+
+#: menu/tokens_catalogue.lua:137
+msgid "Plugin content"
+msgstr "Вміст плагіна"
+
+#: menu/tokens_catalogue.lua:138
+msgid "Frontlight brightness"
+msgstr "Яскравість підсвітки"
+
+#: menu/tokens_catalogue.lua:139 menu/tokens_catalogue.lua:181
+msgid "Frontlight brightness %"
+msgstr "Яскравість підсвітки %"
+
+#: menu/tokens_catalogue.lua:140
+msgid "Frontlight warmth"
+msgstr "Теплота підсвітки"
+
+#: menu/tokens_catalogue.lua:141 menu/tokens_catalogue.lua:182
+msgid "Frontlight warmth %"
+msgstr "Теплота підсвітки %"
+
+#: menu/tokens_catalogue.lua:142
+msgid "RAM used %"
+msgstr "Використано ОЗП %"
+
+#: menu/tokens_catalogue.lua:143
+msgid "System memory used (MiB)"
+msgstr "Використано системної пам'яті (МіБ)"
+
+#: menu/tokens_catalogue.lua:144
+msgid "RAM used (MiB)"
+msgstr "Використано ОЗП (МіБ)"
+
+#: menu/tokens_catalogue.lua:145
+msgid "Free disk space"
+msgstr "Вільне місце на диску"
+
+#: menu/tokens_catalogue.lua:146
+msgid "Page X of Y, em-dash framed"
+msgstr "Сторінка X з Y, в рамці з тире"
+
+#: menu/tokens_catalogue.lua:147
+msgid "Title ⋮ author (italic)"
+msgstr "Назва ⋮ автор (курсив)"
+
+#: menu/tokens_catalogue.lua:148
+msgid "Title in a chosen font"
+msgstr "Назва вибраним шрифтом"
+
+#: menu/tokens_catalogue.lua:149
+msgid "Bookmark(s) count + label"
+msgstr "Кількість закладок + мітка"
+
+#: menu/tokens_catalogue.lua:150
+msgid "Highlight(s) count + label"
+msgstr "Кількість виділень + мітка"
+
+#: menu/tokens_catalogue.lua:151
+msgid "Hourglass session timer + pages"
+msgstr "Пісочний годинник таймера сесії + сторінки"
+
+#: menu/tokens_catalogue.lua:152
+msgid "Sparkles 1"
+msgstr "Іскри 1"
+
+#: menu/tokens_catalogue.lua:153
+msgid "Sparkles 2"
+msgstr "Іскри 2"
+
+#: menu/tokens_catalogue.lua:157
+msgid "If Wi-Fi is on"
+msgstr "Якщо Wi-Fi увімкнено"
+
+#: menu/tokens_catalogue.lua:158
+msgid "If connected"
+msgstr "Якщо з'єднано"
+
+#: menu/tokens_catalogue.lua:159
+msgid "Battery 0–100"
+msgstr "Батарея 0–100"
+
+#: menu/tokens_catalogue.lua:160
+msgid "If charging"
+msgstr "Якщо заряджається"
+
+#: menu/tokens_catalogue.lua:161
+msgid "If page-turn flipped"
+msgstr "Якщо перегортання сторінок перевернуто"
+
+#: menu/tokens_catalogue.lua:162
+msgid "Book progress 0–100"
+msgstr "Прогрес книги 0–100"
+
+#: menu/tokens_catalogue.lua:163
+msgid "Chapter progress 0–100"
+msgstr "Прогрес глави 0–100"
+
+#: menu/tokens_catalogue.lua:165
+msgid "Total chapters"
+msgstr "Всього глав"
+
+#: menu/tokens_catalogue.lua:166
+msgid "Minutes left in chapter"
+msgstr "Хвилин залишилось у главі"
+
+#: menu/tokens_catalogue.lua:167
+msgid "Whole hours left in chapter"
+msgstr "Повних годин залишилось у главі"
+
+#: menu/tokens_catalogue.lua:168
+msgid "Whole hours left in book"
+msgstr "Повних годин залишилось у книзі"
+
+#: menu/tokens_catalogue.lua:169
+msgid "Pages per hour"
+msgstr "Сторінок на годину"
+
+#: menu/tokens_catalogue.lua:170
+msgid "Minutes this session"
+msgstr "Хвилин цієї сесії"
+
+#: menu/tokens_catalogue.lua:171
+msgid "Pages this session"
+msgstr "Сторінок цієї сесії"
+
+#: menu/tokens_catalogue.lua:172
+msgid "Pages read today"
+msgstr "Сторінок прочитано сьогодні"
+
+#: menu/tokens_catalogue.lua:173
+msgid "Pages today (current book)"
+msgstr "Сторінок сьогодні (поточна книга)"
+
+#: menu/tokens_catalogue.lua:176
+msgid "Books finished"
+msgstr "Книг завершено"
+
+#: menu/tokens_catalogue.lua:177
+msgid "Book read % (skip-aware)"
+msgstr "Книга прочитана % (з урахуванням пропусків)"
+
+#: menu/tokens_catalogue.lua:178
+msgid "odd / even"
+msgstr "непарна / парна"
+
+#: menu/tokens_catalogue.lua:179
+msgid "odd / even in chapter"
+msgstr "непарна / парна в главі"
+
+#: menu/tokens_catalogue.lua:180
+msgid "If frontlight on"
+msgstr "Якщо підсвітку увімкнено"
+
+#: menu/tokens_catalogue.lua:183
+msgid "If night mode on"
+msgstr "Якщо нічний режим увімкнено"
+
+#: menu/tokens_catalogue.lua:184
+msgid "EPUB / PDF / CBZ / …"
+msgstr "EPUB / PDF / CBZ / …"
+
+#: menu/tokens_catalogue.lua:185
+msgid "Current HH:MM (24h)"
+msgstr "Поточний ГГ:ХХ (24г)"
+
+#: menu/tokens_catalogue.lua:186
+msgid "Mon–Sun"
+msgstr "Пн–Нд"
+
+#: menu/tokens_catalogue.lua:187
+msgid "If book has title"
+msgstr "Якщо книга має назву"
+
+#: menu/tokens_catalogue.lua:188
+msgid "If book has author"
+msgstr "Якщо книга має автора"
+
+#: menu/tokens_catalogue.lua:189
+msgid "If book in series"
+msgstr "Якщо книга в серії"
+
+#: menu/tokens_catalogue.lua:190
+msgid "If chapter has title"
+msgstr "Якщо глава має назву"
+
+#: menu/tokens_catalogue.lua:191
+msgid "Chapter title at depth 1/2/3"
+msgstr "Назва глави на рівні 1/2/3"
+
+#: menu/tokens_catalogue.lua:192
+msgid "If book has 2+ authors"
+msgstr "Якщо книга має 2+ авторів"
+
+#: menu/tokens_catalogue.lua:193
+msgid "Author with et al. for multi-author"
+msgstr "Автор із «та ін.» для кількох авторів"
+
+#: menu/tokens_catalogue.lua:194
+msgid "Wi-Fi icon only when Wi-Fi enabled"
+msgstr "Іконка Wi-Fi лише коли Wi-Fi увімкнено"
+
+#: menu/tokens_catalogue.lua:195
+msgid "Low-battery warning"
+msgstr "Попередження про низький заряд батареї"
+
+#: menu/tokens_catalogue.lua:196
+msgid "Bolt when charging"
+msgstr "Блискавка під час зарядки"
+
+#: menu/tokens_catalogue.lua:197
+msgid "Arrow when page-turn flipped"
+msgstr "Стрілка при перевернутому перегортанні сторінок"
+
+#: menu/tokens_catalogue.lua:198
+msgid "Odd/even variations"
+msgstr "Варіації непарна/парна"
+
+#: menu/tokens_catalogue.lua:199
+msgid "Near end of book"
+msgstr "Наприкінці книги"
+
+#: menu/tokens_catalogue.lua:200
+msgid "Frontlight on/off label"
+msgstr "Мітка увімк./вимк. підсвітки"
+
+#: menu/tokens_catalogue.lua:201
+msgid "If format"
+msgstr "Якщо формат"
+
+#: menu/tokens_catalogue.lua:202
+msgid "Weekends"
+msgstr "Вихідні"
+
+#: menu/tokens_catalogue.lua:203
+msgid "Time window"
+msgstr "Часовий проміжок"
+
+#: menu/tokens_catalogue.lua:204
+msgid "Non-series books"
+msgstr "Книги поза серією"
+
+#: menu/tokens_catalogue.lua:205
+msgid "Fall back to shallower chapter"
+msgstr "Резервний перехід до менш глибокої глави"
+
+#: menu/tokens_catalogue.lua:206
+msgid "Chapter number then title"
+msgstr "Номер глави, потім назва"
+
+#: menu/tokens_catalogue.lua:207
+msgid "Long books (20+ chapters)"
+msgstr "Довгі книги (20+ глав)"
+
+#: menu/tokens_catalogue.lua:211
+msgid "Time left in chapter, Kindle style"
+msgstr "Часу залишилось у главі, у стилі Kindle"
+
+#: menu/tokens_catalogue.lua:212
+msgid "Time left in book, Kindle style"
+msgstr "Часу залишилось у книзі, у стилі Kindle"
+
+#: menu/tokens_catalogue.lua:213
+msgid "Chapter title only when different from book title"
+msgstr "Назва глави лише коли відрізняється від назви книги"
+
+#: menu/tokens_catalogue.lua:214
+msgid "Battery bars"
+msgstr "Смуги батареї"
+
+#: menu/tokens_library.lua:335
+msgid "Tokens library"
+msgstr "Бібліотека токенів"
+
+#: menu/tokens_library.lua:336
+msgid "Tokens & conditionals"
+msgstr "Токени й умови"
+
+#: menu/tokens_library.lua:337
+msgid ""
+"TOKENS\n"
+"\n"
+"Tokens are placeholders that get replaced with live data each time the "
+"preset renders. Each entry in the Book / Progress / Time / Session / Device "
+"chips is a token, written as %name. They expand inline:\n"
+"  %title — %page_num/%page_count\n"
+"  → 1984 — 12/268\n"
+"\n"
+"A token name runs until the next non-letter, so you need a space (or "
+"punctuation) before any following text. To butt text right up against a "
+"token, wrap the name in angle brackets:\n"
+"  %<book_time_left_h>h%<book_time_left_m>m\n"
+"  → 4h40m\n"
+"Width limits still work inside them: %<author{200}>.\n"
+"\n"
+"INLINE STYLING\n"
+"\n"
+"Wrap a span of text to restyle just that part:\n"
+"  [b]…[/b] bold   [i]…[/i] italic   [u]…[/u] UPPERCASE\n"
+"  [c=50]…[/c] grey 0–100   [c=#RRGGBB]…[/c] colour\n"
+"  [font=Name]…[/font] switch font for the span\n"
+"\n"
+"The font Name is the display name shown in KOReader's font menu, e.g. "
+"[font=Noto Sans]%title[/font]. Spaces are fine. If that font isn't installed "
+"on the device, the span falls back to the line's font, so presets stay "
+"readable when shared.\n"
+"\n"
+"CONDITIONALS\n"
+"\n"
+"Wrap content in [if:condition]…[/if] to show it only when the condition is "
+"true. Add an [else]…[/if] branch for an alternative.\n"
+"\n"
+"OPERATORS\n"
+"  =    equals               !=  not equals\n"
+"  <    less than            >   greater than\n"
+"  <=   at most              >=  at least\n"
+"  and / or / not  · ( ) for grouping\n"
+"\n"
+"  Example:  [if:batt<20 and not charging]LOW[/if]\n"
+"\n"
+"Truthy check: a bare [if:key] tests whether the key is set, non-zero, and "
+"not \"off\"/\"no\". Useful for [if:title]…[/if], [if:author]…[/if], "
+"[if:series]…[/if].\n"
+"\n"
+"Token-reference comparison: =@token compares against another token's current "
+"value, e.g. [if:chap_title_1!=@title]…[/if] hides the chapter title when it "
+"equals the book title.\n"
+"\n"
+"For the full list of conditional state keys (wifi, batt, light_pct, night, "
+"time, format, …) browse the If/else chip — every reference entry there shows "
+"the exact key and operator syntax for one condition.\n"
+"\n"
+"EXAMPLES\n"
+"\n"
+"  [if:authors>1]%author, et al.[else]%author[/if]\n"
+"  [if:batt<20]LOW %batt[/if]\n"
+"  [if:time>=18:00 and time<18:30]6–6:30[/if]\n"
+"  [if:not series]Standalone[/if]\n"
+msgstr ""
+"ТОКЕНИ\n"
+"\n"
+"Токени — це заповнювачі, які замінюються актуальними даними щоразу, коли "
+"рендериться пресет. Кожен запис у чіпах Книга / Прогрес / Час / Сесія / "
+"Пристрій — це токен, який записується як %name. Вони розгортаються прямо в "
+"тексті:\n"
+"  %title — %page_num/%page_count\n"
+"  → 1984 — 12/268\n"
+"\n"
+"Назва токена триває до першого не-літерного символу, тому перед подальшим "
+"текстом потрібен пробіл (або розділовий знак). Щоб розмістити текст впритул "
+"до токена, візьміть його назву в кутові дужки:\n"
+"  %<book_time_left_h>h%<book_time_left_m>m\n"
+"  → 4h40m\n"
+"Обмеження ширини так само працюють і всередині них: %<author{200}>.\n"
+"\n"
+"ВБУДОВАНЕ ФОРМАТУВАННЯ\n"
+"\n"
+"Огорніть частину тексту, щоб змінити стиль лише для неї:\n"
+"  [b]…[/b] жирний   [i]…[/i] курсив   [u]…[/u] ВЕРХНІЙ РЕГІСТР\n"
+"  [c=50]…[/c] сірий 0–100   [c=#RRGGBB]…[/c] колір\n"
+"  [font=Name]…[/font] змінити шрифт для цієї частини\n"
+"\n"
+"Назва (Name) — це назва шрифту, яка відображається в меню шрифтів KOReader, "
+"напр. [font=Noto Sans]%title[/font]. Пробіли допустимі. Якщо цей шрифт не "
+"встановлено на пристрої, частина тексту повертається до шрифту рядка, тому "
+"пресети залишаються читабельними після спільного використання.\n"
+"\n"
+"УМОВИ\n"
+"\n"
+"Огорніть вміст у [if:умова]…[/if], щоб показувати його лише коли умова "
+"істинна. Додайте гілку [else]…[/if] для альтернативи.\n"
+"\n"
+"ОПЕРАТОРИ\n"
+"  =    дорівнює              !=  не дорівнює\n"
+"  <    менше ніж             >   більше ніж\n"
+"  <=   не більше ніж         >=  не менше ніж\n"
+"  and / or / not  · ( ) для групування\n"
+"\n"
+"  Приклад:  [if:batt<20 and not charging]НИЗЬКИЙ[/if]\n"
+"\n"
+"Перевірка істинності: голий [if:key] перевіряє, чи ключ встановлено, "
+"ненульовий і не «off»/«no». Корисно для [if:title]…[/if], [if:author]…[/if], "
+"[if:series]…[/if].\n"
+"\n"
+"Порівняння з посиланням на токен: =@token порівнює з поточним значенням "
+"іншого токена, напр. [if:chap_title_1!=@title]…[/if] приховує назву глави, "
+"коли вона збігається з назвою книги.\n"
+"\n"
+"Повний перелік ключів стану для умов (wifi, batt, light_pct, night, time, "
+"format, …) дивіться в чіпі «Якщо/інакше» — кожен довідковий запис там "
+"показує точний ключ і синтаксис оператора для однієї умови.\n"
+"\n"
+"ПРИКЛАДИ\n"
+"\n"
+"  [if:authors>1]%author, та ін.[else]%author[/if]\n"
+"  [if:batt<20]НИЗЬКИЙ %batt[/if]\n"
+"  [if:time>=18:00 and time<18:30]6–6:30[/if]\n"
+"  [if:not series]Окрема книга[/if]\n"
+
+#: menu/tokens_library.lua:388
+msgid "★ Favourites"
+msgstr "★ Обране"
+
+#: menu/tokens_library.lua:414
+msgid "Search tokens by name, value, or expression…"
+msgstr "Пошук токенів за назвою, значенням або виразом…"
+
+#: menu/tokens_library.lua:419
+msgid "No favourites yet. Tap the ☆ on any token to add it."
+msgstr "Ще немає обраних. Торкніться ☆ на потрібному токені, щоб додати його."
+
+#: menu/tokens_library.lua:466
+msgid "Help"
+msgstr "Довідка"
+
+#~ msgid "Background colour"
+#~ msgstr "Колір фону"
+
+#~ msgid "Wi-Fi is not enabled."
+#~ msgstr "Wi-Fi не увімкнено."
+
+#~ msgid "Book+"
+#~ msgstr "Книга+"
+
+#~ msgid "Book++"
+#~ msgstr "Книга++"
+
+#~ msgid "Book+++"
+#~ msgstr "Книга+++"
+
+#~ msgid "Ch."
+#~ msgstr "Гл."
+
+#~ msgid "Border"
+#~ msgstr "Рамка"
+
+#~ msgid "Round"
+#~ msgstr "Заокруглена"
+
+#~ msgid "Hollow"
+#~ msgstr "Порожниста"
+
+#~ msgid "Do nothing"
+#~ msgstr "Нічого не робити"
+
+#~ msgid "Progress bar colors and tick marks"
+#~ msgstr "Кольори смуги прогресу та поділки"
+
+#~ msgid "Read color (% black)"
+#~ msgstr "Колір прочитаного (% чорного)"
+
+#~ msgid "Unread color (% black)"
+#~ msgstr "Колір непрочитаного (% чорного)"
+
+#~ msgid "Metro read color"
+#~ msgstr "Колір прочитаного (метро)"
+
+#~ msgid "Metro read color (% black)"
+#~ msgstr "Колір прочитаного (метро) (% чорного)"
+
+#~ msgid "Metro track color"
+#~ msgstr "Колір доріжки (метро)"
+
+#~ msgid "Reset all to defaults"
+#~ msgstr "Скинути все до значень за замовчуванням"

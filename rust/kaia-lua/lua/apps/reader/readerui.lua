@@ -22,6 +22,7 @@ local document = strict("document", {
     end }),
     getPageCount = function() return reader.page_count() end,
     getCurrentPage = function() return reader.current_page() end,
+    getVisiblePageCount = function() return 1 end,
     getPageText = function(_, page) return reader.page_text(page) end,
     getTextFromPositions = function(_, a, b)
         return { text = reader.text_from_positions(a, b), sboxes = reader.boxes_from_positions(a, b) }
@@ -97,6 +98,11 @@ local annotation = strict("annotation", {
 })
 
 local view = strict("view", {
+    flipping = false,
+    state = setmetatable({}, { __index = function(_, key)
+        if key == "page" then return reader.current_page() end
+        error("view.state." .. tostring(key) .. " is unavailable", 2)
+    end }),
     registerViewModule = function(_, name, module)
         KAIA_PLUGIN.view_modules[name] = module
     end,
@@ -117,6 +123,7 @@ local menu = strict("menu", {
 
 local ui = {
     name = "ReaderUI",
+    invisible = false,
     reloading = false,
     tearing_down = false,
     switchDocument = function(_, file)
@@ -170,6 +177,6 @@ require("kaia/reader_modules")(ui, reader, strict)
 return setmetatable(ui, { __index = function(_, key)
     if key == "cloudstorage" or key == "pagemap" or key == "profiles"
         or key == "dictionary" or key == "paging" or key == "rolling"
-        or key == "statistics" or key == "disable_double_tap" or key == "link" or key == "file_chooser" then return nil end
+        or key == "statistics" or key == "typeset" or key == "vocabbuilder" or key == "disable_double_tap" or key == "link" or key == "file_chooser" then return nil end
     error("ReaderUI." .. tostring(key) .. " is unavailable", 2)
 end })

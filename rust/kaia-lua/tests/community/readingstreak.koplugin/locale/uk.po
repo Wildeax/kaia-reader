@@ -1,0 +1,240 @@
+# Ukrainian translation for Reading Streak Plugin
+# Copyright (C) 2025
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Reading Streak"
+msgstr "Серія читання"
+
+msgid "Track your daily and weekly reading streaks similar to Kindle Streak. View calendar, set goals, and celebrate milestones."
+msgstr "Відстежуйте щоденні та тижневі серії читання, аналогічно Kindle Streak. Переглядайте календар, встановлюйте цілі та відзначайте досягнення."
+
+msgid "Congratulations! You've reached your streak goal of %1 days!"
+msgstr "Вітаємо! Ви досягли мети в %1 днів поспіль!"
+
+msgid "Congratulations! You've met today's streak target!"
+msgstr "Вітаємо! Ви виконали сьогоднішню ціль серії!"
+
+msgid "Never"
+msgstr "Ніколи"
+
+msgid "Reading streak has been reset!"
+msgstr "Серія читання скинута!"
+
+msgid "View Streak"
+msgstr "Перегляд серії"
+
+msgid "Calendar View"
+msgstr "Календарний вигляд"
+
+msgid "Settings"
+msgstr "Налаштування"
+
+msgid "Goals"
+msgstr "Цілі"
+
+msgid "Streak Goal"
+msgstr "Мета серії"
+
+msgid "Show streak notifications"
+msgstr "Показувати сповіщення про серію"
+
+msgid "Use toast notifications"
+msgstr "Toast-сповіщення (без натискання)"
+
+msgid "Colors"
+msgstr "Кольори"
+
+msgid "Colour options for toast notifications and calendar. Colour screens only; greyscale and night mode keep stock colours."
+msgstr "Кольорові налаштування toast-сповіщень та календаря. Лише для кольорових екранів; на ч/б і в нічному режимі — стандартні кольори."
+
+msgid "Toast color: %1"
+msgstr "Колір toast: %1"
+
+msgid "Background color for toast notifications. Greyscale and night mode keep the stock white toast."
+msgstr "Колір тла toast-сповіщень. На ч/б і в нічному режимі лишається білий toast."
+
+msgid "Calendar fill: %1"
+msgstr "Заливка календаря: %1"
+
+msgid "Fill color for days with a reading streak in the calendar. Greyscale and night mode keep the stock gray fill."
+msgstr "Колір заливки днів зі стриком у календарі. На ч/б і в нічному режимі лишається сіра заливка."
+
+msgid "Toast color preview"
+msgstr "Приклад кольору toast"
+
+msgid "White"
+msgstr "Білий"
+
+msgid "Green"
+msgstr "Зелений"
+
+msgid "Teal"
+msgstr "Бірюзовий"
+
+msgid "Blue"
+msgstr "Синій"
+
+msgid "Gold"
+msgstr "Золотий"
+
+msgid "Orange"
+msgstr "Помаранчевий"
+
+msgid "Red"
+msgstr "Червоний"
+
+msgid "Gray"
+msgstr "Сірий"
+
+msgid "Automatically track reading"
+msgstr "Автоматично відстежувати читання"
+
+msgid "Tracking"
+msgstr "Відстеження"
+
+msgid "Reset All Data"
+msgstr "Скинути всі дані"
+
+msgid "Are you sure you want to reset all reading streak data?"
+msgstr "Ви впевнені, що хочете скинути всі дані про серію читання?"
+
+msgid "Reset"
+msgstr "Скинути"
+
+msgid "1 day"
+msgstr "1 день"
+
+msgid "%1 days"
+msgstr "%1 днів"
+
+msgid "%1 pages"
+msgstr "%1 сторінок"
+
+msgid "%1 minutes"
+msgstr "%1 хвилин"
+
+msgid "1 week"
+msgstr "1 тиждень"
+
+msgid "%1 weeks"
+msgstr "%1 тижнів"
+
+msgid "%1 days read out of %2"
+msgstr "%1 днів прочитано з %2"
+
+msgid "Data Management"
+msgstr "Управління даними"
+
+msgid "Daily page target: %1"
+msgstr "Щоденна ціль за сторінками: %1"
+
+msgid "Daily time target: %1"
+msgstr "Щоденна ціль за часом: %1"
+
+msgid "Daily Page Target"
+msgstr "Щоденна ціль за сторінками"
+
+msgid "Daily Time Target (minutes)"
+msgstr "Щоденна ціль за часом (хвилини)"
+
+msgid "Off"
+msgstr "Вимкнено"
+
+msgid "Import from Statistics"
+msgstr "Імпортувати зі статистики"
+
+msgid "Statistics database not found."
+msgstr "Базу даних статистики не знайдено."
+
+msgid "No reading statistics found in database."
+msgstr "У базі даних не знайдено статистики читання."
+
+msgid "No new reading statistics found in database."
+msgstr "У базі даних не знайдено нової статистики читання."
+
+msgid "No days met the configured daily targets."
+msgstr "Жоден день не відповідає налаштованим щоденним цілям."
+
+msgid "Imported %1 reading days from statistics database."
+msgstr "Імпортовано %1 днів читання з бази даних статистики."
+
+msgid "Imported %1 reading days; skipped %2 days below daily targets."
+msgstr "Імпортовано %1 днів читання; пропущено %2 днів, що не досягли щоденних цілей."
+
+msgid "Error importing statistics: %1"
+msgstr "Помилка при імпорті статистики: %1"
+
+msgid "Error showing calendar: %1"
+msgstr "Помилка при відображенні календаря: %1"
+
+msgid "Streak Goal: %1 days"
+msgstr "Мета серії: %1 днів"
+
+msgid "Calendar streak display: %1"
+msgstr "Відображення серії в календарі: %1"
+
+msgid "Display"
+msgstr "Відображення"
+
+msgid "Days"
+msgstr "Дні"
+
+msgid "Weeks"
+msgstr "Тижні"
+
+msgid "Both"
+msgstr "Обидва"
+
+msgid "Current streak: %1"
+msgstr "Поточна серія: %1"
+
+msgid "Current week streak: %1"
+msgstr "Поточна тижнева серія: %1"
+
+msgid "Longest Streak"
+msgstr "Найдовша серія"
+
+msgid "Total Days Read"
+msgstr "Всього днів читання"
+
+msgid "First Read"
+msgstr "Перше читання"
+
+msgid "Last Read"
+msgstr "Останнє читання"
+
+msgid "Progress to goal"
+msgstr "Прогрес до мети"
+
+msgid "Current Streak"
+msgstr "Поточна серія"
+
+msgid "Current Week Streak"
+msgstr "Поточна тижнева серія"
+
+msgid "Longest Week Streak"
+msgstr "Найдовша тижнева серія"
+
+msgid "Today's Pages Read"
+msgstr "Прочитано сторінок сьогодні"
+
+msgid "Today's Reading Time"
+msgstr "Час читання сьогодні"
+
+msgid "This Week's Reading Time"
+msgstr "Час читання на цьому тижні"
+
+msgid "%1 seconds"
+msgstr "%1 секунд"
+
+msgid "UI Integration"
+msgstr "Інтеграція з інтерфейсом"
+
+msgid "Export to Project Title"
+msgstr "Експорт в Project Title"
+
+msgid "No streak"
+msgstr "Немає серії"

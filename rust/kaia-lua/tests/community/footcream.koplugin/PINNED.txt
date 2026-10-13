@@ -1,0 +1,6 @@
+Repository: https://github.com/Fank1/foot-cream
+Commit: 9d4edc4c08664f133b7064ba2cb3a7991feb914f
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.

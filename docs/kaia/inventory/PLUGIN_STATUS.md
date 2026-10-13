@@ -1,9 +1,10 @@
 # Bundled plugin desktop status
 
 L5 part 1, 2026-10-13. These states describe desktop test results.
-All 37 bundled entries in `plugins.json` have a load-outcome
+All 37 upstream bundled entries have a load-outcome
 assertion in `bundled_inventory_load_outcomes`. A successful load alone does
-not count as a working workflow.
+not count as a working workflow. The regenerated inventory also lists the local
+`kaiaexample` and `kaiastickers` plugins. This table does not assess those two.
 
 The workflow tests are in `rust/kaia-lua/tests/bundled.rs`. They use the original
 plugin code and KOReader widgets on the Kaia window stack. Menu actions and

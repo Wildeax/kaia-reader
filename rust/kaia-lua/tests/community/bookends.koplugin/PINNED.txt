@@ -1,0 +1,6 @@
+Repository: https://github.com/AndyHazz/bookends.koplugin
+Commit: 217a15e4e1b6d5fad94a0cfa6bee303b81b698b5
+Date: 2026-10-13
+Source directory: .
+
+File hashes and omitted repository files are recorded in ../manifest.json.
