@@ -322,6 +322,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-doc"
+version = "0.1.0"
+
+[[package]]
 name = "kaia-events"
 version = "0.1.0"
 
@@ -341,6 +345,18 @@ dependencies = [
 
 [[package]]
 name = "kaia-gfx"
+version = "0.1.0"
+
+[[package]]
+name = "kaia-input"
+version = "0.1.0"
+
+[[package]]
+name = "kaia-luadata"
+version = "0.1.0"
+
+[[package]]
+name = "kaia-mupdf-sys"
 version = "0.1.0"
 
 [[package]]

@@ -1,0 +1,9 @@
+[package]
+name = "kaia-luadata"
+description = "Reader and writer for KOReader's Lua-table data files."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

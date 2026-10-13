@@ -6,6 +6,10 @@ members = [
     "kaia-ffi",
     "kaia-gfx",
     "kaia-events",
+    "kaia-input",
+    "kaia-luadata",
+    "kaia-mupdf-sys",
+    "kaia-doc",
 ]
 
 [workspace.package]
