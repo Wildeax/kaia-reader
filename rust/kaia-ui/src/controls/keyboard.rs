@@ -36,6 +36,7 @@ pub struct KeyBox {
 /// as `Key::Backspace`, Enter as `Key::Press`. The hide key emits the
 /// `on_hide` event. The keyboard is never focused itself.
 pub struct OnScreenKeyboard {
+    background: Option<Tone>,
     layout: &'static KeyboardLayout,
     layer: Layer,
     case: Case,
@@ -47,12 +48,21 @@ pub struct OnScreenKeyboard {
 impl OnScreenKeyboard {
     pub fn new(layout: &'static KeyboardLayout) -> Self {
         Self {
+            background: None,
             layout,
             layer: Layer::Letters,
             case: Case::Lower,
             pressed: None,
             on_hide: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     /// Queues this named event when the hide key is tapped.
@@ -186,7 +196,7 @@ impl Widget for OnScreenKeyboard {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let b = cx.bounds();
         for k in self.key_boxes(t, b.w) {

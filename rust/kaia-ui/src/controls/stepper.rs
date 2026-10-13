@@ -12,6 +12,7 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 /// A value between `min` and `max` that changes by `step` per tap. The minus
 /// and plus buttons dim at the limits. The event argument is the new value.
 pub struct Stepper {
+    background: Option<Tone>,
     value: f64,
     min: f64,
     max: f64,
@@ -25,6 +26,7 @@ impl Stepper {
     /// The value starts clamped to `min..=max`.
     pub fn new(value: f64, min: f64, max: f64, step: f64) -> Self {
         Self {
+            background: None,
             value: value.clamp(min, max),
             min,
             max,
@@ -33,6 +35,14 @@ impl Stepper {
             enabled: true,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     /// The text for the value, for example `|v| format!("{v} pt")`.
@@ -112,7 +122,7 @@ impl Widget for Stepper {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let sq = t.touch_target;

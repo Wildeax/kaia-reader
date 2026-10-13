@@ -13,6 +13,7 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 /// A switch with an "off" label on the left half and an "on" label on the right.
 /// The active half is filled with ink. Taps and Press toggle it.
 pub struct Toggle {
+    background: Option<Tone>,
     on: bool,
     off_label: String,
     on_label: String,
@@ -23,12 +24,21 @@ pub struct Toggle {
 impl Toggle {
     pub fn new(on: bool) -> Self {
         Self {
+            background: None,
             on,
             off_label: "Off".to_string(),
             on_label: "On".to_string(),
             enabled: true,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     /// The text on the off and on halves.
@@ -91,7 +101,7 @@ impl Widget for Toggle {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let radius = t.radius.button;
@@ -104,7 +114,7 @@ impl Widget for Toggle {
         let inactive = if self.on { left } else { right };
 
         let ink_color = cx.color(ink);
-        let surface = cx.color(Tone::Surface);
+        let surface = cx.color(super::backdrop(cx, self.background));
         // Ink under the whole track, then paper over the inactive half. The
         // track keeps its rounded outer corners on both sides.
         cx.fill_rrect(inner, radius, ink_color);

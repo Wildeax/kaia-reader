@@ -54,6 +54,14 @@ pub trait Widget {
     fn flex(&self) -> u32 {
         0
     }
+
+    /// The tone this widget paints under its children. Children that have no
+    /// background of their own inherit it through [`PaintCx::background`].
+    /// [`Frame`](crate::components::Frame) returns its fill. Other widgets
+    /// return `None`, which leaves the inherited value unchanged.
+    fn child_background(&self) -> Option<Tone> {
+        None
+    }
 }
 
 /// Implements [`Widget::as_any_mut`] for the type of the surrounding `impl Widget` block.
@@ -187,6 +195,7 @@ pub struct PaintCx<'a> {
     pub(crate) origin: Point,
     pub(crate) clip: Rect,
     pub(crate) bounds: Rect,
+    pub(crate) background: Tone,
     pub(crate) focused: bool,
     pub(crate) focus: Option<WidgetId>,
 }
@@ -195,6 +204,13 @@ impl PaintCx<'_> {
     /// The widget's absolute bounds.
     pub fn bounds(&self) -> Rect {
         self.bounds
+    }
+
+    /// The tone behind this widget: the nearest ancestor's
+    /// [`Widget::child_background`], or `Surface` when no ancestor sets one.
+    /// Controls clear their bounds to this tone unless they have their own.
+    pub fn background(&self) -> Tone {
+        self.background
     }
 
     /// The area being repainted, in absolute coordinates.
@@ -238,6 +254,47 @@ impl PaintCx<'_> {
             let b = self.bounds;
             self.border(b, radius, width, color);
         }
+    }
+
+    /// Darkens `rect` by `amount`: 0 changes nothing and 255 makes it black.
+    /// Modal windows use it for the scrim behind their content.
+    pub fn dim(&mut self, rect: Rect, amount: u8) {
+        let area = self.local_rect(rect).intersect(&self.target.bounds());
+        if area.is_empty() {
+            return;
+        }
+        let bpp = self.target.format().bytes_per_pixel();
+        let stride = self.target.stride();
+        let keep = 255 - amount as u32;
+        let data = self.target.data_mut();
+        for y in area.y..area.bottom() {
+            let row = y as usize * stride;
+            for x in area.x..area.right() {
+                let i = row + x as usize * bpp;
+                for byte in &mut data[i..i + bpp] {
+                    *byte = (*byte as u32 * keep / 255) as u8;
+                }
+            }
+        }
+    }
+
+    /// Hands `draw` a pixmap the size of `rect`, filled with what is already on
+    /// the frame there. The result is copied back inside the clip. Use it for
+    /// renderers that draw into their own pixmap, such as a foreign widget.
+    pub fn draw_region(&mut self, rect: Rect, draw: impl FnOnce(&mut Pixmap, Rect)) {
+        if rect.is_empty() {
+            return;
+        }
+        let mut sub = Pixmap::new(rect.w, rect.h, self.target.format());
+        draw::blit(&mut sub, &*self.target, self.local_rect(rect), Point::new(0, 0));
+        draw(&mut sub, Rect::from_size(rect.size()));
+        let visible = rect.intersect(&self.clip);
+        if visible.is_empty() {
+            return;
+        }
+        let src = Rect::new(visible.x - rect.x, visible.y - rect.y, visible.w, visible.h);
+        let at = self.local(Point::new(visible.x, visible.y));
+        draw::blit(&mut *self.target, &sub, src, at);
     }
 
     pub fn fill_circle(&mut self, center: Point, radius: f32, color: Color) {
@@ -287,6 +344,7 @@ impl PaintCx<'_> {
                 origin: Point::new(rect.x, rect.y),
                 clip: rect,
                 bounds: self.bounds,
+                background: self.background,
                 focused: self.focused,
                 focus: self.focus,
             };
@@ -373,6 +431,12 @@ impl<'a> EventCx<'a> {
     /// Moves focus to this widget after the event.
     pub fn request_focus(&mut self) {
         self.focus = true;
+    }
+
+    /// The window this widget is on, when it is on one. Modal widgets use it
+    /// to close their own window.
+    pub fn window_id(&self) -> Option<kaia_events::WindowId> {
+        self.window.as_ref().and_then(|w| w.id())
     }
 
     /// Queues a named event for the app to deliver.

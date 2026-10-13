@@ -202,3 +202,50 @@ impl Widget for Holder {
 pub fn point(x: i32, y: i32) -> Point {
     Point::new(x, y)
 }
+
+/// Paints `windows` bottom to top into one frame, as the app does for a stack.
+/// Each window paints its full area once, so the windows above only change what they draw.
+pub fn paint_stack(windows: &[&kaia_ui::Window], t: &kaia_ui::Theme) -> kaia_gfx::Pixmap {
+    use kaia_events::DirtyQueue;
+    let mut frame = kaia_gfx::Pixmap::new(SCREEN.w, SCREEN.h, t.pixel_format());
+    frame.fill_rect(kaia_gfx::Rect::from_size(SCREEN), t.color(kaia_ui::Tone::Surface));
+    let mut dirty = DirtyQueue::new(kaia_events::Rect::new(0, 0, SCREEN.w as i32, SCREEN.h as i32));
+    for window in windows {
+        window.paint(&mut frame, &mut dirty);
+    }
+    frame
+}
+
+/// The golden file `name` in `tests/golden`.
+pub fn golden(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden")).join(name)
+}
+
+use kaia_events::menu::{SEPARATOR_ID, TABS_ID};
+use kaia_events::{MenuBuild, MenuItem, MenuOrder, MenuRegistry};
+
+/// The settings registry: two tabs. Reading has a "Text" section with a
+/// submenu for margins, and a night mode leaf. Device has two leaves.
+pub fn settings_build() -> MenuBuild {
+    let mut reg = MenuRegistry::new();
+    reg.register(MenuItem::callback("font_size", "Font size", "settings.font_size"));
+    reg.register(MenuItem::callback("justify", "Justify text", "settings.justify"));
+    reg.register(MenuItem::callback("hyphenate", "Hyphenate", "settings.hyphenate"));
+    reg.register(MenuItem::callback("top", "Top margin", "settings.margin_top"));
+    reg.register(MenuItem::callback("side", "Side margin", "settings.margin_side"));
+    reg.register(MenuItem::submenu("margins", "Margins", vec![]));
+    reg.register(MenuItem::submenu("text", "Text", vec![]));
+    reg.register(MenuItem::callback("dark", "Night mode", "settings.night"));
+    reg.register(MenuItem::callback("wifi", "Wi-Fi", "settings.wifi"));
+    reg.register(MenuItem::callback("sleep", "Sleep timer", "settings.sleep"));
+    reg.register(MenuItem::submenu("reading", "Reading", vec![]));
+    reg.register(MenuItem::submenu("device", "Device", vec![]));
+
+    let mut order = MenuOrder::new();
+    order.set(TABS_ID, &["reading", "device"]);
+    order.set("reading", &["text", SEPARATOR_ID, "dark"]);
+    order.set("text", &["font_size", "justify", "hyphenate", "margins"]);
+    order.set("margins", &["top", "side"]);
+    order.set("device", &["wifi", "sleep"]);
+    reg.build(&order)
+}

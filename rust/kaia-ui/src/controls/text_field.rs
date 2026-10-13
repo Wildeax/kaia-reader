@@ -19,6 +19,7 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 ///
 /// Password mode draws each character as a dot. The text itself is unchanged.
 pub struct TextField {
+    background: Option<Tone>,
     text: String,
     placeholder: String,
     /// Caret position in characters, from 0 to the character count.
@@ -40,6 +41,7 @@ impl Default for TextField {
 impl TextField {
     pub fn new() -> Self {
         Self {
+            background: None,
             text: String::new(),
             placeholder: String::new(),
             caret: 0,
@@ -49,6 +51,14 @@ impl TextField {
             on_change: Reaction::None,
             on_submit: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn with_text(mut self, text: impl Into<String>) -> Self {
@@ -258,7 +268,7 @@ impl Widget for TextField {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let radius = t.radius.button;

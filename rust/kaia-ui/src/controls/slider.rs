@@ -14,6 +14,7 @@ use kaia_gfx::text::FontSystem;
 /// on the step. A tap on the track, or a pan, moves it to the nearest step.
 /// The value is printed to the right of the track. The event argument is the new value.
 pub struct Slider {
+    background: Option<Tone>,
     value: f64,
     min: f64,
     max: f64,
@@ -27,6 +28,7 @@ impl Slider {
     /// The value is snapped to the nearest step inside `min..=max`.
     pub fn new(value: f64, min: f64, max: f64, step: f64) -> Self {
         let mut s = Self {
+            background: None,
             value: min,
             min,
             max,
@@ -37,6 +39,14 @@ impl Slider {
         };
         s.value = s.snap(value);
         s
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn format(mut self, f: impl Fn(f64) -> String + 'static) -> Self {
@@ -147,7 +157,7 @@ impl Widget for Slider {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let b = cx.bounds();
         let track = self.track(cx.fonts, t, b);

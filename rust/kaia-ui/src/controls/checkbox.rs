@@ -12,6 +12,7 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 
 /// A box that shows a check mark when checked. The whole row toggles on tap.
 pub struct Checkbox {
+    background: Option<Tone>,
     checked: bool,
     label: Option<String>,
     enabled: bool,
@@ -21,11 +22,20 @@ pub struct Checkbox {
 impl Checkbox {
     pub fn new(checked: bool) -> Self {
         Self {
+            background: None,
             checked,
             label: None,
             enabled: true,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn label(mut self, text: impl Into<String>) -> Self {
@@ -93,7 +103,7 @@ impl Widget for Checkbox {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let b = cx.bounds();

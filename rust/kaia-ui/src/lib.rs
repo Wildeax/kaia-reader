@@ -8,7 +8,9 @@
 
 pub mod assets;
 pub mod components;
+pub mod composite;
 pub mod controls;
+pub mod foreign;
 pub mod geometry;
 pub mod harness;
 mod pod;

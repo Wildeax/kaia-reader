@@ -9,7 +9,7 @@
 //! [`EventHandler`]. Borrows last for one call, and handlers cannot reach the
 //! window, so the `RefCell` never sees a re-entrant borrow.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use kaia_events::{Ctx, DirtyQueue, Event, EventHandler, ShowOpts, WindowId};
@@ -20,7 +20,7 @@ use kaia_input::{Key, KeyEvent};
 use crate::assets::{Assets, IconCache, SharedAssets};
 use crate::geometry::Constraints;
 use crate::pod::{Dispatch, WidgetId, WidgetPod};
-use crate::theme::Theme;
+use crate::theme::{Theme, Tone};
 use crate::widget::{Handled, LayoutCx, Out, PaintCx, PaintHint, UiEvent, UpdateCx, Widget};
 
 const ORIGIN: Point = Point::new(0, 0);
@@ -34,13 +34,15 @@ struct Inner {
     outbox: Vec<Out>,
     /// Set when the next paint must lay out the tree and repaint everything.
     full: bool,
-    id: Option<WindowId>,
 }
 
 /// A widget tree that can live on the window stack.
 #[derive(Clone)]
 pub struct Window {
     inner: Rc<RefCell<Inner>>,
+    /// The id from `show`. It lives outside `inner` so a handler can read it
+    /// while the window is delivering an event, when `inner` is borrowed.
+    id: Rc<Cell<Option<WindowId>>>,
 }
 
 impl Window {
@@ -58,8 +60,8 @@ impl Window {
                 focus: None,
                 outbox: Vec::new(),
                 full: true,
-                id: None,
             })),
+            id: Rc::new(Cell::new(None)),
         }
     }
 
@@ -67,13 +69,13 @@ impl Window {
     /// the request after the current handler returns.
     pub fn show(&self, ctx: &mut Ctx, opts: ShowOpts) -> WindowId {
         let id = ctx.show(self.clone(), opts);
-        self.inner.borrow_mut().id = Some(id);
+        self.id.set(Some(id));
         id
     }
 
     /// The id from [`Window::show`], once it is set.
     pub fn id(&self) -> Option<WindowId> {
-        self.inner.borrow().id
+        self.id.get()
     }
 
     pub fn screen(&self) -> Size {
@@ -148,7 +150,7 @@ impl Window {
         }
         inner.focus = d.focus;
         drop(assets);
-        mark_if_requested(inner, ctx);
+        mark_if_requested(self.id.get(), inner, ctx);
         handled
     }
 
@@ -167,7 +169,7 @@ impl Window {
             Some((pod, _)) => run_update::<T, F>(pod, ctx, f),
             None => false,
         };
-        mark_if_requested(inner, ctx);
+        mark_if_requested(self.id.get(), inner, ctx);
         done
     }
 
@@ -184,7 +186,7 @@ impl Window {
             Some((pod, _)) => run_update::<T, F>(pod, ctx, f),
             None => false,
         };
-        mark_if_requested(inner, ctx);
+        mark_if_requested(self.id.get(), inner, ctx);
         done
     }
 
@@ -221,7 +223,7 @@ impl Window {
         }
         inner.root.collect_dirty(ORIGIN, &mut regions);
 
-        if let Some(id) = inner.id {
+        if let Some(id) = self.id.get() {
             dirty.unmark(id);
         }
         let mut assets = inner.assets.borrow_mut();
@@ -272,8 +274,8 @@ where
 }
 
 /// Marks the window for the app when the tree has pending work.
-fn mark_if_requested(inner: &mut Inner, ctx: &mut Ctx) {
-    if let Some(id) = inner.id {
+fn mark_if_requested(id: Option<WindowId>, inner: &mut Inner, ctx: &mut Ctx) {
+    if let Some(id) = id {
         if inner.root.has_requests() {
             ctx.dirty.mark(id);
         }
@@ -336,6 +338,7 @@ fn paint_clip(
             origin: Point::new(clip.x, clip.y),
             clip,
             bounds: clip,
+            background: Tone::Surface,
             focused: false,
             focus,
         };

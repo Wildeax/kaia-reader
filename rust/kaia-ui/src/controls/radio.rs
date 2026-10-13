@@ -13,6 +13,7 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 /// and a bold label. A tap selects a row. Up and Down move the selection
 /// while the group has focus. The event argument is the 0-based index.
 pub struct RadioGroup {
+    background: Option<Tone>,
     options: Vec<String>,
     selected: Option<usize>,
     enabled: bool,
@@ -22,11 +23,20 @@ pub struct RadioGroup {
 impl RadioGroup {
     pub fn new(options: Vec<String>, selected: Option<usize>) -> Self {
         Self {
+            background: None,
             options,
             selected,
             enabled: true,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -76,7 +86,7 @@ impl Widget for RadioGroup {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let b = cx.bounds();
         let row_h = t.touch_target;

@@ -249,15 +249,18 @@ impl WidgetPod {
         if abs.intersect(&cx.clip).is_empty() {
             return;
         }
-        let saved = (cx.bounds, cx.focused);
+        let saved = (cx.bounds, cx.focused, cx.background);
         cx.bounds = abs;
         cx.focused = cx.focus == Some(self.id);
         self.widget.paint(cx);
+        if let Some(tone) = self.widget.child_background() {
+            cx.background = tone;
+        }
         let o = origin_of(abs);
         for child in self.widget.children_mut() {
             child.paint(cx, o);
         }
-        (cx.bounds, cx.focused) = saved;
+        (cx.bounds, cx.focused, cx.background) = saved;
     }
 
     /// Calls this widget's handler and applies the requests it made.

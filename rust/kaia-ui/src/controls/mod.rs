@@ -8,9 +8,12 @@
 //! Focused controls draw the `line.focus` outline inside their bounds, so every
 //! focusable control reserves `line.focus` on each side.
 //!
-//! Each control clears its bounds to `surface` before it draws, so a changed
-//! state never leaves the old drawing behind. Controls therefore expect a
-//! surface background. Put them on a tinted card only with that in mind.
+//! Each control clears its bounds to its background tone before it draws, so a
+//! changed state never leaves the old drawing behind. The background is the
+//! control's own [`background`](Button::background) setting when it has one.
+//! Otherwise it is the tone the parent sets: a [`Frame`](crate::components::Frame)
+//! with a fill passes that fill to its children, and the default is `Surface`.
+//! Keycaps in the on-screen keyboard keep their own fills.
 
 mod button;
 mod checkbox;
@@ -32,6 +35,8 @@ pub use stepper::Stepper;
 pub use text_field::TextField;
 pub use toggle::Toggle;
 
+use std::rc::Rc;
+
 use kaia_events::{Event, Value};
 use kaia_gfx::text::FontSystem;
 
@@ -42,8 +47,13 @@ use crate::widget::{AppAction, EventCx, PaintCx};
 /// or truncates while they size themselves.
 pub(crate) const UNBOUNDED: u32 = 1 << 20;
 
+/// A closure that runs inside the event handler of the control that fires it.
+/// It can change the control's parent through the context, for example by
+/// asking the window to lay out again.
+pub type Hook = Rc<dyn Fn(&mut EventCx<'_>)>;
+
 /// What a control does when the user changes it.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Default)]
 pub enum Reaction {
     #[default]
     None,
@@ -51,21 +61,61 @@ pub enum Reaction {
     Action(String),
     /// Queues a named event. Value controls put the new value in its args.
     Event(String),
+    /// Runs a closure in the control's handler. The app never sees it.
+    Hook(Hook),
 }
 
 impl Reaction {
+    /// A reaction that runs `f`. Use it when the widget that changes must
+    /// stay inside the widget tree, such as a menu that opens a sub-page.
+    pub fn hook(f: impl Fn(&mut EventCx<'_>) + 'static) -> Self {
+        Reaction::Hook(Rc::new(f))
+    }
+
     pub(crate) fn fire(&self, cx: &mut EventCx, args: Vec<Value>) {
         match self {
             Reaction::None => {}
             Reaction::Action(id) => cx.action(AppAction { id: id.clone(), args }),
             Reaction::Event(name) => cx.emit(Event::with_args(name.clone(), args)),
+            Reaction::Hook(f) => f(cx),
         }
     }
 }
 
-/// Paints the control's bounds in the surface tone. Called first in every paint.
-pub(crate) fn clear_bounds(cx: &mut PaintCx) {
-    let color = cx.color(Tone::Surface);
+impl std::fmt::Debug for Reaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Reaction::None => write!(f, "None"),
+            Reaction::Action(id) => write!(f, "Action({id:?})"),
+            Reaction::Event(name) => write!(f, "Event({name:?})"),
+            Reaction::Hook(_) => write!(f, "Hook"),
+        }
+    }
+}
+
+/// Hooks compare by identity: two reactions are equal when they share the closure.
+impl PartialEq for Reaction {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Reaction::None, Reaction::None) => true,
+            (Reaction::Action(a), Reaction::Action(b)) | (Reaction::Event(a), Reaction::Event(b)) => a == b,
+            (Reaction::Hook(a), Reaction::Hook(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Reaction {}
+
+/// The tone behind a control: its own background when set, otherwise the
+/// one inherited through the paint context.
+pub(crate) fn backdrop(cx: &PaintCx, own: Option<Tone>) -> Tone {
+    own.unwrap_or_else(|| cx.background())
+}
+
+/// Clears the control's bounds to its backdrop. Called first in every paint.
+pub(crate) fn clear_bounds(cx: &mut PaintCx, own: Option<Tone>) {
+    let color = cx.color(backdrop(cx, own));
     let b = cx.bounds();
     cx.fill_rect(b, color);
 }

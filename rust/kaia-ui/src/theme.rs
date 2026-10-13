@@ -117,6 +117,13 @@ pub struct Theme {
     pub touch_target: u32,
     /// Icon size for controls: `scaleBySize(32)`.
     pub icon_size: u32,
+    /// Height of the bottom nav bar: `scaleBySize(60)` from DESIGN.md.
+    pub nav_bar: u32,
+    /// Minimum height of a list row: about 14 mm at 300 PPI, from APP_UX.md.
+    pub row_height: u32,
+    /// True when the UI runs right to left. Composite components mirror
+    /// their layout (back chevrons, action order) when this is set.
+    pub rtl: bool,
 }
 
 impl Theme {
@@ -161,6 +168,9 @@ impl Theme {
             },
             touch_target: dp(50),
             icon_size: dp(32),
+            nav_bar: dp(60),
+            row_height: dp(83),
+            rtl: false,
             palette: Palette {
                 ink,
                 ink_secondary: Color::gray(0x55),
@@ -171,6 +181,13 @@ impl Theme {
                 accent: if color_panel { ACCENT_RGB } else { ink },
             },
         }
+    }
+
+    /// The same tokens with the layout direction set. Returns the theme with
+    /// `rtl` changed.
+    pub fn with_rtl(mut self, rtl: bool) -> Self {
+        self.rtl = rtl;
+        self
     }
 
     /// The pixel format the panel frame uses.

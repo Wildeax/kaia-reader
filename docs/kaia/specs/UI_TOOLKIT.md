@@ -70,4 +70,4 @@ Foreign: `ForeignWidget` hands its rect and events to a `trait ForeignRenderer {
 
 Each loop iteration runs in this order: read input, dispatch it to the window stack, paint dirty windows and send refreshes, then run the scheduler's due tasks, then paint again if a task made something dirty. Press feedback depends on this order: a tapped button paints its pressed state in the first paint and releases in a `next_tick` task, so the pressed frame reaches the panel before the release.
 
-Controls clear their own bounds to the theme surface color before painting. A control placed on a tinted card needs the card color passed as its background (to be added when the first surface needs it).
+Controls clear their own bounds to the background tone they inherit from the nearest `Frame` (through `Widget::child_background`), or to a tone set with `.background(...)`; the default is the theme surface.

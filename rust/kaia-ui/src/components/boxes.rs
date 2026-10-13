@@ -231,4 +231,9 @@ impl Widget for Frame {
     fn children_mut(&mut self) -> Vec<&mut WidgetPod> {
         vec![&mut self.child]
     }
+
+    /// The fill, when the frame has one. Children sit on it.
+    fn child_background(&self) -> Option<Tone> {
+        self.fill
+    }
 }

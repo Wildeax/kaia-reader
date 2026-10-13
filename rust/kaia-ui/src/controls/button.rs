@@ -24,6 +24,7 @@ pub enum ButtonStyle {
 /// A labeled button with an optional icon. The content is text, an icon, or
 /// an icon with text. The button is at least `touch_target` high and wide.
 pub struct Button {
+    background: Option<Tone>,
     style: ButtonStyle,
     text: Option<String>,
     icon: Option<String>,
@@ -35,6 +36,7 @@ pub struct Button {
 impl Button {
     pub fn new(style: ButtonStyle) -> Self {
         Self {
+            background: None,
             style,
             text: None,
             icon: None,
@@ -42,6 +44,14 @@ impl Button {
             pressed: false,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn text(mut self, text: impl Into<String>) -> Self {
@@ -69,6 +79,12 @@ impl Button {
     /// Queues a named event on tap.
     pub fn on_event(mut self, name: impl Into<String>) -> Self {
         self.reaction = Reaction::Event(name.into());
+        self
+    }
+
+    /// Runs `f` in the handler on tap. See [`Reaction::hook`].
+    pub fn on_hook(mut self, f: impl Fn(&mut EventCx<'_>) + 'static) -> Self {
+        self.reaction = Reaction::hook(f);
         self
     }
 
@@ -155,7 +171,7 @@ impl Widget for Button {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let radius = t.radius.button;
@@ -205,6 +221,7 @@ impl Widget for Button {
 /// A square button with an icon only. The icon is `icon_size` and the
 /// button is `touch_target` square.
 pub struct IconButton {
+    background: Option<Tone>,
     icon: String,
     enabled: bool,
     pressed: bool,
@@ -212,13 +229,29 @@ pub struct IconButton {
 }
 
 impl IconButton {
+    /// Sets the reaction without a builder method. Composite widgets use it
+    /// for reactions they build at run time.
+    pub(crate) fn reaction(mut self, reaction: Reaction) -> Self {
+        self.reaction = reaction;
+        self
+    }
+
     pub fn new(icon: impl Into<String>) -> Self {
         Self {
+            background: None,
             icon: icon.into(),
             enabled: true,
             pressed: false,
             reaction: Reaction::None,
         }
+    }
+
+    /// The tone behind this control, which it clears its bounds to. Without
+    /// this, the control uses the tone from its parent [`Frame`](crate::components::Frame),
+    /// or `Surface`.
+    pub fn background(mut self, tone: Tone) -> Self {
+        self.background = Some(tone);
+        self
     }
 
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -233,6 +266,12 @@ impl IconButton {
 
     pub fn on_event(mut self, name: impl Into<String>) -> Self {
         self.reaction = Reaction::Event(name.into());
+        self
+    }
+
+    /// Runs `f` in the handler on tap. See [`Reaction::hook`].
+    pub fn on_hook(mut self, f: impl Fn(&mut EventCx<'_>) + 'static) -> Self {
+        self.reaction = Reaction::hook(f);
         self
     }
 
@@ -254,7 +293,7 @@ impl Widget for IconButton {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
-        super::clear_bounds(cx);
+        super::clear_bounds(cx, self.background);
         let t = cx.theme;
         let ring = t.line.focus;
         let inner = cx.bounds().inset(ring as i32);
