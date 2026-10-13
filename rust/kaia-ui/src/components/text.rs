@@ -49,6 +49,7 @@ impl Widget for Label {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        cx.clear_background();
         let b = cx.bounds();
         if self.layout.is_none() {
             // Text changed since the last layout. Lay it out at the box width.
@@ -111,6 +112,7 @@ impl Widget for Paragraph {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        cx.clear_background();
         let b = cx.bounds();
         if self.layout.is_none() {
             let style = cx.theme.style(&self.font, self.tone);

@@ -144,3 +144,20 @@ pub(crate) fn default_format(v: f64) -> String {
         format!("{v}")
     }
 }
+
+/// Decimal places needed to write `x`, up to nine.
+fn decimals_of(x: f64) -> i32 {
+    (0..=9)
+        .find(|d| {
+            let scaled = x * 10f64.powi(*d);
+            (scaled - scaled.round()).abs() <= 1e-9 * scaled.abs().max(1.0)
+        })
+        .unwrap_or(9)
+}
+
+/// Rounds `v` to the decimal places of `step` and `min`, so adding a step many
+/// times gives 0.3 and not 0.30000000000000004.
+pub(crate) fn round_to_step(v: f64, step: f64, min: f64) -> f64 {
+    let p = 10f64.powi(decimals_of(step).max(decimals_of(min)));
+    (v * p).round() / p
+}

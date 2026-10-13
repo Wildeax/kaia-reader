@@ -4,8 +4,10 @@
 //! swipe.
 //!
 //! The first item sets the row height. If a page still does not fit, the
-//! pager shows one row fewer. Every layout builds the cells of the current
-//! page again from the items, so a cell never keeps stale state between layouts.
+//! pager shows one row fewer. The pager builds cells for the visible page only
+//! and keeps them across layouts, so a layout request does not rebuild them,
+//! rescale their covers or lose a keyed update. Setting the items, turning the
+//! page, a new size or a change in rows per page builds the cells again.
 
 use kaia_gfx::{Point, Rect, Size};
 use kaia_input::Gesture;
@@ -60,6 +62,19 @@ pub(crate) struct Pager<T> {
     rows: Option<u32>,
     measured_for: Option<Size>,
     cells: Vec<WidgetPod>,
+    /// Counts `set_items` calls, so cached cells never outlive their items.
+    generation: u64,
+    /// What the cached cells were built for.
+    cells_for: Option<CellsKey>,
+}
+
+/// The inputs that decide which cells are on the page and how they lay out.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct CellsKey {
+    generation: u64,
+    page: usize,
+    rows: u32,
+    cell: Constraints,
 }
 
 /// Where the navigation strip draws its parts, for a pager at `b`.
@@ -120,6 +135,8 @@ impl<T> Pager<T> {
             rows: None,
             measured_for: None,
             cells: Vec::new(),
+            generation: 0,
+            cells_for: None,
         }
     }
 
@@ -129,6 +146,13 @@ impl<T> Pager<T> {
         self.items = items;
         self.page = 0;
         self.rows = None;
+        self.generation += 1;
+        self.cells_for = None;
+    }
+
+    /// Builds the cells again on the next layout, keeping the items and the page.
+    pub(crate) fn rebuild_cells(&mut self) {
+        self.cells_for = None;
     }
 
     pub(crate) fn items(&self) -> &[T] {
@@ -182,9 +206,10 @@ impl<T> Pager<T> {
             self.rows = None;
             self.measured_for = Some(size);
         }
-        self.cells.clear();
         let n = self.items.len();
         if n == 0 {
+            self.cells.clear();
+            self.cells_for = None;
             self.pages = 0;
             self.page = 0;
             return size;
@@ -204,7 +229,17 @@ impl<T> Pager<T> {
             let start = self.page * per;
             let end = (start + per).min(n);
 
-            let mut cells: Vec<WidgetPod> = (start..end).map(|i| (self.build)(&self.items[i], t)).collect();
+            let key = CellsKey {
+                generation: self.generation,
+                page: self.page,
+                rows,
+                cell: cell_c,
+            };
+            let mut cells: Vec<WidgetPod> = if self.cells_for == Some(key) {
+                std::mem::take(&mut self.cells)
+            } else {
+                (start..end).map(|i| (self.build)(&self.items[i], t)).collect()
+            };
             let mut row_heights: Vec<u32> = Vec::new();
             for row in cells.chunks_mut(cols as usize) {
                 let mut row_h = 0;
@@ -219,6 +254,7 @@ impl<T> Pager<T> {
                 // The page does not fit. Show one row fewer and keep the first item in view.
                 self.rows = Some(rows - 1);
                 self.page = start / self.per_page(rows - 1);
+                self.cells_for = None;
                 continue;
             }
 
@@ -231,6 +267,7 @@ impl<T> Pager<T> {
                 y += (row_heights[r] + self.gap) as i32;
             }
             self.cells = cells;
+            self.cells_for = Some(key);
             break;
         }
         size
@@ -334,6 +371,14 @@ impl<T: 'static> PagedList<T> {
         cx.request_paint();
     }
 
+    /// Builds the cells of the page again, keeping the items and the page. Use
+    /// it when the `build` closure reads state that is not in the items.
+    pub fn rebuild_cells(&mut self, cx: &mut UpdateCx<'_>) {
+        self.pager.rebuild_cells();
+        cx.request_layout();
+        cx.request_paint();
+    }
+
     pub fn items(&self) -> &[T] {
         self.pager.items()
     }
@@ -346,6 +391,12 @@ impl<T: 'static> PagedList<T> {
     /// The page count. Zero before the first layout or with no items.
     pub fn page_count(&self) -> usize {
         self.pager.page_count()
+    }
+
+    /// Builds the cells again without an update context. Composite widgets use it
+    /// when they also request the layout themselves.
+    pub(crate) fn pager_rebuild(&mut self) {
+        self.pager.rebuild_cells();
     }
 
     /// Replaces the items without an update context. Composite widgets use it
@@ -409,6 +460,13 @@ impl<T: 'static> Grid<T> {
 
     pub fn set_page(&mut self, page: usize, cx: &mut UpdateCx<'_>) {
         self.pager.set_page(page);
+        cx.request_layout();
+        cx.request_paint();
+    }
+
+    /// Builds the cells of the page again. See [`PagedList::rebuild_cells`].
+    pub fn rebuild_cells(&mut self, cx: &mut UpdateCx<'_>) {
+        self.pager.rebuild_cells();
         cx.request_layout();
         cx.request_paint();
     }

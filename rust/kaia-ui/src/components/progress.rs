@@ -53,6 +53,7 @@ impl Widget for ProgressBar {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        cx.clear_background();
         let b = cx.bounds();
         if self.label.is_none() {
             let style = cx.theme.style(&cx.theme.font.caption, Tone::Ink);

@@ -111,6 +111,8 @@ pub struct Tapper {
     pub handle: bool,
     pub focusable: bool,
     pub focus_on_tap: bool,
+    /// Asks for focus on a tap with `request_focus_if_focusable`.
+    pub soft_focus_on_tap: bool,
     pub log: Log,
 }
 
@@ -122,6 +124,7 @@ impl Tapper {
             handle: false,
             focusable: false,
             focus_on_tap: false,
+            soft_focus_on_tap: false,
             log: Rc::clone(log),
         }
     }
@@ -149,6 +152,9 @@ impl Widget for Tapper {
         self.log.borrow_mut().push(label);
         if self.focus_on_tap && matches!(ev, UiEvent::Gesture(Gesture::Tap { .. })) {
             cx.request_focus();
+        }
+        if self.soft_focus_on_tap && matches!(ev, UiEvent::Gesture(Gesture::Tap { .. })) {
+            cx.request_focus_if_focusable();
         }
         if self.handle {
             Handled::Yes
@@ -248,4 +254,140 @@ pub fn settings_build() -> MenuBuild {
     order.set("margins", &["top", "side"]);
     order.set("device", &["wifi", "sleep"]);
     reg.build(&order)
+}
+
+use std::collections::HashMap;
+use std::time::Duration;
+
+use kaia_events::{Ctx, ManualClock, Refresh, ShowOpts, WindowId, WindowStack};
+use kaia_gfx::Pixmap;
+use kaia_ui::theme::Tone;
+use kaia_ui::Window;
+
+pub fn ev_rect(r: Rect) -> kaia_events::Rect {
+    kaia_events::Rect::new(r.x, r.y, r.w as i32, r.h as i32)
+}
+
+/// A small copy of the app's loop: apply requests, ask the stack for the paint
+/// plan, paint the visible stack with `Window::paint_stack`, take the refreshes.
+pub struct MiniApp {
+    pub clock: ManualClock,
+    pub ctx: Ctx,
+    pub stack: WindowStack,
+    pub windows: HashMap<WindowId, Window>,
+    pub frame: Pixmap,
+    pub last: Vec<Refresh>,
+    pub theme: Theme,
+    pub assets: SharedAssets,
+}
+
+impl MiniApp {
+    pub fn new() -> Self {
+        let clock = ManualClock::new();
+        let ctx = Ctx::new(Box::new(clock.clone()), ev_rect(Rect::from_size(SCREEN)));
+        let theme = theme(false);
+        let mut frame = Pixmap::new(SCREEN.w, SCREEN.h, theme.pixel_format());
+        frame.fill_rect(Rect::from_size(SCREEN), theme.color(Tone::Surface));
+        Self {
+            clock,
+            ctx,
+            stack: WindowStack::new(),
+            windows: HashMap::new(),
+            frame,
+            last: Vec::new(),
+            theme,
+            assets: assets(),
+        }
+    }
+
+    pub fn show(&mut self, w: &Window, opts: ShowOpts) -> WindowId {
+        let id = w.show(&mut self.ctx, opts);
+        self.windows.insert(id, w.clone());
+        self.stack.apply_requests(&mut self.ctx);
+        id
+    }
+
+    /// The window for a root widget, sized to the screen.
+    pub fn window(&self, root: impl Widget + 'static) -> Window {
+        Window::new(root, self.theme.clone(), self.assets.clone(), SCREEN)
+    }
+
+    /// Paints what the stack says is dirty. Returns true when anything was painted.
+    pub fn repaint(&mut self) -> bool {
+        self.stack.apply_requests(&mut self.ctx);
+        let plan = self.stack.paint_plan(&mut self.ctx.dirty);
+        let mut painted = false;
+        if !plan.is_empty() {
+            let windows = Window::visible_stack(&self.stack, |id| self.windows.get(&id).cloned());
+            painted = Window::paint_stack(&windows, &mut self.frame, &mut self.ctx.dirty);
+        }
+        self.last = self.ctx.dirty.take_frame(painted);
+        painted
+    }
+
+    pub fn close(&mut self, id: WindowId) {
+        self.ctx.close(id, None);
+        self.stack.apply_requests(&mut self.ctx);
+    }
+
+    /// Moves the manual clock and runs the tasks that are due.
+    pub fn advance(&mut self, secs: f64) {
+        self.clock.advance(Duration::from_secs_f64(secs));
+        let now = self.ctx.scheduler.now();
+        self.ctx.run_due(now);
+        self.stack.apply_requests(&mut self.ctx);
+    }
+
+    pub fn px(&self, x: i32, y: i32) -> u8 {
+        self.frame.get(x, y).unwrap().r
+    }
+
+    /// The area the last frame's refreshes cover, in pixels. Overlaps count once per refresh.
+    pub fn refreshed_area(&self) -> i64 {
+        self.last
+            .iter()
+            .map(|r| {
+                r.region
+                    .map_or(SCREEN.w as i64 * SCREEN.h as i64, |g| g.w as i64 * g.h as i64)
+            })
+            .sum()
+    }
+
+    pub fn dark_pixels(&self, r: Rect) -> usize {
+        let mut n = 0;
+        for y in r.y..r.bottom() {
+            for x in r.x..r.right() {
+                if self.px(x, y) < 128 {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+}
+
+/// Counts pixels below mid gray in `r`.
+pub fn dark_in(pm: &Pixmap, r: Rect) -> usize {
+    let mut n = 0;
+    for y in r.y..r.bottom() {
+        for x in r.x..r.right() {
+            if pm.get(x, y).is_some_and(|c| c.r < 128) {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+/// The leftmost and rightmost columns holding dark pixels in `r`.
+pub fn dark_span(pm: &Pixmap, r: Rect) -> Option<(i32, i32)> {
+    let mut span: Option<(i32, i32)> = None;
+    for y in r.y..r.bottom() {
+        for x in r.x..r.right() {
+            if pm.get(x, y).is_some_and(|c| c.r < 128) {
+                span = Some(span.map_or((x, x), |(lo, hi)| (lo.min(x), hi.max(x))));
+            }
+        }
+    }
+    span
 }

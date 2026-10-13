@@ -54,6 +54,7 @@ impl Widget for Icon {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        cx.clear_background();
         let b = cx.bounds();
         let color = cx.color(self.tone);
         let x = b.x + (b.w as i32 - self.px as i32) / 2;

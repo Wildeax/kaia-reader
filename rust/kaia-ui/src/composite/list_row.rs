@@ -9,7 +9,7 @@ use kaia_input::Gesture;
 
 use super::CoverImage;
 use crate::components::draw_icon_at;
-use crate::controls::{Reaction, UNBOUNDED};
+use crate::controls::Reaction;
 use crate::geometry::Constraints;
 use crate::pod::WidgetPod;
 use crate::theme::{Theme, Tone};
@@ -204,8 +204,11 @@ impl ListRow {
             Trailing::None => 0,
             Trailing::Chevron => t.icon_size,
             Trailing::Value(text) => {
+                // The value is drawn at most half the row wide, so it takes no more here.
                 let style = t.style(&t.font.body, Tone::InkSecondary);
-                fonts.layout(text, &style, UNBOUNDED, Some(1), false).width
+                fonts
+                    .layout(text, &style, (width / 2).max(1), Some(1), true)
+                    .width
             }
             Trailing::Toggle(_) => switch_w(t),
             Trailing::Checkbox(_) => switch_h(t),

@@ -4,7 +4,7 @@
 use std::cmp::Ordering;
 
 use kaia_events::Value;
-use kaia_gfx::text::FontSystem;
+use kaia_gfx::text::{FontSystem, TextLayout};
 use kaia_gfx::{Point, Rect, Size};
 use kaia_input::{Gesture, Key};
 
@@ -30,6 +30,18 @@ pub struct TextField {
     password: bool,
     on_change: Reaction,
     on_submit: Reaction,
+    /// The shaped text and the caret stops, kept until the text changes.
+    shaped: Option<Shaped>,
+}
+
+/// What shaping the text gave: the layout to draw and the pixel x of every
+/// caret stop. Valid for one shown string and one font size.
+struct Shaped {
+    shown: String,
+    size: f32,
+    layout: TextLayout,
+    /// Entry `i` is the x after `i` characters.
+    stops: Vec<f32>,
 }
 
 impl Default for TextField {
@@ -50,6 +62,7 @@ impl TextField {
             password: false,
             on_change: Reaction::None,
             on_submit: Reaction::None,
+            shaped: None,
         }
     }
 
@@ -158,17 +171,57 @@ impl TextField {
         )
     }
 
-    /// Pixel x of every caret position: entry `i` is the x after `i` characters.
-    fn boundaries(&self, fonts: &mut FontSystem, t: &Theme) -> Vec<f32> {
+    /// Shapes the shown text if it changed since the last call. One edit costs one
+    /// layout when it happens at the end of the text: typing adds the stop from
+    /// the layout of the whole text, and deleting drops the last stop. Any other
+    /// change shapes every prefix again.
+    fn shape(&mut self, fonts: &mut FontSystem, t: &Theme) {
+        let shown = self.shown();
+        let size = t.font.body.size;
+        let previous = match self.shaped.take() {
+            Some(old) if old.size == size && old.shown == shown => {
+                self.shaped = Some(old);
+                return;
+            }
+            Some(old) if old.size == size => Some(old),
+            _ => None,
+        };
         let style = t.style(&t.font.body, Tone::Ink);
-        let mut xs = vec![0.0_f32];
-        let mut prefix = String::new();
-        for ch in self.shown().chars() {
-            prefix.push(ch);
-            let w = fonts.layout(&prefix, &style, UNBOUNDED, None, false).width;
-            xs.push(w as f32);
-        }
-        xs
+        let layout = fonts.layout(&shown, &style, UNBOUNDED, None, false);
+        let stops = match previous {
+            Some(mut old)
+                if shown.starts_with(old.shown.as_str()) && shown.chars().count() == old.stops.len() =>
+            {
+                old.stops.push(layout.width as f32);
+                old.stops
+            }
+            Some(mut old)
+                if old.shown.starts_with(shown.as_str()) && shown.chars().count() + 2 == old.stops.len() =>
+            {
+                old.stops.pop();
+                old.stops
+            }
+            _ => {
+                let mut xs = vec![0.0_f32];
+                let mut prefix = String::new();
+                for ch in shown.chars() {
+                    prefix.push(ch);
+                    xs.push(fonts.layout(&prefix, &style, UNBOUNDED, None, false).width as f32);
+                }
+                xs
+            }
+        };
+        self.shaped = Some(Shaped {
+            shown,
+            size,
+            layout,
+            stops,
+        });
+    }
+
+    /// The caret stops: entry `i` is the x after `i` characters. Call after [`TextField::shape`].
+    fn stops(&self) -> &[f32] {
+        self.shaped.as_ref().map_or(&[0.0], |s| &s.stops)
     }
 
     /// Scrolls so the caret is inside the visible width.
@@ -237,7 +290,8 @@ impl TextField {
         };
         let t = cx.theme();
         let area = self.area(t, cx.bounds());
-        let xs = self.boundaries(cx.fonts(), t);
+        self.shape(cx.fonts(), t);
+        let xs = self.stops().to_vec();
         self.follow_caret(&xs, area.w);
         if changed {
             self.on_change.fire(cx, vec![Value::Str(self.text.clone())]);
@@ -277,7 +331,8 @@ impl Widget for TextField {
         cx.border(b.inset(ring as i32), radius, t.line.divider, edge);
 
         let area = self.area(t, b);
-        let xs = self.boundaries(cx.fonts, t);
+        self.shape(cx.fonts, t);
+        let xs = self.stops().to_vec();
         self.follow_caret(&xs, area.w);
         let style = t.style(&t.font.body, Tone::Ink);
         let line_h = style.line_height.ceil() as u32;
@@ -291,11 +346,10 @@ impl Widget for TextField {
                     .layout(&self.placeholder, &muted, UNBOUNDED, Some(1), true);
                 cx.text(&tl, Point::new(area.x, text_y));
             }
-        } else {
-            let shown = self.shown();
-            let tl = cx.fonts.layout(&shown, &style, UNBOUNDED, None, false);
+        } else if let Some(shaped) = &self.shaped {
             let x0 = area.x - self.scroll.round() as i32;
-            cx.clipped(area, |cx| cx.text(&tl, Point::new(x0, text_y)));
+            let tl = &shaped.layout;
+            cx.clipped(area, |cx| cx.text(tl, Point::new(x0, text_y)));
         }
 
         if cx.is_focused() {
@@ -314,7 +368,8 @@ impl Widget for TextField {
                 cx.request_focus();
                 let t = cx.theme();
                 let area = self.area(t, cx.bounds());
-                let xs = self.boundaries(cx.fonts(), t);
+                self.shape(cx.fonts(), t);
+                let xs = self.stops().to_vec();
                 let x = (pos.x - area.x) as f32 + self.scroll;
                 self.caret = caret_for_x(&xs, x);
                 self.follow_caret(&xs, area.w);

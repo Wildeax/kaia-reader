@@ -35,6 +35,18 @@ impl Size {
     }
 }
 
+/// `v` as an `i32`, stopping at the largest value.
+fn clamp_i32(v: i64) -> i32 {
+    v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+/// `v` as a `u32`, stopping at zero and at the largest value.
+fn clamp_u32(v: i64) -> u32 {
+    v.clamp(0, u32::MAX as i64) as u32
+}
+
+/// Rectangle arithmetic stops at the limits of `i32` and `u32` instead of
+/// overflowing, so a huge rectangle from a bad layout cannot panic a debug build.
 impl Rect {
     pub const fn new(x: i32, y: i32, w: u32, h: u32) -> Self {
         Self { x, y, w, h }
@@ -49,11 +61,11 @@ impl Rect {
     }
 
     pub fn right(&self) -> i32 {
-        self.x + self.w as i32
+        clamp_i32(self.x as i64 + self.w as i64)
     }
 
     pub fn bottom(&self) -> i32 {
-        self.y + self.h as i32
+        clamp_i32(self.y as i64 + self.h as i64)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -73,7 +85,12 @@ impl Rect {
         if x1 <= x0 || y1 <= y0 {
             return Rect::new(self.x, self.y, 0, 0);
         }
-        Rect::new(x0, y0, (x1 - x0) as u32, (y1 - y0) as u32)
+        Rect::new(
+            x0,
+            y0,
+            clamp_u32(x1 as i64 - x0 as i64),
+            clamp_u32(y1 as i64 - y0 as i64),
+        )
     }
 
     /// The smallest rectangle containing both. An empty input is ignored.
@@ -88,18 +105,28 @@ impl Rect {
         let y0 = self.y.min(other.y);
         let x1 = self.right().max(other.right());
         let y1 = self.bottom().max(other.bottom());
-        Rect::new(x0, y0, (x1 - x0) as u32, (y1 - y0) as u32)
+        Rect::new(
+            x0,
+            y0,
+            clamp_u32(x1 as i64 - x0 as i64),
+            clamp_u32(y1 as i64 - y0 as i64),
+        )
     }
 
     /// Shrinks every side by `d` pixels (or grows when negative).
     pub fn inset(&self, d: i32) -> Rect {
-        let w = (self.w as i64 - 2 * d as i64).max(0) as u32;
-        let h = (self.h as i64 - 2 * d as i64).max(0) as u32;
-        Rect::new(self.x + d, self.y + d, w, h)
+        let w = clamp_u32(self.w as i64 - 2 * d as i64);
+        let h = clamp_u32(self.h as i64 - 2 * d as i64);
+        Rect::new(self.x.saturating_add(d), self.y.saturating_add(d), w, h)
     }
 
     pub fn translate(&self, dx: i32, dy: i32) -> Rect {
-        Rect::new(self.x + dx, self.y + dy, self.w, self.h)
+        Rect::new(
+            self.x.saturating_add(dx),
+            self.y.saturating_add(dy),
+            self.w,
+            self.h,
+        )
     }
 }
 
@@ -114,6 +141,25 @@ mod tests {
         assert_eq!(a.intersect(&b), Rect::new(5, 5, 5, 5));
         assert_eq!(a.union(&b), Rect::new(0, 0, 15, 15));
         assert!(a.intersect(&Rect::new(20, 20, 1, 1)).is_empty());
+    }
+
+    #[test]
+    fn methods_saturate_instead_of_overflowing() {
+        let far = Rect::new(i32::MAX - 5, i32::MAX - 5, 100, 100);
+        assert_eq!(far.right(), i32::MAX);
+        assert_eq!(far.bottom(), i32::MAX);
+        let low = Rect::new(i32::MIN, i32::MIN, u32::MAX, u32::MAX);
+        assert_eq!(low.right(), i32::MAX);
+        assert_eq!(low.bottom(), i32::MAX);
+        let u = low.union(&far);
+        assert_eq!((u.x, u.y), (i32::MIN, i32::MIN));
+        assert_eq!((u.w, u.h), (u32::MAX, u32::MAX));
+        assert_eq!(far.translate(100, 100).x, i32::MAX);
+        assert_eq!(Rect::new(i32::MIN + 1, 0, 10, 10).translate(-100, 0).x, i32::MIN);
+        assert_eq!(far.inset(-10).x, i32::MAX - 15);
+        assert_eq!(Rect::new(i32::MIN + 1, 0, 10, 10).inset(-10).x, i32::MIN);
+        assert!(low.intersect(&far).w > 0);
+        assert!(low.contains(Point::new(0, 0)));
     }
 
     #[test]

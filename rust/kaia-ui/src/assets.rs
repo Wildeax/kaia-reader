@@ -66,6 +66,10 @@ impl std::error::Error for IconError {}
 pub struct Assets {
     pub fonts: FontSystem,
     pub icons: IconCache,
+    /// Areas that windows covered before they closed. The windows left on the
+    /// stack repaint them in the next pass. Shared here because all windows of
+    /// an app share one `Assets`.
+    pub(crate) closed: Vec<kaia_gfx::Rect>,
 }
 
 impl Assets {
@@ -80,6 +84,7 @@ impl Assets {
         Ok(Self {
             fonts,
             icons: IconCache::new(icons_dir.to_path_buf()),
+            closed: Vec::new(),
         })
     }
 

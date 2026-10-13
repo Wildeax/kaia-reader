@@ -124,8 +124,10 @@ fn find_rect_reports_the_absolute_bounds_of_a_nested_widget() {
     assert!(r.w > 0 && r.h > 0);
 }
 
+/// A layout request repaints the widgets whose bounds changed and the widget
+/// that asked, not the screen (UI-H5).
 #[test]
-fn a_layout_request_repaints_the_whole_window() {
+fn a_layout_request_repaints_only_the_widget_that_asked() {
     let t = theme(false);
     let column = Column::new(vec![WidgetPod::new(Label::new(
         "A",
@@ -136,9 +138,10 @@ fn a_layout_request_repaints_the_whole_window() {
     .shrink();
     let mut h = Harness::new(column, SCREEN, &t, &assets());
     h.frame();
+    let label = h.find_rect("a").expect("laid out");
     h.update::<Label, _>("a", |_, cx| cx.request_layout());
     h.frame();
-    assert_eq!(h.refresh_requests(), &[refresh_of(Rect::from_size(SCREEN))]);
+    assert_eq!(h.refresh_requests(), &[refresh_of(label)]);
 }
 
 #[test]

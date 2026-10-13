@@ -4,6 +4,7 @@
 //! Positions are stored relative to the parent, so moving a subtree does not
 //! change its children. Absolute bounds are computed while walking.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use kaia_events::Ctx;
@@ -13,7 +14,9 @@ use kaia_input::Key;
 
 use crate::geometry::Constraints;
 use crate::theme::Theme;
-use crate::widget::{EventCx, Handled, LayoutCx, Out, PaintCx, PaintHint, PaintRequest, UiEvent, Widget};
+use crate::widget::{
+    EventCx, FocusRequest, Handled, LayoutCx, Out, PaintCx, PaintHint, PaintRequest, UiEvent, Widget,
+};
 use crate::window::Window;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -240,19 +243,26 @@ impl WidgetPod {
         }
     }
 
-    /// Paints this widget and its children. Subtrees outside the clip are skipped.
+    /// Paints this widget and its children. Subtrees outside the repaint
+    /// region are skipped. Each widget draws only inside its own bounds.
     pub(crate) fn paint(&mut self, cx: &mut PaintCx, origin: Point) {
         if !self.visible {
             return;
         }
         let abs = self.abs(origin);
-        if abs.intersect(&cx.clip).is_empty() {
+        let visible = abs.intersect(&cx.region);
+        if visible.is_empty() {
             return;
         }
-        let saved = (cx.bounds, cx.focused, cx.background);
+        let saved = (cx.bounds, cx.focused, cx.background, cx.clip);
         cx.bounds = abs;
+        cx.clip = visible;
         cx.focused = cx.focus == Some(self.id);
+        cx.drew = false;
         self.widget.paint(cx);
+        if cx.drew {
+            cx.touched = cx.touched.union(&visible);
+        }
         if let Some(tone) = self.widget.child_background() {
             cx.background = tone;
         }
@@ -260,7 +270,7 @@ impl WidgetPod {
         for child in self.widget.children_mut() {
             child.paint(cx, o);
         }
-        (cx.bounds, cx.focused, cx.background) = saved;
+        (cx.bounds, cx.focused, cx.background, cx.clip) = saved;
     }
 
     /// Calls this widget's handler and applies the requests it made.
@@ -277,7 +287,7 @@ impl WidgetPod {
             focused: d.focus == Some(self.id),
             paint: None,
             layout: false,
-            focus: false,
+            focus: FocusRequest::None,
             keys: Vec::new(),
         };
         let handled = self.widget.event(&mut cx, ev);
@@ -295,8 +305,17 @@ impl WidgetPod {
         if layout {
             self.needs_layout = true;
         }
-        if focus {
-            d.focus_request = Some(self.id);
+        match focus {
+            FocusRequest::None => {}
+            FocusRequest::IfFocusable => {
+                if self.focusable {
+                    d.focus_request = Some(self.id);
+                }
+            }
+            FocusRequest::Force => {
+                self.focusable = true;
+                d.focus_request = Some(self.id);
+            }
         }
         handled
     }
@@ -376,6 +395,40 @@ impl WidgetPod {
             }
         }
         Handled::No
+    }
+
+    /// The deepest visible widget whose bounds contain `pos`. Hit testing
+    /// walks the children in reverse paint order, so the topmost one wins.
+    pub(crate) fn deepest_at(&mut self, origin: Point, pos: Point) -> Option<WidgetId> {
+        if !self.visible {
+            return None;
+        }
+        let abs = self.abs(origin);
+        if !abs.contains(pos) {
+            return None;
+        }
+        let o = origin_of(abs);
+        for child in self.widget.children_mut().into_iter().rev() {
+            if let Some(id) = child.deepest_at(o, pos) {
+                return Some(id);
+            }
+        }
+        Some(self.id)
+    }
+
+    /// Records the absolute bounds of every widget in the subtree, and whether
+    /// the widget asked for a layout. Hidden widgets have empty bounds.
+    pub(crate) fn snapshot(&mut self, origin: Point, out: &mut HashMap<WidgetId, (Rect, bool)>) {
+        let abs = self.abs(origin);
+        if !self.visible {
+            out.insert(self.id, (Rect::new(abs.x, abs.y, 0, 0), self.needs_layout));
+            return;
+        }
+        out.insert(self.id, (abs, self.needs_layout));
+        let o = origin_of(abs);
+        for child in self.widget.children_mut() {
+            child.snapshot(o, out);
+        }
     }
 
     /// Finds a pod by id. Returns it with the origin of its parent.

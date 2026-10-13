@@ -210,6 +210,7 @@ impl Menu {
     /// Stores the state of a switch row and repaints it. Call it when the app's setting changes.
     pub fn set_toggle(&mut self, id: &str, on: bool, cx: &mut UpdateCx<'_>) {
         self.state.borrow_mut().toggles.insert(id.to_string(), on);
+        self.rebuild_rows();
         cx.request_layout();
         cx.request_paint();
     }
@@ -217,8 +218,22 @@ impl Menu {
     /// Stores the value of a leaf row and repaints it.
     pub fn set_value(&mut self, id: &str, text: impl Into<String>, cx: &mut UpdateCx<'_>) {
         self.state.borrow_mut().values.insert(id.to_string(), text.into());
+        self.rebuild_rows();
         cx.request_layout();
         cx.request_paint();
+    }
+
+    /// The rows read the switch and value state when they are built, and the
+    /// list keeps its rows between layouts, so a state change builds them again.
+    fn rebuild_rows(&mut self) {
+        if let Some(list) = self
+            .list
+            .widget_mut()
+            .as_any_mut()
+            .downcast_mut::<PagedList<Entry>>()
+        {
+            list.pager_rebuild();
+        }
     }
 
     /// The number of submenus open above the tab page. Zero on the tab page.

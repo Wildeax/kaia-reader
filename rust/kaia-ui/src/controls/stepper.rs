@@ -4,7 +4,7 @@ use kaia_events::Value;
 use kaia_gfx::{Rect, Size};
 use kaia_input::{Gesture, Key};
 
-use super::{default_format, measure_text, Formatter, Reaction, UNBOUNDED};
+use super::{default_format, measure_text, round_to_step, Formatter, Reaction, UNBOUNDED};
 use crate::geometry::Constraints;
 use crate::theme::Tone;
 use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
@@ -100,7 +100,7 @@ impl Stepper {
         if !self.enabled {
             return;
         }
-        let next = self.value + dir * self.step;
+        let next = round_to_step(self.value + dir * self.step, self.step, self.min);
         self.commit(cx, next);
     }
 }
@@ -183,7 +183,7 @@ impl Widget for Stepper {
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         match ev {
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
-                cx.request_focus();
+                cx.request_focus_if_focusable();
                 let t = cx.theme();
                 let b = cx.bounds();
                 let edge = (t.line.focus + t.touch_target) as i32;

@@ -184,8 +184,9 @@ pub struct LayoutCx<'a> {
 /// Context for [`Widget::paint`].
 ///
 /// Coordinates in the methods are absolute (screen pixels). Everything drawn
-/// outside [`PaintCx::clip`] is dropped, so a widget can draw its full bounds
-/// without checking the clip.
+/// outside [`PaintCx::clip`] is dropped: the clip is the widget's bounds inside
+/// the area being repainted, so a widget can draw freely and never reach a
+/// neighbor.
 pub struct PaintCx<'a> {
     pub theme: &'a Theme,
     pub fonts: &'a mut FontSystem,
@@ -193,11 +194,19 @@ pub struct PaintCx<'a> {
     pub(crate) target: &'a mut Pixmap,
     /// Absolute position of the target's top-left pixel.
     pub(crate) origin: Point,
+    /// The area being repainted. The pod uses it to skip subtrees.
+    pub(crate) region: Rect,
+    /// Where the widget being painted may draw: its bounds inside `region`.
     pub(crate) clip: Rect,
     pub(crate) bounds: Rect,
     pub(crate) background: Tone,
     pub(crate) focused: bool,
     pub(crate) focus: Option<WidgetId>,
+    /// True once the widget being painted has drawn something.
+    pub(crate) drew: bool,
+    /// The union of the clips of the widgets that drew. The window keeps it as
+    /// the footprint of what it has put on the frame.
+    pub(crate) touched: Rect,
 }
 
 impl PaintCx<'_> {
@@ -213,7 +222,8 @@ impl PaintCx<'_> {
         self.background
     }
 
-    /// The area being repainted, in absolute coordinates.
+    /// Where this widget can draw, in absolute coordinates: its bounds inside
+    /// the area being repainted.
     pub fn clip(&self) -> Rect {
         self.clip
     }
@@ -227,20 +237,40 @@ impl PaintCx<'_> {
         self.theme.color(tone)
     }
 
+    /// Clears the widget's bounds to the inherited background tone. Widgets
+    /// that redraw their content call it first, so the old drawing never
+    /// shows through.
+    pub fn clear_background(&mut self) {
+        let color = self.color(self.background);
+        let b = self.bounds;
+        self.fill_rect(b, color);
+    }
+
     pub fn fill_rect(&mut self, rect: Rect, color: Color) {
-        let local = self.local_rect(rect);
+        let visible = rect.intersect(&self.clip);
+        if visible.is_empty() {
+            return;
+        }
+        self.drew = true;
+        let local = self.local_rect(visible);
         self.target.fill_rect(local, color);
     }
 
     pub fn fill_rrect(&mut self, rect: Rect, radius: u32, color: Color) {
-        let local = self.local_rect(rect);
-        draw::fill_rrect(self.target, local, radius, color);
+        if !self.reaches_clip(rect) {
+            return;
+        }
+        let (local, clip) = (self.local_rect(rect), self.local_rect(self.clip));
+        draw::fill_rrect_clipped(self.target, local, radius, color, clip);
     }
 
     /// A border drawn inside `rect`.
     pub fn border(&mut self, rect: Rect, radius: u32, width: u32, color: Color) {
-        let local = self.local_rect(rect);
-        draw::border(self.target, local, radius, width, color);
+        if !self.reaches_clip(rect) {
+            return;
+        }
+        let (local, clip) = (self.local_rect(rect), self.local_rect(self.clip));
+        draw::border_clipped(self.target, local, radius, width, color, clip);
     }
 
     /// Draws the focus outline on the edge of this widget, when it has focus.
@@ -259,7 +289,12 @@ impl PaintCx<'_> {
     /// Darkens `rect` by `amount`: 0 changes nothing and 255 makes it black.
     /// Modal windows use it for the scrim behind their content.
     pub fn dim(&mut self, rect: Rect, amount: u8) {
-        let area = self.local_rect(rect).intersect(&self.target.bounds());
+        let area = rect.intersect(&self.clip);
+        if area.is_empty() {
+            return;
+        }
+        self.drew = true;
+        let area = self.local_rect(area).intersect(&self.target.bounds());
         if area.is_empty() {
             return;
         }
@@ -292,37 +327,65 @@ impl PaintCx<'_> {
         if visible.is_empty() {
             return;
         }
+        self.drew = true;
         let src = Rect::new(visible.x - rect.x, visible.y - rect.y, visible.w, visible.h);
         let at = self.local(Point::new(visible.x, visible.y));
         draw::blit(&mut *self.target, &sub, src, at);
     }
 
     pub fn fill_circle(&mut self, center: Point, radius: f32, color: Color) {
+        if !self.reaches_clip(circle_box(center, radius)) {
+            return;
+        }
         let c = self.local(center);
-        draw::fill_circle(self.target, c.x as f32, c.y as f32, radius, color);
+        let clip = self.local_rect(self.clip);
+        draw::fill_circle_clipped(self.target, c.x as f32, c.y as f32, radius, color, clip);
     }
 
     pub fn stroke_circle(&mut self, center: Point, radius: f32, thickness: f32, color: Color) {
+        if !self.reaches_clip(circle_box(center, radius)) {
+            return;
+        }
         let c = self.local(center);
-        draw::stroke_circle(self.target, c.x as f32, c.y as f32, radius, thickness, color);
+        let clip = self.local_rect(self.clip);
+        draw::stroke_circle_clipped(
+            self.target,
+            c.x as f32,
+            c.y as f32,
+            radius,
+            thickness,
+            color,
+            clip,
+        );
     }
 
     /// Draws a laid out text with its top-left corner at `at`.
     pub fn text(&mut self, layout: &TextLayout, at: Point) {
+        if !self.reaches_clip(Rect::new(at.x, at.y, layout.width, layout.height)) {
+            return;
+        }
         let local = self.local(at);
-        self.fonts.draw_layout(&mut *self.target, layout, local);
+        let clip = self.local_rect(self.clip);
+        self.fonts
+            .draw_layout_clipped(&mut *self.target, layout, local, clip);
     }
 
     /// Copies `src` with its top-left corner at `at`.
     pub fn blit_pixmap(&mut self, src: &Pixmap, at: Point) {
-        let local = self.local(at);
-        draw::blit(&mut *self.target, src, Rect::from_size(src.size()), local);
+        if !self.reaches_clip(Rect::new(at.x, at.y, src.width(), src.height())) {
+            return;
+        }
+        let (local, clip) = (self.local(at), self.local_rect(self.clip));
+        draw::blit_clipped(&mut *self.target, src, Rect::from_size(src.size()), local, clip);
     }
 
     /// Composites `src` over the target with its top-left corner at `at`.
     pub fn blit_alpha(&mut self, src: &AlphaPixmap, at: Point) {
-        let local = self.local(at);
-        draw::blit_alpha(&mut *self.target, src, Rect::from_size(src.size()), local);
+        if !self.reaches_clip(Rect::new(at.x, at.y, src.width(), src.height())) {
+            return;
+        }
+        let (local, clip) = (self.local(at), self.local_rect(self.clip));
+        draw::blit_alpha_clipped(&mut *self.target, src, Rect::from_size(src.size()), local, clip);
     }
 
     /// Runs `draw` with every write clipped to `rect` (absolute). Pixels outside
@@ -335,33 +398,54 @@ impl PaintCx<'_> {
         let local = self.local_rect(rect);
         let mut scratch = Pixmap::new(rect.w, rect.h, self.target.format());
         draw::blit(&mut scratch, &*self.target, local, Point::new(0, 0));
-        {
+        let drew = {
             let mut inner = PaintCx {
                 theme: self.theme,
                 fonts: &mut *self.fonts,
                 icons: &mut *self.icons,
                 target: &mut scratch,
                 origin: Point::new(rect.x, rect.y),
+                region: rect,
                 clip: rect,
                 bounds: self.bounds,
                 background: self.background,
                 focused: self.focused,
                 focus: self.focus,
+                drew: false,
+                touched: Rect::default(),
             };
             draw(&mut inner);
-        }
+            inner.drew
+        };
+        self.drew |= drew;
         let at = self.local(Point::new(rect.x, rect.y));
         draw::blit(self.target, &scratch, Rect::from_size(rect.size()), at);
     }
 
+    /// True when `rect` overlaps the clip. Marks the widget as having drawn.
+    fn reaches_clip(&mut self, rect: Rect) -> bool {
+        let hit = !rect.intersect(&self.clip).is_empty();
+        self.drew |= hit;
+        hit
+    }
+
     fn local(&self, p: Point) -> Point {
-        Point::new(p.x - self.origin.x, p.y - self.origin.y)
+        Point::new(
+            p.x.saturating_sub(self.origin.x),
+            p.y.saturating_sub(self.origin.y),
+        )
     }
 
     fn local_rect(&self, r: Rect) -> Rect {
         let p = self.local(Point::new(r.x, r.y));
         Rect::new(p.x, p.y, r.w, r.h)
     }
+}
+
+/// The square that holds a circle.
+fn circle_box(center: Point, radius: f32) -> Rect {
+    let r = radius.max(0.0).ceil() as i32 + 1;
+    Rect::new(center.x - r, center.y - r, 2 * r as u32, 2 * r as u32)
 }
 
 /// Context for [`Widget::event`]. Requests made here take effect after the
@@ -377,8 +461,20 @@ pub struct EventCx<'a> {
     pub(crate) focused: bool,
     pub(crate) paint: Option<PaintRequest>,
     pub(crate) layout: bool,
-    pub(crate) focus: bool,
+    pub(crate) focus: FocusRequest,
     pub(crate) keys: Vec<Key>,
+}
+
+/// What a widget asked for in [`EventCx::request_focus`] and
+/// [`EventCx::request_focus_if_focusable`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum FocusRequest {
+    #[default]
+    None,
+    /// Focus the widget only if its pod is marked focusable.
+    IfFocusable,
+    /// Focus the widget, and mark its pod focusable.
+    Force,
 }
 
 impl<'a> EventCx<'a> {
@@ -423,14 +519,25 @@ impl<'a> EventCx<'a> {
         );
     }
 
-    /// Re-runs layout for the window before the next paint.
+    /// Re-runs layout for the window before the next paint. The next paint
+    /// repaints this widget and every widget whose bounds changed.
     pub fn request_layout(&mut self) {
         self.layout = true;
     }
 
-    /// Moves focus to this widget after the event.
+    /// Moves focus to this widget after the event. The widget becomes
+    /// focusable, so the request is never dropped. Text fields use it.
     pub fn request_focus(&mut self) {
-        self.focus = true;
+        self.focus = FocusRequest::Force;
+    }
+
+    /// Moves focus to this widget after the event when its pod is marked
+    /// [`focusable`](crate::WidgetPod::focusable). Plain controls use it, so a
+    /// tap focuses them only in apps that opted in to keyboard navigation.
+    pub fn request_focus_if_focusable(&mut self) {
+        if self.focus == FocusRequest::None {
+            self.focus = FocusRequest::IfFocusable;
+        }
     }
 
     /// The window this widget is on, when it is on one. Modal widgets use it
@@ -526,7 +633,10 @@ impl<'a> UpdateCx<'a> {
     }
 
     /// Lays the window out again before the next paint. The paint after a
-    /// layout repaints the whole window.
+    /// layout repaints the updated widget and every widget whose bounds changed,
+    /// not the whole window. Changing what a widget draws still needs a paint
+    /// request, as a layout that leaves the bounds alone repaints only the widget
+    /// that asked.
     pub fn request_layout(&mut self) {
         self.layout = true;
     }

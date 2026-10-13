@@ -67,7 +67,7 @@ impl RadioGroup {
     }
 
     fn select(&mut self, cx: &mut EventCx, index: usize) {
-        cx.request_focus();
+        cx.request_focus_if_focusable();
         if !self.enabled || index >= self.options.len() || self.selected == Some(index) {
             return;
         }

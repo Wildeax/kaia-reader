@@ -15,12 +15,12 @@ use cosmic_text::{
 };
 use unicode_script::Script;
 
-use crate::geom::Point;
+use crate::geom::{Point, Rect};
 use crate::pixmap::{Color, Pixmap};
 
-/// File name prefixes of the Noto fonts the UI uses by default. Arabic needs
-/// `NotoNaskhArabic-`, which is not in this list.
-pub const NOTO_FONT_PREFIXES: &[&str] = &["NotoSans-", "NotoSerif-"];
+/// File name prefixes of the Noto fonts the UI uses by default. Arabic text
+/// falls back to `NotoNaskhArabic-` (see `NotoFallback`), so it is in the list.
+pub const NOTO_FONT_PREFIXES: &[&str] = &["NotoSans-", "NotoSerif-", "NotoNaskhArabic-"];
 
 /// Errors while loading fonts.
 #[derive(Debug)]
@@ -46,6 +46,7 @@ impl std::error::Error for TextError {}
 pub struct FontSystem {
     inner: cosmic_text::FontSystem,
     swash: SwashCache,
+    layouts: u64,
 }
 
 impl fmt::Debug for FontSystem {
@@ -102,7 +103,14 @@ impl FontSystem {
         Ok(Self {
             inner,
             swash: SwashCache::new(),
+            layouts: 0,
         })
+    }
+
+    /// How many times [`FontSystem::layout`] has run. Tests use it to check that
+    /// a widget shapes its text once per change and not once per paint.
+    pub fn layout_count(&self) -> u64 {
+        self.layouts
     }
 
     /// Breaks `text` into lines no wider than `max_width` pixels.
@@ -119,10 +127,11 @@ impl FontSystem {
         max_lines: Option<usize>,
         ellipsis: bool,
     ) -> TextLayout {
+        self.layouts += 1;
         let full = self.shape(text, style, max_width);
         let count = full.layout_runs().count();
         let Some(max) = max_lines.filter(|&m| count > m) else {
-            return TextLayout::new(full, false);
+            return self.finish(full, false, max_width);
         };
         if max == 0 {
             // An empty buffer still has one line, so the lines are cleared by hand.
@@ -161,12 +170,48 @@ impl FontSystem {
             }
         }
         let buffer = self.shape(&candidate(lo), style, max_width);
-        TextLayout::new(buffer, true)
+        self.finish(buffer, true, max_width)
+    }
+
+    /// Builds the layout from a shaped buffer.
+    ///
+    /// Cosmic-text aligns a right-to-left line to the right edge of the width it
+    /// shaped at. A layout made at a wide limit would then draw far to the right
+    /// of the `width` it reports, and a widget that sizes itself from `width`
+    /// would show nothing. When the text is right to left and narrower than the
+    /// limit, the buffer is shaped again at the width of its widest line, so
+    /// every line aligns to the edge of the reported box. The line breaks stay
+    /// the same, because every line already fits in that width.
+    fn finish(&mut self, mut buffer: Buffer, truncated: bool, max_width: u32) -> TextLayout {
+        let (mut rtl, mut widest, lines) = (false, 0.0_f32, buffer.layout_runs().count());
+        for run in buffer.layout_runs() {
+            rtl |= run.rtl;
+            widest = widest.max(run.line_w);
+        }
+        let fitted = widest.ceil();
+        if rtl && fitted < max_width as f32 {
+            // A small slack covers rounding in the wrap test. If the lines still
+            // change, keep the wide layout rather than a different wrap.
+            for slack in [0.0_f32, 1.0, 2.0] {
+                buffer.set_size(&mut self.inner, Some(fitted + slack), None);
+                if buffer.layout_runs().count() == lines {
+                    return TextLayout::new(buffer, truncated);
+                }
+            }
+            buffer.set_size(&mut self.inner, Some(max_width as f32), None);
+        }
+        TextLayout::new(buffer, truncated)
     }
 
     /// Draws a layout onto `pm`. `origin` is the top-left corner of the layout
     /// box. The text color comes from the style used in [`FontSystem::layout`].
     pub fn draw_layout(&mut self, pm: &mut Pixmap, layout: &TextLayout, origin: Point) {
+        let clip = pm.bounds();
+        self.draw_layout_clipped(pm, layout, origin, clip);
+    }
+
+    /// [`FontSystem::draw_layout`] that writes only inside `clip`, in `pm` coordinates.
+    pub fn draw_layout_clipped(&mut self, pm: &mut Pixmap, layout: &TextLayout, origin: Point, clip: Rect) {
         let (ox, oy) = (origin.x, origin.y);
         layout.buffer.draw(
             &mut self.inner,
@@ -178,9 +223,10 @@ impl FontSystem {
                     return;
                 }
                 let color = Color::rgb(c.r(), c.g(), c.b());
-                for py in y..y + h as i32 {
-                    for px in x..x + w as i32 {
-                        crate::draw::blend_pixel(pm, ox + px, oy + py, color, alpha);
+                let glyph = Rect::new(ox + x, oy + y, w, h).intersect(&clip);
+                for py in glyph.y..glyph.bottom() {
+                    for px in glyph.x..glyph.right() {
+                        crate::draw::blend_pixel(pm, px, py, color, alpha);
                     }
                 }
             },
@@ -445,6 +491,65 @@ mod tests {
         let mixed = fs.layout("Read the كتاب today", &style, 400, None, false);
         assert_eq!(mixed.lines.len(), 1);
         assert!(mixed.width > 0);
+    }
+
+    /// The leftmost and rightmost columns with ink in `pm`.
+    fn ink_span(pm: &Pixmap) -> Option<(i32, i32)> {
+        let mut span: Option<(i32, i32)> = None;
+        for y in 0..pm.height() as i32 {
+            for x in 0..pm.width() as i32 {
+                if pm.get(x, y).is_some_and(|c| c.r < 200) {
+                    span = Some(span.map_or((x, x), |(lo, hi)| (lo.min(x), hi.max(x))));
+                }
+            }
+        }
+        span
+    }
+
+    /// Cosmic-text aligns right-to-left lines to the width it shapes at. A
+    /// layout made at a wide limit must still put its ink inside its own
+    /// reported width, so a widget that sizes itself from `width` shows the text.
+    #[test]
+    fn rtl_ink_lands_inside_the_reported_width() {
+        let mut fs = fonts();
+        let style = TextStyle::new(40.0);
+        let samples = [
+            ("arabic", "مرحبا بالعالم"),
+            ("hebrew", "שלום עולם"),
+            ("mixed", "Read the كتاب today"),
+        ];
+        for (name, text) in samples {
+            for limit in [200u32, 600, 1 << 20] {
+                let layout = fs.layout(text, &style, limit, Some(1), true);
+                let mut pm = Pixmap::new(1400, layout.height + 8, PixelFormat::Gray8);
+                fs.draw_layout(&mut pm, &layout, Point::new(10, 4));
+                let (lo, hi) = ink_span(&pm).unwrap_or_else(|| panic!("{name} at {limit}: no ink"));
+                assert!(
+                    lo >= 10 && hi < 10 + layout.width as i32,
+                    "{name} at limit {limit}: ink {lo}..={hi}, layout width {}",
+                    layout.width
+                );
+            }
+        }
+    }
+
+    /// Wrapped right-to-left lines share one right edge: the final width.
+    #[test]
+    fn wrapped_rtl_lines_align_to_the_final_width() {
+        let mut fs = fonts();
+        let style = TextStyle::new(40.0);
+        let text = "مرحبا بالعالم مرحبا بالعالم مرحبا بالعالم مرحبا بالعالم";
+        let layout = fs.layout(text, &style, 400, None, false);
+        assert!(layout.lines.len() > 1);
+        assert!(layout.width <= 400);
+        let mut pm = Pixmap::new(900, layout.height + 8, PixelFormat::Gray8);
+        fs.draw_layout(&mut pm, &layout, Point::new(10, 4));
+        let (lo, hi) = ink_span(&pm).expect("ink");
+        assert!(
+            lo >= 10 && hi < 10 + layout.width as i32,
+            "ink {lo}..={hi}, width {}",
+            layout.width
+        );
     }
 
     #[test]

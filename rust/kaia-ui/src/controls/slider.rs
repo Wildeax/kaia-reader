@@ -4,7 +4,7 @@ use kaia_events::Value;
 use kaia_gfx::{Point, Rect, Size};
 use kaia_input::{Gesture, Key};
 
-use super::{default_format, measure_text, Formatter, Reaction, UNBOUNDED};
+use super::{default_format, measure_text, round_to_step, Formatter, Reaction, UNBOUNDED};
 use crate::geometry::Constraints;
 use crate::theme::{Theme, Tone};
 use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
@@ -84,7 +84,12 @@ impl Slider {
     /// The nearest step inside the range.
     fn snap(&self, v: f64) -> f64 {
         let k = ((v - self.min) / self.step).round().max(0.0);
-        (self.min + k * self.step).min(self.max)
+        self.at_step(k)
+    }
+
+    /// The value `k` steps above the minimum, without float drift, inside the range.
+    fn at_step(&self, k: f64) -> f64 {
+        round_to_step(self.min + k * self.step, self.step, self.min).min(self.max)
     }
 
     /// Number of steps between `min` and `max`.
@@ -117,7 +122,7 @@ impl Slider {
         }
         let frac = ((x - track.x) as f64 / track.w as f64).clamp(0.0, 1.0);
         let k = (frac * self.steps() as f64).round();
-        (self.min + k * self.step).min(self.max)
+        self.at_step(k)
     }
 
     fn commit(&mut self, cx: &mut EventCx, v: f64) {
@@ -195,7 +200,7 @@ impl Widget for Slider {
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         match ev {
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
-                cx.request_focus();
+                cx.request_focus_if_focusable();
                 self.drag_to(cx, pos.x);
                 Handled::Yes
             }

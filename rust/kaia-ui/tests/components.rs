@@ -96,19 +96,38 @@ fn a_label_with_plenty_of_room_keeps_its_full_text() {
     assert!(ink.w > 30 && ink.w < 200, "four letters, got width {}", ink.w);
 }
 
-#[test]
-fn a_tap_cannot_focus_a_widget_that_is_not_focusable() {
+/// A holder with one 300 px Tapper, set up by `setup`.
+fn holder_with(setup: impl FnOnce(&mut Tapper), focusable: bool) -> Harness {
     let log = new_log();
     let mut b = Tapper::new("B", 300, 300, &log);
-    b.focus_on_tap = true;
+    setup(&mut b);
     let root = Holder {
-        children: vec![WidgetPod::new(b)],
+        children: vec![WidgetPod::new(b).focusable(focusable)],
         size: SCREEN,
         name: "root",
         log: log.clone(),
         handle: false,
     };
-    let mut h = Harness::new(root, SCREEN, &theme(false), &assets());
+    Harness::new(root, SCREEN, &theme(false), &assets())
+}
+
+#[test]
+fn a_focus_request_makes_the_widget_focusable() {
+    let mut h = holder_with(|b| b.focus_on_tap = true, false);
     h.tap(kaia_gfx::Point::new(5, 5));
-    assert_eq!(h.focus(), None);
+    assert!(h.focus().is_some(), "the request must not be dropped");
+}
+
+#[test]
+fn a_soft_focus_request_needs_a_focusable_widget() {
+    let mut h = holder_with(|b| b.soft_focus_on_tap = true, false);
+    h.tap(kaia_gfx::Point::new(5, 5));
+    assert_eq!(
+        h.focus(),
+        None,
+        "a plain control is not pulled into the focus order"
+    );
+    let mut h = holder_with(|b| b.soft_focus_on_tap = true, true);
+    h.tap(kaia_gfx::Point::new(5, 5));
+    assert!(h.focus().is_some());
 }

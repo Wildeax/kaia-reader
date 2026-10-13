@@ -78,7 +78,7 @@ impl Toggle {
     }
 
     fn toggle(&mut self, cx: &mut EventCx) {
-        cx.request_focus();
+        cx.request_focus_if_focusable();
         if !self.enabled {
             return;
         }

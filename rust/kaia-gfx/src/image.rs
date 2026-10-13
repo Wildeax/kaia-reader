@@ -18,11 +18,15 @@ use crate::rgba::AlphaPixmap;
 /// Largest side accepted by [`render_svg`] in pixels.
 pub const MAX_SVG_SIDE: u32 = 4096;
 
-/// Largest image the decoder accepts, checked from the file header.
+/// Largest image the decoder accepts, checked from the file header. The
+/// width and height limits do not bound the pixel count by themselves once
+/// they are raised, so `max_pixels` limits the area too.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DecodeLimits {
     pub max_width: u32,
     pub max_height: u32,
+    /// Largest `width * height`.
+    pub max_pixels: u64,
 }
 
 impl Default for DecodeLimits {
@@ -30,6 +34,7 @@ impl Default for DecodeLimits {
         Self {
             max_width: 4096,
             max_height: 4096,
+            max_pixels: 4096 * 4096,
         }
     }
 }
@@ -59,8 +64,8 @@ impl fmt::Display for ImageError {
                 limits,
             } => write!(
                 f,
-                "image is {width}x{height}, the limit is {}x{}",
-                limits.max_width, limits.max_height
+                "image is {width}x{height}, the limit is {}x{} and {} pixels",
+                limits.max_width, limits.max_height, limits.max_pixels
             ),
             ImageError::Decode(e) => write!(f, "cannot decode image: {e}"),
         }
@@ -98,7 +103,10 @@ fn check_header(bytes: &[u8], limits: DecodeLimits) -> Result<ImageFormat, Image
     let (width, height) = ImageReader::with_format(Cursor::new(bytes), format)
         .into_dimensions()
         .map_err(ImageError::Decode)?;
-    if width > limits.max_width || height > limits.max_height {
+    if width > limits.max_width
+        || height > limits.max_height
+        || u64::from(width) * u64::from(height) > limits.max_pixels
+    {
         return Err(ImageError::TooLarge {
             width,
             height,
@@ -114,6 +122,8 @@ fn decode_dynamic(bytes: &[u8], limits: DecodeLimits) -> Result<DynamicImage, Im
     let mut guard = ::image::Limits::default();
     guard.max_image_width = Some(limits.max_width);
     guard.max_image_height = Some(limits.max_height);
+    // RGBA output is four bytes a pixel. Leave room for one decoder copy.
+    guard.max_alloc = Some(limits.max_pixels.saturating_mul(8));
     reader.limits(guard);
     reader.decode().map_err(ImageError::Decode)
 }
@@ -402,6 +412,7 @@ mod tests {
         let limits = DecodeLimits {
             max_width: 32,
             max_height: 32,
+            max_pixels: 1024,
         };
         match decode_rgba(truncated, limits) {
             Err(ImageError::TooLarge {
@@ -411,6 +422,35 @@ mod tests {
             }) => {}
             other => panic!("expected TooLarge from the header, got {other:?}"),
         }
+    }
+
+    /// A wide limit on each side must not allow an image with too many pixels.
+    #[test]
+    fn the_pixel_count_is_limited_as_well_as_the_sides() {
+        let mut bytes = Vec::new();
+        let img = vec![0u8; 64 * 64 * 4];
+        ::image::ImageEncoder::write_image(
+            ::image::codecs::png::PngEncoder::new(&mut bytes),
+            &img,
+            64,
+            64,
+            ::image::ExtendedColorType::Rgba8,
+        )
+        .unwrap();
+        let limits = DecodeLimits {
+            max_width: 4096,
+            max_height: 4096,
+            max_pixels: 64 * 64 - 1,
+        };
+        assert!(matches!(
+            decode_rgba(&bytes, limits),
+            Err(ImageError::TooLarge { .. })
+        ));
+        let fits = DecodeLimits {
+            max_pixels: 64 * 64,
+            ..limits
+        };
+        assert!(decode_rgba(&bytes, fits).is_ok());
     }
 
     #[test]

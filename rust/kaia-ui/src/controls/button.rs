@@ -4,7 +4,7 @@ use kaia_gfx::text::FontSystem;
 use kaia_gfx::{Point, Size};
 use kaia_input::{Gesture, Key};
 
-use super::{measure_text, Reaction, UNBOUNDED};
+use super::{measure_text, Reaction};
 use crate::components::draw_icon_at;
 use crate::geometry::Constraints;
 use crate::theme::{Theme, Tone};
@@ -143,7 +143,7 @@ impl Button {
     /// Presses the button: the press shows as an inverted frame until the
     /// app paints it, then the button returns to normal.
     fn press(&mut self, cx: &mut EventCx) {
-        cx.request_focus();
+        cx.request_focus_if_focusable();
         if !self.enabled {
             return;
         }
@@ -186,20 +186,29 @@ impl Widget for Button {
             cx.border(inner, radius, ring, color);
         }
 
-        let content = self.content_size(cx.fonts, t);
-        let mut x = inner.x + (inner.w as i32 - content.w as i32) / 2;
+        // The text gets the width inside the outline after the icon, with one
+        // outline width of margin on each side, and ends with an ellipsis when it
+        // is longer. A button at its natural width has more room than the text needs.
+        let icon_px = self.icon.as_ref().map(|_| t.icon_size);
+        let icon_block = icon_px.map_or(0, |px| px + t.space.sm);
+        let room = (inner.w as i32 - 2 * ring as i32 - icon_block as i32).max(1) as u32;
         let fg_color = cx.color(fg);
-        if let Some(name) = &self.icon {
-            let px = t.icon_size;
+        let text_layout = self.text.as_ref().map(|text| {
+            let style = t.style(&t.font.body_bold, fg);
+            cx.fonts.layout(text, &style, room, Some(1), true)
+        });
+        let content_w = icon_px.map_or(0, |px| px + if text_layout.is_some() { t.space.sm } else { 0 })
+            + text_layout.as_ref().map_or(0, |tl| tl.width);
+        let mut x = inner.x + (inner.w as i32 - content_w as i32).max(0) / 2;
+        if let Some(px) = icon_px {
+            let name = self.icon.as_deref().unwrap_or_default();
             let y = inner.y + (inner.h as i32 - px as i32) / 2;
             draw_icon_at(cx, name, px, fg_color, Point::new(x, y));
             x += (px + t.space.sm) as i32;
         }
-        if let Some(text) = &self.text {
-            let style = t.style(&t.font.body_bold, fg);
-            let tl = cx.fonts.layout(text, &style, UNBOUNDED, Some(1), true);
+        if let Some(tl) = &text_layout {
             let y = inner.y + (inner.h as i32 - tl.height as i32) / 2;
-            cx.text(&tl, Point::new(x, y));
+            cx.text(tl, Point::new(x, y));
         }
         cx.focus_ring(radius + ring);
     }
@@ -325,7 +334,7 @@ impl Widget for IconButton {
         if !activate {
             return Handled::No;
         }
-        cx.request_focus();
+        cx.request_focus_if_focusable();
         if self.enabled {
             self.pressed = true;
             cx.request_paint_with(PaintHint::Fast);
