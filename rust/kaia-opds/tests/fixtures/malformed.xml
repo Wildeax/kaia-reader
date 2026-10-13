@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Broken catalog</title>
+  <entry>
+    <title>Cut off in the middle
+    <link rel="http://opds-spec.org/acquisition" href="/x.epub" type="application/epub+zip"/>
+  </entry>
+</feed>

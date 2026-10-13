@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/terms/" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>http://www.gutenberg.org/ebooks.opds/</id>
+  <title>Project Gutenberg</title>
+  <updated>2026-10-01T00:00:00Z</updated>
+  <link rel="self" href="/ebooks.opds/?format=opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="/ebooks.opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="next" href="/ebooks.opds/?format=opds&amp;start_index=26" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="search" type="application/opensearchdescription+xml" href="https://www.gutenberg.org/catalog/osd-books.xml"/>
+  <entry>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <id>http://www.gutenberg.org/ebooks/search.opds/</id>
+    <title>Search for books</title>
+    <content type="text">Search by title or author</content>
+    <link rel="start" href="/ebooks.opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+    <link rel="subsection" href="/ebooks/search.opds/" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <id>http://www.gutenberg.org/ebooks/bookshelves.opds/</id>
+    <title>Bookshelves</title>
+    <content type="text">Books grouped by shelf</content>
+    <link rel="subsection" href="/ebooks/bookshelves.opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <id>http://www.gutenberg.org/ebooks/popular.opds/</id>
+    <title>Popular</title>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Most <i>downloaded</i> books</p></div></content>
+    <link rel="http://opds-spec.org/sort/popular" href="/ebooks/popular.opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <updated>2026-10-01T00:00:00Z</updated>
+    <id>http://www.gutenberg.org/ebooks/recent.opds/</id>
+    <title>Recent additions</title>
+    <link rel="http://opds-spec.org/sort/new" href="/ebooks/recent.opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+</feed>

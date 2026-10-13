@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <title>Relative links</title>
+  <link rel="next" href="?page=2" type="application/atom+xml;profile=opds-catalog"/>
+  <link rel="previous" href="../shelf/new.xml" type="application/atom+xml;profile=opds-catalog"/>
+  <entry>
+    <title>Walden</title>
+    <author><name>Henry David Thoreau</name></author>
+    <link rel="http://opds-spec.org/image/thumbnail" href="//cdn.example.net/cover.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image" href="covers/walden.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="../files/walden.epub" type="application/epub+zip"/>
+    <link rel="subsection" href="walden/chapters.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+</feed>

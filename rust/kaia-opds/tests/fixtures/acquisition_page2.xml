@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:gutenberg:new:2</id>
+  <title>New Books, page 2</title>
+  <link rel="previous" href="/books/new" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <entry>
+    <updated>2026-06-01T00:00:00Z</updated>
+    <id>urn:gutenberg:84</id>
+    <title>Frankenstein</title>
+    <author><name>Mary Shelley</name></author>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/84.epub" type="application/epub+zip"/>
+  </entry>
+</feed>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:thr="http://purl.org/syndication/thread/1.0">
+  <id>urn:gutenberg:new</id>
+  <title>New Books</title>
+  <updated>2026-09-30T00:00:00Z</updated>
+  <link rel="self" href="/books/new" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="next" href="/books/new?page=2" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="previous" href="/books/new?page=0" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="http://opds-spec.org/facet" type="application/atom+xml;profile=opds-catalog" title="English" opds:facetGroup="Languages" thr:count="120" opds:activeFacet="true" href="/books/new?lang=en"/>
+  <link rel="http://opds-spec.org/facet" type="application/atom+xml;profile=opds-catalog" title="French" opds:facetGroup="Languages" thr:count="8" href="/books/new?lang=fr"/>
+  <entry>
+    <updated>2026-09-01T00:00:00Z</updated>
+    <id>urn:gutenberg:1342</id>
+    <title>Pride and Prejudice</title>
+    <author>
+      <name>Jane Austen</name>
+      <uri>http://www.gutenberg.org/ebooks/author/68</uri>
+    </author>
+    <summary type="text">&lt;p&gt;A novel about &amp;quot;manners&amp;quot;.&lt;/p&gt;</summary>
+    <link rel="http://opds-spec.org/image" href="/cache/epub/1342/cover.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/cache/epub/1342/cover.small.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/1342.epub.noimages" type="application/epub+zip" title="EPUB (no images)" length="312000"/>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/1342.kindle.noimages" type="application/x-mobipocket-ebook" title="Kindle"/>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/1342.txt.utf-8" type="text/plain" title="Plain text"/>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/1342.bin" type="application/x-unknown" title="Binary"/>
+    <link rel="alternate" href="/ebooks/1342" type="text/html"/>
+  </entry>
+  <entry>
+    <updated>2026-08-15T00:00:00Z</updated>
+    <id>urn:gutenberg:4300</id>
+    <title>Ulysses</title>
+    <content type="html">&lt;p&gt;Dublin, &lt;b&gt;1904&lt;/b&gt;&lt;/p&gt;</content>
+    <link rel="alternate" title="pdf" href="/files/4300"/>
+    <link rel="http://opds-spec.org/acquisition" href="/ebooks/4300.epub" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <updated>2026-07-01T00:00:00Z</updated>
+    <id>urn:gutenberg:9999</id>
+    <title>Anonymous Pamphlet</title>
+    <link rel="http://opds-spec.org/acquisition/borrow" href="/borrow/9999" type="application/atom+xml"/>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="/ebooks/9999.fb2.zip" type="application/fb2+zip"/>
+  </entry>
+</feed>

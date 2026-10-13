@@ -1,0 +1,53 @@
+{
+  "metadata": {"title": "Standard Ebooks", "numberOfItems": 3},
+  "links": [
+    {"rel": "self", "href": "/opds/feed.json", "type": "application/opds+json"},
+    {"rel": "next", "href": "/opds/feed.json?page=2", "type": "application/opds+json"},
+    {"rel": "search", "href": "/opds/search{?query}", "type": "application/opds+json", "templated": true}
+  ],
+  "facets": [
+    {
+      "metadata": {"title": "Sort"},
+      "links": [
+        {"href": "/opds/feed.json", "title": "Title", "rel": "self", "properties": {"numberOfItems": 3}},
+        {"href": "/opds/feed.json?sort=new", "title": "Newest", "properties": {"numberOfItems": 3}}
+      ]
+    }
+  ],
+  "navigation": [
+    {"href": "/opds/subjects.json", "title": "Subjects", "rel": "subsection", "type": "application/opds+json"}
+  ],
+  "groups": [
+    {
+      "metadata": {"title": "Featured", "numberOfItems": 2},
+      "links": [{"href": "/opds/featured.json", "type": "application/opds+json"}]
+    },
+    {
+      "metadata": {"title": "Authors"},
+      "navigation": [{"href": "/opds/authors/a.json", "title": "A", "rel": "subsection"}]
+    }
+  ],
+  "publications": [
+    {
+      "metadata": {
+        "title": "Pride and Prejudice",
+        "author": [{"name": "Jane Austen"}],
+        "description": "<p>A novel about <em>manners</em>.</p>",
+        "modified": "2026-09-01T00:00:00Z"
+      },
+      "links": [
+        {"rel": "http://opds-spec.org/acquisition", "href": "/books/1342.epub", "type": "application/epub+zip"},
+        {
+          "rel": "http://opds-spec.org/acquisition",
+          "href": "/books/1342/indirect",
+          "type": "application/opds+json",
+          "properties": {"indirectAcquisition": [{"type": "application/epub+zip"}]}
+        }
+      ],
+      "images": [
+        {"href": "/img/1342.jpg", "type": "image/jpeg", "rel": "http://opds-spec.org/image"},
+        {"href": "/img/1342-thumb.jpg", "type": "image/jpeg", "rel": "http://opds-spec.org/image/thumbnail"}
+      ]
+    }
+  ]
+}

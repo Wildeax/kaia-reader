@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:pse="http://vaemendis.net/opds-pse/ns" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <title>Comics</title>
+  <entry>
+    <updated>2026-04-01T00:00:00Z</updated>
+    <title>Watchmen</title>
+    <author><name>Alan Moore</name></author>
+    <link rel="http://vaemendis.net/opds-pse/stream" type="image/jpeg" href="/pse/7/{pageNumber}?maxWidth={maxWidth}" pse:count="12" pse:lastRead="5" pse:lastReadDate="2026-10-01T00:00:00Z"/>
+    <link rel="http://opds-spec.org/acquisition" type="application/x-cbz" href="/download/7.cbz"/>
+  </entry>
+  <entry>
+    <updated>2026-04-02T00:00:00Z</updated>
+    <title>Maus</title>
+    <author><name>Art Spiegelman</name></author>
+    <link rel="http://vaemendis.net/opds-pse/stream" type="image/jpeg" href="/pse/8/{pageNumber}?maxWidth={maxWidth}"/>
+    <link rel="http://opds-spec.org/acquisition" type="application/vnd.comicbook+zip" href="/download/8.cbz"/>
+  </entry>
+</feed>

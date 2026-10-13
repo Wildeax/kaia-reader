@@ -1,0 +1,8 @@
+{
+  "metadata": {"title": "Pride and Prejudice"},
+  "links": [
+    {"rel": "self", "href": "/books/1342/indirect", "type": "application/opds+json"},
+    {"rel": "http://opds-spec.org/acquisition/open-access", "href": "/files/1342.epub", "type": "application/epub+zip", "title": "EPUB"},
+    {"rel": "alternate", "href": "/books/1342", "type": "text/html"}
+  ]
+}
