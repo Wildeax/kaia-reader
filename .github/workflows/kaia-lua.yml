@@ -21,6 +21,7 @@ on:
       - 'rust/kaia-cre-sys/**'
       - 'rust/kaia-doc/**'
       - 'rust/kaia-library/**'
+      - 'rust/kaia-book/**'
   pull_request:
     paths:
       - 'frontend/kaia/**'
@@ -34,6 +35,7 @@ on:
       - 'rust/kaia-cre-sys/**'
       - 'rust/kaia-doc/**'
       - 'rust/kaia-library/**'
+      - 'rust/kaia-book/**'
 
 permissions:
   contents: read
@@ -148,7 +150,7 @@ jobs:
         working-directory: rust
         run: |
           export PATH="${HOME}/.cargo/bin:${PATH}"
-          cargo test --locked -p kaia-mupdf-sys -p kaia-doc -p kaia-library
+          cargo test --locked -p kaia-mupdf-sys -p kaia-doc -p kaia-library -p kaia-book
 
       - name: Front suite
         run: ./kodev test front
