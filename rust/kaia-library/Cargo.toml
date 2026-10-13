@@ -1,0 +1,24 @@
+[package]
+name = "kaia-library"
+description = "Library scanner and SQLite index: books, metadata, covers, collections, search."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+kaia-doc = { path = "../kaia-doc" }
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-luadata = { path = "../kaia-luadata" }
+# Build script only: test binaries need MuPDF's library directories (see build.rs).
+kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+md-5 = "0.11"
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
