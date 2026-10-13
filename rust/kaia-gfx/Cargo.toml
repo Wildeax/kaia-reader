@@ -7,3 +7,11 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# Pure Rust shaping and layout. The fontconfig feature is off: fonts come
+# from directories the caller passes in, never from the system.
+cosmic-text = { version = "0.17", default-features = false, features = ["std", "swash"] }
+# PNG and JPEG only. Decoding and encoding stay pure Rust.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# SVG icons. resvg re-exports usvg and tiny-skia, so their versions match.
+resvg = { version = "0.45", default-features = false }
+unicode-script = "0.5"

@@ -42,3 +42,4 @@ i18n
 /.project
 .gitignore~
 dist/
+*.actual.png
