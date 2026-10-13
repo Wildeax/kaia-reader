@@ -25,6 +25,7 @@ members = [
     "kaia-opds",
     "kaia-lua",
     "kaia-i18n",
+    "kaia-calibre",
 ]
 
 [workspace.package]

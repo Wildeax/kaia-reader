@@ -1,0 +1,11 @@
+[package]
+name = "kaia-calibre"
+description = "Calibre wireless device connection, compatible with KOReader's Calibre plugin."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json = "1"
+sha1 = "0.10"
