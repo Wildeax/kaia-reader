@@ -146,6 +146,7 @@ local order = {
         "----------------------------",
         "plugin_management",
         "kaia_extensions", -- Kaia
+        "kaia_import_koreader", -- Kaia
         "patch_management",
         "advanced_settings",
         "developer_options",

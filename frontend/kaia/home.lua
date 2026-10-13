@@ -205,6 +205,12 @@ function Home:show()
     local widget = self:new{}
     current = widget
     UIManager:show(widget)
+    -- Kaia: offer the one-time KOReader import (kaia/importko). Home is already on
+    -- the widget stack, so the dialog sits above it. No timer or task is scheduled.
+    local ok, err = pcall(function() require("kaia/importko").offerOnce() end)
+    if not ok then
+        logger.warn("kaia/importko: offer failed", err)
+    end
     return widget
 end
 

@@ -544,6 +544,13 @@ To:
             require("kaia/extensions"):show()
         end,
     }
+    -- Kaia: one-time, read-only copy of settings, history and sidecars from KOReader (kaia/importko).
+    self.menu_items.kaia_import_koreader = {
+        text = _("Import from KOReader"),
+        callback = function()
+            require("kaia/importko").showMenu()
+        end,
+    }
     self.menu_items.patch_management = dofile("frontend/ui/elements/patch_management.lua")
     self.menu_items.advanced_settings = {
         text = _("Advanced settings"),
