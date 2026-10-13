@@ -1,0 +1,4143 @@
+{
+  "asset_counts": [
+    {
+      "files": 6,
+      "group": "archive_or_binary",
+      "top_directory": "base"
+    },
+    {
+      "files": 57,
+      "group": "book_or_document",
+      "top_directory": "base"
+    },
+    {
+      "files": 1,
+      "group": "font",
+      "top_directory": "base"
+    },
+    {
+      "files": 35,
+      "group": "font",
+      "top_directory": "resources"
+    },
+    {
+      "files": 288,
+      "group": "book_or_document",
+      "top_directory": "test"
+    }
+  ],
+  "asset_flags": [],
+  "fonts": {
+    "families": [
+      {
+        "font_extensions": [
+          "ttf"
+        ],
+        "font_files": 1,
+        "license": "Apache-2.0 text",
+        "license_files": [
+          {
+            "headers": [
+              "Apache-2.0 text"
+            ],
+            "hint": "Apache-2.0 text",
+            "path": "resources/fonts/droid/NOTICE",
+            "sha256": "38751245389e1e23f73e6f5384b5cbe7fa972cc4410c5adc9c04b082a0b9561a"
+          }
+        ],
+        "license_status": "license file in family directory (text hint)",
+        "name": "droid",
+        "needs_review": false,
+        "path": "resources/fonts/droid",
+        "review_reason": null,
+        "upstream_license_to_verify": "Apache-2.0 (unverified)"
+      },
+      {
+        "font_extensions": [
+          "ttf"
+        ],
+        "font_files": 2,
+        "license": "GPL-3.0 text",
+        "license_files": [
+          {
+            "headers": [
+              "GPL-3.0 text"
+            ],
+            "hint": "GPL-3.0 text",
+            "path": "resources/fonts/freefont/COPYING",
+            "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+          }
+        ],
+        "license_status": "license file in family directory (text hint)",
+        "name": "freefont",
+        "needs_review": false,
+        "path": "resources/fonts/freefont",
+        "review_reason": null,
+        "upstream_license_to_verify": "GPL-3.0 with font exception (unverified)"
+      },
+      {
+        "font_extensions": [
+          "ttf"
+        ],
+        "font_files": 1,
+        "license": "not classified",
+        "license_files": [
+          {
+            "headers": [],
+            "hint": null,
+            "path": "resources/fonts/nerdfonts/LICENSE",
+            "sha256": "f0599ba5242a349cee5aa8a621e6133dc2f0b45f610015d328c964c0b07fdd07"
+          }
+        ],
+        "license_status": "license file present, not classified",
+        "name": "nerdfonts",
+        "needs_review": true,
+        "path": "resources/fonts/nerdfonts",
+        "review_reason": "license text not classified",
+        "upstream_license_to_verify": "mixed: MIT for project code, SIL OFL 1.1 for glyphs (unverified)"
+      },
+      {
+        "font_extensions": [
+          "otf",
+          "ttf"
+        ],
+        "font_files": 17,
+        "license": "not classified",
+        "license_files": [
+          {
+            "headers": [
+              "MIT text",
+              "OFL-1.1 text"
+            ],
+            "hint": null,
+            "path": "resources/fonts/noto/LICENSE",
+            "sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb"
+          }
+        ],
+        "license_status": "license file present, not classified",
+        "name": "noto",
+        "needs_review": true,
+        "path": "resources/fonts/noto",
+        "review_reason": "license text not classified",
+        "upstream_license_to_verify": "SIL OFL 1.1 (unverified)"
+      },
+      {
+        "font_extensions": [
+          "cff"
+        ],
+        "font_files": 14,
+        "license": "AGPL-3.0 text (-only or -or-later not determined)",
+        "license_files": [
+          {
+            "headers": [
+              "AGPL-3.0 text (-only or -or-later not determined)"
+            ],
+            "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+            "path": "resources/fonts/urw/COPYING",
+            "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+          },
+          {
+            "headers": [
+              "AGPL-3.0 text (-only or -or-later not determined)"
+            ],
+            "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+            "path": "resources/fonts/urw/LICENSE",
+            "sha256": "772b1b47eead8722156abaed483154e1dd1137e7035290550cea6444192a2e3f"
+          }
+        ],
+        "license_status": "license file in family directory (text hint)",
+        "name": "urw",
+        "needs_review": false,
+        "path": "resources/fonts/urw",
+        "review_reason": null,
+        "upstream_license_to_verify": "AGPL or GPL with font exception (unverified)"
+      }
+    ],
+    "loose_files": [
+      "resources/fonts/README.md",
+      "resources/fonts/freefont-build-tweaks.patch"
+    ]
+  },
+  "git": {
+    "head": "9192014d8bd82a91dc1012473be0f238dedfdb54",
+    "tags_at_head": [
+      "v2026.07.1"
+    ]
+  },
+  "git_submodule_status_error": null,
+  "images": [
+    {
+      "covered_by_license_file_in_directory_or_parent": false,
+      "directory": "resources",
+      "image_files": 2,
+      "license_files": [],
+      "license_files_not_classified": [],
+      "needs_review": true,
+      "other_files": 0,
+      "review_reason": "images with no license or attribution file in this directory or a parent under resources/"
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": false,
+      "directory": "resources/icons",
+      "image_files": 1,
+      "license_files": [],
+      "license_files_not_classified": [],
+      "needs_review": true,
+      "other_files": 0,
+      "review_reason": "images with no license or attribution file in this directory or a parent under resources/"
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": true,
+      "directory": "resources/icons/mdlight",
+      "image_files": 102,
+      "license_files": [
+        "resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md",
+        "resources/icons/mdlight/icons-license.txt",
+        "resources/icons/mdlight/license.txt"
+      ],
+      "license_files_not_classified": [
+        "resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md",
+        "resources/icons/mdlight/icons-license.txt"
+      ],
+      "needs_review": true,
+      "other_files": 3,
+      "review_reason": "license file in this directory is not classified: resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt"
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": true,
+      "directory": "resources/icons/src",
+      "image_files": 26,
+      "license_files": [
+        "resources/icons/src/license.txt",
+        "resources/icons/src/menu-icon-license.txt"
+      ],
+      "license_files_not_classified": [],
+      "needs_review": false,
+      "other_files": 20,
+      "review_reason": null
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": false,
+      "directory": "resources/quickstart",
+      "image_files": 6,
+      "license_files": [],
+      "license_files_not_classified": [],
+      "needs_review": true,
+      "other_files": 0,
+      "review_reason": "images with no license or attribution file in this directory or a parent under resources/"
+    }
+  ],
+  "koreader_license": {
+    "copying": {
+      "first_lines": [
+        "GNU AFFERO GENERAL PUBLIC LICENSE",
+        "Version 3, 19 November 2007"
+      ],
+      "lines_mentioning_later_version_or_option": [
+        {
+          "line": 342,
+          "text": "When you convey a copy of a covered work, you may at your option"
+        },
+        {
+          "line": 570,
+          "text": "Public License \"or any later version\" applies to it, you have the"
+        },
+        {
+          "line": 572,
+          "text": "version or of any later version published by the Free Software"
+        },
+        {
+          "line": 585,
+          "text": "later version."
+        },
+        {
+          "line": 638,
+          "text": "(at your option) any later version."
+        }
+      ],
+      "path": "COPYING",
+      "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+    },
+    "kaia_license_statements": [
+      {
+        "line": 134,
+        "path": "frontend/ui/elements/common_info_menu_table.lua",
+        "text": "text = T(_(\"%1\\n\\nAn offline-first reader for E Ink devices, based on KOReader.\\n\\nLicensed under Affero GPL v3. All dependencies are free software.\\n\\nSource: %2\\nKOReader: http://koreader.rocks\"), B"
+      }
+    ],
+    "open_question": {
+      "discussion": "https://github.com/koreader/koreader/discussions/11652",
+      "plan": "docs/kaia/ENGINEERING_PLAN.md section 11",
+      "status": "open; this inventory does not resolve it and asserts no SPDX suffix",
+      "topic": "AGPL-3.0-only versus AGPL-3.0-or-later"
+    },
+    "per_file_notices": {
+      "files_naming_affero_gpl": 1,
+      "files_scanned": 750,
+      "files_with_any_later_version_clause": 0,
+      "files_with_either_version_3_clause": 0
+    },
+    "readme": {
+      "license_lines": [
+        {
+          "line": 5,
+          "text": "[![AGPL Licence][badge-license]](COPYING)"
+        },
+        {
+          "line": 87,
+          "text": "[badge-license]:https://img.shields.io/github/license/koreader/koreader"
+        }
+      ],
+      "path": "README.md",
+      "version_numbers_in_license_lines": []
+    }
+  },
+  "license_files": [
+    {
+      "headers": [
+        "AGPL-3.0 text (-only or -or-later not determined)"
+      ],
+      "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+      "path": "COPYING",
+      "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+    },
+    {
+      "headers": [
+        "AGPL-3.0 text (-only or -or-later not determined)"
+      ],
+      "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+      "path": "base/COPYING",
+      "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/android/res/raw/license.txt",
+      "sha256": "ad29d3535b6181b3c73c099f2b9c32e4c3fe0442482c6f72668cd94b7941789d"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/cr3gui/COPYING",
+      "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+    },
+    {
+      "headers": [
+        "LGPL-2.1 text"
+      ],
+      "hint": "LGPL-2.1 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/cr3qt/src/qtc-gdbmacros/LICENSE.LGPL",
+      "sha256": "36b6d3fa47916943fd5fec313c584784946047ec1337a78b440e5992cb595f89"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/cr3wx/COPYING",
+      "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+    },
+    {
+      "headers": [
+        "BSD-2-Clause text",
+        "MIT text"
+      ],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/crengine/qimagescale/QIMAGETRANSFORM_LICENSE.txt",
+      "sha256": "46b3cbfa2f2946b93291506351e9be1dd0a28d2a53260f5aa488abd36fbeca9d"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/packages/ubuntu/debian/copyright",
+      "sha256": "b915cfe82804c2110f86478573316086e9c7cda0d56a69bdaabc8e524bcaa2b8"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/copying",
+      "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/gpc/copying.txt",
+      "sha256": "21b234912d70f1a3b31de89f2d100263dfffbaae4591bf9f814658d5339a74d2"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/src/copying",
+      "sha256": "3e4d82ee85f6864d3c1941a023a0caae2fb857e2ada9bba23ec497bb9c6ad406"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/antiword/Docs/COPYING",
+      "sha256": "3c6f6f8e9eda89b42eda68cf893681db1eeb03e951af8677782501ac95c9b556"
+    },
+    {
+      "headers": [
+        "LGPL-2.1 text"
+      ],
+      "hint": "LGPL-2.1 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/chmlib/COPYING",
+      "sha256": "ca0061fc1381a3ab242310e4b3f56389f28e3d460eb2fd822ed7a21c6f030532"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/freetype/docs/LICENSE.TXT",
+      "sha256": "f6333b3a9106f10190e96d9f994f934deb7a5632851a1aaf846b94651a80f4da"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/libpng/LICENSE",
+      "sha256": "08c28d18cdcabc55a7671f56024f51208f150db58db1d97a6c6db5ff00fb9bca"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/unrar/license.txt",
+      "sha256": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a"
+    },
+    {
+      "headers": [
+        "GPL-2.0 text"
+      ],
+      "hint": "GPL-2.0 text",
+      "path": "base/thirdparty/kpvcrlib/crengine/tinydict/COPYING",
+      "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+    },
+    {
+      "headers": [
+        "MIT text"
+      ],
+      "hint": "MIT text",
+      "path": "base/thirdparty/lua-ljsqlite3/LICENSE",
+      "sha256": "f9263d987c5860ff10b9723a00b8ba0d84898cf6bc91494e145402dba963325a"
+    },
+    {
+      "headers": [
+        "BSD-2-Clause text"
+      ],
+      "hint": "BSD-2-Clause text",
+      "path": "base/thirdparty/srell/license.txt",
+      "sha256": "013ba4e9f5ba60c72efa40f638d09b3d1a72c9a4787560207179710e1060d3be"
+    },
+    {
+      "headers": [
+        "AGPL-3.0 text (-only or -or-later not determined)"
+      ],
+      "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+      "path": "l10n/LICENSE",
+      "sha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+    },
+    {
+      "headers": [
+        "MIT text"
+      ],
+      "hint": "MIT text",
+      "path": "platform/android/luajit-launcher/LICENSE",
+      "sha256": "bf1b197b886ac2a490d22df94e04749bf0095ed4633b5620bda64b5dee6f9cff"
+    },
+    {
+      "headers": [
+        "MIT text"
+      ],
+      "hint": "MIT text",
+      "path": "platform/linux/copyright",
+      "sha256": "e3bb73335ff5e82e77ffa214660c8fff520a27e2f0cf21028783c557598e129c"
+    },
+    {
+      "headers": [
+        "BSD-3-Clause text"
+      ],
+      "hint": "BSD-3-Clause text",
+      "path": "plugins/newsdownloader.koplugin/lib/LICENCE_lua-feedparser",
+      "sha256": "f9a57954ba49b3e1a51d9434f1baf10cae7db1f12760cdc0abeaeccd390a0099"
+    },
+    {
+      "headers": [
+        "MIT text"
+      ],
+      "hint": "MIT text",
+      "path": "plugins/newsdownloader.koplugin/lib/LICENSE_LuaXML",
+      "sha256": "c736d3ae9ee32254e28718b2be802b0c768f2c2cbe658d792d8d926406d9e004"
+    },
+    {
+      "headers": [
+        "Apache-2.0 text"
+      ],
+      "hint": "Apache-2.0 text",
+      "path": "resources/fonts/droid/NOTICE",
+      "sha256": "38751245389e1e23f73e6f5384b5cbe7fa972cc4410c5adc9c04b082a0b9561a"
+    },
+    {
+      "headers": [
+        "GPL-3.0 text"
+      ],
+      "hint": "GPL-3.0 text",
+      "path": "resources/fonts/freefont/COPYING",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "resources/fonts/nerdfonts/LICENSE",
+      "sha256": "f0599ba5242a349cee5aa8a621e6133dc2f0b45f610015d328c964c0b07fdd07"
+    },
+    {
+      "headers": [
+        "MIT text",
+        "OFL-1.1 text"
+      ],
+      "hint": null,
+      "path": "resources/fonts/noto/LICENSE",
+      "sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb"
+    },
+    {
+      "headers": [
+        "AGPL-3.0 text (-only or -or-later not determined)"
+      ],
+      "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+      "path": "resources/fonts/urw/COPYING",
+      "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+    },
+    {
+      "headers": [
+        "AGPL-3.0 text (-only or -or-later not determined)"
+      ],
+      "hint": "AGPL-3.0 text (-only or -or-later not determined)",
+      "path": "resources/fonts/urw/LICENSE",
+      "sha256": "772b1b47eead8722156abaed483154e1dd1137e7035290550cea6444192a2e3f"
+    },
+    {
+      "headers": [
+        "MIT text",
+        "OFL-1.1 text"
+      ],
+      "hint": null,
+      "path": "resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md",
+      "sha256": "670beeddaa23e28254f11100c7ec03666bca1103fba9e01b38627e511862d9f8"
+    },
+    {
+      "headers": [],
+      "hint": null,
+      "path": "resources/icons/mdlight/icons-license.txt",
+      "sha256": "65cd576ad6c38e52cf0292a4e49d89c6f8dfb08d773dd0478a311d9c26365c9d"
+    },
+    {
+      "headers": [
+        "CC-BY-3.0 (link in file; attribution required)"
+      ],
+      "hint": "CC-BY-3.0 (link in file; attribution required)",
+      "path": "resources/icons/mdlight/license.txt",
+      "sha256": "fe2c47c29751861c00d505a42b0e5bbd710b60b494230b93b3498d9e4853cd1a"
+    },
+    {
+      "headers": [
+        "CC-BY-3.0 (link in file; attribution required)"
+      ],
+      "hint": "CC-BY-3.0 (link in file; attribution required)",
+      "path": "resources/icons/src/license.txt",
+      "sha256": "01cf7d72d0a6855a61f9201eea47c637de5acc6744a863a4947e1517cea3ca9d"
+    },
+    {
+      "headers": [
+        "CC0-1.0 text"
+      ],
+      "hint": "CC0-1.0 text",
+      "path": "resources/icons/src/menu-icon-license.txt",
+      "sha256": "bd550b1e172e68943bba07b3edb6141cd429e136d10a8e410e5272ee5b852321"
+    }
+  ],
+  "lua_outside_frontend": [
+    {
+      "directory": "base/thirdparty/lua-ljsqlite3",
+      "license": "MIT text",
+      "license_files": [
+        "base/thirdparty/lua-ljsqlite3/LICENSE"
+      ],
+      "lua_files": 2,
+      "needs_review": false,
+      "review_reason": null
+    },
+    {
+      "directory": "platform/android/luajit-launcher",
+      "license": "MIT text",
+      "license_files": [
+        "platform/android/luajit-launcher/LICENSE"
+      ],
+      "lua_files": 1,
+      "needs_review": false,
+      "review_reason": null
+    },
+    {
+      "directory": "plugins/newsdownloader.koplugin/lib",
+      "license": "BSD-3-Clause text + MIT text",
+      "license_files": [
+        "plugins/newsdownloader.koplugin/lib/LICENCE_lua-feedparser",
+        "plugins/newsdownloader.koplugin/lib/LICENSE_LuaXML"
+      ],
+      "lua_files": 3,
+      "needs_review": false,
+      "review_reason": null
+    }
+  ],
+  "needs_review": [
+    {
+      "area": "font",
+      "id": "font:nerdfonts",
+      "path": "resources/fonts/nerdfonts",
+      "reason": "license text not classified"
+    },
+    {
+      "area": "font",
+      "id": "font:noto",
+      "path": "resources/fonts/noto",
+      "reason": "license text not classified"
+    },
+    {
+      "area": "image",
+      "id": "image:resources",
+      "path": "resources",
+      "reason": "images with no license or attribution file in this directory or a parent under resources/"
+    },
+    {
+      "area": "image",
+      "id": "image:resources/icons",
+      "path": "resources/icons",
+      "reason": "images with no license or attribution file in this directory or a parent under resources/"
+    },
+    {
+      "area": "image",
+      "id": "image:resources/icons/mdlight",
+      "path": "resources/icons/mdlight",
+      "reason": "license file in this directory is not classified: resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt"
+    },
+    {
+      "area": "image",
+      "id": "image:resources/quickstart",
+      "path": "resources/quickstart",
+      "reason": "images with no license or attribution file in this directory or a parent under resources/"
+    },
+    {
+      "area": "koreader",
+      "id": "koreader:COPYING",
+      "path": "COPYING",
+      "reason": "open question: AGPL-3.0-only versus AGPL-3.0-or-later (see docs/kaia/ENGINEERING_PLAN.md section 11)"
+    },
+    {
+      "area": "submodule",
+      "id": "submodule:base/thirdparty/kpvcrlib/crengine",
+      "path": "base/thirdparty/kpvcrlib/crengine",
+      "reason": "no license file at submodule root; 15 license files below it"
+    },
+    {
+      "area": "submodule",
+      "id": "submodule:resources/fonts",
+      "path": "resources/fonts",
+      "reason": "no license file at submodule root; 6 license files below it"
+    },
+    {
+      "area": "submodule",
+      "id": "submodule:test",
+      "path": "test",
+      "reason": "no license file in submodule"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:busted",
+      "path": "base/thirdparty/spec/busted",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:cluacov",
+      "path": "base/thirdparty/spec/cluacov",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:lua-term",
+      "path": "base/thirdparty/spec/lua-term",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:lua_cliargs",
+      "path": "base/thirdparty/spec/lua_cliargs",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:luacov",
+      "path": "base/thirdparty/spec/luacov",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:luafilesystem",
+      "path": "base/thirdparty/spec/luafilesystem",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:luassert",
+      "path": "base/thirdparty/spec/luassert",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:luasystem",
+      "path": "base/thirdparty/spec/luasystem",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:mediator_lua",
+      "path": "base/thirdparty/spec/mediator_lua",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:penlight",
+      "path": "base/thirdparty/spec/penlight",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "test_rock",
+      "id": "test_rock:say",
+      "path": "base/thirdparty/spec/say",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:android-luajit-launcher",
+      "path": "base/thirdparty/android-luajit-launcher",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:brotli",
+      "path": "base/thirdparty/brotli",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:certifi",
+      "path": "base/thirdparty/certifi",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:cpu_features",
+      "path": "base/thirdparty/cpu_features",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:curl",
+      "path": "base/thirdparty/curl",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:czmq",
+      "path": "base/thirdparty/czmq",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:djvulibre",
+      "path": "base/thirdparty/djvulibre",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:dkjson",
+      "path": "base/thirdparty/dkjson",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:dropbear",
+      "path": "base/thirdparty/dropbear",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:fbink",
+      "path": "base/thirdparty/fbink",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:freetype2",
+      "path": "base/thirdparty/freetype2",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:fribidi",
+      "path": "base/thirdparty/fribidi",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:giflib",
+      "path": "base/thirdparty/giflib",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:glib",
+      "path": "base/thirdparty/glib",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:harfbuzz",
+      "path": "base/thirdparty/harfbuzz",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:inkview",
+      "path": "base/thirdparty/inkview",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:kobo-usbms",
+      "path": "base/thirdparty/kobo-usbms",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:koreader-lfs",
+      "path": "base/thirdparty/koreader-lfs",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:kpvcrlib",
+      "path": "base/thirdparty/kpvcrlib",
+      "reason": "15 license files under this directory, not mapped to components"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:leptonica",
+      "path": "base/thirdparty/leptonica",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libarchive",
+      "path": "base/thirdparty/libarchive",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libjpeg-turbo",
+      "path": "base/thirdparty/libjpeg-turbo",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libk2pdfopt",
+      "path": "base/thirdparty/libk2pdfopt",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libpng",
+      "path": "base/thirdparty/libpng",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libressl",
+      "path": "base/thirdparty/libressl",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libunibreak",
+      "path": "base/thirdparty/libunibreak",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libwebp",
+      "path": "base/thirdparty/libwebp",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:libzmq",
+      "path": "base/thirdparty/libzmq",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lj-wpaclient",
+      "path": "base/thirdparty/lj-wpaclient",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lodepng",
+      "path": "base/thirdparty/lodepng",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lpeg",
+      "path": "base/thirdparty/lpeg",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lua-Spore",
+      "path": "base/thirdparty/lua-Spore",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lua-htmlparser",
+      "path": "base/thirdparty/lua-htmlparser",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lua-rapidjson",
+      "path": "base/thirdparty/lua-rapidjson",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:luajit",
+      "path": "base/thirdparty/luajit",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:luajson",
+      "path": "base/thirdparty/luajson",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:luarocks",
+      "path": "base/thirdparty/luarocks",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:luasec",
+      "path": "base/thirdparty/luasec",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:luasocket",
+      "path": "base/thirdparty/luasocket",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:lunasvg",
+      "path": "base/thirdparty/lunasvg",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:md4c",
+      "path": "base/thirdparty/md4c",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:miniconv",
+      "path": "base/thirdparty/miniconv",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:minizip",
+      "path": "base/thirdparty/minizip",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:mupdf",
+      "path": "base/thirdparty/mupdf",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:nanosvg",
+      "path": "base/thirdparty/nanosvg",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:openlipclua",
+      "path": "base/thirdparty/openlipclua",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:openssh",
+      "path": "base/thirdparty/openssh",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:popen-noshell",
+      "path": "base/thirdparty/popen-noshell",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:proxy-libintl",
+      "path": "base/thirdparty/proxy-libintl",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:sdcv",
+      "path": "base/thirdparty/sdcv",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:sdl3",
+      "path": "base/thirdparty/sdl3",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:sqlite",
+      "path": "base/thirdparty/sqlite",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:tar",
+      "path": "base/thirdparty/tar",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:tesseract",
+      "path": "base/thirdparty/tesseract",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:tree-sitter",
+      "path": "base/thirdparty/tree-sitter",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:tree-sitter-c",
+      "path": "base/thirdparty/tree-sitter-c",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:turbo",
+      "path": "base/thirdparty/turbo",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:utf8proc",
+      "path": "base/thirdparty/utf8proc",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:xxhash",
+      "path": "base/thirdparty/xxhash",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:xz",
+      "path": "base/thirdparty/xz",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:zlib",
+      "path": "base/thirdparty/zlib",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:zstd",
+      "path": "base/thirdparty/zstd",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    },
+    {
+      "area": "thirdparty",
+      "id": "thirdparty:zsync2",
+      "path": "base/thirdparty/zsync2",
+      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
+    }
+  ],
+  "plugins": [
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "SSH.koplugin",
+      "path": "plugins/SSH.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "archiveviewer.koplugin",
+      "path": "plugins/archiveviewer.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "autodim.koplugin",
+      "path": "plugins/autodim.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "autostandby.koplugin",
+      "path": "plugins/autostandby.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "autosuspend.koplugin",
+      "path": "plugins/autosuspend.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "autoturn.koplugin",
+      "path": "plugins/autoturn.koplugin"
+    },
+    {
+      "files": 3,
+      "kaia": false,
+      "license_files": [],
+      "name": "autowarmth.koplugin",
+      "path": "plugins/autowarmth.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "batterystat.koplugin",
+      "path": "plugins/batterystat.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "bookshortcuts.koplugin",
+      "path": "plugins/bookshortcuts.koplugin"
+    },
+    {
+      "files": 6,
+      "kaia": false,
+      "license_files": [],
+      "name": "calibre.koplugin",
+      "path": "plugins/calibre.koplugin"
+    },
+    {
+      "files": 6,
+      "kaia": false,
+      "license_files": [],
+      "name": "cloudstorage.koplugin",
+      "path": "plugins/cloudstorage.koplugin"
+    },
+    {
+      "files": 6,
+      "kaia": false,
+      "license_files": [],
+      "name": "coverbrowser.koplugin",
+      "path": "plugins/coverbrowser.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "coverimage.koplugin",
+      "path": "plugins/coverimage.koplugin"
+    },
+    {
+      "files": 3,
+      "kaia": false,
+      "license_files": [],
+      "name": "docsettingtweak.koplugin",
+      "path": "plugins/docsettingtweak.koplugin"
+    },
+    {
+      "files": 16,
+      "kaia": false,
+      "license_files": [],
+      "name": "exporter.koplugin",
+      "path": "plugins/exporter.koplugin"
+    },
+    {
+      "files": 4,
+      "kaia": false,
+      "license_files": [],
+      "name": "externalkeyboard.koplugin",
+      "path": "plugins/externalkeyboard.koplugin"
+    },
+    {
+      "files": 4,
+      "kaia": false,
+      "license_files": [],
+      "name": "gestures.koplugin",
+      "path": "plugins/gestures.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "hello.koplugin",
+      "path": "plugins/hello.koplugin"
+    },
+    {
+      "files": 3,
+      "kaia": false,
+      "license_files": [],
+      "name": "hotkeys.koplugin",
+      "path": "plugins/hotkeys.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "httpinspector.koplugin",
+      "path": "plugins/httpinspector.koplugin"
+    },
+    {
+      "files": 5,
+      "kaia": false,
+      "license_files": [],
+      "name": "japanese.koplugin",
+      "path": "plugins/japanese.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "keepalive.koplugin",
+      "path": "plugins/keepalive.koplugin"
+    },
+    {
+      "files": 5,
+      "kaia": false,
+      "license_files": [],
+      "name": "kosync.koplugin",
+      "path": "plugins/kosync.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "movetoarchive.koplugin",
+      "path": "plugins/movetoarchive.koplugin"
+    },
+    {
+      "files": 10,
+      "kaia": false,
+      "license_files": [
+        "plugins/newsdownloader.koplugin/lib/LICENCE_lua-feedparser",
+        "plugins/newsdownloader.koplugin/lib/LICENSE_LuaXML"
+      ],
+      "name": "newsdownloader.koplugin",
+      "path": "plugins/newsdownloader.koplugin"
+    },
+    {
+      "files": 5,
+      "kaia": false,
+      "license_files": [],
+      "name": "opds.koplugin",
+      "path": "plugins/opds.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "perceptionexpander.koplugin",
+      "path": "plugins/perceptionexpander.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "profiles.koplugin",
+      "path": "plugins/profiles.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "qrclipboard.koplugin",
+      "path": "plugins/qrclipboard.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "readtimer.koplugin",
+      "path": "plugins/readtimer.koplugin"
+    },
+    {
+      "files": 4,
+      "kaia": false,
+      "license_files": [],
+      "name": "statistics.koplugin",
+      "path": "plugins/statistics.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "systemstat.koplugin",
+      "path": "plugins/systemstat.koplugin"
+    },
+    {
+      "files": 7,
+      "kaia": false,
+      "license_files": [],
+      "name": "terminal.koplugin",
+      "path": "plugins/terminal.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "texteditor.koplugin",
+      "path": "plugins/texteditor.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "timesync.koplugin",
+      "path": "plugins/timesync.koplugin"
+    },
+    {
+      "files": 3,
+      "kaia": false,
+      "license_files": [],
+      "name": "vocabbuilder.koplugin",
+      "path": "plugins/vocabbuilder.koplugin"
+    },
+    {
+      "files": 2,
+      "kaia": false,
+      "license_files": [],
+      "name": "wallabag.koplugin",
+      "path": "plugins/wallabag.koplugin"
+    }
+  ],
+  "schema_version": 1,
+  "submodules": [
+    {
+      "commit": "6e4bc81af4e04f78d81677a323a780a71b29702a",
+      "declared_in": ".gitmodules (root)",
+      "describe": "v2013.03-3987-g6e4bc81a",
+      "license": "AGPL-3.0 text (-only or -or-later not determined)",
+      "license_files_in_subtree": 18,
+      "license_status": "license file at submodule root",
+      "needs_review": false,
+      "path": "base",
+      "review_reason": null,
+      "root_license_files": [
+        "base/COPYING"
+      ],
+      "shallow": false,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/koreader-base.git"
+    },
+    {
+      "commit": "b32a88ffbbf505cf2ea5208c1a49002d70d3609f",
+      "declared_in": "base",
+      "describe": "remotes/origin/none_algorithm_hyphenation-1381-gb32a88ff",
+      "license": "mixed or unmapped",
+      "license_files_in_subtree": 15,
+      "license_status": "no license file at root; license files in subtree",
+      "needs_review": true,
+      "path": "base/thirdparty/kpvcrlib/crengine",
+      "review_reason": "no license file at submodule root; 15 license files below it",
+      "root_license_files": [],
+      "shallow": false,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/crengine.git"
+    },
+    {
+      "commit": "be4726d0fa58195dbe6f2b868ddafd2b18e472d9",
+      "declared_in": ".gitmodules (root)",
+      "describe": "be4726d0f",
+      "license": "AGPL-3.0 text (-only or -or-later not determined)",
+      "license_files_in_subtree": 1,
+      "license_status": "license file at submodule root",
+      "needs_review": false,
+      "path": "l10n",
+      "review_reason": null,
+      "root_license_files": [
+        "l10n/LICENSE"
+      ],
+      "shallow": true,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/koreader-translations.git"
+    },
+    {
+      "commit": "dc24a50aae4f69dd3a9708e8eb8e141b5e1c1c03",
+      "declared_in": ".gitmodules (root)",
+      "describe": "v2.1.0-24-gdc24a50",
+      "license": "MIT text",
+      "license_files_in_subtree": 1,
+      "license_status": "license file at submodule root",
+      "needs_review": false,
+      "path": "platform/android/luajit-launcher",
+      "review_reason": null,
+      "root_license_files": [
+        "platform/android/luajit-launcher/LICENSE"
+      ],
+      "shallow": false,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/android-luajit-launcher.git"
+    },
+    {
+      "commit": "046976988aa33639d60d6ffd25c7a0ff50b72ac0",
+      "declared_in": ".gitmodules (root)",
+      "describe": "heads/master",
+      "license": "mixed or unmapped",
+      "license_files_in_subtree": 6,
+      "license_status": "no license file at root; license files in subtree",
+      "needs_review": true,
+      "path": "resources/fonts",
+      "review_reason": "no license file at submodule root; 6 license files below it",
+      "root_license_files": [],
+      "shallow": true,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/koreader-fonts.git"
+    },
+    {
+      "commit": "c3b5d06e1ae8ea088bd898b0e7f9da3753d0d86c",
+      "declared_in": ".gitmodules (root)",
+      "describe": "heads/master",
+      "license": "unknown, needs review",
+      "license_files_in_subtree": 0,
+      "license_status": "no license file",
+      "needs_review": true,
+      "path": "test",
+      "review_reason": "no license file in submodule",
+      "root_license_files": [],
+      "shallow": true,
+      "state": "checked out at recorded commit",
+      "url": "https://github.com/koreader/test-data.git"
+    }
+  ],
+  "summary": {
+    "asset_flags": 0,
+    "font_families": 5,
+    "font_files": 35,
+    "image_directories": 5,
+    "image_files": 137,
+    "license_files_in_repo": 35,
+    "lua_directories_outside_frontend": 3,
+    "needs_review": 84,
+    "plugins": 37,
+    "submodules": 6,
+    "test_rocks": 11,
+    "thirdparty_entries": 66,
+    "thirdparty_vendored_in_tree": 4,
+    "thirdparty_with_download": 61
+  },
+  "test_rocks": [
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "99efb93f00ab7885718832a373fb388c",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/lunarmodules/busted-2.3.0-1.src.rock"
+          ],
+          "version": "2.3.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "busted",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/busted",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "2.3.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "076273d593b0aa95666f1d3238d6549e",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/luarocks/cluacov-0.1.4-1.src.rock"
+          ],
+          "version": "0.1.4",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "cluacov",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/cluacov",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.1.4"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "672b60c1e856129891fe29e23632c032",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/hoelzro/lua-term/archive/0.08.tar.gz"
+          ],
+          "version": "0.08",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lua-term",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/lua-term",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.08"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "a5d712064c5c08beb69d816e1a7b8378",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/lunarmodules/lua_cliargs/archive/refs/tags/v3.0.2.tar.gz"
+          ],
+          "version": "3.0.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lua_cliargs",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/lua_cliargs",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "3.0.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "5a3bc7c5b5ee85eb06cc8c4cc5cc3d94",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/hisham/luacov-0.15.0-1.src.rock"
+          ],
+          "version": "0.15.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luacov",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/luacov",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.15.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "0dbdcb2bcbe0bad2cc9cb01532255a53",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/hisham/luafilesystem-1.9.0-1.src.rock"
+          ],
+          "version": "1.9.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luafilesystem",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/luafilesystem",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.9.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "0df52010a5a5f728da0b9b7615a82da6",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/lunarmodules/luassert-1.9.0-1.src.rock"
+          ],
+          "version": "1.9.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luassert",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/luassert",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.9.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "f1f6bbda6e0fed95fb481d8172011a23",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/lunarmodules/luasystem-0.7.1-1.src.rock"
+          ],
+          "version": "0.7.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luasystem",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/luasystem",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.7.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "3ef01fc6ced99f6e4c2a229e91c459bf",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/Olivine-Labs/mediator_lua/archive/v1.1.2-0.tar.gz"
+          ],
+          "version": "1.1.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "mediator_lua",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/mediator_lua",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.1.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "b5e677e6d65b5ecbd79b6212592d4c1c",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/tieske/penlight-1.15.0-1.src.rock"
+          ],
+          "version": "1.15.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "penlight",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/penlight",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.15.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "spec_rock",
+          "declared_ref": "3b776612edf1e659b2a1e95698597e44",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://luarocks.org/manifests/lunarmodules/say-1.4.1-3.src.rock"
+          ],
+          "version": "1.4.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "test_rock",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "say",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/spec/say",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.4.1"
+    }
+  ],
+  "thirdparty": [
+    {
+      "downloads": [],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "android-luajit-launcher",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/android-luajit-launcher",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "build helper only (no download, no sources)",
+      "upstream_license_to_verify": "not recorded",
+      "version": null
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "3a6a3dba82a3604792d3cb0bd41bca60",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
+          ],
+          "version": "1.1.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "brotli",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/brotli",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.1.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "3b14da8e2efaade7cd0ff168139c7868",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://files.pythonhosted.org/packages/ef/2f/c5464532e965badff2f4c4c1a3a83f5697f0d7c407ed0cda44aaa99bb451/certifi-2026.6.17-py3-none-any.whl"
+          ],
+          "version": "2026.6.17",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "certifi",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/certifi",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MPL-2.0 (unverified)",
+      "version": "2026.6.17"
+    },
+    {
+      "downloads": [],
+      "group": "thirdparty",
+      "license": "in-tree build helper (repository license applies, verify)",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "in-tree file",
+      "name": "cmake_modules",
+      "needs_review": false,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/cmake_modules",
+      "review_reason": null,
+      "source": "vendored in tree (no download declaration)",
+      "upstream_license_to_verify": "not recorded",
+      "version": null
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "32f6f561c24dce66ed4bc0384b22c026",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/google/cpu_features/archive/refs/tags/v0.10.1.tar.gz"
+          ],
+          "version": "0.10.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "cpu_features",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/cpu_features",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "Apache-2.0 (unverified)",
+      "version": "0.10.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "cba9ea54bccefed639a529b1b5b17405",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/curl/curl/releases/download/curl-8_14_1/curl-8.14.1.tar.xz"
+          ],
+          "version": "8.14.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "curl",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "clock_gettime_needs_rt.patch",
+        "no_glibc_2.6_or_above_symbols.patch",
+        "use_-pthread.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "clock_gettime_needs_rt.patch",
+        "no_glibc_2.6_or_above_symbols.patch",
+        "use_-pthread.patch"
+      ],
+      "path": "base/thirdparty/curl",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "curl license (MIT-style) (unverified)",
+      "version": "8.14.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "471e9ec120fc66a2fe2aae14359e3cfa",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/zeromq/czmq/releases/download/v4.2.1/czmq-4.2.1.tar.gz"
+          ],
+          "version": "4.2.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "czmq",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "android.patch",
+        "cmake_tweaks.patch",
+        "fix_prefix_handling.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "android.patch",
+        "cmake_tweaks.patch",
+        "fix_prefix_handling.patch"
+      ],
+      "path": "base/thirdparty/czmq",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MPL-2.0 (unverified)",
+      "version": "4.2.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "release.3.5.30.1-2-g69e23da",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://gitlab.com/koreader/djvulibre.git"
+          ],
+          "version": "release.3.5.30.1-2-g69e23da",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "djvulibre",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "android.patch",
+        "no-locale-mangling.patch",
+        "no_references_to_install_dir.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "android.patch",
+        "no-locale-mangling.patch",
+        "no_references_to_install_dir.patch"
+      ],
+      "path": "base/thirdparty/djvulibre",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "GPL-2.0-or-later (unverified)",
+      "version": "release.3.5.30.1-2-g69e23da"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "eededec0ec8befa97fc88947a668b5e6",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "http://dkolf.de/dkjson-lua/dkjson-2.10.tar.gz"
+          ],
+          "version": "2.10",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "dkjson",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/dkjson",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "2.10"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "26c3e2ea61a8f3bc5b19c78e697ec42c",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/mkj/dropbear/archive/refs/tags/DROPBEAR_2026.92.tar.gz"
+          ],
+          "version": "2026.92",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "dropbear",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "dbscp-path.patch",
+        "fix__GNU_SOURCE_warnings.patch",
+        "nochdir-hack.patch",
+        "nopasswd-hack.patch",
+        "pubkey-hack.patch",
+        "reduce_build_verbosity.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "dbscp-path.patch",
+        "fix__GNU_SOURCE_warnings.patch",
+        "nochdir-hack.patch",
+        "nopasswd-hack.patch",
+        "pubkey-hack.patch",
+        "reduce_build_verbosity.patch"
+      ],
+      "path": "base/thirdparty/dropbear",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT-style (Dropbear license) (unverified)",
+      "version": "2026.92"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "92e127008145b2a22fba7c59815d810d716310dd",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/NiLuJe/FBInk.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "fbink",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cdecl_c99_type_begone.patch",
+        "new_ffi-cdecl.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cdecl_c99_type_begone.patch",
+        "new_ffi-cdecl.patch"
+      ],
+      "path": "base/thirdparty/fbink",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "GPL-3.0 (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "0f816defb4d1d7dd274df0937431916f",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-3.tar.gz"
+          ],
+          "version": "2-14-3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "freetype2",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "ftcalc_gcc12_arm_neon_fix.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "ftcalc_gcc12_arm_neon_fix.patch"
+      ],
+      "path": "base/thirdparty/freetype2",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "FTL or GPL-2.0-or-later (dual) (unverified)",
+      "version": "2-14-3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "333ad150991097a627755b752b87f9ff",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz"
+          ],
+          "version": "1.0.16",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "fribidi",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/fribidi",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "LGPL-2.1-or-later (unverified)",
+      "version": "1.0.16"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "a70e90ff780e9ebee9cb84b82bbd46a7",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://sourceforge.net/projects/giflib/files/giflib-6.x/giflib-6.1.3.tar.gz"
+          ],
+          "version": "6.1.3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "giflib",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/giflib",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "6.1.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "d101f1acab6805d4d6d3104e9634b8e3",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://download.gnome.org/sources/glib/2.82/glib-2.82.1.tar.xz"
+          ],
+          "version": "2.82.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "glib",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "libglib-only.patch",
+        "no_glibc_2.6_or_above_symbols.patch",
+        "no_regex_support.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "libglib-only.patch",
+        "no_glibc_2.6_or_above_symbols.patch",
+        "no_regex_support.patch"
+      ],
+      "path": "base/thirdparty/glib",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "LGPL-2.1-or-later (unverified)",
+      "version": "2.82.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "dda477eb1b44ac816ec1a8e4effee1af",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz"
+          ],
+          "version": "14.2.1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "harfbuzz",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "android.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "android.patch"
+      ],
+      "path": "base/thirdparty/harfbuzz",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "14.2.1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "4a3e32c39ed14ac7f2e3ca4f8c66a7d5fbe5e0fe",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/koreader/pocketbook-inkview.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "inkview",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/inkview",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "d1d916655b1406780f12ba0c2442b6a901e75929",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/koreader/KoboUSBMS.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "kobo-usbms",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/kobo-usbms",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "v1_9_0",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/lunarmodules/luafilesystem"
+          ],
+          "version": "v1_9_0",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "koreader-lfs",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "lfs-pushnumber-for-wide-types.patch",
+        "lfs-visibility.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "lfs-pushnumber-for-wide-types.patch",
+        "lfs-visibility.patch"
+      ],
+      "path": "base/thirdparty/koreader-lfs",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "v1_9_0"
+    },
+    {
+      "downloads": [],
+      "group": "thirdparty",
+      "license": "mixed or unmapped (see license_files)",
+      "license_files": [
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/android/res/raw/license.txt",
+          "sha256": "ad29d3535b6181b3c73c099f2b9c32e4c3fe0442482c6f72668cd94b7941789d"
+        },
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/cr3gui/COPYING",
+          "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+        },
+        {
+          "headers": [
+            "LGPL-2.1 text"
+          ],
+          "hint": "LGPL-2.1 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/cr3qt/src/qtc-gdbmacros/LICENSE.LGPL",
+          "sha256": "36b6d3fa47916943fd5fec313c584784946047ec1337a78b440e5992cb595f89"
+        },
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/cr3wx/COPYING",
+          "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+        },
+        {
+          "headers": [
+            "BSD-2-Clause text",
+            "MIT text"
+          ],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/crengine/qimagescale/QIMAGETRANSFORM_LICENSE.txt",
+          "sha256": "46b3cbfa2f2946b93291506351e9be1dd0a28d2a53260f5aa488abd36fbeca9d"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/packages/ubuntu/debian/copyright",
+          "sha256": "b915cfe82804c2110f86478573316086e9c7cda0d56a69bdaabc8e524bcaa2b8"
+        },
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/copying",
+          "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/gpc/copying.txt",
+          "sha256": "21b234912d70f1a3b31de89f2d100263dfffbaae4591bf9f814658d5339a74d2"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/agg/src/copying",
+          "sha256": "3e4d82ee85f6864d3c1941a023a0caae2fb857e2ada9bba23ec497bb9c6ad406"
+        },
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/antiword/Docs/COPYING",
+          "sha256": "3c6f6f8e9eda89b42eda68cf893681db1eeb03e951af8677782501ac95c9b556"
+        },
+        {
+          "headers": [
+            "LGPL-2.1 text"
+          ],
+          "hint": "LGPL-2.1 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/chmlib/COPYING",
+          "sha256": "ca0061fc1381a3ab242310e4b3f56389f28e3d460eb2fd822ed7a21c6f030532"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/freetype/docs/LICENSE.TXT",
+          "sha256": "f6333b3a9106f10190e96d9f994f934deb7a5632851a1aaf846b94651a80f4da"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/libpng/LICENSE",
+          "sha256": "08c28d18cdcabc55a7671f56024f51208f150db58db1d97a6c6db5ff00fb9bca"
+        },
+        {
+          "headers": [],
+          "hint": null,
+          "path": "base/thirdparty/kpvcrlib/crengine/thirdparty/unrar/license.txt",
+          "sha256": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a"
+        },
+        {
+          "headers": [
+            "GPL-2.0 text"
+          ],
+          "hint": "GPL-2.0 text",
+          "path": "base/thirdparty/kpvcrlib/crengine/tinydict/COPYING",
+          "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+        }
+      ],
+      "license_files_in_subtree": 15,
+      "license_status": "license files in subtree only, not mapped to components",
+      "name": "kpvcrlib",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/kpvcrlib",
+      "review_reason": "15 license files under this directory, not mapped to components",
+      "source": "vendored in tree (no download declaration)",
+      "upstream_license_to_verify": "GPL-2.0-or-later for crengine core; subtree mixes licenses (unverified)",
+      "version": null
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "1f66c425c270e9793982289e1ff9634a",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/DanBloomberg/leptonica/archive/refs/tags/1.87.0.tar.gz"
+          ],
+          "version": "1.87.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "leptonica",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "fmemopen-arm-compat-symbol.patch",
+        "k2pdfopt.patch",
+        "no_messing_with_debug_flags.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "fmemopen-arm-compat-symbol.patch",
+        "k2pdfopt.patch",
+        "no_messing_with_debug_flags.patch"
+      ],
+      "path": "base/thirdparty/leptonica",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "Leptonica license (BSD-2-Clause style) (unverified)",
+      "version": "1.87.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "81a6d70daf20671ea2c5cd4bb1d371ae",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/libarchive/libarchive/releases/download/v3.8.8/libarchive-3.8.8.tar.xz"
+          ],
+          "version": "3.8.8",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libarchive",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "android.patch",
+        "avoid_mode_t.patch",
+        "ignore_locale_and_use_utf8.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "android.patch",
+        "avoid_mode_t.patch",
+        "ignore_locale_and_use_utf8.patch"
+      ],
+      "path": "base/thirdparty/libarchive",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "BSD-2-Clause (unverified)",
+      "version": "3.8.8"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "a80f9f1c735b57d3cdd66daed1ba6bb4",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz"
+          ],
+          "version": "3.2.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libjpeg-turbo",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "no_12_or_16_bits_precision.patch",
+        "no_cmake_rpath_shenanigans.patch",
+        "no_other_image_formats_except_bmp.patch",
+        "no_simdcoverage_exe.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "no_12_or_16_bits_precision.patch",
+        "no_cmake_rpath_shenanigans.patch",
+        "no_other_image_formats_except_bmp.patch",
+        "no_simdcoverage_exe.patch"
+      ],
+      "path": "base/thirdparty/libjpeg-turbo",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "IJG, BSD-3-Clause and zlib (mixed) (unverified)",
+      "version": "3.2.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "1fcffeb1e61ec43265d23e2ac77d9a901f8c45d2",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/koreader/libk2pdfopt.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libk2pdfopt",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/libk2pdfopt",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "92972b05f1895240139f749ff24afce8",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.58.tar.gz"
+          ],
+          "version": "1.6.58",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libpng",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/libpng",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "libpng license (zlib style) (unverified)",
+      "version": "1.6.58"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "52d53fe0cd880a7276a4a2f9cd1fa29f",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz",
+            "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.2.tar.gz"
+          ],
+          "version": "4.3.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libressl",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "android.patch",
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "android.patch",
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/libressl",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "ISC and OpenSSL-style (mixed) (unverified)",
+      "version": "4.3.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "ccc11ff950ef7aefa815035f3a20de57",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/adah1972/libunibreak/releases/download/libunibreak_7_0/libunibreak-7.0.tar.gz"
+          ],
+          "version": "7.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libunibreak",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "trim_the_fat.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "trim_the_fat.patch"
+      ],
+      "path": "base/thirdparty/libunibreak",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "7.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "cceb6447180f961473b181c9ef38b630",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz"
+          ],
+          "version": "1.6.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libwebp",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/libwebp",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "BSD-3-Clause (unverified)",
+      "version": "1.6.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "ae933b1e98411fd7cb8309f9502d2737",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/zeromq/libzmq/releases/download/v4.3.5/zeromq-4.3.5.tar.gz"
+          ],
+          "version": "4.3.5",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "libzmq",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "disable_eventfd.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "disable_eventfd.patch"
+      ],
+      "path": "base/thirdparty/libzmq",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "LGPL-3.0-or-later with static linking exception, or MPL-2.0 (depends on release) (unverified)",
+      "version": "4.3.5"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "0d5c8ee336b699dbb35850a7336d24e89e1aac24",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/koreader/lj-wpaclient.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lj-wpaclient",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/lj-wpaclient",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "0b1d9ccfc2093e5d6620cd9a11d03ee6ff6705f5",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/lvandeve/lodepng.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lodepng",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/lodepng",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "c9914cc6036d4afa2f49e5c659a214a5",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/roberto-ieru/LPeg/archive/refs/tags/v1.1.0.tar.gz"
+          ],
+          "version": "1.1.0",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lpeg",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "luajit.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "luajit.patch"
+      ],
+      "path": "base/thirdparty/lpeg",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.1.0"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "0.4.2",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://framagit.org/fperrad/lua-Spore"
+          ],
+          "version": "0.4.2",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lua-Spore",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "detect-more-json-content-types.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "detect-more-json-content-types.patch"
+      ],
+      "path": "base/thirdparty/lua-Spore",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.4.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "5ce9a775a345cf458c0388d7288e246bb1b82bff",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/msva/lua-htmlparser"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lua-htmlparser",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/lua-htmlparser",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [],
+      "group": "thirdparty",
+      "license": "MIT <http://opensource.org/licenses/MIT>",
+      "license_files": [
+        {
+          "headers": [
+            "MIT text"
+          ],
+          "hint": "MIT text",
+          "path": "base/thirdparty/lua-ljsqlite3/LICENSE",
+          "sha256": "f9263d987c5860ff10b9723a00b8ba0d84898cf6bc91494e145402dba963325a"
+        }
+      ],
+      "license_files_in_subtree": 1,
+      "license_status": "declared in repo and license file present",
+      "name": "lua-ljsqlite3",
+      "needs_review": false,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/lua-ljsqlite3",
+      "review_reason": null,
+      "source": "vendored in tree (no download declaration)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "1.0.2 (from __meta.lua)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "e84973356255bde06a70ce6263a3a0ef5c8f4ad4",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/NiLuJe/lua-rapidjson"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lua-rapidjson",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/lua-rapidjson",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "3c4f9fe2052b8d08a917ac0d5f38563f0297b5a3",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/LuaJIT/LuaJIT"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luajit",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "koreader-luajit-enable-table_pack.patch",
+        "koreader-luajit-makefile-tweaks.patch",
+        "koreader-luajit-verbose-build.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [
+        "koreader-luajit-verbose-build.patch"
+      ],
+      "patch_files_referenced_in_cmake": [
+        "koreader-luajit-enable-table_pack.patch",
+        "koreader-luajit-makefile-tweaks.patch"
+      ],
+      "path": "base/thirdparty/luajit",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "6ecaf9bea8b121a9ffca5a470a2080298557b55d",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/harningt/luajson.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luajson",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/luajson",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "56d10945997f2eab5922f24195550a1d",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/luarocks/luarocks/archive/refs/tags/v3.12.2.tar.gz"
+          ],
+          "version": "3.12.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luarocks",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/luarocks",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "3.12.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "v1.3.2",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/brunoos/luasec"
+          ],
+          "version": "v1.3.2",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luasec",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "visibility.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "visibility.patch"
+      ],
+      "path": "base/thirdparty/luasec",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "v1.3.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "e3ca4a767a68d127df548d82669aba3689bd84f4",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/lunarmodules/luasocket"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "luasocket",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "enforce-cloexec.patch",
+        "export-api-for-luasec.patch",
+        "luajit-compat.patch",
+        "namespace.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "enforce-cloexec.patch",
+        "export-api-for-luasec.patch",
+        "luajit-compat.patch",
+        "namespace.patch"
+      ],
+      "path": "base/thirdparty/luasocket",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "v2.3.9",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/sammycage/lunasvg.git"
+          ],
+          "version": "v2.3.9",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "lunasvg",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "extended.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "extended.patch"
+      ],
+      "path": "base/thirdparty/lunasvg",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "v2.3.9"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "04b54eb032d324be3d9307bda1125320",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/mity/md4c/archive/refs/tags/release-0.5.3.tar.gz"
+          ],
+          "version": "0.5.3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "md4c",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/md4c",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.5.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "5871dfaced0f3d5f96c032f30b0590ae",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/malord/miniconv/archive/170ddcb9ac8eda1e08e7426acecb6a5733cf1d36.tar.gz"
+          ],
+          "version": "not declared (pinned to commit in URL)",
+          "version_source": "URL commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "miniconv",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "iconv-proto-compat.patch",
+        "miniconv-config.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "iconv-proto-compat.patch",
+        "miniconv-config.patch"
+      ],
+      "path": "base/thirdparty/miniconv",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit in URL)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "aa4758baea16e9dc03583340e62b370ea1140df9",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/nmoinvaz/minizip"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "minizip",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/minizip",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "17169f89d135a9cb0de147690f982c88",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/ArtifexSoftware/mupdf-downloads/releases/download/1.27.2/mupdf-1.27.2-source.tar.lz",
+            "https://mupdf.com/downloads/archive/mupdf-1.27.2-source.tar.lz"
+          ],
+          "version": "1.27.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "mupdf",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "encrypted_zip.patch",
+        "external_fonts.patch",
+        "free-html-doc-fonts-on-close.patch",
+        "honor_cflags.patch",
+        "mupdf_cbz_chapter_support.patch",
+        "no_arm_asm.patch",
+        "passthrough_device.patch",
+        "relink_on_xlibs_change.patch",
+        "visibility.patch",
+        "webp-upstream-697749.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "encrypted_zip.patch",
+        "external_fonts.patch",
+        "free-html-doc-fonts-on-close.patch",
+        "honor_cflags.patch",
+        "mupdf_cbz_chapter_support.patch",
+        "no_arm_asm.patch",
+        "passthrough_device.patch",
+        "relink_on_xlibs_change.patch",
+        "visibility.patch",
+        "webp-upstream-697749.patch"
+      ],
+      "path": "base/thirdparty/mupdf",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "AGPL-3.0 (commercial license also offered; check version suffix) (unverified)",
+      "version": "1.27.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "ea6a6aca009422bba0dbad4c80df6e6ba0c82183",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/memononen/nanosvg.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "nanosvg",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/nanosvg",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "96c2d16696a482664b4e84eb3b6d851f807a44d1",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/notmarek/openlipclua.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "openlipclua",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/openlipclua",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "c5fb91ded926b38e8956074cac2cd44f",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.4p1.tar.gz",
+            "https://cloudflare.cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.4p1.tar.gz"
+          ],
+          "version": "10.4p1",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "openssh",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/openssh",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "BSD-style (mixed) (unverified)",
+      "version": "10.4p1"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "e715396a4951ee91c40a98d2824a130f158268bb",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/famzah/popen-noshell.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "popen-noshell",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "kindle_legacy.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "kindle_legacy.patch"
+      ],
+      "path": "base/thirdparty/popen-noshell",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "not declared (pinned to commit)"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "7cc93d2fec98a5b9820888135d2e8844",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/frida/proxy-libintl/archive/refs/tags/0.4.tar.gz"
+          ],
+          "version": "0.4",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "proxy-libintl",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/proxy-libintl",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "not recorded",
+      "version": "0.4"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "265dbfda83a57810595d156877f3e6fd",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/Dushistov/sdcv/archive/refs/tags/v0.5.5.tar.gz"
+          ],
+          "version": "0.5.5",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "sdcv",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "compat_with_newer_glib.patch",
+        "ignore_hidden.patch",
+        "sdcv-locale-hack.patch",
+        "sdcv-no-unknown-dict-warning.patch",
+        "sdcv-syn-oft-cache.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "compat_with_newer_glib.patch",
+        "ignore_hidden.patch",
+        "sdcv-locale-hack.patch",
+        "sdcv-no-unknown-dict-warning.patch",
+        "sdcv-syn-oft-cache.patch"
+      ],
+      "path": "base/thirdparty/sdcv",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "GPL-3.0 (unverified)",
+      "version": "0.5.5"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "6ad7c4fc2b36a9e073f23dfb8765f7ea",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz"
+          ],
+          "version": "3.4.12",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "sdl3",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "cocoa.patch",
+        "ensure_deps.patch",
+        "pkg-config_jailbreak.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "cocoa.patch",
+        "ensure_deps.patch",
+        "pkg-config_jailbreak.patch"
+      ],
+      "path": "base/thirdparty/sdl3",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "3.4.12"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "b43f1b254ab1ad9b22b0389995311b87",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://www.sqlite.org/2026/sqlite-amalgamation-3530300.zip",
+            "https://www2.sqlite.org/2026/sqlite-amalgamation-3530300.zip",
+            "https://www3.sqlite.org/2026/sqlite-amalgamation-3530300.zip"
+          ],
+          "version": "3530300",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "sqlite",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/sqlite",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "public domain (unverified)",
+      "version": "3530300"
+    },
+    {
+      "downloads": [],
+      "group": "thirdparty",
+      "license": "BSD-2-Clause text",
+      "license_files": [
+        {
+          "headers": [
+            "BSD-2-Clause text"
+          ],
+          "hint": "BSD-2-Clause text",
+          "path": "base/thirdparty/srell/license.txt",
+          "sha256": "013ba4e9f5ba60c72efa40f638d09b3d1a72c9a4787560207179710e1060d3be"
+        }
+      ],
+      "license_files_in_subtree": 1,
+      "license_status": "license file in repo (text hint)",
+      "name": "srell",
+      "needs_review": false,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/srell",
+      "review_reason": null,
+      "source": "vendored in tree (no download declaration)",
+      "upstream_license_to_verify": "BSD-style (unverified)",
+      "version": null
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "9d5949e4c2d9665546ac65dafc0e726a",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "http://ftpmirror.gnu.org/tar/tar-1.34.tar.gz",
+            "https://ftp.wayne.edu/gnu/tar/tar-1.34.tar.gz",
+            "http://ftp.gnu.org/pub/gnu/tar/tar-1.34.tar.gz"
+          ],
+          "version": "1.34",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "tar",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "tar-1.31-revert-wordsplit-for-android-glob.patch",
+        "tar-1.33-remove-o_path-usage.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "tar-1.31-revert-wordsplit-for-android-glob.patch",
+        "tar-1.33-remove-o_path-usage.patch"
+      ],
+      "path": "base/thirdparty/tar",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "GPL-3.0-or-later (unverified)",
+      "version": "1.34"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "ee8efb2b71dc79eb56cd02ced84a31d5",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.2.tar.gz"
+          ],
+          "version": "5.5.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "tesseract",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "k2pdfopt.patch",
+        "no_debug_fonts.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "k2pdfopt.patch",
+        "no_debug_fonts.patch"
+      ],
+      "path": "base/thirdparty/tesseract",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "Apache-2.0 (unverified)",
+      "version": "5.5.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "d98afafe16c700b75df5cab113fc471b",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.26.10.tar.gz"
+          ],
+          "version": "0.26.10",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "tree-sitter",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/tree-sitter",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.26.10"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "02c27c7a6f92ff9b3e201358d614a78d",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/tree-sitter/tree-sitter-c/archive/refs/tags/v0.24.2.tar.gz"
+          ],
+          "version": "0.24.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "tree-sitter-c",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "no_tree-sitter-cli.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "no_tree-sitter-cli.patch"
+      ],
+      "path": "base/thirdparty/tree-sitter-c",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "0.24.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "v2.1.3",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/kernelsauce/turbo"
+          ],
+          "version": "v2.1.3",
+          "version_source": "git revision as declared"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "turbo",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "d7a8a247a4a2689b0f207162eb804141c87c4899.patch",
+        "fix_cdefs.patch",
+        "fix_ssl_load.patch",
+        "fix_tffi_wrap_load.patch",
+        "no_httpserver_api.patch",
+        "no_linux_only_apis.patch",
+        "no_signal_handler_api.patch",
+        "no_tcpserver_api.patch",
+        "no_web_api.patch",
+        "no_websocket_api.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "d7a8a247a4a2689b0f207162eb804141c87c4899.patch",
+        "fix_cdefs.patch",
+        "fix_ssl_load.patch",
+        "fix_tffi_wrap_load.patch",
+        "no_httpserver_api.patch",
+        "no_linux_only_apis.patch",
+        "no_signal_handler_api.patch",
+        "no_tcpserver_api.patch",
+        "no_web_api.patch",
+        "no_websocket_api.patch"
+      ],
+      "path": "base/thirdparty/turbo",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "v2.1.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "09773a9a9c4029b1e547fe398e555411",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v2.11.3.tar.gz"
+          ],
+          "version": "2.11.3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "utf8proc",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/utf8proc",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "MIT (unverified)",
+      "version": "2.11.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "599804eb9555e51c05f1b821f9212a07",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/Cyan4973/xxHash/archive/refs/tags/v0.8.3.tar.gz"
+          ],
+          "version": "0.8.3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "xxhash",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/xxhash",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "BSD-2-Clause (also offered under GPL-2.0) (unverified)",
+      "version": "0.8.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "a02753f34e5546d20213b87f876a0933",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz"
+          ],
+          "version": "5.8.3",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "xz",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch",
+        "no_glibc_2.6_or_above_symbols.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch",
+        "no_glibc_2.6_or_above_symbols.patch"
+      ],
+      "path": "base/thirdparty/xz",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "0BSD for liblzma (unverified)",
+      "version": "5.8.3"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "be8a129ec5d60c5084911fd7ea16d84e",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz"
+          ],
+          "version": "1.3.2",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "zlib",
+      "needs_review": true,
+      "patch_files_in_directory": [],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [],
+      "path": "base/thirdparty/zlib",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "zlib (unverified)",
+      "version": "1.3.2"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "780fc1896922b1bc52a4e90980cdda48",
+          "extra": [],
+          "method": "URL",
+          "urls": [
+            "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+          ],
+          "version": "1.5.7",
+          "version_source": "parsed from URL file name"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "zstd",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "no_qsort_r.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "no_qsort_r.patch"
+      ],
+      "path": "base/thirdparty/zstd",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (URL)",
+      "upstream_license_to_verify": "BSD-3-Clause (also offered under GPL-2.0) (unverified)",
+      "version": "1.5.7"
+    },
+    {
+      "downloads": [
+        {
+          "call": "external_project",
+          "declared_ref": "e281e1eb4466ff6b3866c25dbe62a3e150fa5bfd",
+          "extra": [],
+          "method": "GIT",
+          "urls": [
+            "https://github.com/NiLuJe/zsync2.git"
+          ],
+          "version": "not declared (pinned to commit)",
+          "version_source": "git commit"
+        }
+      ],
+      "group": "thirdparty",
+      "license": "unknown, needs review",
+      "license_files": [],
+      "license_files_in_subtree": 0,
+      "license_status": "unknown, needs review",
+      "name": "zsync2",
+      "needs_review": true,
+      "patch_files_in_directory": [
+        "cmake_tweaks.patch"
+      ],
+      "patch_files_not_referenced_in_cmake": [],
+      "patch_files_referenced_in_cmake": [
+        "cmake_tweaks.patch"
+      ],
+      "path": "base/thirdparty/zsync2",
+      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "source": "download (GIT)",
+      "upstream_license_to_verify": "Artistic License (unverified)",
+      "version": "not declared (pinned to commit)"
+    }
+  ],
+  "tool": "tools/kaia/inventory/license_inventory.py"
+}
