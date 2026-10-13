@@ -20,7 +20,7 @@ build_kobo() {
     local target="$1" tc max_glibc
     case "${target}" in
         kobo) tc=arm-kobo-linux-gnueabihf max_glibc=2.15 ;;
-        kobov5) tc=arm-kobov5-linux-gnueabihf max_glibc=99 ;;
+        kobov5) tc=arm-kobov5-linux-gnueabihf max_glibc=2.35 ;; # newest glibc that KOReader's own kobov5 binaries need
     esac
     local image=kaia/kobo-rust:1
     if ! docker image inspect "${image}" >/dev/null 2>&1; then
