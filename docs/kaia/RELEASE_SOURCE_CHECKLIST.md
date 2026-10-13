@@ -55,6 +55,7 @@ Where a step runs a command, paste the output into the release record.
 ## 9. Upstream notices
 
 - [ ] Every license or notice file recorded in `licenses.json` ships with the package under its original name and path.
+- [ ] Every Rust crate in the `Rust crates` section of `docs/kaia/inventory/LICENSES.md` ships its license files, and any NOTICE file, with the package.
 - [ ] The Creative Commons BY 3.0 attribution for the icon packs in `resources/icons/` stays with the icons.
 - [ ] The Kaia about text (`frontend/ui/elements/common_info_menu_table.lua`, line 134 at the time of writing) matches the decided license expression.
 
