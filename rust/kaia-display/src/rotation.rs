@@ -1,13 +1,28 @@
 //! Screen rotation and the mapping between logical and panel coordinates.
 //!
-//! The panel has a fixed size. Frames are drawn in logical orientation. A rotation
-//! turns the logical picture clockwise to get panel order: at [`Rotation::Deg90`] the
-//! logical screen is the panel turned a quarter turn clockwise, so its width and height
-//! swap. A backend calls [`rotate_to_panel`] before it sends a frame to the hardware.
+//! The panel has a fixed size, portrait on the Kobo. Frames are drawn in logical
+//! orientation. A [`Rotation`] names the logical screen by how far it is turned
+//! clockwise from the panel. The mapping follows KOReader's rotation modes, so the same
+//! number means the same orientation on both sides:
+//!
+//! - [`Rotation::Deg90`] is KOReader mode 1: "landscape with bottom on the right side of
+//!   screen" (`base/ffi/framebuffer.lua`, line 51 and `DEVICE_ROTATED_CLOCKWISE`, line
+//!   79). The logical top-left pixel is at the panel's bottom-left corner.
+//! - [`Rotation::Deg270`] is KOReader mode 3, the opposite landscape. The logical top-left
+//!   pixel is at the panel's top-right corner.
+//!
+//! The formulas are the inverses of KOReader's blit buffer mapping
+//! (`BB_mt.__index:getPhysicalCoordinates`, `base/ffi/blitbuffer.lua`, line 769). KOReader
+//! sets that buffer rotation to `-90 * mode` (`fb:setRotationMode`,
+//! `base/ffi/framebuffer.lua`, line 457).
+//!
+//! A backend calls [`rotate_to_panel`] before it sends a frame to the hardware. Touch
+//! positions use [`Rotation::panel_to_logical`] on the way back.
 
 use kaia_gfx::{Pixmap, Point, Rect, Size};
 
-/// How far the logical screen is turned clockwise from the panel.
+/// How far the logical screen is turned clockwise from the panel, in KOReader's
+/// rotation modes (see the module docs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Rotation {
     #[default]
@@ -42,13 +57,16 @@ impl Rotation {
     }
 
     /// The panel pixel that shows a logical pixel. `panel` is the panel size.
+    ///
+    /// Deg90 is `(x, y) -> (y, H - 1 - x)` and Deg270 is `(x, y) -> (W - 1 - y, x)`, the
+    /// KOReader buffer rotations 3 and 1 (`getPhysicalCoordinates`, line 769 onward).
     pub const fn logical_to_panel(self, p: Point, panel: Size) -> Point {
         let (w, h) = (panel.w as i32, panel.h as i32);
         match self {
             Rotation::Deg0 => p,
-            Rotation::Deg90 => Point::new(w - 1 - p.y, p.x),
+            Rotation::Deg90 => Point::new(p.y, h - 1 - p.x),
             Rotation::Deg180 => Point::new(w - 1 - p.x, h - 1 - p.y),
-            Rotation::Deg270 => Point::new(p.y, h - 1 - p.x),
+            Rotation::Deg270 => Point::new(w - 1 - p.y, p.x),
         }
     }
 
@@ -57,9 +75,9 @@ impl Rotation {
         let (w, h) = (panel.w as i32, panel.h as i32);
         match self {
             Rotation::Deg0 => p,
-            Rotation::Deg90 => Point::new(p.y, w - 1 - p.x),
+            Rotation::Deg90 => Point::new(h - 1 - p.y, p.x),
             Rotation::Deg180 => Point::new(w - 1 - p.x, h - 1 - p.y),
-            Rotation::Deg270 => Point::new(h - 1 - p.y, p.x),
+            Rotation::Deg270 => Point::new(p.y, w - 1 - p.x),
         }
     }
 }
@@ -143,27 +161,51 @@ mod tests {
     }
 
     #[test]
-    fn quarter_turn_moves_the_top_left_pixel_to_the_top_right() {
-        // Panel 2 wide and 3 tall. The logical top-left pixel lands at the panel's top right.
+    fn deg90_puts_the_logical_top_left_at_the_panel_bottom_left() {
+        // framebuffer.lua line 51: mode 1 is "landscape with bottom on the right side of
+        // screen". The logical top-left pixel is then at the bottom left of the panel.
+        // Panel 2 wide and 3 tall.
         let panel = Size::new(2, 3);
         assert_eq!(
             Rotation::Deg90.logical_to_panel(Point::new(0, 0), panel),
+            Point::new(0, 2)
+        );
+    }
+
+    #[test]
+    fn deg90_puts_the_logical_bottom_edge_on_the_panel_right_edge() {
+        // The bottom edge of a Deg90 screen is the row y = logical height - 1 = panel
+        // width - 1, which must land on the panel's right column. Panel 2 wide, 3 tall.
+        let panel = Size::new(2, 3);
+        for x in 0..3 {
+            let p = Rotation::Deg90.logical_to_panel(Point::new(x, 1), panel);
+            assert_eq!(p.x, 1, "logical x {x}");
+        }
+    }
+
+    #[test]
+    fn deg270_puts_the_logical_top_left_at_the_panel_top_right() {
+        // Mode 3, the opposite landscape: the bottom edge is on the left.
+        let panel = Size::new(2, 3);
+        assert_eq!(
+            Rotation::Deg270.logical_to_panel(Point::new(0, 0), panel),
             Point::new(1, 0)
         );
     }
 
     #[test]
-    fn rotate_to_panel_matches_a_clockwise_turn() {
+    fn rotate_to_panel_matches_koreader_mode_1() {
         // Logical frame at Deg90 is 3 wide and 2 tall:
         //   0  1  2
         //  10 11 12
-        // Turned clockwise, the panel (2 wide, 3 tall) reads:
-        //  10  0
-        //  11  1
-        //  12  2
+        // Each panel pixel (px, py) shows logical (h - 1 - py, px), with the panel 2 wide
+        // and 3 tall. The panel rows, top to bottom, are:
+        //   2 12
+        //   1 11
+        //   0 10
         let logical = Pixmap::from_data(3, 2, PixelFormat::Gray8, vec![0, 1, 2, 10, 11, 12]).unwrap();
         let panel = rotate_to_panel(&logical, Rotation::Deg90);
-        let expected = Pixmap::from_data(2, 3, PixelFormat::Gray8, vec![10, 0, 11, 1, 12, 2]).unwrap();
+        let expected = Pixmap::from_data(2, 3, PixelFormat::Gray8, vec![2, 12, 1, 11, 0, 10]).unwrap();
         assert_eq!(panel, expected);
     }
 

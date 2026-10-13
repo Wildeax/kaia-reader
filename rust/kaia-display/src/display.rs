@@ -32,6 +32,16 @@ pub trait Display {
 
     /// Changes the orientation. Later frames use the new logical size.
     fn set_rotation(&mut self, rotation: Rotation) -> Result<(), DisplayError>;
+
+    /// Waits until the last refresh has finished on the panel. Call it before the device
+    /// suspends, so that no update is still running. Backends without a panel that
+    /// refreshes asynchronously have nothing to wait for, so the default does nothing.
+    fn wait_idle(&mut self) {}
+
+    /// Turns the night mode on or off. Night mode inverts the panel and changes the
+    /// waveforms of later refreshes. The default does nothing, for backends without a
+    /// night mode.
+    fn set_night_mode(&mut self, _on: bool) {}
 }
 
 /// The physical panel: its size at rotation 0, its density, and the frame format it

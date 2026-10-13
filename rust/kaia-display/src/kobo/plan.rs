@@ -5,9 +5,12 @@
 //! MTK panel of the Libra Colour: `mxc_update` for the waits and the promotion to
 //! color and FULL modes, and the MTK setup block for the mode assignments. Each rule
 //! names the behavior it copies. Nothing here has been run on a device.
+//!
+//! The FBInk backend is kept for comparison. The native backend is the default. See
+//! [`crate::kobo::native`].
 
 use kaia_fbink_sys as fb;
-use kaia_gfx::{PixelFormat, Rect, Size};
+use kaia_gfx::{Rect, Size};
 
 use crate::waveform::{Refresh, Waveform};
 
@@ -24,8 +27,11 @@ pub struct RefreshPlan {
     pub waveform: u8,
     /// Ask for a flash. FBInk turns this into `UPDATE_MODE_FULL`.
     pub flashing: bool,
-    /// Use the CFA post-process mode (color content on the color panel).
+    /// Use the CFA post-process mode (dithered content in a Kaleido mode).
     pub color_post: bool,
+    /// FBInk dithering mode. `fb::HWD_ORDERED` when [`Refresh::dither`] is set, else
+    /// `fb::HWD_PASSTHROUGH`. The mapping to KOReader's HWTCON dither is not verified.
+    pub dithering_mode: u8,
     /// Wait for the previous update to finish, after the pixels are drawn and before
     /// the refresh is sent.
     pub wait_before: bool,
@@ -37,23 +43,23 @@ pub struct RefreshPlan {
 
 /// The FBInk waveform for a requested [`Waveform`].
 ///
-/// `color` is true for `Rgb24` content. Two mappings change with it:
+/// `dither` is [`Refresh::dither`]. Two mappings change with it:
 ///
 /// - `Gc16` (KOReader's `full`) becomes `GCC16`, as KOReader's `refresh_mtk` promotes it
 ///   when the dither flag is set on a color panel.
 /// - `Glr16` (KOReader's `partial`, REAGL on MTK) becomes `GLRC16`, the color
 ///   counterpart that KOReader uses for the same case.
 ///
-/// An explicit `Waveform::Gcc16` is always the color waveform, whatever the content.
-pub fn waveform_for(waveform: Waveform, color: bool) -> u8 {
+/// An explicit `Waveform::Gcc16` is always the color waveform, whatever the flag.
+pub fn waveform_for(waveform: Waveform, dither: bool) -> u8 {
     match waveform {
         Waveform::Auto => fb::WFM_AUTO,
         Waveform::Du => fb::WFM_DU,
         Waveform::Gl16 => fb::WFM_GL16,
-        Waveform::Gc16 if color => fb::WFM_GCC16,
+        Waveform::Gc16 if dither => fb::WFM_GCC16,
         Waveform::Gc16 => fb::WFM_GC16,
         Waveform::A2 => fb::WFM_A2,
-        Waveform::Glr16 if color => fb::WFM_GLRC16,
+        Waveform::Glr16 if dither => fb::WFM_GLRC16,
         Waveform::Glr16 => fb::WFM_REAGL,
         Waveform::Gcc16 => fb::WFM_GCC16,
     }
@@ -77,7 +83,7 @@ pub fn align_region(region: Rect, screen: Size) -> Rect {
 }
 
 /// Builds the plan for a refresh of `refresh.region` on a screen of `screen` logical
-/// size, showing content in `format`.
+/// size.
 ///
 /// The rules, each from `framebuffer_mxcfb.lua`:
 ///
@@ -89,11 +95,11 @@ pub fn align_region(region: Rect, screen: Size) -> Rect {
 ///   updates").
 /// - After a PARTIAL update that is neither DU nor A2, wait for submission
 ///   (`wait_for_submission_after`, set for MTK).
-/// - CFA post-processing is on for color content in a Kaleido mode (`CFA_PROCESSING_FLAG`,
-///   set to `HWTCON_FLAG_CFA_EINK_G2` for color screens).
-pub fn plan_refresh(format: PixelFormat, refresh: &Refresh, screen: Size) -> RefreshPlan {
-    let color = format == PixelFormat::Rgb24;
-    let waveform = waveform_for(refresh.waveform, color);
+/// - The Kaleido promotion and the CFA post-process happen only with the dither flag
+///   (`mxc_update`, "Handle promotion to Kaleido waveform modes").
+pub fn plan_refresh(refresh: &Refresh, screen: Size) -> RefreshPlan {
+    let dither = refresh.dither;
+    let waveform = waveform_for(refresh.waveform, dither);
     let kaleido = waveform == fb::WFM_GCC16 || waveform == fb::WFM_GLRC16;
     let reagl = waveform == fb::WFM_REAGL;
     let flashing = refresh.flash || kaleido || reagl;
@@ -106,7 +112,12 @@ pub fn plan_refresh(format: PixelFormat, refresh: &Refresh, screen: Size) -> Ref
     RefreshPlan {
         waveform,
         flashing,
-        color_post: color && kaleido,
+        color_post: dither && kaleido,
+        dithering_mode: if dither {
+            fb::HWD_ORDERED
+        } else {
+            fb::HWD_PASSTHROUGH
+        },
         wait_before,
         wait_after: flashing,
         wait_submission_after: !flashing && waveform != fb::WFM_DU && waveform != fb::WFM_A2,
@@ -141,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn color_content_promotes_full_and_partial_modes() {
+    fn dither_promotes_full_and_partial_modes() {
         assert_eq!(waveform_for(Waveform::Gc16, true), fb::WFM_GCC16);
         assert_eq!(waveform_for(Waveform::Glr16, true), fb::WFM_GLRC16);
         // Fast modes stay black and white.
@@ -152,17 +163,18 @@ mod tests {
     #[test]
     fn fast_gray_update_does_not_flash_or_wait() {
         let r = refresh(Rect::new(0, 0, 200, 40), Waveform::Du, false);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert_eq!(p.waveform, fb::WFM_DU);
         assert!(!p.flashing);
         assert!(!p.wait_before && !p.wait_after && !p.wait_submission_after);
         assert!(!p.color_post);
+        assert_eq!(p.dithering_mode, fb::HWD_PASSTHROUGH);
     }
 
     #[test]
     fn a2_update_does_not_wait_for_submission() {
         let r = refresh(Rect::new(0, 0, 200, 40), Waveform::A2, false);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert!(!p.wait_submission_after);
     }
 
@@ -170,7 +182,7 @@ mod tests {
     fn partial_gray_update_is_reagl_and_forced_full() {
         // KOReader's partial on MTK is REAGL, and REAGL always runs in FULL mode.
         let r = refresh(Rect::new(0, 0, 300, 300), Waveform::Glr16, false);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert_eq!(p.waveform, fb::WFM_REAGL);
         assert!(p.flashing);
         assert!(p.wait_before);
@@ -181,7 +193,7 @@ mod tests {
     #[test]
     fn auto_partial_waits_for_submission_only() {
         let r = refresh(Rect::new(10, 10, 300, 40), Waveform::Auto, false);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert!(!p.flashing);
         assert!(!p.wait_before && !p.wait_after);
         assert!(p.wait_submission_after);
@@ -190,7 +202,7 @@ mod tests {
     #[test]
     fn full_screen_flashing_ui_waits_before() {
         let r = refresh(Rect::new(0, 0, 1264, 1680), Waveform::Auto, true);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert!(p.wait_before);
         assert!(p.flashing);
         assert!(p.wait_after);
@@ -199,7 +211,7 @@ mod tests {
     #[test]
     fn partial_flashing_ui_does_not_wait_before() {
         let r = refresh(Rect::new(0, 0, 300, 300), Waveform::Auto, true);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert!(!p.wait_before);
         assert!(p.flashing);
     }
@@ -207,29 +219,41 @@ mod tests {
     #[test]
     fn full_gray_refresh_is_gc16_and_waits_both_sides() {
         let r = refresh(Rect::new(0, 0, 1264, 1680), Waveform::Gc16, true);
-        let p = plan_refresh(PixelFormat::Gray8, &r, SCREEN);
+        let p = plan_refresh(&r, SCREEN);
         assert_eq!(p.waveform, fb::WFM_GC16);
         assert!(p.wait_before && p.wait_after && p.flashing);
         assert!(!p.color_post);
     }
 
     #[test]
-    fn color_full_refresh_uses_cfa_and_flashes() {
-        let r = refresh(Rect::new(0, 0, 1264, 1680), Waveform::Gc16, true);
-        let p = plan_refresh(PixelFormat::Rgb24, &r, SCREEN);
+    fn dithered_full_refresh_uses_cfa_and_flashes() {
+        let r = refresh(Rect::new(0, 0, 1264, 1680), Waveform::Gc16, true).with_dither(true);
+        let p = plan_refresh(&r, SCREEN);
         assert_eq!(p.waveform, fb::WFM_GCC16);
         assert!(p.color_post);
         assert!(p.flashing);
         assert!(p.wait_before);
+        assert_eq!(p.dithering_mode, fb::HWD_ORDERED);
     }
 
     #[test]
-    fn color_partial_uses_glrc16_with_cfa() {
-        let r = refresh(Rect::new(0, 0, 400, 400), Waveform::Glr16, false);
-        let p = plan_refresh(PixelFormat::Rgb24, &r, SCREEN);
+    fn dithered_partial_uses_glrc16_with_cfa() {
+        let r = refresh(Rect::new(0, 0, 400, 400), Waveform::Glr16, false).with_dither(true);
+        let p = plan_refresh(&r, SCREEN);
         assert_eq!(p.waveform, fb::WFM_GLRC16);
         assert!(p.color_post);
         assert!(p.flashing, "Kaleido modes run in FULL update mode");
+    }
+
+    #[test]
+    fn undithered_full_refresh_stays_gc16_on_a_color_panel() {
+        // The dither flag alone decides the waveform, not the frame format. Without it,
+        // KOReader keeps GC16 and sets no CFA flag.
+        let r = refresh(Rect::new(0, 0, 1264, 1680), Waveform::Gc16, true);
+        let p = plan_refresh(&r, SCREEN);
+        assert_eq!(p.waveform, fb::WFM_GC16);
+        assert!(!p.color_post);
+        assert_eq!(p.dithering_mode, fb::HWD_PASSTHROUGH);
     }
 
     #[test]

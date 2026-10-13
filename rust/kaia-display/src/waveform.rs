@@ -17,7 +17,7 @@ use kaia_gfx::Rect;
 ///
 /// | KOReader mode | Method | Waveform | Flash | Notes |
 /// |---|---|---|---|---|
-/// | `full` | `refreshFullImp` | `Gc16` | yes | With the dither flag on a color panel, the driver uses `Gcc16`. |
+/// | `full` | `refreshFullImp` | `Gc16` | yes | With [`Refresh::dither`] on a color panel, the driver uses `Gcc16`. |
 /// | `flashpartial` | `refreshFlashPartialImp` | `Glr16` | yes | `avoid_flashing_ui` turns it into `partial`. |
 /// | `partial` | `refreshPartialImp` | `Glr16` | no | Every `FULL_REFRESH_COUNT`th partial is promoted: to `full` without a region, to `flashui` with one. |
 /// | `[partial]` | `refreshNoMergePartialImp` | `Glr16` | no | Same waveform as `partial`. Only the merging of refreshes differs. |
@@ -59,14 +59,30 @@ pub struct Refresh {
     /// A flash inverts the region once to clear ghosting. The UI sets it for full
     /// screen refreshes and flashing UI updates.
     pub flash: bool,
+    /// KOReader's dither flag for image content: `UIManager:setDirty(widget, refreshtype,
+    /// refreshregion, refreshdither)` (`frontend/ui/uimanager.lua`, line 153). On a color
+    /// Kobo panel it turns on the Kaleido waveforms, GCC16 for GC16 and GLRC16 for GLR16,
+    /// with the CFA flag. It also turns on hardware dithering. Both happen only when this
+    /// flag is set, whatever the frame format. Gray UI leaves it off.
+    ///
+    /// The flag is off by default. [`Refresh::new`] sets it to off, and
+    /// [`Refresh::with_dither`] sets it.
+    pub dither: bool,
 }
 
 impl Refresh {
+    /// A refresh with no dithering. See [`Refresh::dither`].
     pub const fn new(region: Rect, waveform: Waveform, flash: bool) -> Self {
         Self {
             region,
             waveform,
             flash,
+            dither: false,
         }
+    }
+
+    /// The same refresh with the dither flag set to `dither`.
+    pub const fn with_dither(self, dither: bool) -> Self {
+        Self { dither, ..self }
     }
 }

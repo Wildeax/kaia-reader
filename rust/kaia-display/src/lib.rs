@@ -3,8 +3,13 @@
 //! [`Display`] shows frames on a screen and [`InputSource`] yields touch, key and
 //! window events. Two backends ship here: [`HeadlessDisplay`] and [`ScriptedInput`]
 //! for tests, and [`DesktopDisplay`], a window through minifb, behind the `desktop`
-//! feature. The Kobo backend (FBInk and evdev) implements the same traits behind the
-//! `kobo` feature.
+//! feature.
+//!
+//! The Kobo backends sit behind the `kobo` feature. The default Kobo display is
+//! [`NativeKoboDisplay`]. It maps `/dev/fb0` and sends the MediaTek HWTCON ioctls the way
+//! KOReader does, and it needs no FBInk. [`KoboDisplay::open_auto`] picks it. The FBInk
+//! display, [`KoboDisplay`], is used only when `KAIA_DISPLAY=fbink` is set. Touch and
+//! key input is [`EvdevInput`]. Each Kobo display implements the [`Display`] trait.
 //!
 //! Frames are always drawn in logical orientation. [`Refresh`] names the region to
 //! update and the [`Waveform`] to use. The waveform table on [`Waveform`] maps
@@ -32,4 +37,4 @@ pub use waveform::{Refresh, Waveform};
 pub use desktop::{DesktopDisplay, DesktopOptions};
 
 #[cfg(all(feature = "kobo", target_os = "linux"))]
-pub use kobo::{EvdevInput, KoboDisplay};
+pub use kobo::{EvdevInput, KoboDisplay, NativeKoboDisplay};

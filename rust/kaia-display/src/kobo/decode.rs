@@ -594,8 +594,8 @@ mod tests {
 
     #[test]
     fn rotation_moves_touch_into_logical_space() {
-        // Deg90 turns the portrait panel a quarter turn clockwise. Panel (100, 200)
-        // maps to logical (200, 1263 - 100).
+        // Deg90 is KOReader mode 1 (framebuffer.lua, line 51). Panel (100, 200) maps to
+        // logical (1679 - 200, 100): x = H - 1 - y and y = x, with H = 1680.
         let cal = Calibration {
             rotation: Rotation::Deg90,
             ..identity()
@@ -607,7 +607,7 @@ mod tests {
             abs(code::ABS_MT_POSITION_Y, 200, 0),
             syn(1),
         ]);
-        assert_eq!(out, vec![touch(0, Phase::Down, 200, 1163, 1)]);
+        assert_eq!(out, vec![touch(0, Phase::Down, 1479, 100, 1)]);
     }
 
     #[test]

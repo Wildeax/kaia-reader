@@ -118,15 +118,6 @@ impl KoboDisplay {
         self.state.has_color_panel
     }
 
-    /// Waits until the last refresh has finished on the panel. Call it before the
-    /// device suspends, so that no update is still running.
-    ///
-    /// Errors are ignored, as KOReader ignores them. A wait that fails only costs
-    /// time.
-    pub fn wait_idle(&mut self) {
-        self.wait_complete(fb::LAST_MARKER);
-    }
-
     /// Draws `pixels` at `at` without refreshing the panel.
     fn draw(&self, pixels: &Pixmap, at: Rect) -> Result<(), DisplayError> {
         let mut cfg = self.cfg;
@@ -159,7 +150,7 @@ impl KoboDisplay {
         cfg.no_refresh = false;
         cfg.wfm_mode = plan.waveform;
         cfg.is_flashing = plan.flashing;
-        cfg.dithering_mode = fb::HWD_PASSTHROUGH;
+        cfg.dithering_mode = plan.dithering_mode;
         cfg.cfa_mode = if plan.color_post {
             fb::CFA_G2
         } else {
@@ -222,7 +213,7 @@ impl Display for KoboDisplay {
         }
 
         let region = align_region(refresh.region, screen);
-        let plan = plan_refresh(frame.format(), &Refresh { region, ..*refresh }, screen);
+        let plan = plan_refresh(&Refresh { region, ..*refresh }, screen);
         let at = logical_rect_to_panel(region, self.rotation, self.panel.size);
 
         let logical = crop(frame, region).ok_or_else(|| backend("refresh region does not fit the frame"))?;
@@ -253,6 +244,12 @@ impl Display for KoboDisplay {
     fn set_rotation(&mut self, rotation: Rotation) -> Result<(), DisplayError> {
         self.rotation = rotation;
         Ok(())
+    }
+
+    /// Waits for the last update on the panel. Errors are ignored, as KOReader ignores
+    /// them. A wait that fails only costs time.
+    fn wait_idle(&mut self) {
+        self.wait_complete(fb::LAST_MARKER);
     }
 }
 

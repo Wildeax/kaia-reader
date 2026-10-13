@@ -44,6 +44,29 @@ fn presents_two_frames_and_records_both_refreshes() {
 }
 
 #[test]
+fn records_the_dither_flag_of_each_refresh() {
+    let mut display = HeadlessDisplay::new(small_panel());
+    let frame = Pixmap::new(200, 100, PixelFormat::Gray8);
+    let plain = Refresh::new(full_screen(display.size()), Waveform::Gc16, true);
+    let dithered = plain.with_dither(true);
+    display.present(&frame, &dithered).unwrap();
+    display.present(&frame, &plain).unwrap();
+    assert_eq!(display.refreshes(), &[dithered, plain]);
+    assert!(display.refreshes()[0].dither);
+    assert!(!display.refreshes()[1].dither);
+}
+
+#[test]
+fn wait_idle_and_night_mode_are_no_ops_on_the_headless_display() {
+    // They are default methods of the trait, so they are reachable through a box.
+    let mut display: Box<dyn Display> = Box::new(HeadlessDisplay::new(small_panel()));
+    display.wait_idle();
+    display.set_night_mode(true);
+    display.set_night_mode(false);
+    assert_eq!(display.size(), Size::new(200, 100));
+}
+
+#[test]
 fn rejected_frames_change_nothing() {
     let mut display = HeadlessDisplay::new(small_panel());
     let before = display.snapshot().clone();
