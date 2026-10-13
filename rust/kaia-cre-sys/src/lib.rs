@@ -19,11 +19,14 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
+mod options;
+pub use options::{init_with_options, RuntimeOptions};
+
 /// CSS, hyphenation dictionaries and other data files that ship with KOReader.
-/// The default is the desktop tree in this repository.
+/// Desktop fallback. Runtime options prefer resources beside the executable.
 pub const DATA_DIR: &str = env!("KAIA_CRE_DATA_DIR");
 
-/// Font files for CREngine's font manager. The default is `resources/fonts`.
+/// Desktop fallback for fonts. Runtime options prefer the installed fonts.
 pub const FONTS_DIR: &str = env!("KAIA_CRE_FONTS_DIR");
 
 /// Largest width or height that [`Doc::render`] accepts, in pixels.
@@ -85,6 +88,18 @@ pub mod ffi {
             font_count: usize,
             hyph_dir: *const c_char,
             registered: *mut c_int,
+        ) -> c_int;
+        pub fn kaia_cre_init_with_data(
+            font_files: *const *const c_char,
+            font_count: usize,
+            data_dir: *const c_char,
+            registered: *mut c_int,
+        ) -> c_int;
+        pub fn kaia_cre_compare_xpointers(
+            doc: *mut kaia_cre_doc,
+            a: *const c_char,
+            b: *const c_char,
+            out: *mut i32,
         ) -> c_int;
         pub fn kaia_cre_doc_new(width: c_int, height: c_int, out: *mut *mut kaia_cre_doc) -> c_int;
         pub fn kaia_cre_doc_free(doc: *mut kaia_cre_doc);
@@ -250,8 +265,8 @@ unsafe fn take_opt_string(p: *mut c_char) -> Option<String> {
     }
 }
 
-/// Registers font files and sets the hyphenation directory. Only the first call
-/// does work. Returns the number of fonts CREngine accepted.
+/// Registers font files and sets the hyphenation directory.
+/// Returns the number of usable supplied files. Fails when none are usable.
 pub fn init(fonts: &[PathBuf], hyph_dir: &Path) -> Result<usize> {
     let owned: Vec<CString> = fonts.iter().map(|p| path_cstring(p)).collect::<Result<_>>()?;
     let ptrs: Vec<*const c_char> = owned.iter().map(|c| c.as_ptr()).collect();
@@ -522,6 +537,22 @@ impl Doc {
         let code = unsafe { ffi::kaia_cre_xpointer_page(self.raw(), x.as_ptr(), &mut page) };
         match code {
             ffi::KAIA_CRE_OK => Ok(Some(page.max(0) as u32)),
+            ffi::KAIA_CRE_NOT_FOUND => Ok(None),
+            _ => Err(Error::Engine(last_error())),
+        }
+    }
+
+    /// KOReader's comparison: positive if `a` precedes `b`, negative if it
+    /// follows, zero if equal. None if either position is invalid.
+    pub fn compare_xpointers(&mut self, a: &str, b: &str) -> Result<Option<i32>> {
+        let a = cstring(a)?;
+        let b = cstring(b)?;
+        let mut comparison = 0;
+        // SAFETY: live handle, valid C strings and a writable output integer.
+        let code =
+            unsafe { ffi::kaia_cre_compare_xpointers(self.raw(), a.as_ptr(), b.as_ptr(), &mut comparison) };
+        match code {
+            ffi::KAIA_CRE_OK => Ok(Some(comparison)),
             ffi::KAIA_CRE_NOT_FOUND => Ok(None),
             _ => Err(Error::Engine(last_error())),
         }

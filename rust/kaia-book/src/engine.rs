@@ -46,6 +46,7 @@ pub(crate) struct LayoutOutcome {
     pub page: u32,
     pub page_count: usize,
     pub position: Location,
+    pub toc: Vec<TocEntry>,
 }
 
 /// Messages from the engine thread to the session.
@@ -309,6 +310,7 @@ impl Worker {
             layout: self.layout,
             page,
             page_count: self.page_count(),
+            toc: self.doc.doc().toc(),
             position,
         })
     }

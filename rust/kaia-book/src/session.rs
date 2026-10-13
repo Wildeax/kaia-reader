@@ -332,7 +332,7 @@ impl BookSession {
             .join("books")
             .join(format!("{md5}.json"));
         let cache = Arc::new(Mutex::new(PageCache::new(opts.cache_bytes)));
-        let (engine, facts) = Handle::spawn(path.clone(), opts.engine, cache.clone())?;
+        let (engine, mut facts) = Handle::spawn(path.clone(), opts.engine, cache.clone())?;
         let lease = SessionLease::acquire(&path, &state_path)?;
         let mut read_only = !lease.writable();
         let mut state_issue = read_only.then_some(StateIssue::Locked);
@@ -465,6 +465,7 @@ impl BookSession {
             Err(e) => return Err(e),
         };
         let (page, position, page_count, layout_gen) = restored;
+        facts.toc = engine.call(|w| Ok(w.doc.doc().toc()))?;
         state.position = Some(position);
         state.percent = fraction(page, page_count);
         if !facts.cre && facts.reflowable {
@@ -1005,19 +1006,7 @@ impl BookSession {
     pub fn annotations(&mut self) -> Result<Vec<Annotation>> {
         self.ensure_idle()?;
         self.sort_annotations()?;
-        let mut items = self.state.annotations.clone();
-        for a in items.iter_mut() {
-            if let Some(k) = self.order.keys.get(&a.id).copied() {
-                if k.page != u32::MAX {
-                    a.pageno = Some(k.page + 1);
-                    a.chapter = self.chapter_title(k.page);
-                    if a.is_bookmark() {
-                        a.text = a.chapter.as_ref().map(|name| format!("in {name}"));
-                    }
-                }
-            }
-        }
-        Ok(items)
+        Ok(self.state.annotations.clone())
     }
 
     /// The text of a highlight, read from the book at its current layout.
@@ -1336,6 +1325,7 @@ impl BookSession {
                 self.layout_gen = outcome.layout;
                 self.page = outcome.page;
                 self.page_count = outcome.page_count;
+                self.facts.toc = outcome.toc;
                 self.state.position = Some(outcome.position);
                 self.state.percent = fraction(self.page, self.page_count);
                 self.selection = None;
@@ -1452,20 +1442,36 @@ impl BookSession {
 
     fn sort_annotations(&mut self) -> Result<()> {
         self.ensure_order_keys()?;
-        for a in &mut self.state.annotations {
-            if let Some(k) = self.order.keys.get(&a.id) {
-                if k.page != u32::MAX {
+        let mut annotations = self.state.annotations.clone();
+        let keys = self.order.keys.clone();
+        let toc = self.facts.toc.clone();
+        self.state.annotations = self.engine.call(move |w| {
+            for a in &mut annotations {
+                if let Some(k) = keys.get(&a.id).filter(|k| k.page != u32::MAX) {
                     a.pageno = Some(k.page + 1);
-                    a.chapter = chapter_title_from_toc(&self.facts.toc, k.page);
+                    a.chapter = annotation_chapter(w.doc.doc(), &toc, k.page, &a.page)?;
                     if a.is_bookmark() {
                         a.text = a.chapter.as_ref().map(|name| format!("in {name}"));
                     }
                 }
             }
-        }
-        self.state
-            .annotations
-            .sort_by(|a, b| annotation_order(a, b, &self.order.keys));
+            let mut error = None;
+            annotations.sort_by(|a, b| {
+                annotation_order(a, b, &keys, |a, b| {
+                    match compare_annotation_xpointers(w.doc.doc(), a, b) {
+                        Ok(order) => order,
+                        Err(e) => {
+                            error = Some(e);
+                            std::cmp::Ordering::Equal
+                        }
+                    }
+                })
+            });
+            if let Some(error) = error {
+                return Err(error);
+            }
+            Ok(annotations)
+        })?;
         Ok(())
     }
 
@@ -1515,7 +1521,10 @@ impl BookSession {
             .iter()
             .filter(|a| !self.order.keys.contains_key(&a.id))
             .map(|a| {
-                let pos = a.pos0.clone().unwrap_or_else(|| location_pos(&a.page));
+                let pos = match &a.page {
+                    Location::Engine(_) => location_pos(&a.page),
+                    Location::Page(_) => a.pos0.clone().unwrap_or_else(|| location_pos(&a.page)),
+                };
                 (a.id, pos)
             })
             .collect();
@@ -1563,6 +1572,50 @@ fn chapter_title_from_toc(toc: &[TocEntry], page: u32) -> Option<String> {
         .or_else(|| toc.iter().rev().find(|t| t.page.is_some_and(|p| p < page)))
         .map(|t| t.title.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+/// Follows readertoc.lua: start at the first chapter on this page, then use
+/// engine positions to find the chapter before the annotation within the page.
+fn annotation_chapter(
+    doc: &dyn kaia_doc::Document,
+    toc: &[TocEntry],
+    page: u32,
+    location: &Location,
+) -> std::result::Result<Option<String>, kaia_doc::DocError> {
+    let Location::Engine(xp) = location else {
+        return Ok(chapter_title_from_toc(toc, page));
+    };
+    let Some(index) = toc
+        .iter()
+        .position(|t| t.page == Some(page))
+        .or_else(|| toc.iter().rposition(|t| t.page.is_some_and(|p| p < page)))
+    else {
+        return Ok(None);
+    };
+    let compare = |i: usize| match toc[i].xpointer.as_deref() {
+        Some(toc_xp) => doc.compare_xpointers(toc_xp, xp),
+        None => Ok(None),
+    };
+    let title = |i: usize| {
+        let title = toc[i].title.trim();
+        (!title.is_empty()).then(|| title.to_string())
+    };
+    if compare(index)?.is_some_and(|cmp| cmp < 0) {
+        for i in (0..index).rev() {
+            if compare(i)?.is_some_and(|cmp| cmp >= 0) {
+                return Ok(title(i));
+            }
+        }
+    } else {
+        let mut previous = index;
+        for i in index + 1..toc.len() {
+            if compare(i)?.is_some_and(|cmp| cmp < 0) {
+                return Ok(title(previous));
+            }
+            previous = i;
+        }
+    }
+    Ok(title(index))
 }
 
 impl Drop for BookSession {
@@ -1756,10 +1809,26 @@ fn cmp_keys(a: &OrderKey, b: &OrderKey) -> std::cmp::Ordering {
         .then(a.x.total_cmp(&b.x))
 }
 
+fn compare_annotation_xpointers(
+    doc: &dyn kaia_doc::Document,
+    a: &str,
+    b: &str,
+) -> std::result::Result<std::cmp::Ordering, DocError> {
+    if let Some(cmp) = doc.compare_xpointers(a, b)? {
+        return Ok(0.cmp(&cmp));
+    }
+    // Keep invalid positions in a stable group. Treating an invalid pointer
+    // as equal to every valid one would make the sort inconsistent.
+    let valid_a = doc.compare_xpointers(a, a)?.is_some();
+    let valid_b = doc.compare_xpointers(b, b)?.is_some();
+    Ok(valid_a.cmp(&valid_b).then_with(|| a.cmp(b)))
+}
+
 fn annotation_order(
     a: &Annotation,
     b: &Annotation,
     keys: &HashMap<AnnotationId, OrderKey>,
+    mut compare: impl FnMut(&str, &str) -> std::cmp::Ordering,
 ) -> std::cmp::Ordering {
     let ka = keys.get(&a.id);
     let kb = keys.get(&b.id);
@@ -1770,8 +1839,8 @@ fn annotation_order(
     page.then_with(|| b.is_bookmark().cmp(&a.is_bookmark()))
         .then_with(|| match (&a.page, &b.page) {
             (Location::Engine(x), Location::Engine(y)) => {
-                cmp_xp(x, y).then_with(|| match (&a.pos1, &b.pos1) {
-                    (Some(Pos::Xpointer(x)), Some(Pos::Xpointer(y))) => cmp_xp(x, y),
+                compare(x, y).then_with(|| match (&a.pos1, &b.pos1) {
+                    (Some(Pos::Xpointer(x)), Some(Pos::Xpointer(y))) if !a.is_bookmark() => compare(x, y),
                     _ => std::cmp::Ordering::Equal,
                 })
             }
@@ -1815,37 +1884,4 @@ fn fixed_annotation_order(a: &Annotation, b: &Annotation) -> std::cmp::Ordering 
 
 fn cmp_point(a: (u32, f32, f32), b: (u32, f32, f32)) -> std::cmp::Ordering {
     a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.total_cmp(&b.2))
-}
-
-fn cmp_xp(a: &str, b: &str) -> std::cmp::Ordering {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    let (mut i, mut j) = (0, 0);
-    while i < a.len() && j < b.len() {
-        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
-            let start_i = i;
-            let start_j = j;
-            while i < a.len() && a[i].is_ascii_digit() {
-                i += 1;
-            }
-            while j < b.len() && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            let left = a[start_i..i].iter().fold(0u64, |n, d| {
-                n.saturating_mul(10).saturating_add((d - b'0') as u64)
-            });
-            let right = b[start_j..j].iter().fold(0u64, |n, d| {
-                n.saturating_mul(10).saturating_add((d - b'0') as u64)
-            });
-            if left != right {
-                return left.cmp(&right);
-            }
-        } else {
-            if a[i] != b[j] {
-                return a[i].cmp(&b[j]);
-            }
-            i += 1;
-            j += 1;
-        }
-    }
-    a.len().cmp(&b.len())
 }

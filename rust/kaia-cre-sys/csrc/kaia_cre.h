@@ -55,9 +55,12 @@ typedef struct {
 
 const char *kaia_cre_last_error(void);
 
-/* Registers font files and sets the hyphenation dictionary directory. Only the
- * first call does work. `registered` receives the number of fonts accepted. */
+/* Registers font files and sets the hyphenation dictionary directory. Each
+ * call can add fonts. `registered` counts usable supplied files. Zero is an error. */
 int kaia_cre_init(const char *const *font_files, size_t font_count, const char *hyph_dir, int *registered);
+
+/* Uses <data_dir>/hyph. Font files are discovered by the Rust runtime options. */
+int kaia_cre_init_with_data(const char *const *font_files, size_t font_count, const char *data_dir, int *registered);
 
 /* Fails with KAIA_CRE_ERROR until kaia_cre_init has succeeded. */
 int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out);
@@ -96,6 +99,9 @@ int kaia_cre_current_page(kaia_cre_doc *doc, int32_t *out);
 int kaia_cre_page_xpointer(kaia_cre_doc *doc, int32_t page, char **out);
 /* Returns KAIA_CRE_NOT_FOUND when the xpointer is not in the document. */
 int kaia_cre_xpointer_page(kaia_cre_doc *doc, const char *xpointer, int32_t *out);
+/* Positive if a precedes b, negative if a follows b, zero if equal.
+ * Returns KAIA_CRE_NOT_FOUND if either xpointer is invalid. */
+int kaia_cre_compare_xpointers(kaia_cre_doc *doc, const char *a, const char *b, int32_t *out);
 /* Returns KAIA_CRE_NOT_FOUND when no node is at the point. */
 int kaia_cre_xpointer_at(kaia_cre_doc *doc, int32_t x, int32_t y, char **out);
 

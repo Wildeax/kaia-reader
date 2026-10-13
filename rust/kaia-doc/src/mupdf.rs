@@ -101,6 +101,7 @@ impl Document for MupdfDocument {
             .unwrap_or_default()
             .into_iter()
             .map(|t| TocEntry {
+                xpointer: None,
                 level: t.level,
                 title: t.title,
                 page: t.page,

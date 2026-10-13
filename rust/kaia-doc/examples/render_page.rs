@@ -8,9 +8,9 @@
 //! the engine that `kaia_doc::open` picks for the file.
 //!
 //! Font and data locations: MuPDF reads its fallback faces from `FONTDIR`.
-//! CREngine reads its fonts and stylesheets from the directories compiled
-//! into `kaia-cre-sys` (`KAIA_CRE_FONTS_DIR` and `KAIA_CRE_DATA_DIR` at build
-//! time). Those are absolute paths in the repository by default.
+//! CREngine finds `fonts` and `data` beside the executable, with the desktop
+//! build tree as a fallback. Use `CreDocument::open_with_options` to supply
+//! other resource folders.
 
 use std::env;
 use std::fs::File;

@@ -12,6 +12,12 @@ use crate::types::{Layout, Link, Location, Metadata, PageSize, PageText, Quad, T
 /// inside them, they return the empty value: 0 pages, no entries, no metadata,
 /// false, or None. The other methods return `Result`.
 pub trait Document {
+    /// CREngine position comparison, with KOReader's sign convention. Positive
+    /// means `a` precedes `b`. None for invalid positions or other backends.
+    fn compare_xpointers(&self, _a: &str, _b: &str) -> Result<Option<i32>> {
+        Ok(None)
+    }
+
     /// Pages at the current layout.
     fn page_count(&self) -> usize;
 

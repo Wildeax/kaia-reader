@@ -297,7 +297,12 @@ fn walk_outline(expr: &Sexp, level: u32, out: &mut Vec<TocEntry>) {
             LinkTarget::Page(page) => Some(page),
             _ => None,
         });
-        out.push(TocEntry { level, title, page });
+        out.push(TocEntry {
+            level,
+            title,
+            page,
+            xpointer: None,
+        });
         for item in items.iter().skip(2) {
             walk_outline(item, level + 1, out);
         }

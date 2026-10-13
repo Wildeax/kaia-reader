@@ -12,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -183,34 +184,55 @@ const char *kaia_cre_last_error(void) { return g_error.c_str(); }
 
 int kaia_cre_init(const char *const *font_files, size_t font_count, const char *hyph_dir, int *registered) {
     return guard([&]() -> int {
-        int accepted = 0;
-        if (!g_inited) {
-            if (!InitFontManager(lString8())) {
-                fail("cannot start the CREngine font manager");
-            }
-            // KOReader's default (default_cre_storage_size_factor in
-            // credocument.lua). It raises the in-memory limits of the DOM
-            // storage, so large books do not hit them.
-            setStorageMaxUncompressedSizeFactor(40.0f);
-            for (size_t i = 0; i < font_count; i++) {
-                if (font_files[i] && fontMan->RegisterFont(lString8(font_files[i]))) {
-                    accepted++;
-                }
-            }
-            if (hyph_dir) {
-                std::string dir = hyph_dir;
-                if (!dir.empty() && dir.back() != '/') {
-                    dir += '/';
-                }
-                HyphMan::initDictionaries(lString32(dir.c_str()));
-            }
-            g_inited = true;
-        }
+        static std::set<std::string> fonts;
+        static std::string active_hyph_dir;
         if (registered) {
-            *registered = accepted;
+            *registered = 0;
         }
+        if (!font_files || font_count == 0) {
+            fail("CREngine needs at least one usable font; no font files supplied");
+        }
+        if (!fontMan && !InitFontManager(lString8())) {
+            fail("cannot start the CREngine font manager");
+        }
+        int accepted = 0;
+        for (size_t i = 0; i < font_count; i++) {
+            if (!font_files[i]) continue;
+            if (fonts.count(font_files[i]) || fontMan->RegisterFont(lString8(font_files[i]))) {
+                fonts.insert(font_files[i]);
+                accepted++;
+            }
+        }
+        if (accepted == 0 || fontMan->GetFontCount() == 0) {
+            fail("CREngine needs at least one usable font; none of the supplied files were accepted");
+        }
+        fontMan->RegularizeRegisteredFontsWeights();
+        // Same storage limit as credocument.lua.
+        setStorageMaxUncompressedSizeFactor(40.0f);
+        std::string dir = hyph_dir ? hyph_dir : "";
+        if (!dir.empty() && dir.back() != '/') dir += '/';
+        if (dir != active_hyph_dir) {
+            HyphMan::initDictionaries(lString32(dir.c_str()));
+            active_hyph_dir = dir;
+        }
+        g_inited = true;
+        if (registered) *registered = accepted;
         return KAIA_CRE_OK;
     });
+}
+
+int kaia_cre_init_with_data(const char *const *font_files, size_t font_count, const char *data_dir, int *registered) {
+    // Build the path inside a guard so allocation failures stay behind the ABI.
+    std::string hyph;
+    int code = guard([&]() -> int {
+        if (!data_dir || !*data_dir) fail("CREngine data directory is empty");
+        hyph = data_dir;
+        if (hyph.back() != '/') hyph += '/';
+        hyph += "hyph";
+        return KAIA_CRE_OK;
+    });
+    if (code != KAIA_CRE_OK) return code;
+    return kaia_cre_init(font_files, font_count, hyph.c_str(), registered);
 }
 
 int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
@@ -490,6 +512,18 @@ int kaia_cre_xpointer_page(kaia_cre_doc *doc, const char *xpointer, int32_t *out
             return KAIA_CRE_NOT_FOUND;
         }
         *out = view->getBookmarkPage(xp, false);
+        return KAIA_CRE_OK;
+    });
+}
+
+int kaia_cre_compare_xpointers(kaia_cre_doc *doc, const char *a, const char *b, int32_t *out) {
+    return guard([&]() -> int {
+        if (!a || !b || !out) fail("xpointer comparison argument is null");
+        ldomXPointerEx first = parse_xpointer(doc, a);
+        ldomXPointerEx second = parse_xpointer(doc, b);
+        if (first.isNull() || second.isNull()) return KAIA_CRE_NOT_FOUND;
+        // KOReader returns positive when the second position follows the first.
+        *out = second.compare(first);
         return KAIA_CRE_OK;
     });
 }

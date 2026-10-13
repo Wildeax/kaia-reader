@@ -13,7 +13,7 @@
 //! that has `thirdparty/crengine/build/libcrengine.a`, the same search as
 //! `kaia-mupdf-sys`. Set `KAIA_CRE_ROOT` to a build directory to pick one.
 //!
-//! The defaults for the data directories (CSS, hyphenation, fonts) are exported
+//! The desktop fallbacks for data directories and fonts are exported
 //! as `kaia_cre_sys::DATA_DIR` and `kaia_cre_sys::FONTS_DIR`.
 
 use std::env;
@@ -56,9 +56,8 @@ const DEPS: &[&str] = &[
 
 fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    // Canonical path, so the default data and font paths baked into the binary
-    // have no `..` parts. A binary run outside the build tree (for example the
-    // emulated Kobo test) cannot resolve `..` through directories it lacks.
+    // Canonical paths for the desktop fallback. Runtime options prefer resources
+    // beside the installed executable and can override both directories.
     let repo = manifest
         .join("../..")
         .canonicalize()

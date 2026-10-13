@@ -9,6 +9,18 @@
 //! scale other than 1 renders at the layout size and resamples the result.
 //! Line positions returned by `page_text` and `search` are in those units.
 //!
+//! The default pixel layout is Noto Serif at 24 px, 100% line spacing, engine
+//! margins of 12 px left/right and 6 px top/bottom, CSS DPI 96, embedded styles
+//! and fonts enabled, and hyphenation disabled. The app supplies its own layout
+//! and hyphenation choice. KOReader's frontend scales its 22-unit font and
+//! 10/15-unit margins with Screen:scaleBySize before calling the engine. That
+//! gives 47 px text and 22/32 px margins at 1264x1680, before footer space.
+//!
+//! The stock constructor alone uses Arial, DejaVu Sans and an engine header.
+//! It gives juliet.epub 97 pages; Noto Serif gives 115, and disabling the header
+//! gives 114, matching this backend. tests/koreader_layout.lua reproduces those
+//! counts. The 97-page control is not the frontend's default reading layout.
+//!
 //! Threads: CREngine keeps the hyphenation dictionary and the preferred font
 //! in process-wide state, and the shim's lock covers only one call. Two
 //! threads that each open documents (the library scan and the reader) could
@@ -22,10 +34,9 @@
 //! resolve. Internal links resolve to pages when the target id exists.
 
 use std::cell::RefCell;
-use std::fs;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard};
 
 use kaia_cre_sys::{CharBox, Doc, DocFormat, Meta};
 use kaia_gfx::image::scale_pixmap;
@@ -127,54 +138,24 @@ impl DerefMut for Session<'_> {
     }
 }
 
-/// Starts CREngine once with the repository's fonts and data files.
-fn engine_ready() -> Result<()> {
-    static READY: OnceLock<std::result::Result<(), String>> = OnceLock::new();
-    READY
-        .get_or_init(|| {
-            let fonts = font_files(Path::new(kaia_cre_sys::FONTS_DIR));
-            let hyph_dir = data_dir().join("hyph");
-            kaia_cre_sys::init(&fonts, &hyph_dir)
-                .map(|_| ())
-                .map_err(|e| e.to_string())
-        })
-        .clone()
-        .map_err(DocError::Engine)
-}
+/// Runtime resource folders for the CREngine backend.
+pub use kaia_cre_sys::RuntimeOptions as CreOptions;
 
-/// The directory with CREngine's stylesheets and hyphenation dictionaries.
-pub fn data_dir() -> PathBuf {
-    PathBuf::from(kaia_cre_sys::DATA_DIR)
-}
-
-/// Font files under `dir`, sorted. Like credocument.lua, this skips the URW
-/// faces (MuPDF's fallbacks) and the Nerd Fonts symbol font.
-fn font_files(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&d) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name();
-            if path.is_dir() {
-                if name != "urw" {
-                    stack.push(path);
-                }
-                continue;
-            }
-            let is_font = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc"));
-            let is_symbols = name == "symbols.ttf" && d.ends_with("nerdfonts");
-            if is_font && !is_symbols {
-                out.push(path);
-            }
-        }
+/// Called while ENGINE is held. Cache only successful initialization so callers
+/// can correct missing resource paths and retry.
+fn engine_ready(options: &CreOptions) -> Result<()> {
+    static READY: Mutex<Option<CreOptions>> = Mutex::new(None);
+    let mut ready = READY.lock().unwrap_or_else(|p| p.into_inner());
+    if ready.as_ref() != Some(options) {
+        kaia_cre_sys::init_with_options(options).map_err(engine_err)?;
+        *ready = Some(options.clone());
     }
-    out.sort();
-    out
+    Ok(())
+}
+
+/// The installed data directory, with a desktop build tree fallback.
+pub fn data_dir() -> PathBuf {
+    CreOptions::default().data_dir
 }
 
 fn engine_err(e: kaia_cre_sys::Error) -> DocError {
@@ -184,6 +165,7 @@ fn engine_err(e: kaia_cre_sys::Error) -> DocError {
 /// An open CREngine document.
 pub struct CreDocument {
     doc: RefCell<Doc>,
+    options: Box<CreOptions>,
     kind: Kind,
     path: PathBuf,
     /// The layout last applied to the engine. None until the first `set_layout`.
@@ -200,22 +182,32 @@ impl CreDocument {
     /// Opens a file. The kind comes from the extension and defaults to EPUB.
     /// Fails with an engine error when CREngine cannot read the file.
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_with_options(path, &CreOptions::default())
+    }
+
+    /// Opens a file with runtime font and data folders.
+    pub fn open_with_options(path: &Path, options: &CreOptions) -> Result<Self> {
         let kind = path
             .extension()
             .and_then(|e| e.to_str())
             .and_then(Kind::from_extension)
             .unwrap_or(Kind::Epub);
-        Self::open_as(path, kind)
+        Self::open_as_with_options(path, kind, options)
     }
 
     /// Opens a file as the given kind. CREngine must read it as a format that
     /// kind accepts.
     pub fn open_as(path: &Path, kind: Kind) -> Result<Self> {
-        engine_ready()?;
+        Self::open_as_with_options(path, kind, &CreOptions::default())
+    }
+
+    /// Opens a known format with runtime font and data folders.
+    pub fn open_as_with_options(path: &Path, kind: Kind, options: &CreOptions) -> Result<Self> {
         let doc = {
             // Loading can lay the book out, so it runs under the engine lock
             // with this document's settings.
             let _engine = engine_lock();
+            engine_ready(options)?;
             let mut doc = Doc::new(DEFAULT_WIDTH, DEFAULT_HEIGHT).map_err(engine_err)?;
             doc.set_hyphenation(None).map_err(engine_err)?;
             if !doc.load(path).map_err(engine_err)? {
@@ -238,6 +230,7 @@ impl CreDocument {
         };
         let mut this = Self {
             doc: RefCell::new(doc),
+            options: Box::new(options.clone()),
             kind,
             path: path.to_path_buf(),
             applied: None,
@@ -256,6 +249,7 @@ impl CreDocument {
     /// the lock is not reentrant.
     fn doc_mut(&self) -> Result<Session<'_>> {
         let engine = engine_lock();
+        engine_ready(&self.options)?;
         let mut doc = self.doc.borrow_mut();
         doc.set_hyphenation(self.hyphenation.as_deref())
             .map_err(engine_err)?;
@@ -291,6 +285,12 @@ impl CreDocument {
     /// The page that holds an xpointer, or None when it is not in the document.
     pub fn xpointer_page(&self, xpointer: &str) -> Result<Option<u32>> {
         self.doc_mut()?.xpointer_page(xpointer).map_err(engine_err)
+    }
+
+    /// KOReader's comparison: positive if `a` precedes `b`, negative if it
+    /// follows, zero if equal. None if either position is invalid.
+    pub fn compare_xpointers(&self, a: &str, b: &str) -> Result<Option<i32>> {
+        self.doc_mut()?.compare_xpointers(a, b).map_err(engine_err)
     }
 
     /// The xpointer of the node under a point on the given page.
@@ -458,6 +458,10 @@ fn crop_white(src: &Pixmap, clip: Rect) -> Pixmap {
 }
 
 impl Document for CreDocument {
+    fn compare_xpointers(&self, a: &str, b: &str) -> Result<Option<i32>> {
+        CreDocument::compare_xpointers(self, a, b)
+    }
+
     fn page_count(&self) -> usize {
         self.doc_mut()
             .and_then(|mut d| d.page_count().map_err(engine_err))
@@ -500,6 +504,7 @@ impl Document for CreDocument {
             .unwrap_or_default()
             .into_iter()
             .map(|t| TocEntry {
+                xpointer: (!t.xpointer.is_empty()).then_some(t.xpointer),
                 level: t.level,
                 title: t.title,
                 page: t.page,
@@ -594,7 +599,7 @@ impl Document for CreDocument {
             ));
         }
         let prev = self.applied.clone();
-        let css_path = data_dir().join(self.kind.default_css());
+        let css_path = self.options.data_dir.join(self.kind.default_css());
         if let Some(face) = &layout.font_family {
             // `doc_mut` applies the face with the other process-wide settings.
             self.font_face.clone_from(face);
@@ -678,6 +683,7 @@ impl Document for CreDocument {
 mod tests {
     use super::*;
     use kaia_gfx::png::write_pixmap;
+    use std::fs;
 
     fn repo_file(rel: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)

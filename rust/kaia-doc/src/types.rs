@@ -70,6 +70,8 @@ impl Quad {
 /// One table of contents entry. `level` starts at 1.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TocEntry {
+    /// CREngine position, preserved across reflow. None for other backends.
+    pub xpointer: Option<String>,
     pub level: u32,
     pub title: String,
     /// Target page, or None when the entry does not point into the document.
