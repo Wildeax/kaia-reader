@@ -1,6 +1,16 @@
 version: 2
 updates:
+  # Kaia's own workflows pin actions by full commit SHA and are updated by hand.
+  # Dependabot does not open PRs for the upstream workflow actions, so the limit is 0.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
+
+  # Rust crates in the libkaia workspace.
+  - package-ecosystem: "cargo"
+    directory: "/rust"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

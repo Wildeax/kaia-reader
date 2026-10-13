@@ -9,9 +9,9 @@
 
 mod args;
 mod buf;
+mod error;
 #[cfg(all(feature = "glibc215", target_os = "linux"))]
 mod glibc215;
-mod error;
 mod registry;
 
 use std::ffi::c_char;

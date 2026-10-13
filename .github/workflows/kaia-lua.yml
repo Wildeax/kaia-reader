@@ -1,0 +1,132 @@
+name: kaia-lua
+
+# Gates the Kaia Lua code: luacheck, then the desktop emulator build with the
+# Kaia specs and the full front-end suite. The build job runs in the same
+# image that upstream CircleCI uses (koreader/kobase). Pull requests from forks
+# get a read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/kaia/**'
+      - 'plugins/kaia*/**'
+      - 'spec/unit/kaia_*'
+      - 'reader.lua'
+      - 'frontend/**'
+      - '.luacheckrc'
+      - '.github/workflows/kaia-lua.yml'
+  pull_request:
+    paths:
+      - 'frontend/kaia/**'
+      - 'plugins/kaia*/**'
+      - 'spec/unit/kaia_*'
+      - 'reader.lua'
+      - 'frontend/**'
+      - '.luacheckrc'
+      - '.github/workflows/kaia-lua.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  luacheck:
+    name: luacheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install luacheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lua-check
+          luacheck --version
+
+      # Unmatched globs stay literal in bash, so expand them with nullglob.
+      - name: Lint Kaia code
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          paths=(frontend/kaia plugins/kaia*.koplugin spec/unit/kaia_*_spec.lua)
+          printf 'luacheck %s\n' "${paths[*]}"
+          luacheck -q "${paths[@]}"
+
+  emulator:
+    name: emulator build, Kaia specs and front suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    # Same image as upstream CircleCI. Pinned by the digest of the tag
+    # koreader/kobase:1.0.0-22.04 (multi-arch index), read from Docker Hub.
+    container:
+      image: koreader/kobase@sha256:0751390e1a93b57e4836ceb67b4ffc701b46df675853f7662e3aefb6d6af648f
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Shallow submodule fetch, the same call upstream CI makes. The CI
+      # variable is set on GitHub Actions, so the Makefile uses depth 1.
+      - name: Fetch submodules
+        run: make fetchthirdparty
+
+      - name: Read koreader-base commit
+        id: base
+        run: echo "commit=$(git rev-parse HEAD:base)" >> "${GITHUB_OUTPUT}"
+
+      # base/build holds the compiled third-party libraries. It only changes
+      # when the koreader-base commit or the image changes.
+      - name: Restore base build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: base/build
+          key: kaia-base-kobase-0751390e1a93-${{ steps.base.outputs.commit }}
+
+      - name: Build emulator
+        run: ./kodev build
+
+      # rustup pinned to 1.99.0. The rust/rust-toolchain.toml file pins the
+      # same version for cargo runs inside rust/.
+      - name: Install rustup
+        run: |
+          set -euo pipefail
+          rustup_version=1.29.1
+          init="${RUNNER_TEMP}/rustup-init"
+          curl -fsSLo "${init}" \
+            "https://static.rust-lang.org/rustup/archive/${rustup_version}/x86_64-unknown-linux-gnu/rustup-init"
+          echo "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71  ${init}" | sha256sum -c -
+          chmod +x "${init}"
+          "${init}" -y --profile minimal --default-toolchain 1.99.0 --no-modify-path
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+
+      - name: Build libkaia for the host
+        run: tools/kaia/build-libkaia.sh host
+
+      # kodev test takes spec names: the file name without _spec.lua.
+      - name: Kaia specs
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          names=()
+          for spec in spec/unit/kaia_*_spec.lua; do
+            name="$(basename "${spec}" _spec.lua)"
+            names+=("${name}")
+          done
+          test "${#names[@]}" -gt 0
+          printf 'Kaia specs: %s\n' "${names[*]}"
+          ./kodev test front "${names[@]}"
+
+      - name: Front suite
+        run: ./kodev test front

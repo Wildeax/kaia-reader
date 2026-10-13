@@ -1,0 +1,53 @@
+name: kaia-docs
+
+# Checks the writing style of Kaia-owned text: no em dash or en dash in the
+# Kaia docs, code, tools and CLAUDE.md. The script uses only the Python standard
+# library. Pull requests from forks get a read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/kaia/**'
+      - 'frontend/kaia/**'
+      - 'plugins/kaia*/**'
+      - 'tools/kaia/**'
+      - 'rust/**/*.rs'
+      - 'CLAUDE.md'
+      - '.github/workflows/kaia-docs.yml'
+  pull_request:
+    paths:
+      - 'docs/kaia/**'
+      - 'frontend/kaia/**'
+      - 'plugins/kaia*/**'
+      - 'tools/kaia/**'
+      - 'rust/**/*.rs'
+      - 'CLAUDE.md'
+      - '.github/workflows/kaia-docs.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  style:
+    name: style check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # -I ignores the working directory and PYTHONPATH, so a file in the
+      # checkout cannot shadow a standard library module.
+      - name: Check style
+        run: |
+          python3 --version
+          python3 -I tools/kaia/ci/check_style.py

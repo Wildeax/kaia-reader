@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Source this file to put the GNU tools KOReader's build expects ahead of the macOS ones.
 if [ "$(uname -s)" = "Darwin" ]; then
     B="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"

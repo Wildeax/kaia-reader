@@ -1,0 +1,23 @@
+# cargo-deny policy for the libkaia workspace.
+# Run from rust/: cargo deny check licenses advisories
+
+[graph]
+all-features = true
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+# Only permissive licenses and the AGPL of our own crates. Add a license here
+# only after reading it and recording the crate in docs/kaia/inventory/LICENSES.md.
+allow = [
+    "AGPL-3.0-or-later",
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[advisories]
+version = 2
+unmaintained = "workspace"
+yanked = "deny"

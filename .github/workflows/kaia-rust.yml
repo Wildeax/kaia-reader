@@ -1,0 +1,89 @@
+name: kaia-rust
+
+# Gates the libkaia Cargo workspace in rust/. Runs for pull requests from forks
+# with a read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths: ['rust/**']
+  pull_request:
+    paths: ['rust/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  test:
+    name: fmt, clippy and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The channel comes from rust/rust-toolchain.toml, so the toolchain
+      # version is set in one place.
+      - name: Install toolchain
+        run: |
+          set -euo pipefail
+          channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)"
+          test -n "${channel}"
+          rustup toolchain install "${channel}" --profile minimal --component rustfmt --component clippy
+          cd rust
+          rustup show active-toolchain
+          cargo --version
+
+      - name: Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: "rust -> target"
+
+      - name: Format
+        working-directory: rust
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        working-directory: rust
+        run: cargo test --workspace --all-features --locked
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Release binary from GitHub, checked against the SHA-256 of the asset.
+      - name: Install cargo-deny
+        run: |
+          set -euo pipefail
+          version=0.20.2
+          archive="${RUNNER_TEMP}/cargo-deny.tar.gz"
+          curl -fsSL -o "${archive}" \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${version}/cargo-deny-${version}-x86_64-unknown-linux-musl.tar.gz"
+          echo "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f  ${archive}" | sha256sum -c -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/cargo-deny-${version}-x86_64-unknown-linux-musl" >> "${GITHUB_PATH}"
+
+      - name: Check licenses and advisories
+        working-directory: rust
+        run: |
+          cargo-deny --version
+          cargo deny check licenses advisories

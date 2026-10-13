@@ -1,0 +1,78 @@
+name: kaia-shell
+
+# Lints the Kaia shell scripts and runs the device profile collector test on a
+# desktop. The test uses fake Kobo roots and needs no device. Pull requests
+# from forks get a read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/kaia/**'
+      - 'platform/kobo/kaia/**'
+      - '.shellcheckrc'
+      - '.github/workflows/kaia-shell.yml'
+  pull_request:
+    paths:
+      - 'tools/kaia/**'
+      - 'platform/kobo/kaia/**'
+      - '.shellcheckrc'
+      - '.github/workflows/kaia-shell.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Release archive from GitHub, checked against the SHA-256 of the asset.
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          version=0.11.0
+          archive="${RUNNER_TEMP}/shellcheck.tar.xz"
+          curl -fsSL -o "${archive}" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.linux.x86_64.tar.xz"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  ${archive}" | sha256sum -c -
+          tar -xJf "${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/shellcheck-v${version}" >> "${GITHUB_PATH}"
+
+      # Severity is warning: style notes from .shellcheckrc do not fail the job.
+      - name: Lint
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+          files=(tools/kaia/**/*.sh platform/kobo/kaia/*.sh)
+          test "${#files[@]}" -gt 0
+          shellcheck --version
+          shellcheck --severity=warning "${files[@]}"
+
+  device-test:
+    name: collect-profile test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # /bin/sh is dash on Ubuntu, so the test runs under the POSIX shell that
+      # the device scripts target.
+      - name: Run test-collect-profile
+        run: sh tools/kaia/device/test-collect-profile.sh
