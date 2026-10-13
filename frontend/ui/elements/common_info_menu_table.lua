@@ -6,6 +6,7 @@ local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local Notification = require("ui/widget/notification")
 local UIManager = require("ui/uimanager")
+local KaiaIdentity = require("kaia/identity")
 local Version = require("version")
 local dbg = require("dbg")
 local lfs = require("libs/libkoreader-lfs")
@@ -21,7 +22,8 @@ common_info.more_tools = {
 }
 
 -- main tab
-if Device:hasOTAUpdates() then
+-- Kaia: no OTA menu until Kaia has its own update channel (KR-001).
+if Device:hasOTAUpdates() and KaiaIdentity.update_channel then
     local OTAManager = require("ui/otamanager")
     common_info.ota_update = OTAManager:getOTAMenuTable()
 end
@@ -55,8 +57,8 @@ common_info.report_bug = {
     keep_menu_open = true,
     callback = function(touchmenu_instance)
         local log_path = string.format("%s/%s", DataStorage:getDataDir(), "crash.log")
-        local common_msg = T(_("Please report bugs to \nhttps://github.com/koreader/koreader/issues\n\nVersion:\n%1\n\nDetected device:\n%2"),
-            Version:getCurrentRevision(), Device:info())
+        local common_msg = T(_("Please report bugs to \n%1\n\nVersion:\n%2\n\nDetected device:\n%3"),
+            KaiaIdentity.issues_url, KaiaIdentity:versionString(Version:getCurrentRevision()), Device:info())
         local log_msg = T(_("Verbose logs will make our investigations easier. If possible, try to reproduce the issue while it's enabled, and attach %1 to your bug report."), log_path)
 
         if Device:isAndroid() then
@@ -129,7 +131,7 @@ common_info.about = {
     keep_menu_open = true,
     callback = function()
         UIManager:show(InfoMessage:new{
-            text = T(_("KOReader %1\n\nA document viewer for E Ink devices.\n\nLicensed under Affero GPL v3. All dependencies are free software.\n\nhttp://koreader.rocks"), BD.ltr(Version:getCurrentRevision())),
+            text = T(_("%1\n\nAn offline-first reader for E Ink devices, based on KOReader.\n\nLicensed under Affero GPL v3. All dependencies are free software.\n\nSource: %2\nKOReader: http://koreader.rocks"), BD.ltr(KaiaIdentity:versionString(Version:getCurrentRevision())), KaiaIdentity.source_url),
             icon = "koreader",
         })
     end

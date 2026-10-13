@@ -45,7 +45,7 @@ local Screen = Device.screen
 local T = ffiUtil.template
 
 local FileManager = InputContainer:extend{
-    title = _("KOReader"),
+    title = require("kaia/identity").app_name,
     active_widgets = nil, -- array
     root_path = lfs.currentdir(),
 
