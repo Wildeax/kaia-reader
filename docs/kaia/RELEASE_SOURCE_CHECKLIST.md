@@ -38,7 +38,7 @@ Where a step runs a command, paste the output into the release record.
 ## 6. SBOM
 
 - [ ] Generate an SBOM (SPDX or CycloneDX) covering the native dependencies, submodules, fonts, icons and Rust crates. Record the tool and its version.
-- [ ] Each SBOM component lists name, version, source URL or commit, hash and license as recorded in `licenses.json`. A component with `unknown, needs review` is not a finished entry.
+- [ ] Each SBOM component lists name, version, source URL or commit, hash and license. For native dependencies, submodules and fonts, take these from `licenses.json`. For a Rust crate, take the name, version and declared license from the `Rust crates` section of `docs/kaia/inventory/LICENSES.md`, which `tools/kaia/inventory/rust_licenses.py` writes, and take the source and SHA-256 from `rust/Cargo.lock`. A component with `unknown, needs review` in `licenses.json` is not a finished entry.
 
 ## 7. Checksums and signing
 

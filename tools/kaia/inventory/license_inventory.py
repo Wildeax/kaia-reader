@@ -6,7 +6,12 @@ Usage, from the repository root:
     python3 -I tools/kaia/inventory/license_inventory.py --root . --out docs/kaia/inventory
 
 The script reads files in the tree and runs `git submodule status`. It writes
-licenses.json and LICENSES.md into the output directory.
+licenses.json and LICENSES.md into the output directory. In LICENSES.md it
+renders the sections it owns and copies every other "## " section from the
+existing file, in place. The "Rust crates" section from rust_licenses.py and the
+hand-written community plugin fixtures section survive a rerun this way. A
+heading this script stops rendering stays in the file as a copied section, so
+delete it by hand.
 
 Directories named build, .git and __pycache__ are skipped, and so is rust/target.
 A build that runs in parallel writes only into build directories, so it cannot
@@ -1185,6 +1190,47 @@ def dump_json(obj):
     return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+# ---------------------------------------------------------------- keeping other sections
+
+def split_sections(text):
+    """Split markdown into (heading, lines) pairs, one per "## " line.
+
+    The first pair has heading None and holds the lines before the first section.
+    Joining the lines of every pair with a newline gives back the text.
+    """
+    parts = [(None, [])]
+    for line in text.split("\n"):
+        if line.startswith("## "):
+            parts.append((line, []))
+        parts[-1][1].append(line)
+    return parts
+
+
+def keep_other_sections(old_text, new_text):
+    """Return new_text with the sections this script does not render copied from old_text.
+
+    The preamble is always rendered. A heading that render_markdown emits belongs to
+    this script, so its old copy is dropped. Every other "## " section of old_text is
+    copied unchanged, right after the rendered section that came before it in old_text.
+    A copied section with no rendered section before it goes right after the preamble.
+    """
+    new_parts = split_sections(new_text)
+    rendered = {heading for heading, _ in new_parts[1:]}
+    copied = {}
+    anchor = None
+    for heading, lines in split_sections(old_text)[1:]:
+        if heading in rendered:
+            anchor = heading
+        else:
+            copied.setdefault(anchor, []).extend(lines)
+    out = list(new_parts[0][1])
+    out += copied.pop(None, [])
+    for heading, lines in new_parts[1:]:
+        out += lines
+        out += copied.pop(heading, [])
+    return "\n".join(out)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--root", default=".", help="repository root (default: current directory)")
@@ -1199,10 +1245,15 @@ def main(argv):
     os.makedirs(out_dir, exist_ok=True)
 
     inv = build_inventory(root)
+    md_path = os.path.join(out_dir, "LICENSES.md")
+    old_md = ""
+    if os.path.isfile(md_path):
+        with open(md_path, encoding="utf-8") as fh:
+            old_md = fh.read()
     with open(os.path.join(out_dir, "licenses.json"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(dump_json(inv))
-    with open(os.path.join(out_dir, "LICENSES.md"), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(render_markdown(inv) + "\n")
+    with open(md_path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(keep_other_sections(old_md, render_markdown(inv) + "\n"))
 
     s = inv["summary"]
     print(f"thirdparty entries: {s['thirdparty_entries']} (download: {s['thirdparty_with_download']}, "
