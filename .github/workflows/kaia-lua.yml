@@ -80,6 +80,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Full history and tags: version_spec needs `git describe` to find v2026.07.1.
+          fetch-depth: 0
+          fetch-tags: true
 
       # Shallow submodule fetch, the same call upstream CI makes. The CI
       # variable is set on GitHub Actions, so the Makefile uses depth 1.
