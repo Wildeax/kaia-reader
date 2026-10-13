@@ -210,7 +210,9 @@ function PluginLoader:_discover()
                 local plugin_name = entry:sub(1, -10)
                 local disabled = false
                 if (plugins_disabled and plugins_disabled[plugin_name]) or
-                        (G_reader_settings:isTrue("plugins_disable_external") and not BUILTIN_PLUGINS[plugin_name]) then
+                        (G_reader_settings:isTrue("plugins_disable_external") and not BUILTIN_PLUGINS[plugin_name]) or
+                        -- Kaia: safe mode loads bundled plugins only.
+                        require("kaia/safemode"):skipsPlugin(plugin_name, BUILTIN_PLUGINS) then
                     mainfile = metafile
                     disabled = true
                 end

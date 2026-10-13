@@ -21,6 +21,10 @@ io.write([[
 -- Set up Lua and ffi search paths
 require("setupkoenv")
 
+-- Kaia: count this startup and decide on safe mode before any user patch runs.
+local KaiaSafeMode = require("kaia/safemode")
+KaiaSafeMode:init(require("datastorage"):getDataDir())
+
 -- Apply startup user patches and execute startup user scripts
 local userpatch = require("userpatch")
 userpatch.applyPatches(userpatch.early_once)
@@ -240,6 +244,9 @@ if not Device:isStartupScriptUpToDate() then
     UIManager:runOnce()
 end
 
+-- Kaia: reset the failed-start counter once running, and announce safe mode.
+KaiaSafeMode:afterStartup()
+
 -- Start app
 if exit_code then -- luacheck: ignore
     -- We're quitting to finalize an update.
@@ -310,6 +317,8 @@ end
 
 -- Exit
 local function exitReader()
+    -- Kaia: a clean exit is a successful run.
+    KaiaSafeMode:markStable()
     -- Shutdown hardware abstraction (it'll also flush G_reader_settings to disk)
     Device:exit()
 

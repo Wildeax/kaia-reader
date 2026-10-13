@@ -109,6 +109,8 @@ end
 ---- @string priority ... one of the defined priorities in the userpatch hashtable
 function userpatch.applyPatches(priority)
     if patches_disabled then return end
+    -- Kaia: safe mode skips every user patch.
+    if require("kaia/safemode").active then return end
     local update_once_marker = package_dir .. "/update_once.marker"
     local update_once_pending = lfs.attributes(update_once_marker, "mode") == "file"
 
