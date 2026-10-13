@@ -157,8 +157,8 @@ pub struct OpenOptions {
     pub viewport: Size,
     /// The layout for a book with no saved state and no sidecar.
     pub default_layout: TextLayout,
-    /// Where to look for KOReader sidecars, in order. The first one that
-    /// parses is imported.
+    /// Where to look for KOReader sidecars, in priority order. The newest
+    /// valid file is imported.
     pub sidecars: Vec<SidecarLocation>,
     /// Bound of the rendered page cache, in bytes of pixel data.
     pub cache_bytes: usize,
@@ -168,15 +168,21 @@ pub struct OpenOptions {
 
 impl OpenOptions {
     /// Options with the defaults: automatic engine choice, a 1264 x 1680 viewport,
-    /// KOReader's default text layout, a sidecar next to the book, a 32 MiB
-    /// page cache and Gray8 pages.
+    /// KOReader's default text layout and sidecar locations, a 32 MiB page
+    /// cache and Gray8 pages.
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
+        let data_dir = data_dir.into();
         Self {
-            data_dir: data_dir.into(),
+            data_dir: data_dir.clone(),
             engine: Engine::Auto,
             viewport: Size { w: 1264, h: 1680 },
             default_layout: TextLayout::default(),
-            sidecars: vec![SidecarLocation::BesideBook],
+            sidecars: vec![
+                SidecarLocation::BesideBook,
+                SidecarLocation::DocSettingsDir(data_dir.join("docsettings")),
+                SidecarLocation::HashDocSettingsDir(data_dir.join("hashdocsettings")),
+                SidecarLocation::HistoryDir(data_dir.join("history")),
+            ],
             cache_bytes: DEFAULT_CACHE_BYTES,
             pixel_format: PixelFormat::Gray8,
         }
@@ -203,7 +209,7 @@ pub struct PageInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Selection {
     pub page: u32,
-    /// The selected text. Line breaks become spaces.
+    /// The selected text, with line breaks retained.
     pub text: String,
     /// The start of the selection, in the form that annotations store.
     pub pos0: Pos,
@@ -302,7 +308,7 @@ pub struct BookSession {
 impl BookSession {
     /// Opens a book. The document is loaded on the engine thread. Kaia's
     /// state is read from `<data_dir>/kaia/books/<partial MD5>.json`. When
-    /// that file is missing, the first KOReader sidecar in
+    /// that file is missing, the newest valid KOReader sidecar in
     /// `opts.sidecars` is imported. KOReader's files are read and never written.
     /// A saved layout that the engine rejects gives way to the default layout.
     ///
@@ -933,15 +939,21 @@ impl BookSession {
             drawer: Some(drawer.as_str().to_string()),
             color: Some(color.to_string()),
             text: Some(selection.text.clone()),
+            text_edited: None,
             note: clean_note(note),
+            note_format: None,
             chapter: self.chapter_title(selection.page),
             pageno: Some(selection.page + 1),
+            pageref: None,
+            pboxes: None,
+            ext: None,
             page: page_loc,
             pos0: Some(selection.pos0.clone()),
             pos1: Some(selection.pos1.clone()),
             orphaned: false,
         };
         self.state.annotations.push(annotation);
+        self.sort_annotations()?;
         self.dirty = true;
         self.save()?;
         Ok(id)
@@ -992,21 +1004,16 @@ impl BookSession {
     /// `chapter` are computed for the current layout.
     pub fn annotations(&mut self) -> Result<Vec<Annotation>> {
         self.ensure_idle()?;
-        self.ensure_order_keys()?;
+        self.sort_annotations()?;
         let mut items = self.state.annotations.clone();
-        items.sort_by(|a, b| {
-            let ka = self.order.keys.get(&a.id);
-            let kb = self.order.keys.get(&b.id);
-            match (ka, kb) {
-                (Some(x), Some(y)) => cmp_keys(x, y).then(a.id.cmp(&b.id)),
-                _ => a.id.cmp(&b.id),
-            }
-        });
         for a in items.iter_mut() {
             if let Some(k) = self.order.keys.get(&a.id).copied() {
                 if k.page != u32::MAX {
                     a.pageno = Some(k.page + 1);
                     a.chapter = self.chapter_title(k.page);
+                    if a.is_bookmark() {
+                        a.text = a.chapter.as_ref().map(|name| format!("in {name}"));
+                    }
                 }
             }
         }
@@ -1134,15 +1141,21 @@ impl BookSession {
             datetime_updated: None,
             drawer: None,
             color: None,
-            text: None,
+            text: chapter.as_ref().map(|name| format!("in {name}")),
+            text_edited: None,
             note: None,
+            note_format: None,
             chapter,
             pageno: Some(page + 1),
+            pageref: None,
+            pboxes: None,
+            ext: None,
             page: location,
             pos0: None,
             pos1: None,
             orphaned: false,
         });
+        self.sort_annotations()?;
         self.dirty = true;
         self.save()?;
         Ok(true)
@@ -1278,6 +1291,9 @@ impl BookSession {
     pub fn save(&mut self) -> Result<()> {
         if self.read_only {
             return Err(BookError::ReadOnly(format!("{:?}", self.state_issue)));
+        }
+        if !self.layout_pending {
+            self.sort_annotations()?;
         }
         write_state(&self.state_path, &self.state).map_err(|source| BookError::Io {
             path: self.state_path.clone(),
@@ -1431,13 +1447,26 @@ impl BookSession {
     }
 
     fn chapter_title(&self, page: u32) -> Option<String> {
-        self.facts
-            .toc
-            .iter()
-            .filter_map(|t| t.page.filter(|p| *p <= page).map(|p| (p, t)))
-            .max_by_key(|(p, _)| *p)
-            .map(|(_, t)| t.title.trim().to_string())
-            .filter(|s| !s.is_empty())
+        chapter_title_from_toc(&self.facts.toc, page)
+    }
+
+    fn sort_annotations(&mut self) -> Result<()> {
+        self.ensure_order_keys()?;
+        for a in &mut self.state.annotations {
+            if let Some(k) = self.order.keys.get(&a.id) {
+                if k.page != u32::MAX {
+                    a.pageno = Some(k.page + 1);
+                    a.chapter = chapter_title_from_toc(&self.facts.toc, k.page);
+                    if a.is_bookmark() {
+                        a.text = a.chapter.as_ref().map(|name| format!("in {name}"));
+                    }
+                }
+            }
+        }
+        self.state
+            .annotations
+            .sort_by(|a, b| annotation_order(a, b, &self.order.keys));
+        Ok(())
     }
 
     fn pages_left(&self, page: u32) -> Option<u32> {
@@ -1526,6 +1555,14 @@ impl BookSession {
             screen_rects,
         })
     }
+}
+
+fn chapter_title_from_toc(toc: &[TocEntry], page: u32) -> Option<String> {
+    toc.iter()
+        .find(|t| t.page == Some(page))
+        .or_else(|| toc.iter().rev().find(|t| t.page.is_some_and(|p| p < page)))
+        .map(|t| t.title.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 impl Drop for BookSession {
@@ -1717,4 +1754,98 @@ fn cmp_keys(a: &OrderKey, b: &OrderKey) -> std::cmp::Ordering {
         .cmp(&b.page)
         .then(a.y.total_cmp(&b.y))
         .then(a.x.total_cmp(&b.x))
+}
+
+fn annotation_order(
+    a: &Annotation,
+    b: &Annotation,
+    keys: &HashMap<AnnotationId, OrderKey>,
+) -> std::cmp::Ordering {
+    let ka = keys.get(&a.id);
+    let kb = keys.get(&b.id);
+    let page = match (ka, kb) {
+        (Some(x), Some(y)) => x.page.cmp(&y.page),
+        _ => std::cmp::Ordering::Equal,
+    };
+    page.then_with(|| b.is_bookmark().cmp(&a.is_bookmark()))
+        .then_with(|| match (&a.page, &b.page) {
+            (Location::Engine(x), Location::Engine(y)) => {
+                cmp_xp(x, y).then_with(|| match (&a.pos1, &b.pos1) {
+                    (Some(Pos::Xpointer(x)), Some(Pos::Xpointer(y))) => cmp_xp(x, y),
+                    _ => std::cmp::Ordering::Equal,
+                })
+            }
+            _ => fixed_annotation_order(a, b).then_with(|| match (ka, kb) {
+                (Some(x), Some(y)) => cmp_keys(x, y),
+                _ => std::cmp::Ordering::Equal,
+            }),
+        })
+        .then(a.id.cmp(&b.id))
+}
+
+fn fixed_annotation_order(a: &Annotation, b: &Annotation) -> std::cmp::Ordering {
+    let range = |a: &Annotation| match (&a.pos0, &a.pos1) {
+        (
+            Some(Pos::Point {
+                page: p0,
+                x: x0,
+                y: y0,
+            }),
+            Some(Pos::Point {
+                page: p1,
+                x: x1,
+                y: y1,
+            }),
+        ) => {
+            let first = (*p0, *y0, *x0);
+            let last = (*p1, *y1, *x1);
+            Some(if cmp_point(first, last).is_le() {
+                (first, last)
+            } else {
+                (last, first)
+            })
+        }
+        _ => None,
+    };
+    match (range(a), range(b)) {
+        (Some((a0, a1)), Some((b0, b1))) => cmp_point(a0, b0).then_with(|| cmp_point(a1, b1)),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+fn cmp_point(a: (u32, f32, f32), b: (u32, f32, f32)) -> std::cmp::Ordering {
+    a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.total_cmp(&b.2))
+}
+
+fn cmp_xp(a: &str, b: &str) -> std::cmp::Ordering {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
+            let start_i = i;
+            let start_j = j;
+            while i < a.len() && a[i].is_ascii_digit() {
+                i += 1;
+            }
+            while j < b.len() && b[j].is_ascii_digit() {
+                j += 1;
+            }
+            let left = a[start_i..i].iter().fold(0u64, |n, d| {
+                n.saturating_mul(10).saturating_add((d - b'0') as u64)
+            });
+            let right = b[start_j..j].iter().fold(0u64, |n, d| {
+                n.saturating_mul(10).saturating_add((d - b'0') as u64)
+            });
+            if left != right {
+                return left.cmp(&right);
+            }
+        } else {
+            if a[i] != b[j] {
+                return a[i].cmp(&b[j]);
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    a.len().cmp(&b.len())
 }

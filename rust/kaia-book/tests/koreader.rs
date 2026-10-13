@@ -47,6 +47,39 @@ fn partial_md5_matches_koreader_and_the_library_crate() {
 }
 
 #[test]
+fn koreader_end_exclusive_xpointer_extracts_librarian() {
+    let Some(lib) = common::library_dir() else {
+        eprintln!("skipped: ~/kaia-test-library is missing");
+        return;
+    };
+    let source = lib.join("2701.epub");
+    if !source.exists() {
+        eprintln!("skipped: 2701.epub is missing");
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let book = common::copy_into(&source, work.path());
+    let sidecar = work.path().join("2701.sdr");
+    fs::create_dir(&sidecar).unwrap();
+    fs::write(
+        sidecar.join("metadata.epub.lua"),
+        r#"return { ["annotations"] = {
+        [1] = { ["datetime"] = "2026-10-12 07:45:00", ["drawer"] = "lighten",
+            ["page"] = "/body/DocFragment[2]/body/div[3]/h2[2]/text().34",
+            ["pos0"] = "/body/DocFragment[2]/body/div[3]/h2[2]/text().34",
+            ["pos1"] = "/body/DocFragment[2]/body/div[3]/h2[2]/text().43",
+            ["text"] = "Librarian" }
+    } }"#,
+    )
+    .unwrap();
+    common::init_engine();
+    let mut reader = BookSession::open(&book, OpenOptions::new(data.path())).unwrap();
+    let annotation = reader.annotations().unwrap().remove(0);
+    assert_eq!(reader.annotation_text(annotation.id).unwrap(), "Librarian");
+}
+
+#[test]
 fn imports_a_koreader_sidecar_from_a_copy_and_leaves_the_original_alone() {
     let Some(lib) = common::library_dir() else {
         eprintln!("skipped: ~/kaia-test-library is missing");

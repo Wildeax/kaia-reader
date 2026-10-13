@@ -100,17 +100,35 @@ pub fn word_span(text: &PageText, i: usize) -> Option<(usize, usize)> {
 /// The text of the inclusive character range `first..=last`. A line break
 /// becomes one space. The result has no leading or trailing spaces.
 pub fn span_text(text: &PageText, first: usize, last: usize) -> String {
+    span_text_with_lines(text, first, last, ' ')
+}
+
+/// Text of a selection with the line breaks KOReader keeps in highlights.
+pub fn span_selected_text(text: &PageText, first: usize, last: usize) -> String {
+    span_text_with_lines(text, first, last, '\n')
+}
+
+fn span_text_with_lines(text: &PageText, first: usize, last: usize, line_separator: char) -> String {
     let mut out = String::new();
     if first > last || last >= text.chars.len() {
         return out;
     }
     for i in first..=last {
         if i > first && text.lines.iter().any(|l| l.first_char == i) {
-            out.push(' ');
+            out.push(line_separator);
         }
         out.push(text.chars[i].ch);
     }
-    out.trim().to_string()
+    if line_separator == '\n' {
+        out.lines()
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string()
+    } else {
+        out.trim().to_string()
+    }
 }
 
 /// One box per line for the inclusive character range `first..=last`. Each box
@@ -286,6 +304,7 @@ mod tests {
         assert_eq!(rects[0], RectF::new(60.0, 0.0, 80.0, 12.0));
         assert_eq!(rects[1], RectF::new(0.0, 14.0, 30.0, 26.0));
         assert_eq!(span_text(&t, 6, 10), "re fri");
+        assert_eq!(span_selected_text(&t, 6, 10), "re\nfri");
     }
 
     #[test]

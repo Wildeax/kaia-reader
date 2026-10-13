@@ -39,7 +39,7 @@ pub struct DocumentId {
 /// Time spent on one page during one visit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReadingTime {
-    /// When the visit to the page ended, `YYYY-MM-DD HH:MM:SS` (UTC).
+    /// When the visit to the page ended, `YYYY-MM-DD HH:MM:SS` local time.
     pub datetime: String,
     /// The page, 1-based.
     pub page: u32,
@@ -418,9 +418,14 @@ mod tests {
             drawer: Some("lighten".into()),
             color: Some("yellow".into()),
             text: Some("Learn from me".into()),
+            text_edited: None,
             note: Some("Read again".into()),
+            note_format: None,
             chapter: Some("Chapter 4".into()),
             pageno: Some(12),
+            pageref: None,
+            pboxes: None,
+            ext: None,
             page: Location::Engine("/body/DocFragment[5]/body/div/p[12].0".into()),
             pos0: Some(Pos::Xpointer("/body/DocFragment[5]/body/div/p[12].0".into())),
             pos1: Some(Pos::Xpointer("/body/DocFragment[5]/body/div/p[12].40".into())),

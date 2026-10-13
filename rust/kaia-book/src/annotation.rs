@@ -63,13 +63,19 @@ pub struct Annotation {
     pub color: Option<String>,
     /// The highlighted text, as selected.
     pub text: Option<String>,
+    /// Whether the user edited the selected text.
+    pub text_edited: Option<bool>,
     /// The user's note.
     pub note: Option<String>,
+    pub note_format: Option<String>,
     /// Chapter title at the position, when the book has a table of contents.
     pub chapter: Option<String>,
     /// Page number, 1-based, as of the last computation. Not stored in
     /// positions, so it can differ after a relayout until the next listing.
     pub pageno: Option<u32>,
+    pub pageref: Option<Value>,
+    pub pboxes: Option<Value>,
+    pub ext: Option<Value>,
     /// The page or xpointer of the annotation. For a highlight, the start.
     pub page: Location,
     /// Start of a highlight.
@@ -102,7 +108,9 @@ impl Annotation {
         put("drawer", opt_str(self.drawer.as_deref()));
         put("color", opt_str(self.color.as_deref()));
         put("text", opt_str(self.text.as_deref()));
+        put("text_edited", self.text_edited.map_or(Value::Nil, Value::Bool));
         put("note", opt_str(self.note.as_deref()));
+        put("note_format", opt_str(self.note_format.as_deref()));
         put("chapter", opt_str(self.chapter.as_deref()));
         put(
             "pageno",
@@ -117,6 +125,9 @@ impl Annotation {
         );
         put("pos0", self.pos0.as_ref().map_or(Value::Nil, Pos::to_value));
         put("pos1", self.pos1.as_ref().map_or(Value::Nil, Pos::to_value));
+        put("pageref", self.pageref.clone().unwrap_or(Value::Nil));
+        put("pboxes", self.pboxes.clone().unwrap_or(Value::Nil));
+        put("ext", self.ext.clone().unwrap_or(Value::Nil));
         if self.orphaned {
             put("orphaned", Value::Bool(true));
         }
@@ -151,9 +162,14 @@ impl Annotation {
             drawer: text_of("drawer"),
             color: text_of("color"),
             text: text_of("text"),
+            text_edited: v.get("text_edited").as_bool(),
             note: text_of("note"),
+            note_format: text_of("note_format"),
             chapter: text_of("chapter"),
             pageno: v.get("pageno").as_i64().filter(|n| *n > 0).map(|n| n as u32),
+            pageref: (!v.get("pageref").is_nil()).then(|| v.get("pageref").clone()),
+            pboxes: (!v.get("pboxes").is_nil()).then(|| v.get("pboxes").clone()),
+            ext: (!v.get("ext").is_nil()).then(|| v.get("ext").clone()),
             page,
             pos0,
             pos1,
@@ -186,9 +202,14 @@ mod tests {
             drawer: Some("lighten".into()),
             color: Some("yellow".into()),
             text: Some("Call me Ishmael.".into()),
+            text_edited: None,
             note: None,
+            note_format: None,
             chapter: Some("Loomings".into()),
             pageno: Some(3),
+            pageref: None,
+            pboxes: None,
+            ext: None,
             page: Location::Engine("/body/DocFragment[2]/body/div/p[2].0".into()),
             pos0: Some(Pos::Xpointer("/body/DocFragment[2]/body/div/p[2].0".into())),
             pos1: Some(Pos::Xpointer("/body/DocFragment[2]/body/div/p[2].40".into())),
@@ -198,7 +219,12 @@ mod tests {
 
     #[test]
     fn value_round_trip_keeps_koreader_fields() {
-        let a = sample();
+        let mut a = sample();
+        a.text_edited = Some(true);
+        a.note_format = Some("md".into());
+        a.pageref = Some(Value::from("12"));
+        a.pboxes = Some(Value::array([Value::from(4i64)]));
+        a.ext = Some(Value::Bool(true));
         let v = a.to_value();
         assert_eq!(v.get("drawer").as_str(), Some("lighten"));
         assert_eq!(v.get("text").as_str(), Some("Call me Ishmael."));
@@ -207,6 +233,11 @@ mod tests {
         assert_eq!(back.page, a.page);
         assert_eq!(back.pos1, a.pos1);
         assert_eq!(back.chapter, a.chapter);
+        assert_eq!(back.text_edited, a.text_edited);
+        assert_eq!(back.note_format, a.note_format);
+        assert_eq!(back.pageref, a.pageref);
+        assert_eq!(back.pboxes, a.pboxes);
+        assert_eq!(back.ext, a.ext);
         assert!(!back.is_bookmark());
     }
 

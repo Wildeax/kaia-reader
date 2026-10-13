@@ -2,9 +2,8 @@
 //! a fixed page.
 //!
 //! The point form follows KOReader's PDF positions. KOReader stores the page
-//! as a 1-based number, `x` and `y` in the engine's native units with a zoom
-//! factor, and `rotation`. Kaia writes zoom 1 and rotation 0, so `x` and `y`
-//! are page points. A point maps to the character whose box contains it, or
+//! as a 1-based number, `x` and `y` at zoom 1, plus the displayed zoom
+//! factor and `rotation`. A point maps to the character whose box contains it, or
 //! the nearest one.
 
 use kaia_doc::Location;
@@ -46,8 +45,8 @@ impl Pos {
     }
 
     /// Reads the KOReader form. Returns None for a value that is neither a
-    /// string nor a table with a page. A table's `x` and `y` are divided by its
-    /// zoom, as KOReader does before it uses them.
+    /// string nor a table with a page. KOReader already stores the coordinates
+    /// at zoom 1, regardless of the table's `zoom` value.
     pub(crate) fn from_value(v: &Value) -> Option<Pos> {
         match v {
             Value::Str(xp) if !xp.is_empty() => Some(Pos::Xpointer(xp.clone())),
@@ -56,13 +55,8 @@ impl Pos {
                 if page < 1 {
                     return None;
                 }
-                let zoom = v
-                    .get("zoom")
-                    .as_f64()
-                    .filter(|z| z.is_finite() && *z > 0.0)
-                    .unwrap_or(1.0);
-                let x = v.get("x").as_f64().unwrap_or(0.0) / zoom;
-                let y = v.get("y").as_f64().unwrap_or(0.0) / zoom;
+                let x = v.get("x").as_f64().unwrap_or(0.0);
+                let y = v.get("y").as_f64().unwrap_or(0.0);
                 Some(Pos::Point {
                     page: (page - 1) as u32,
                     x: x as f32,
@@ -91,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn koreader_point_divides_by_zoom() {
+    fn koreader_point_is_already_at_zoom_one() {
         let mut t = Table::new();
         t.insert("page".into(), Value::from(2i64));
         t.insert("x".into(), Value::from(300.0));
@@ -102,8 +96,8 @@ mod tests {
             pos,
             Pos::Point {
                 page: 1,
-                x: 150.0,
-                y: 300.0
+                x: 300.0,
+                y: 600.0
             }
         );
     }

@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use kaia_doc::{Location, Margins};
-use kaia_events::Value;
+use kaia_events::{Key, Table, Value};
 
 use crate::annotation::Annotation;
 use crate::layout::TextLayout;
@@ -24,45 +24,57 @@ pub enum SidecarLocation {
     /// `<root>/<first two hex digits of the MD5>/<MD5>.sdr/`. KOReader's "hash"
     /// setting. `root` is KOReader's hashdocsettings directory.
     HashDocSettingsDir(PathBuf),
+    /// KOReader's legacy history directory.
+    HistoryDir(PathBuf),
 }
 
-/// The sidecar files to try for a book, in order. Each location yields the
-/// main file, then its `.old` backup.
+/// The sidecar files KOReader checks. The reader chooses the newest valid one.
 pub fn sidecar_candidates(book: &Path, partial_md5: &str, locations: &[SidecarLocation]) -> Vec<PathBuf> {
-    let file_name = book
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let (stem, ext) = match file_name.rfind('.') {
-        Some(i) if i > 0 => (file_name[..i].to_string(), file_name[i + 1..].to_string()),
-        _ => (file_name.clone(), "_".to_string()),
-    };
+    let path = book.to_string_lossy();
+    let stem_path = path.rfind('.').map_or(path.as_ref(), |i| &path[..i]);
+    let ext = path
+        .rsplit_once('.')
+        .filter(|(_, ext)| !ext.is_empty())
+        .map_or("_", |(_, ext)| ext);
     let sidecar_name = format!("metadata.{ext}.lua");
-    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut out = Vec::new();
     for loc in locations {
         match loc {
             SidecarLocation::BesideBook => {
-                let parent = book.parent().unwrap_or(Path::new(""));
-                dirs.push(parent.join(format!("{stem}.sdr")));
+                let dir = PathBuf::from(format!("{stem_path}.sdr"));
+                let main = dir.join(&sidecar_name);
+                out.push(main.clone());
+                out.push(with_suffix(&main, ".old"));
+                let name = book.file_name().unwrap_or_default();
+                out.push(dir.join(format!("{}.lua", name.to_string_lossy())));
             }
             SidecarLocation::DocSettingsDir(root) => {
-                let parent = book.parent().unwrap_or(Path::new(""));
-                let rel = parent.strip_prefix("/").unwrap_or(parent);
-                dirs.push(root.join(rel).join(format!("{stem}.sdr")));
+                let rel = stem_path.strip_prefix('/').unwrap_or(stem_path);
+                let main = root.join(format!("{rel}.sdr")).join(&sidecar_name);
+                out.push(main.clone());
+                out.push(with_suffix(&main, ".old"));
             }
             SidecarLocation::HashDocSettingsDir(root) => {
                 if partial_md5.len() >= 2 {
-                    dirs.push(root.join(&partial_md5[..2]).join(format!("{partial_md5}.sdr")));
+                    let main = root
+                        .join(&partial_md5[..2])
+                        .join(format!("{partial_md5}.sdr"))
+                        .join(&sidecar_name);
+                    out.push(main.clone());
+                    out.push(with_suffix(&main, ".old"));
                 }
+            }
+            SidecarLocation::HistoryDir(root) => {
+                let parent = book.parent().unwrap_or(Path::new(""));
+                let encoded = format!("{}/", parent.display()).replace('/', "#");
+                let name = book.file_name().unwrap_or_default().to_string_lossy();
+                let main = root.join(format!("[{encoded}] {name}.lua"));
+                out.push(main.clone());
+                out.push(with_suffix(&main, ".old"));
             }
         }
     }
-    let mut out = Vec::new();
-    for dir in dirs {
-        let main = dir.join(&sidecar_name);
-        out.push(main.clone());
-        out.push(with_suffix(&main, ".old"));
-    }
+    out.push(with_suffix(book, ".kpdfview.lua"));
     out
 }
 
@@ -72,15 +84,49 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Reads the first candidate that parses as a Lua table. Returns the table,
+/// Reads the newest nonempty candidate that parses as a Lua table. Returns the table,
 /// source file and whether UTF-8 conversion replaced any bytes.
 pub(crate) fn read_first(candidates: &[PathBuf]) -> Option<(Value, PathBuf, bool)> {
-    for path in candidates {
+    let mut ordered: Vec<_> = candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(i, path)| {
+            let meta = std::fs::metadata(path).ok()?;
+            if meta.len() == 0 {
+                return None;
+            }
+            Some((i, path, meta.modified().ok()?))
+        })
+        .collect();
+    for pair in candidates.windows(2) {
+        if pair.len() == 2 && pair[1] == with_suffix(&pair[0], ".old") {
+            let primary = ordered
+                .iter()
+                .find(|(_, path, _)| **path == pair[0])
+                .map(|(_, _, time)| *time);
+            let backup = ordered
+                .iter()
+                .find(|(_, path, _)| **path == pair[1])
+                .map(|(_, _, time)| *time);
+            if let (Some(a), Some(b)) = (primary, backup) {
+                if b > a {
+                    if let Some((_, _, time)) = ordered.iter_mut().find(|(_, path, _)| **path == pair[0]) {
+                        *time = b;
+                    }
+                }
+            }
+        }
+    }
+    ordered.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)));
+    for (_, path, _) in ordered {
         let Ok(bytes) = std::fs::read(path) else {
             continue;
         };
         let src = String::from_utf8_lossy(&bytes);
         if let Ok(v @ Value::Table(_)) = kaia_luadata::parse(&src) {
+            if matches!(&v, Value::Table(t) if t.is_empty()) {
+                continue;
+            }
             return Some((v, path.clone(), matches!(src, std::borrow::Cow::Owned(_))));
         }
     }
@@ -129,9 +175,16 @@ pub(crate) struct Imported {
 pub(crate) fn map_sidecar(root: &Value, fixed: bool, source: &Path) -> Imported {
     let mut skipped = 0usize;
     let mut annotations = Vec::new();
-    if let Value::Table(list) = root.get("annotations") {
+    if let Value::Table(list) = annotation_table(root, fixed) {
         for entry in list.values() {
             match Annotation::from_value(entry) {
+                Some(a) if fits(&a, fixed) => annotations.push(a),
+                _ => skipped += 1,
+            }
+        }
+    } else {
+        for entry in legacy_annotations(root, fixed) {
+            match Annotation::from_value(&entry) {
                 Some(a) if fits(&a, fixed) => annotations.push(a),
                 _ => skipped += 1,
             }
@@ -189,6 +242,160 @@ pub(crate) fn map_sidecar(root: &Value, fixed: bool, source: &Path) -> Imported 
         summary_note,
         report,
     }
+}
+
+fn annotation_table(root: &Value, fixed: bool) -> &Value {
+    let primary = root.get("annotations");
+    let first = match primary {
+        Value::Table(t) => t.values().next(),
+        _ => None,
+    };
+    if let Some(first) = first {
+        if matches!(first.get("page"), Value::Number(_)) == fixed {
+            return primary;
+        }
+    }
+    root.get(if fixed {
+        "annotations_paging"
+    } else {
+        "annotations_rolling"
+    })
+}
+
+fn legacy_annotations(root: &Value, fixed: bool) -> Vec<Value> {
+    let suffix = if fixed { "paging" } else { "rolling" };
+    let primary = root.get("bookmarks");
+    let first = match primary {
+        Value::Table(t) => t.values().next(),
+        _ => None,
+    };
+    let compatible = first.is_some_and(|bm| matches!(bm.get("page"), Value::Number(_)) == fixed);
+    let bookmarks = if compatible {
+        primary
+    } else {
+        root.get(format!("bookmarks_{suffix}"))
+    };
+    let highlights = if compatible {
+        root.get("highlight")
+    } else {
+        root.get(format!("highlight_{suffix}"))
+    };
+    let mut out = Vec::new();
+    if let Value::Table(list) = bookmarks {
+        for bm in list.values() {
+            let page = bm.get("page");
+            if page.is_nil() {
+                continue;
+            }
+            let highlighted = bm.get("highlighted").truthy() && !bm.get("highlighted").is_nil();
+            let found = if highlighted {
+                find_legacy_highlight(highlights, bm)
+            } else {
+                None
+            };
+            let mut item = Table::new();
+            for key in ["datetime", "chapter", "pageno", "pageref", "pos0", "pos1"] {
+                copy_key(&mut item, bm, key, key);
+            }
+            item.insert("page".into(), page.clone());
+            if highlighted {
+                item.insert(
+                    "drawer".into(),
+                    found
+                        .and_then(|h| h.get("drawer").as_str())
+                        .unwrap_or("lighten")
+                        .into(),
+                );
+                item.insert(
+                    "color".into(),
+                    found
+                        .and_then(|h| h.get("color").as_str())
+                        .unwrap_or("yellow")
+                        .into(),
+                );
+                copy_key(&mut item, bm, "notes", "text");
+                if let Some(hl) = found {
+                    copy_key(&mut item, hl, "edited", "text_edited");
+                    for key in ["pboxes", "ext"] {
+                        copy_key(&mut item, hl, key, key);
+                    }
+                }
+                copy_key(&mut item, bm, "text", "note");
+            } else {
+                copy_key(&mut item, bm, "text", "text");
+            }
+            out.push(Value::Table(item));
+        }
+    }
+    if root.get("highlights_imported").is_nil() {
+        if let Value::Table(pages) = highlights {
+            for (page, entries) in pages {
+                let Value::Table(entries) = entries else {
+                    continue;
+                };
+                for hl in entries.values() {
+                    if hl.get("pos0").is_nil() {
+                        continue;
+                    }
+                    let already = out
+                        .iter()
+                        .any(|bm| bm.get("pos0") == hl.get("pos0") && bm.get("pos1") == hl.get("pos1"));
+                    if already {
+                        continue;
+                    }
+                    let mut item = Table::new();
+                    let location = if fixed {
+                        match page {
+                            Key::Int(n) => Value::from(*n),
+                            _ => continue,
+                        }
+                    } else {
+                        hl.get("pos0").clone()
+                    };
+                    item.insert("page".into(), location);
+                    for key in ["datetime", "pos0", "pos1", "pboxes", "ext"] {
+                        copy_key(&mut item, hl, key, key);
+                    }
+                    copy_key(&mut item, hl, "text", "text");
+                    copy_key(&mut item, hl, "edited", "text_edited");
+                    item.insert(
+                        "drawer".into(),
+                        hl.get("drawer").as_str().unwrap_or("lighten").into(),
+                    );
+                    item.insert(
+                        "color".into(),
+                        hl.get("color").as_str().unwrap_or("yellow").into(),
+                    );
+                    out.push(Value::Table(item));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn copy_key(target: &mut Table, source: &Value, from: &str, to: &str) {
+    let value = source.get(from);
+    if !value.is_nil() {
+        target.insert(to.into(), value.clone());
+    }
+}
+
+fn find_legacy_highlight<'a>(highlights: &'a Value, bookmark: &Value) -> Option<&'a Value> {
+    let Value::Table(pages) = highlights else {
+        return None;
+    };
+    for entries in pages.values() {
+        let Value::Table(entries) = entries else {
+            continue;
+        };
+        for hl in entries.values() {
+            if hl.get("pos0") == bookmark.get("pos0") && hl.get("pos1") == bookmark.get("pos1") {
+                return Some(hl);
+            }
+        }
+    }
+    None
 }
 
 /// An annotation fits a book when its positions have the book's kind.
@@ -293,14 +500,14 @@ mod tests {
         assert_eq!(c[0], PathBuf::from("/books/84.sdr/metadata.epub.lua"));
         assert_eq!(c[1], PathBuf::from("/books/84.sdr/metadata.epub.lua.old"));
         assert_eq!(
-            c[2],
+            c[3],
             PathBuf::from("/kr/docsettings/books/84.sdr/metadata.epub.lua")
         );
         assert_eq!(
-            c[4],
+            c[5],
             PathBuf::from("/kr/hashdocsettings/37/378df3409d69b6994febc92492dbb19e.sdr/metadata.epub.lua")
         );
-        assert_eq!(c.len(), 6);
+        assert_eq!(c.len(), 8);
     }
 
     #[test]
@@ -372,5 +579,75 @@ mod tests {
             .as_str()
             .unwrap()
             .contains('\u{fffd}'));
+    }
+
+    #[test]
+    fn candidate_paths_match_dotted_folders_and_hidden_names() {
+        let c = sidecar_candidates(
+            Path::new("/books/v1.2/.foo"),
+            "abcd",
+            &[SidecarLocation::BesideBook],
+        );
+        assert_eq!(c[0], PathBuf::from("/books/v1.2/.sdr/metadata.foo.lua"));
+        assert_eq!(c[2], PathBuf::from("/books/v1.2/.sdr/.foo.lua"));
+        let c = sidecar_candidates(
+            Path::new("/books/v1.2/plain"),
+            "abcd",
+            &[SidecarLocation::BesideBook],
+        );
+        assert_eq!(c[0], PathBuf::from("/books/v1.sdr/metadata.2/plain.lua"));
+    }
+
+    #[test]
+    fn newest_nonempty_candidate_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.lua");
+        let newest = dir.path().join("new.lua");
+        std::fs::write(&old, "return { [\"last_page\"] = 2 }").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&newest, "return { [\"last_page\"] = 3 }").unwrap();
+        let (_, source, _) = read_first(&[old.clone(), newest.clone()]).unwrap();
+        assert_eq!(source, newest);
+        std::fs::write(&newest, "return {}").unwrap();
+        let (_, source, _) = read_first(&[old.clone(), newest]).unwrap();
+        assert_eq!(source, old);
+    }
+
+    #[test]
+    fn migrates_old_bookmarks_and_highlights() {
+        let src = r#"return { ["bookmarks"] = {
+            [1] = { ["page"] = 2, ["datetime"] = "2020-01-01 12:00:00", ["highlighted"] = true,
+                ["notes"] = "line one\nline two", ["text"] = "my note",
+                ["pos0"] = { ["page"] = 2, ["x"] = 10, ["y"] = 20 },
+                ["pos1"] = { ["page"] = 2, ["x"] = 50, ["y"] = 20 } }
+        }, ["highlight"] = { [2] = { [1] = {
+            ["pos0"] = { ["page"] = 2, ["x"] = 10, ["y"] = 20 },
+            ["pos1"] = { ["page"] = 2, ["x"] = 50, ["y"] = 20 },
+            ["edited"] = true, ["pboxes"] = { [1] = { ["x"] = 10 } },
+            ["ext"] = { ["page"] = 3 }
+        } } } }"#;
+        let root = kaia_luadata::parse(src).unwrap();
+        let imported = map_sidecar(&root, true, Path::new("/metadata.pdf.lua"));
+        assert_eq!(imported.report.annotations, 1);
+        let a = &imported.annotations[0];
+        assert_eq!(a.text.as_deref(), Some("line one\nline two"));
+        assert_eq!(a.note.as_deref(), Some("my note"));
+        assert_eq!(a.text_edited, Some(true));
+        assert!(a.pboxes.is_some());
+        assert!(a.ext.is_some());
+    }
+
+    #[test]
+    fn imports_compatible_annotation_backup() {
+        let src = r#"return { ["annotations"] = {
+            [1] = { ["page"] = 3, ["datetime"] = "2020-01-01 12:00:00" }
+        }, ["annotations_rolling"] = {
+            [1] = { ["page"] = "/body/DocFragment[2]/body/p[1].0",
+                ["datetime"] = "2020-01-02 12:00:00" }
+        } }"#;
+        let root = kaia_luadata::parse(src).unwrap();
+        let imported = map_sidecar(&root, false, Path::new("/metadata.epub.lua"));
+        assert_eq!(imported.report.annotations, 1);
+        assert_eq!(imported.annotations[0].datetime, "2020-01-02 12:00:00");
     }
 }

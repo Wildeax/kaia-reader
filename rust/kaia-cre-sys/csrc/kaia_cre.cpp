@@ -672,7 +672,7 @@ int kaia_cre_char_boxes(kaia_cre_doc *doc, const char *xp0, const char *xp1, kai
         ldomXPointerEx cur(range.getStart());
         ldomXPointerEx last(range.getEnd());
         const long kMaxSteps = 2000000;
-        for (long steps = 0; cur.compare(last) <= 0 && steps < kMaxSteps; steps++) {
+        for (long steps = 0; cur.compare(last) < 0 && steps < kMaxSteps; steps++) {
             if (cur.isText()) {
                 ldomNode *node = cur.getNode();
                 if (node != text_node) {

@@ -22,7 +22,7 @@ use crate::error::{BookError, Result};
 use crate::layout::TextLayout;
 use crate::pos::Pos;
 use crate::session::SearchResult;
-use crate::text::{nearest_char, page_text_from_boxes, span_rects, span_text, word_span, Flat};
+use crate::text::{nearest_char, page_text_from_boxes, span_rects, span_selected_text, word_span, Flat};
 use crate::view::{PageTransform, ZoomMode};
 
 /// Pages of text kept for selection and links.
@@ -457,7 +457,13 @@ impl Worker {
                     None => Err(DocError::Engine(format!("no text position at character {i}"))),
                 }
             };
-            return Ok((at(first)?, at(last)?));
+            let start = at(first)?;
+            let Pos::Xpointer(end) = at(last)? else {
+                unreachable!();
+            };
+            let end = next_text_offset(&end)
+                .ok_or_else(|| DocError::Engine(format!("xpointer has no text offset: {end}")))?;
+            return Ok((start, Pos::Xpointer(end)));
         }
         let point = |i: usize| {
             let c = center(i);
@@ -501,7 +507,7 @@ impl Worker {
         Ok(Some(RawSelection {
             first,
             last,
-            text: span_text(&text, first, last),
+            text: span_selected_text(&text, first, last),
             pos0,
             pos1,
             page_rects: span_rects(&text, first, last),
@@ -548,10 +554,10 @@ impl Worker {
             let to = (page == p1).then_some(pos1);
             let span = self.range_span(page, from, to)?;
             if !span.is_empty() {
-                parts.push(span_text(&span.text, span.first, span.last));
+                parts.push(span_selected_text(&span.text, span.first, span.last));
             }
         }
-        Ok(parts.join(" "))
+        Ok(parts.join("\n"))
     }
 
     /// Screen rectangles of a highlight on one page.
@@ -579,6 +585,12 @@ impl Worker {
             .map(|r| transform.to_screen(r))
             .collect())
     }
+}
+
+fn next_text_offset(xp: &str) -> Option<String> {
+    let (node, offset) = xp.rsplit_once('.')?;
+    let next = offset.parse::<u32>().ok()?.checked_add(1)?;
+    Some(format!("{node}.{next}"))
 }
 
 /// Starts a search in the background. Results arrive as events, one chunk per page.

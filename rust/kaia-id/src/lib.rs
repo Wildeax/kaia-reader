@@ -69,8 +69,15 @@ fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
 /// sync plugin uses this as the document id when the user picks file name
 /// matching instead of content. Returns None when the path has no file name.
 pub fn filename_md5(path: &Path) -> Option<String> {
-    let name = path.file_name()?.to_string_lossy();
-    let digest = Md5::digest(name.as_bytes());
+    let name = path.file_name()?;
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        name.as_bytes()
+    };
+    #[cfg(not(unix))]
+    let bytes = name.to_str()?.as_bytes();
+    let digest = Md5::digest(bytes);
     Some(digest.iter().map(|b| format!("{b:02x}")).collect())
 }
 
@@ -78,6 +85,20 @@ pub fn filename_md5(path: &Path) -> Option<String> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[cfg(unix)]
+    #[test]
+    fn filename_md5_hashes_non_utf8_bytes() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let name = OsStr::from_bytes(b"name-\xff.epub");
+        let expected: String = Md5::digest(name.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(filename_md5(Path::new(name)), Some(expected));
+    }
 
     #[test]
     fn empty_file_hashes_to_md5_of_nothing() {

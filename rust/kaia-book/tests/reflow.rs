@@ -48,8 +48,8 @@ fn page_turns_percent_and_chapter_info() {
     let info = s.current();
     let page = s.toc()[act].page.expect("page");
     assert_eq!(info.page, page);
-    // "Act I" and its subsection "Prologue" start on the same page. The deepest entry wins.
-    assert_eq!(info.chapter.as_deref(), Some("Prologue"));
+    // KOReader uses the first TOC entry on this page.
+    assert_eq!(info.chapter.as_deref(), Some("Act I"));
     assert!(info.pages_left_in_chapter.is_some());
 }
 
@@ -152,11 +152,21 @@ fn highlights_and_bookmarks_persist_across_reopen() {
         .join(format!("{}.json", kaia_book::partial_md5(&book).unwrap()))
         .exists());
     assert!(state_file.join("paths.json").exists());
+    let saved = kaia_events::Settings::open(
+        &state_file.join(format!("{}.json", kaia_book::partial_md5(&book).unwrap())),
+    );
+    let kaia_events::Value::Table(saved_annotations) = saved.read("annotations") else {
+        panic!("annotations array");
+    };
+    let first = saved_annotations.values().next().expect("first annotation");
+    assert!(first.get("drawer").is_nil(), "bookmark sorts before highlight");
+    assert!(first.get("text").as_str().unwrap_or("").starts_with("in "));
 
     let mut s = common::open(&book, &data);
     assert_eq!(s.current().location, here);
     assert_eq!(s.current().page, 5);
     let all = s.annotations().unwrap();
+    assert!(all[0].is_bookmark());
     let highlight = all.iter().find(|a| !a.is_bookmark()).expect("highlight");
     assert_eq!(highlight.text.as_deref(), Some(text.as_str()));
     assert_eq!(highlight.drawer.as_deref(), Some("lighten"));
