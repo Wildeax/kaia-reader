@@ -606,6 +606,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-cre-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "kaia-display"
 version = "0.1.0"
 dependencies = [
@@ -618,6 +625,7 @@ dependencies = [
 name = "kaia-doc"
 version = "0.1.0"
 dependencies = [
+ "kaia-cre-sys",
  "kaia-gfx",
  "kaia-mupdf-sys",
 ]

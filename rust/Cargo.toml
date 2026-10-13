@@ -13,6 +13,7 @@ members = [
     "kaia-display",
     "kaia-ui",
     "kaia-platform",
+    "kaia-cre-sys",
 ]
 
 [workspace.package]

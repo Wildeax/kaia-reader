@@ -1,0 +1,13 @@
+[package]
+name = "kaia-cre-sys"
+description = "C++ shim and bindings to KOReader's CREngine build."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+links = "kaia_cre"
+
+[dependencies]
+
+[build-dependencies]
+cc = "1.2"
