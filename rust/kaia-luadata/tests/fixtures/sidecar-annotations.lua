@@ -1,0 +1,40 @@
+-- sample sidecar, text replaced with placeholders
+return {
+    ["doc_path"] = "/books/sample.epub",
+    ["annotations"] = {
+        [1] = {
+            ["page"] = "/body/DocFragment[2]/body/div/p[1].0",
+            ["pageno"] = 1,
+            ["pos0"] = "/body/DocFragment[2]/body/div/p[1].0",
+            ["pos1"] = "/body/DocFragment[2]/body/div/p[1].40",
+            ["text"] = "Placeholder text 1.",
+            ["note"] = "Placeholder text 2.",
+            ["color"] = "yellow",
+            ["datetime"] = "2026-10-12 07:45:00",
+            ["chapter"] = "Placeholder chapter",
+            ["drawer"] = "lighten",
+        },
+        [2] = {
+            ["page"] = "/body/DocFragment[7]/body/div/p[4].0",
+            ["pageno"] = 1,
+            ["pos0"] = "/body/DocFragment[7]/body/div/p[4].0",
+            ["pos1"] = "/body/DocFragment[7]/body/div/p[4].40",
+            ["text"] = "Placeholder text 3.",
+            ["color"] = "yellow",
+            ["datetime"] = "2026-10-12 07:50:12",
+            ["chapter"] = "Placeholder chapter",
+            ["drawer"] = "lighten",
+        },
+        [3] = {
+            ["page"] = "/body/DocFragment[9]/body/div/p[2].0",
+            ["pageno"] = 1,
+            ["pos0"] = "/body/DocFragment[9]/body/div/p[2].0",
+            ["pos1"] = "/body/DocFragment[9]/body/div/p[2].40",
+            ["text"] = "Placeholder text 4.",
+            ["color"] = "yellow",
+            ["datetime"] = "2026-10-10 21:03:44",
+            ["chapter"] = "Placeholder chapter",
+            ["drawer"] = "lighten",
+        },
+    },
+}

@@ -54,7 +54,8 @@ impl Key {
         if n.is_nan() {
             return None;
         }
-        if n.fract() == 0.0 && n >= i64::MIN as f64 && n <= i64::MAX as f64 {
+        // 2^63 is not representable as i64, so the upper bound is strict.
+        if n.fract() == 0.0 && n >= i64::MIN as f64 && n < 9_223_372_036_854_775_808.0 {
             Some(Key::Int(n as i64))
         } else {
             Some(Key::Num(OrderedF64(n)))
@@ -224,6 +225,7 @@ mod tests {
     #[test]
     fn integral_numbers_become_int_keys() {
         assert_eq!(Key::num(3.0), Some(Key::Int(3)));
+        assert!(matches!(Key::num(9_223_372_036_854_775_808.0), Some(Key::Num(_))));
         assert_eq!(Key::num(f64::NAN), None);
     }
 

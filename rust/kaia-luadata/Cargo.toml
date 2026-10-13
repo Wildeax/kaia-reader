@@ -7,3 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+kaia-events = { path = "../kaia-events" }
+
+[dev-dependencies]
+proptest = "1"
