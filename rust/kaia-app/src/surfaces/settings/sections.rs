@@ -108,7 +108,8 @@ fn reading(services: &Services) -> Vec<Entry> {
         Entry::Heading("Dictionary".into()),
         Entry::Row {
             primary: "Dictionary folder".into(),
-            secondary: Some(dictionaries.display().to_string()),
+            // The last two parts only. See `facts::short_path`.
+            secondary: Some(facts::short_path(&dictionaries)),
             value: Some(format!("{found} found")),
             action: None,
         },

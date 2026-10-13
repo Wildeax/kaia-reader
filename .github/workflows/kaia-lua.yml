@@ -159,6 +159,9 @@ jobs:
       # from KAIA_LUAJIT_LIB, the same way rust/kaia-lua/env.sh does on macOS.
       - name: Rust crates that link KOReader's native build
         working-directory: rust
+        env:
+          # The statistics golden labels days in local time.
+          TZ: UTC
         run: |
           set -euo pipefail
           export PATH="${HOME}/.cargo/bin:${PATH}"

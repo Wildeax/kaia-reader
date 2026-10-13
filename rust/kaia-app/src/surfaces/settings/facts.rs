@@ -3,7 +3,7 @@
 //! and the user's OPDS catalogs.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use kaia_events::{Settings, Value};
 use kaia_platform::Paths;
@@ -107,7 +107,7 @@ pub fn find_koreader(paths: &Paths, home: Option<&Path>) -> Option<KoreaderFolde
         })
 }
 
-/// The number of StarDict dictionaries (`*.ifo`) in `<data>/dictionaries`.
+/// The number of StarDict dictionaries (`*.ifo`) in `<data>/dict`.
 pub fn dictionary_count(data_dir: &Path) -> usize {
     fs::read_dir(data_dir.join("dict"))
         .map(|entries| {
@@ -117,6 +117,27 @@ pub fn dictionary_count(data_dir: &Path) -> usize {
                 .count()
         })
         .unwrap_or(0)
+}
+
+/// The last two parts of `path`, such as `.kaia/dict`, with `…/` in front when
+/// the path has more parts. The full path starts with the host's own folders
+/// (the home folder, or the temp folder that a test uses), so a row that
+/// printed it would differ from one host to the next.
+pub fn short_path(path: &Path) -> String {
+    let parts: Vec<String> = path
+        .components()
+        .filter_map(|part| match part {
+            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
+    let kept = parts.len().min(2);
+    let tail = parts[parts.len() - kept..].join("/");
+    if parts.len() > kept {
+        format!("…/{tail}")
+    } else {
+        tail
+    }
 }
 
 /// The library folders: `library.folders`, or the books folder when none is set.
@@ -157,5 +178,16 @@ mod tests {
         assert_eq!(duration(0), "0 min");
         assert_eq!(duration(40 * 60 + 59), "40 min");
         assert_eq!(duration(3900), "1 h 5 min");
+    }
+
+    #[test]
+    fn short_paths_keep_the_last_two_parts() {
+        assert_eq!(short_path(Path::new("/mnt/onboard/.kaia/dict")), "…/.kaia/dict");
+        assert_eq!(
+            short_path(Path::new("/tmp/kaia-app-test-7-x/data/dict")),
+            "…/data/dict"
+        );
+        assert_eq!(short_path(Path::new("/data/dict")), "data/dict");
+        assert_eq!(short_path(Path::new("dict")), "dict");
     }
 }
