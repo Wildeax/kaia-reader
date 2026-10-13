@@ -1,0 +1,5837 @@
+{
+  "baseline": "Upstream KOReader v2026.07.1 (9192014d8). Plugin tree scanned at b5ad80933, which has no plugin changes since 9192014d8",
+  "generator": "tools/kaia/inventory/plugin_inventory.py",
+  "loader": {
+    "builtin_plugins": [
+      "SSH",
+      "archiveviewer",
+      "autodim",
+      "autostandby",
+      "autosuspend",
+      "autoturn",
+      "autowarmth",
+      "batterystat",
+      "bookshortcuts",
+      "calibre",
+      "cloudstorage",
+      "coverbrowser",
+      "coverimage",
+      "docsettingtweak",
+      "exporter",
+      "externalkeyboard",
+      "gestures",
+      "hello",
+      "hotkeys",
+      "httpinspector",
+      "japanese",
+      "keepalive",
+      "kosync",
+      "movetoarchive",
+      "newsdownloader",
+      "opds",
+      "perceptionexpander",
+      "profiles",
+      "qrclipboard",
+      "readtimer",
+      "statistics",
+      "systemstat",
+      "terminal",
+      "texteditor",
+      "timesync",
+      "vocabbuilder",
+      "wallabag"
+    ],
+    "file": "frontend/pluginloader.lua"
+  },
+  "plugin_count": 37,
+  "plugins": [
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isKindle",
+        "isKobo"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 12,
+        "LuaSettings:open": 0,
+        "io.open": 1,
+        "lfs.": 0
+      },
+      "file_writes": {
+        "os.remove": 2
+      },
+      "gating": [
+        {
+          "enclosing_condition": "if not util.pathExists(\"dropbear\") then",
+          "file": "main.lua",
+          "line": 21,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 351,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Connect and transfer files to the device using SSH.",
+        "fullname": "SSH"
+      },
+      "meta_raw": {
+        "description": "_([[Connect and transfer files to the device using SSH.]])",
+        "fullname": "_(\"SSH\")"
+      },
+      "meta_summary": "Connect and transfer files to the device using SSH.",
+      "name": "SSH",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 9
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/SSH.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 7,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "ui/bidi",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "SSH_allow_no_password",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "SSH_autostart",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "SSH_force_kill_clients",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "SSH_key_only_auth",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "SSH_port",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 380,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Enables exploring the content of zip archives.",
+        "fullname": "Archive viewer"
+      },
+      "meta_raw": {
+        "description": "_([[Enables exploring the content of zip archives.]])",
+        "fullname": "_(\"Archive viewer\")"
+      },
+      "meta_summary": "Enables exploring the content of zip archives.",
+      "name": "archiveviewer",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/archiveviewer.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 8,
+        "addToMainMenu": 0,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 0
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "document/documentregistry",
+          "ffi/archiver",
+          "ffi/util",
+          "gettext",
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/textviewer",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/textviewer"
+        ],
+        "widgets": [
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/textviewer"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasEinkScreen",
+        "hasFrontlight"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 7,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not Device:hasFrontlight() then",
+          "file": "main.lua",
+          "line": 10,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 332,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin allows dimming the frontlight after a period of inactivity.",
+        "fullname": "Automatic dimmer"
+      },
+      "meta_raw": {
+        "description": "_(\"This plugin allows dimming the frontlight after a period of inactivity.\")",
+        "fullname": "_(\"Automatic dimmer\")"
+      },
+      "meta_summary": "This plugin allows dimming the frontlight after a period of inactivity.",
+      "name": "autodim",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "Powerd"
+      ],
+      "path": "plugins/autodim.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 3,
+        "UIManager:show": 4,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "device",
+          "ffi/util",
+          "gettext",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget",
+          "ui/widget/trapwidget"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autodim_duration_seconds",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autodim_fraction",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autodim_starttime_minutes",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget",
+          "ui/widget/trapwidget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget",
+          "ui/widget/trapwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isPocketBook"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not Device:isPocketBook() then",
+          "file": "main.lua",
+          "line": 4,
+          "statement": "return { disabled = true }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 187,
+      "lua_settings_files": [
+        {
+          "expr": "DataStorage:getSettingsDir() .. \"/autostandby.lua\"",
+          "file": "main.lua",
+          "value": null
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Put into standby on no input, wake up from standby on UI input",
+        "fullname": "Auto Standby"
+      },
+      "meta_raw": {
+        "description": "_([[Put into standby on no input, wake up from standby on UI input]])",
+        "fullname": "_(\"Auto Standby\")"
+      },
+      "meta_summary": "Put into standby on no input, wake up from standby on UI input",
+      "name": "autostandby",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/autostandby.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 1,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "gettext",
+          "logger",
+          "luasettings",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "forbidden",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasAuxBattery",
+        "hasReliableMxcWaitFor",
+        "isKindle",
+        "isKobo"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 5,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not Device:canSuspend() then",
+          "file": "main.lua",
+          "line": 5,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 720,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Puts the device into standby, suspend or power off after specified periods of inactivity.",
+        "fullname": "Auto power save"
+      },
+      "meta_raw": {
+        "description": "_([[Puts the device into standby, suspend or power off after specified periods of inactivity.]])",
+        "fullname": "_(\"Auto power save\")"
+      },
+      "meta_summary": "Puts the device into standby, suspend or power off after specified periods of inactivity.",
+      "name": "autosuspend",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 1,
+        "modules": [
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/autosuspend.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 5,
+        "UIManager:show": 3,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "device",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "optmath",
+          "pluginshare",
+          "ui/network/manager",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/network/manager",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 9,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 207,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Automatically turns the page after a set period of time. Hold to set the scrolling distance.",
+        "fullname": "Autoturn"
+      },
+      "meta_raw": {
+        "description": "_([[ Automatically turns the page after a set period of time. Hold to set the scrolling distance.]])",
+        "fullname": "_(\"Autoturn\")"
+      },
+      "meta_summary": "Automatically turns the page after a set period of time.",
+      "name": "autoturn",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "PluginShare"
+      ],
+      "path": "plugins/autoturn.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 2,
+        "UIManager:show": 3,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "pluginshare",
+          "ui/event",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autoturn_enabled",
+          "method": "makeFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autoturn_enabled",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autoturn_distance",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autoturn_timeout_seconds",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasNaturalLight"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 44,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua",
+        "suntime.lua"
+      ],
+      "lua_line_count": 1962,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin allows to set the frontlight warmth and night mode automagically. This plugin allows to enable night mode automagically.",
+        "fullname": "Auto warmth and night mode Auto night mode"
+      },
+      "meta_raw": {
+        "description": "require(\"device\"):hasNaturalLight() and _([[This plugin allows to set the frontlight warmth and night mode automagically.]]) or _([[This plugin allows to enable night mode automagically.]])",
+        "fullname": "require(\"device\"):hasNaturalLight() and _(\"Auto warmth and night mode\") or _(\"Auto night mode\")"
+      },
+      "meta_summary": "This plugin allows to set the frontlight warmth and night mode automagically.",
+      "name": "autowarmth",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "Powerd"
+      ],
+      "path": "plugins/autowarmth.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 7,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 7,
+        "UIManager:show": 15,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "device",
+          "device/devicelistener",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "optmath",
+          "ui/event",
+          "ui/font",
+          "ui/uimanager",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/radiobuttonwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget"
+        ],
+        "local": [
+          "suntime"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_control_nightmode",
+          "method": "makeFalse",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_control_warmth",
+          "method": "makeFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_control_nightmode",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_control_warmth",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_hide_nightmode_warning",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_activate",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_altitude",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_easy_mode",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_fl_off_during_day",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 3
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_fl_off_during_day_offset_s",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_hide_nightmode_warning",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_latitude",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_location",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_longitude",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_scheduler_times",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_timezone",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "autowarmth_warmth",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 3
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/font",
+          "ui/uimanager",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/radiobuttonwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget"
+        ],
+        "widgets": [
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/radiobuttonwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [
+        "dassert"
+      ],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 1,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 327,
+      "lua_settings_files": [
+        {
+          "expr": "BatteryStatWidget.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/battery_stats.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Collects and displays battery statistics.",
+        "fullname": "Battery statistics"
+      },
+      "meta_raw": {
+        "description": "_([[Collects and displays battery statistics.]])",
+        "fullname": "_(\"Battery statistics\")"
+      },
+      "meta_summary": "Collects and displays battery statistics.",
+      "name": "batterystat",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/batterystat.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "datetime",
+          "dbg",
+          "device",
+          "dispatcher",
+          "gettext",
+          "luasettings",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 1,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 3
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 223,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/bookshortcuts.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin allows adding a book shortcut to a gesture.",
+        "fullname": "Book shortcuts"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin allows adding a book shortcut to a gesture.]])",
+        "fullname": "_(\"Book shortcuts\")"
+      },
+      "meta_summary": "This plugin allows adding a book shortcut to a gesture.",
+      "name": "bookshortcuts",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/bookshortcuts.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanager",
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "luasettings",
+          "readhistory",
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/pathchooser",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "BookShortcuts.bs_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/pathchooser"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/pathchooser"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasExternalSD",
+        "isAndroid",
+        "isCervantes",
+        "isEmulator",
+        "isKobo"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 4,
+        "DocSettings": 0,
+        "G_reader_settings": 44,
+        "LuaSettings:open": 1,
+        "io.open": 2,
+        "lfs.": 9
+      },
+      "file_writes": {
+        "io.open (write mode)": 1,
+        "lfs.mkdir": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "extensions.lua",
+        "main.lua",
+        "metadata.lua",
+        "search.lua",
+        "wireless.lua"
+      ],
+      "lua_line_count": 2254,
+      "lua_settings_files": [
+        {
+          "expr": "CalibreSearch.cache_libs.path",
+          "file": "main.lua",
+          "value": "require(\"datastorage\"):getDataDir()"
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Integration with calibre. Send documents from calibre library via Wi-Fi and search calibre metadata.",
+        "fullname": "Calibre"
+      },
+      "meta_raw": {
+        "description": "_([[Integration with calibre. Send documents from calibre library via Wi-Fi and search calibre metadata.]])",
+        "fullname": "_(\"Calibre\")"
+      },
+      "meta_summary": "Integration with calibre.",
+      "name": "calibre",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 3,
+        "modules": [
+          "socket",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/calibre.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 7,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 2,
+        "UIManager:show": 15,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanager",
+          "apps/filemanager/filemanagerbookinfo",
+          "apps/reader/readerui",
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/sha2",
+          "ffi/utf8proc",
+          "ffi/util",
+          "ffi/zeromq_h",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "luasettings",
+          "persist",
+          "rapidjson",
+          "socket",
+          "sort",
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/event",
+          "ui/message/streammessagequeue",
+          "ui/network/manager",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "util",
+          "version"
+        ],
+        "local": [
+          "extensions",
+          "metadata",
+          "search",
+          "wireless"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "wireless.lua"
+          ],
+          "key": "calibre_wireless_password",
+          "method": "delSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "calibre_wireless_url",
+          "method": "delSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "calibre_wireless_default_format",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "wireless.lua"
+          ],
+          "key": "calibre_wireless_password",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "calibre_wireless_url",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "wireless.lua"
+          ],
+          "key": "inbox_dir",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "cache",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/event",
+          "ui/message/streammessagequeue",
+          "ui/network/manager",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog"
+        ],
+        "widgets": [
+          "ui/widget/booklist",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 7,
+        "LuaSettings:open": 1,
+        "io.open": 6,
+        "lfs.": 6
+      },
+      "file_writes": {
+        "io.open (write mode)": 3,
+        "os.remove": 3
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "cloudstorage.lua",
+        "main.lua",
+        "providers/dropbox.lua",
+        "providers/ftp.lua",
+        "providers/webdav.lua"
+      ],
+      "lua_line_count": 2519,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/cloudstorage.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Provides access to cloud storage.",
+        "fullname": "Cloud storage+"
+      },
+      "meta_raw": {
+        "description": "_([[Provides access to cloud storage.]])",
+        "fullname": "_(\"Cloud storage+\")"
+      },
+      "meta_summary": "Provides access to cloud storage.",
+      "name": "cloudstorage",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 12,
+        "modules": [
+          "socket",
+          "socket.ftp",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/cloudstorage.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 2,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 51,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "datetime",
+          "dispatcher",
+          "document/documentregistry",
+          "ffi/sha2",
+          "ffi/util",
+          "gettext",
+          "json",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ltn12",
+          "luasettings",
+          "socket",
+          "socket.ftp",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "sort",
+          "ui/bidi",
+          "ui/network/manager",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/buttonselector",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/progressbardialog",
+          "ui/widget/sortwidget",
+          "util"
+        ],
+        "local": [
+          "cloudstorage"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "Cloud.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "cloudstorage.lua"
+          ],
+          "key": "default_server",
+          "method": "delSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "cloudstorage.lua"
+          ],
+          "key": "default_server",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "cloudstorage.lua",
+            "main.lua"
+          ],
+          "key": "download_dir",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 3
+        },
+        {
+          "files": [
+            "cloudstorage.lua",
+            "main.lua"
+          ],
+          "key": "upload_dir",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/network/manager",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/buttonselector",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/progressbardialog",
+          "ui/widget/sortwidget"
+        ],
+        "widgets": [
+          "ui/widget/booklist",
+          "ui/widget/buttondialog",
+          "ui/widget/buttonselector",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/progressbardialog",
+          "ui/widget/sortwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 29,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 1
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 0,
+        "G_reader_settings": 6,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 8
+      },
+      "file_writes": {
+        "os.remove": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "bookinfomanager.lua",
+        "covermenu.lua",
+        "listmenu.lua",
+        "main.lua",
+        "mosaicmenu.lua"
+      ],
+      "lua_line_count": 3974,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Alternative display modes for file browser and history.",
+        "fullname": "Cover browser"
+      },
+      "meta_raw": {
+        "description": "_([[Alternative display modes for file browser and history.]])",
+        "fullname": "_(\"Cover browser\")"
+      },
+      "meta_summary": "Alternative display modes for file browser and history.",
+      "name": "coverbrowser",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "FileChooser"
+      ],
+      "path": "plugins/coverbrowser.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 3,
+        "UIManager:scheduleIn": 6,
+        "UIManager:show": 23,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanager",
+          "apps/filemanager/filemanagerbookinfo",
+          "apps/filemanager/filemanagercollection",
+          "apps/filemanager/filemanagerfilesearcher",
+          "apps/filemanager/filemanagerhistory",
+          "apps/filemanager/filemanagerutil",
+          "apps/reader/readerui",
+          "datastorage",
+          "device",
+          "document/credocument",
+          "document/documentregistry",
+          "ffi/blitbuffer",
+          "ffi/util",
+          "ffi/zstd",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "lua-ljsqlite3/init",
+          "optmath",
+          "readcollection",
+          "ui/bidi",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/renderimage",
+          "ui/size",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/topcontainer",
+          "ui/widget/container/underlinecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/doublespinwidget",
+          "ui/widget/filechooser",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconwidget",
+          "ui/widget/imagewidget",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/menu",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan",
+          "util"
+        ],
+        "local": [
+          "bookinfomanager",
+          "covermenu",
+          "listmenu",
+          "mosaicmenu"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "bookinfomanager.lua",
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 3
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "collection_display_mode",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "filemanager_display_mode",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "listmenu.lua",
+            "main.lua"
+          ],
+          "key": "files_per_page",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "history_display_mode",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "nb_cols_landscape",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "nb_cols_portrait",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "nb_rows_landscape",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "nb_rows_portrait",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "series_mode",
+          "method": "saveSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "bookinfomanager.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "collections_hint_opened",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "fixed_item_font_size",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "flash_ui_cover_images",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "hide_file_info",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "hide_page_info",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "history_hint_opened",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "no_hint_description",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "show_pages_left_in_progress",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "show_pages_read_as_progress",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "show_progress_in_mosaic",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "unified_display_mode",
+          "method": "toggleSetting",
+          "receiver": "BookInfoManager",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "coverbrowser_initial_default_setup_done",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "bookinfomanager.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "self",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/renderimage",
+          "ui/size",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/topcontainer",
+          "ui/widget/container/underlinecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/doublespinwidget",
+          "ui/widget/filechooser",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconwidget",
+          "ui/widget/imagewidget",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/menu",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/topcontainer",
+          "ui/widget/container/underlinecontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/doublespinwidget",
+          "ui/widget/filechooser",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconwidget",
+          "ui/widget/imagewidget",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/menu",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 4,
+      "debug_calls": [],
+      "device_checks": [
+        "isAndroid",
+        "isEmulator",
+        "isPocketBook",
+        "isRemarkable",
+        "isValidPath"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 2
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 0,
+        "G_reader_settings": 26,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 20
+      },
+      "file_writes": {
+        "lfs.mkdir": 1,
+        "os.remove": 4,
+        "os.rename": 2
+      },
+      "gating": [
+        {
+          "enclosing_condition": "if not (Device.isAndroid() or Device.isEmulator() or Device.isRemarkable() or Device.isPocketBook()) then",
+          "file": "main.lua",
+          "line": 10,
+          "statement": "return { disabled = true }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 844,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Stores cover image to a file.",
+        "fullname": "Cover image"
+      },
+      "meta_raw": {
+        "description": "_([[Stores cover image to a file.]])",
+        "fullname": "_(\"Cover image\")"
+      },
+      "meta_summary": "Stores cover image to a file.",
+      "name": "coverimage",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 2
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/coverimage.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 9,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 1,
+        "external": [
+          "apps/filemanager/filemanagerbookinfo",
+          "datastorage",
+          "device",
+          "ffi/blitbuffer",
+          "ffi/sha2",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/pathchooser",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 5
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_background",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_enabled",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_fallback",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_format",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_grayscale",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "cover_image_rotate",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "exclude_cover_image",
+          "method": "makeFalse",
+          "receiver": "self.ui.doc_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "exclude_cover_image",
+          "method": "makeTrue",
+          "receiver": "self.ui.doc_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/renderimage",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/pathchooser",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/pathchooser",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasFewKeys",
+        "isTouchDevice"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 2
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "directory_defaults_template.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 154,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/directory_defaults.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin allows you to tweak document settings before the document is loaded based on external factors.",
+        "fullname": "Tweak document settings"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin allows you to tweak document settings before the document is loaded based on external factors.]])",
+        "fullname": "_(\"Tweak document settings\")"
+      },
+      "meta_summary": "This plugin allows you to tweak document settings before the document is loaded based on external factors.",
+      "name": "docsettingtweak",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/docsettingtweak.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 1,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "device",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "luasettings",
+          "ui/bidi",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/inputdialog",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/inputdialog"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/inputdialog"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isKindle"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 1,
+        "self.ui.document": 3
+      },
+      "file_access": {
+        "DataStorage": 5,
+        "DocSettings": 2,
+        "G_reader_settings": 6,
+        "LuaSettings:open": 0,
+        "io.open": 8,
+        "lfs.": 0
+      },
+      "file_writes": {
+        "io.open (write mode)": 5
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "base.lua",
+        "clip.lua",
+        "main.lua",
+        "target/html.lua",
+        "target/joplin.lua",
+        "target/json.lua",
+        "target/markdown.lua",
+        "target/my_clippings.lua",
+        "target/nextcloud.lua",
+        "target/readwise.lua",
+        "target/text.lua",
+        "target/xmnote.lua",
+        "template/md.lua",
+        "template/slt2.lua"
+      ],
+      "lua_line_count": 2636,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "deprecated": "feature Joplin",
+        "description": "Exports highlights and notes.",
+        "fullname": "Export highlights"
+      },
+      "meta_raw": {
+        "deprecated": "{ \"feature\", \"Joplin \"}",
+        "description": "_(\"Exports highlights and notes.\")",
+        "fullname": "_(\"Export highlights\")"
+      },
+      "meta_summary": "Exports highlights and notes.",
+      "name": "exporter",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 5,
+        "modules": [
+          "socket",
+          "socket.http",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/exporter.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 2,
+        "UIManager:nextTick": 1,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 15,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanagerutil",
+          "apps/reader/modules/readerhighlight",
+          "datastorage",
+          "datetime",
+          "device",
+          "dispatcher",
+          "docsettings",
+          "document/documentregistry",
+          "ffi/MD5",
+          "ffi/sha2",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "ltn12",
+          "lua-ljsqlite3/init",
+          "mime",
+          "provider",
+          "rapidjson",
+          "readhistory",
+          "socket",
+          "socket.http",
+          "socketutil",
+          "ui/bidi",
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttonselector",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/radiobuttonwidget",
+          "util"
+        ],
+        "local": [
+          "base",
+          "clip",
+          "target/html",
+          "target/joplin",
+          "target/json",
+          "target/markdown",
+          "target/my_clippings",
+          "target/nextcloud",
+          "target/readwise",
+          "target/text",
+          "target/xmnote",
+          "template/md",
+          "template/slt2"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "base.lua"
+          ],
+          "key": "exporter",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/booklist",
+          "ui/widget/buttonselector",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/radiobuttonwidget"
+        ],
+        "widgets": [
+          "ui/widget/booklist",
+          "ui/widget/buttonselector",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/radiobuttonwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasDPad",
+        "hasFewKeys",
+        "hasKeyboard",
+        "hasKeys",
+        "isKindle"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 3,
+        "LuaSettings:open": 0,
+        "io.open": 6,
+        "lfs.": 6
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not has_otg_role and not Device:isKindle() then",
+          "file": "main.lua",
+          "line": 103,
+          "statement": "return { disabled = true }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "event_map_keyboard.lua",
+        "find-keyboard.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 639,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Manages USB OTG and configures keyboard.",
+        "fullname": "External keyboard"
+      },
+      "meta_raw": {
+        "description": "_([[Manages USB OTG and configures keyboard.]])",
+        "fullname": "_(\"External keyboard\")"
+      },
+      "meta_summary": "Manages USB OTG and configures keyboard.",
+      "name": "externalkeyboard",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 1
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "Device"
+      ],
+      "path": "plugins/externalkeyboard.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 2,
+        "UIManager:show": 4,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "bit",
+          "device",
+          "ffi",
+          "ffi/fbink_input_h",
+          "ffi/posix_h",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputtext",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "external_keyboard_otg_mode_on_start",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputtext"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputtext"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasFrontlight",
+        "hasMultitouch",
+        "hasNaturalLight",
+        "hasWifiToggle",
+        "isTouchDevice"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 1
+      },
+      "file_access": {
+        "DataStorage": 4,
+        "DocSettings": 0,
+        "G_reader_settings": 31,
+        "LuaSettings:open": 2,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not Device:isTouchDevice() then",
+          "file": "main.lua",
+          "line": 3,
+          "statement": "return { disabled = true }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "defaults.lua",
+        "main.lua",
+        "migration.lua"
+      ],
+      "lua_line_count": 1803,
+      "lua_settings_files": [
+        {
+          "expr": "ffiUtil.joinPath(self.path, \"defaults.lua\")",
+          "file": "main.lua",
+          "value": null
+        },
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/gestures.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin provides gesture support.",
+        "fullname": "Gestures"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin provides gesture support.]])",
+        "fullname": "_(\"Gestures\")"
+      },
+      "meta_summary": "This plugin provides gesture support.",
+      "name": "gestures",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "GestureDetector",
+        "InputContainer"
+      ],
+      "path": "plugins/gestures.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 14,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "device/gesturedetector",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "luadata",
+          "luasettings",
+          "ui/bidi",
+          "ui/event",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/notification",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": [
+          "migration"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "migration.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "delSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "gestures_migrated",
+          "method": "delSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ignore_hold_corners",
+          "method": "flipNilOrFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "multiswipes_enabled",
+          "method": "makeFalse",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "migration.lua"
+          ],
+          "key": "gestures_migrated",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "multiswipes_enabled",
+          "method": "makeTrue",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_double_tap_interval_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_hold_interval_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_swipe_interval_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_tap_interval_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_tap_interval_on_keyboard_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ges_two_finger_tap_duration_ms",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "hold_pan_rate",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "ignore_hold_corners",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "Gestures.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/event",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/notification",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/notification",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if true then",
+          "file": "main.lua",
+          "line": 9,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 58,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "This is a debugging plugin.",
+        "fullname": "Hello"
+      },
+      "meta_raw": {
+        "description": "_([[This is a debugging plugin.]])",
+        "fullname": "_(\"Hello\")"
+      },
+      "meta_summary": "This is a debugging plugin.",
+      "name": "hello",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/hello.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "dispatcher",
+          "gettext",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasKeyboard",
+        "hasScreenKB",
+        "hasSymKey",
+        "hasWifiToggle",
+        "isTouchDevice"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 1
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 6,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if not (Device:hasScreenKB() or Device:hasKeyboard()) then",
+          "file": "main.lua",
+          "line": 15,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "defaults.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 805,
+      "lua_settings_files": [
+        {
+          "expr": "defaults_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(self.path, \"defaults.lua\")"
+        },
+        {
+          "expr": "defaults_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(self.path, \"defaults.lua\")"
+        },
+        {
+          "expr": "hotkeys_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(DataStorage:getSettingsDir(), \"hotkeys.lua\")"
+        },
+        {
+          "expr": "hotkeys_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(DataStorage:getSettingsDir(), \"hotkeys.lua\")"
+        },
+        {
+          "expr": "hotkeys_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(DataStorage:getSettingsDir(), \"hotkeys.lua\")"
+        },
+        {
+          "expr": "hotkeys_path",
+          "file": "main.lua",
+          "value": "ffiUtil.joinPath(DataStorage:getSettingsDir(), \"hotkeys.lua\")"
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin provides custom shortcut support for devices with physical keys.",
+        "fullname": "Hotkeys"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin provides custom shortcut support for devices with physical keys.]])",
+        "fullname": "_(\"Hotkeys\")"
+      },
+      "meta_summary": "This plugin provides custom shortcut support for devices with physical keys.",
+      "name": "hotkeys",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/hotkeys.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 0,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "device/sdl/gamepad",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "luasettings",
+          "ui/uimanager",
+          "ui/widget/container/inputcontainer",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings_data",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/container/inputcontainer"
+        ],
+        "widgets": [
+          "ui/widget/container/inputcontainer"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isKindle"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 0,
+        "G_reader_settings": 2,
+        "LuaSettings:open": 0,
+        "io.open": 3,
+        "lfs.": 0
+      },
+      "file_writes": {
+        "os.remove": 1
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 1306,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Allow browsing KOReader internal objects over HTTP. This is aimed at developers, and may pose some security risks. Only enable this on networks you can trust.",
+        "fullname": "HTTP KOReader Inspector"
+      },
+      "meta_raw": {
+        "description": "_([[Allow browsing KOReader internal objects over HTTP. This is aimed at developers, and may pose some security risks. Only enable this on networks you can trust.]])",
+        "fullname": "_(\"HTTP KOReader Inspector\")"
+      },
+      "meta_summary": "Allow browsing KOReader internal objects over HTTP.",
+      "name": "httpinspector",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 4
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/httpinspector.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 3,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "json",
+          "logger",
+          "ui/event",
+          "ui/message/simpletcpserver",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "util",
+          "version"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/message/simpletcpserver",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 4,
+        "LuaSettings:open": 0,
+        "io.open": 1,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "deinflector.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 729,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Japanese language support for KOReader, modeled after Yomichan. This plugin extends KOReader's built-in dictionary and selection system to support Yomichan-style deinflection and text scanning, allowing for one-tap searches of inflected verbs and multi-character words and phrases. As such, this plugin removes the need for synonym-based deinflection rules for StarDict-converted Japanese dictionaries. You must have at least one Japanese dictionary installed in order for this plugin to work smoothly with Japanese text.",
+        "fullname": "Japanese support"
+      },
+      "meta_raw": {
+        "description": "_([[ Japanese language support for KOReader, modeled after Yomichan. This plugin extends KOReader's built-in dictionary and selection system to support Yomichan-style deinflection and text scanning, a",
+        "fullname": "_(\"Japanese support\")"
+      },
+      "meta_summary": "Japanese language support for KOReader, modeled after Yomichan.",
+      "name": "japanese",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/japanese.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 0,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 0
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/reader/modules/readerdictionary",
+          "bit",
+          "device",
+          "ffi/utf8proc",
+          "ffi/util",
+          "gettext",
+          "languagesupport",
+          "logger",
+          "rapidjson",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": [
+          "deinflector"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "deinflector.lua"
+          ],
+          "key": "language_japanese_text_conversions",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "language_japanese_text_scan_length",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isCervantes",
+        "isKindle",
+        "isKobo",
+        "isSDL"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": null,
+          "file": "main.lua",
+          "line": 56,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 81,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Keeps the device awake to prevent automatic Wi-Fi disconnects.",
+        "fullname": "Keep alive"
+      },
+      "meta_raw": {
+        "description": "_([[Keeps the device awake to prevent automatic Wi-Fi disconnects.]])",
+        "fullname": "_(\"Keep alive\")"
+      },
+      "meta_summary": "Keeps the device awake to prevent automatic Wi-Fi disconnects.",
+      "name": "keepalive",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 2
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [
+        "PluginShare"
+      ],
+      "path": "plugins/keepalive.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 3,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "device",
+          "gettext",
+          "pluginshare",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasSeamlessWifiToggle",
+        "hasWifiManager",
+        "hasWifiRestore",
+        "model"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 4
+      },
+      "file_access": {
+        "DataStorage": 4,
+        "DocSettings": 0,
+        "G_reader_settings": 4,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "KOSyncClient.lua",
+        "KOSyncQueue.lua",
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 1409,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/kosync.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Synchronizes your reading progress to a server across your KOReader devices.",
+        "fullname": "Progress sync"
+      },
+      "meta_raw": {
+        "description": "_([[Synchronizes your reading progress to a server across your KOReader devices.]])",
+        "fullname": "_(\"Progress sync\")"
+      },
+      "meta_summary": "Synchronizes your reading progress to a server across your KOReader devices.",
+      "name": "kosync",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 3,
+        "modules": [
+          "httpclient",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/kosync.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 4,
+        "UIManager:nextTick": 1,
+        "UIManager:scheduleIn": 5,
+        "UIManager:show": 25,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "Spore",
+          "Spore.Middleware.AsyncHTTP",
+          "Spore.Middleware.GinClient",
+          "Spore.Middleware.KOSyncAuth",
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/sha2",
+          "ffi/util",
+          "gettext",
+          "httpclient",
+          "logger",
+          "luasettings",
+          "optmath",
+          "persist",
+          "socketutil",
+          "ui/event",
+          "ui/network/manager",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": [
+          "KOSyncClient",
+          "KOSyncQueue"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "KOSync.settings_obj",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/network/manager",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 4,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 2,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 188,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/move_to_archive_settings.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Moves or copies the current book to the archive folder.",
+        "fullname": "Move to archive"
+      },
+      "meta_raw": {
+        "description": "_([[Moves or copies the current book to the archive folder.]])",
+        "fullname": "_(\"Move to archive\")"
+      },
+      "meta_summary": "Moves or copies the current book to the archive folder.",
+      "name": "movetoarchive",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/movetoarchive.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 1,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanager",
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "dispatcher",
+          "docsettings",
+          "ffi/util",
+          "gettext",
+          "luasettings",
+          "readcollection",
+          "readhistory",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 2
+      },
+      "file_access": {
+        "DataStorage": 6,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 3,
+        "lfs.": 10
+      },
+      "file_writes": {
+        "io.open (write mode)": 2,
+        "lfs.mkdir": 2,
+        "os.remove": 5,
+        "os.rename": 1
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "epubdownloadbackend.lua",
+        "feed_config.lua",
+        "feed_view.lua",
+        "lib/dateparser.lua",
+        "lib/handler.lua",
+        "lib/xml.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 3524,
+      "lua_settings_files": [
+        {
+          "expr": "(\"%s/%s\"):format(DataStorage:getSettingsDir(), self.news_config_file)",
+          "file": "main.lua",
+          "value": null
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Retrieves RSS and Atom news entries and saves them as HTML files.",
+        "fullname": "News downloader"
+      },
+      "meta_raw": {
+        "description": "_([[Retrieves RSS and Atom news entries and saves them as HTML files.]])",
+        "fullname": "_(\"News downloader\")"
+      },
+      "meta_summary": "Retrieves RSS and Atom news entries and saves them as HTML files.",
+      "name": "newsdownloader",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 7,
+        "modules": [
+          "socket",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/newsdownloader.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 10,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanager",
+          "cachesqlite",
+          "datastorage",
+          "document/documentregistry",
+          "ffi/archiver",
+          "ffi/util",
+          "gettext",
+          "htmlparser",
+          "lib.dateparser",
+          "libs/libkoreader-cre",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ltn12",
+          "luasettings",
+          "mime",
+          "persist",
+          "readhistory",
+          "socket",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/network/manager",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox",
+          "util",
+          "version"
+        ],
+        "local": [
+          "epubdownloadbackend",
+          "feed_view",
+          "lib/handler",
+          "lib/xml"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 2
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "<dynamic>",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/network/manager",
+          "ui/time",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isAndroid"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 2
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 3,
+        "LuaSettings:open": 1,
+        "io.open": 1,
+        "lfs.": 4
+      },
+      "file_writes": {
+        "io.open (write mode)": 1,
+        "os.remove": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua",
+        "opdsbrowser.lua",
+        "opdsparser.lua",
+        "opdspse.lua"
+      ],
+      "lua_line_count": 2491,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/opds.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "OPDS allows you to download books from online catalogs.",
+        "fullname": "OPDS"
+      },
+      "meta_raw": {
+        "description": "_([[OPDS allows you to download books from online catalogs.]])",
+        "fullname": "_(\"OPDS\")"
+      },
+      "meta_summary": "OPDS allows you to download books from online catalogs.",
+      "name": "opds",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 9,
+        "modules": [
+          "socket",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/opds.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 1,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 40,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "cache",
+          "datastorage",
+          "device",
+          "dispatcher",
+          "document/documentregistry",
+          "ffi",
+          "ffi/util",
+          "gettext",
+          "json",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ltn12",
+          "luasettings",
+          "luxl",
+          "socket",
+          "socket.http",
+          "socket.url",
+          "socketutil",
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/network/manager",
+          "ui/renderimage",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/menu",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer",
+          "util"
+        ],
+        "local": [
+          "opdsbrowser",
+          "opdsparser",
+          "opdspse"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "opdsbrowser.lua"
+          ],
+          "key": "download_dir",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/network/manager",
+          "ui/renderimage",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/menu",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer"
+        ],
+        "widgets": [
+          "ui/widget/buttondialog",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/imageviewer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/menu",
+          "ui/widget/multiinputdialog",
+          "ui/widget/notification",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textviewer"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 4,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 252,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/perception_expander.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Improves your reading speed with the help of two vertical lines over the text.",
+        "fullname": "Perception expander"
+      },
+      "meta_raw": {
+        "description": "_([[Improves your reading speed with the help of two vertical lines over the text.]])",
+        "fullname": "_(\"Perception expander\")"
+      },
+      "meta_summary": "Improves your reading speed with the help of two vertical lines over the text.",
+      "name": "perceptionexpander",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/perceptionexpander.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "ffi/blitbuffer",
+          "ffi/util",
+          "gettext",
+          "luasettings",
+          "ui/geometry",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/horizontalgroup",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/multiinputdialog",
+          "ui/widget/widget"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "is_enabled",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "line_color_intensity",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "line_thick",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "margin",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "shift_each_pages",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/geometry",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/horizontalgroup",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/multiinputdialog",
+          "ui/widget/widget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/horizontalgroup",
+          "ui/widget/infomessage",
+          "ui/widget/linewidget",
+          "ui/widget/multiinputdialog",
+          "ui/widget/widget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 11,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 2,
+        "LuaSettings:open": 1,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 1346,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/profiles.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin allows combining multiple settings to make switchable 'profiles'.",
+        "fullname": "Profiles"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin allows combining multiple settings to make switchable 'profiles'.]])",
+        "fullname": "_(\"Profiles\")"
+      },
+      "meta_summary": "This plugin allows combining multiple settings to make switchable 'profiles'.",
+      "name": "profiles",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/profiles.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 1,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 12,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "luasettings",
+          "readcollection",
+          "ui/data/optionsutil",
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "Profiles.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/data/optionsutil",
+          "ui/event",
+          "ui/uimanager",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasClipboard"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 1,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 83,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin generates a QR code from clipboard content.",
+        "fullname": "QR from clipboard"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin generates a QR code from clipboard content.]])",
+        "fullname": "_(\"QR from clipboard\")"
+      },
+      "meta_summary": "This plugin generates a QR code from clipboard content.",
+      "name": "qrclipboard",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/qrclipboard.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 1,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "device",
+          "gettext",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/qrmessage",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/qrmessage"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/qrmessage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 4,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 586,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Shows an alarm after a specified amount of time.",
+        "fullname": "Read timer"
+      },
+      "meta_raw": {
+        "description": "_([[Shows an alarm after a specified amount of time.]])",
+        "fullname": "_(\"Read timer\")"
+      },
+      "meta_summary": "Shows an alarm after a specified amount of time.",
+      "name": "readtimer",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/readtimer.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 5,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 4,
+        "UIManager:show": 10,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "dispatcher",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "ui/event",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/event",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification"
+        ],
+        "widgets": [
+          "ui/widget/checkbutton",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 51,
+      "debug_calls": [],
+      "device_checks": [
+        "hasColorScreen",
+        "hasKeyboard",
+        "hasKeys",
+        "hasScreenKB",
+        "isTouchDevice"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 12,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 4,
+        "G_reader_settings": 15,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 6
+      },
+      "file_writes": {
+        "os.remove": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "calendarview.lua",
+        "main.lua",
+        "readerprogress.lua"
+      ],
+      "lua_line_count": 5339,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Keeps and displays your reading statistics.",
+        "fullname": "Reading statistics"
+      },
+      "meta_raw": {
+        "description": "_([[Keeps and displays your reading statistics.]])",
+        "fullname": "_(\"Reading statistics\")"
+      },
+      "meta_summary": "Keeps and displays your reading statistics.",
+      "name": "statistics",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/statistics.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 8,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 62,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "datetime",
+          "device",
+          "dispatcher",
+          "docsettings",
+          "ffi/blitbuffer",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "lua-ljsqlite3/init",
+          "optmath",
+          "readhistory",
+          "ui/bidi",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/quickstart",
+          "ui/size",
+          "ui/uimanager",
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/checkmark",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/infomessage",
+          "ui/widget/keyvaluepage",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan",
+          "ui/widget/widget",
+          "util"
+        ],
+        "local": [
+          "calendarview",
+          "readerprogress"
+        ]
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/quickstart",
+          "ui/size",
+          "ui/uimanager",
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/checkmark",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/infomessage",
+          "ui/widget/keyvaluepage",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan",
+          "ui/widget/widget"
+        ],
+        "widgets": [
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/checkmark",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/datetimewidget",
+          "ui/widget/doublespinwidget",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/infomessage",
+          "ui/widget/keyvaluepage",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/progresswidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan",
+          "ui/widget/widget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "hasAuxBattery",
+        "isCervantes",
+        "isKindle",
+        "isKobo",
+        "isPocketBook",
+        "isSDL"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 3,
+        "lfs.": 0
+      },
+      "file_writes": {},
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 352,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Shows system statistics.",
+        "fullname": "System statistics"
+      },
+      "meta_raw": {
+        "description": "_([[Shows system statistics.]])",
+        "fullname": "_(\"System statistics\")"
+      },
+      "meta_summary": "Shows system statistics.",
+      "name": "systemstat",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 1,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/systemstat.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 1,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datetime",
+          "device",
+          "dispatcher",
+          "gettext",
+          "optmath",
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/time",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/keyvaluepage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "firmware_rev",
+        "isAndroid",
+        "isKobo"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 2,
+        "DocSettings": 0,
+        "G_reader_settings": 14,
+        "LuaSettings:open": 0,
+        "io.open": 4,
+        "lfs.": 1
+      },
+      "file_writes": {
+        "io.open (write mode)": 2,
+        "lfs.mkdir": 1,
+        "os.remove": 3,
+        "os.rename": 1
+      },
+      "gating": [
+        {
+          "enclosing_condition": "if (Device:isAndroid() and Device.firmware_rev < 21) or not check_prerequisites() then",
+          "file": "main.lua",
+          "line": 50,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "aliases.lua",
+        "main.lua",
+        "terminputtext.lua"
+      ],
+      "lua_line_count": 1720,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "KOReader's terminal emulator.",
+        "fullname": "Terminal emulator"
+      },
+      "meta_raw": {
+        "description": "_([[KOReader's terminal emulator.]])",
+        "fullname": "_(\"Terminal emulator\")"
+      },
+      "meta_summary": "KOReader's terminal emulator.",
+      "name": "terminal",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 2
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/terminal.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 1,
+        "UIManager:scheduleIn": 4,
+        "UIManager:show": 13,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "bit",
+          "datastorage",
+          "dbg",
+          "device",
+          "dispatcher",
+          "ffi",
+          "ffi/posix_h",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "string.buffer",
+          "ui/font",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/inputtext",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/scrolltextwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget",
+          "util"
+        ],
+        "local": [
+          "aliases",
+          "terminputtext"
+        ]
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "terminal_buffer_size",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "terminal_font_size",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "terminal_shell",
+          "method": "saveSetting",
+          "receiver": "G_reader_settings",
+          "sites": 2
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/font",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/inputtext",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/scrolltextwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/inputtext",
+          "ui/widget/keyvaluepage",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "ui/widget/scrolltextwidget",
+          "ui/widget/spinwidget",
+          "ui/widget/textwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 2,
+        "lfs.": 3
+      },
+      "file_writes": {
+        "io.open (write mode)": 1,
+        "os.remove": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 716,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/text_editor.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "A basic text editor for making small changes to plain text files.",
+        "fullname": "Text editor"
+      },
+      "meta_raw": {
+        "description": "_([[A basic text editor for making small changes to plain text files.]])",
+        "fullname": "_(\"Text editor\")"
+      },
+      "meta_summary": "A basic text editor for making small changes to plain text files.",
+      "name": "texteditor",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/texteditor.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 1,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 15,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "dispatcher",
+          "document/documentregistry",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "logger",
+          "luasettings",
+          "ui/bidi",
+          "ui/data/optionsutil",
+          "ui/font",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/qrmessage",
+          "ui/widget/spinwidget",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "auto_para_direction",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "font_face",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "font_size",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "force_ltr_para_direction",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "history",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "last_path",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "last_view_pos",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "qr_code_export",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "show_keyboard_on_start",
+          "method": "saveSetting",
+          "receiver": "self.settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/data/optionsutil",
+          "ui/font",
+          "ui/trapper",
+          "ui/uimanager",
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/qrmessage",
+          "ui/widget/spinwidget"
+        ],
+        "widgets": [
+          "ui/widget/buttondialog",
+          "ui/widget/confirmbox",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/notification",
+          "ui/widget/pathchooser",
+          "ui/widget/qrmessage",
+          "ui/widget/spinwidget"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [
+        "isKindle"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 0,
+        "DocSettings": 0,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 2
+      },
+      "file_writes": {},
+      "gating": [
+        {
+          "enclosing_condition": "if C.getuid() ~= 0 then",
+          "file": "main.lua",
+          "line": 10,
+          "statement": "return { disabled = true, }"
+        },
+        {
+          "enclosing_condition": "if not ntp_cmd then",
+          "file": "main.lua",
+          "line": 28,
+          "statement": "return { disabled = true, }"
+        }
+      ],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 100,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "Synchronizes the device time with NTP servers.",
+        "fullname": "Time sync"
+      },
+      "meta_raw": {
+        "description": "_([[Synchronizes the device time with NTP servers.]])",
+        "fullname": "_(\"Time sync\")"
+      },
+      "meta_summary": "Synchronizes the device time with NTP servers.",
+      "name": "timesync",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 1,
+        "os.execute": 3
+      },
+      "network": {
+        "count": 1,
+        "modules": [
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/timesync.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 0,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 2,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 0,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "device",
+          "ffi",
+          "ffi/posix_h",
+          "ffi/util",
+          "gettext",
+          "libs/libkoreader-lfs",
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 18,
+      "debug_calls": [],
+      "device_checks": [
+        "hasFewKeys",
+        "hasKeys",
+        "isTouchDevice"
+      ],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 0
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 0,
+        "G_reader_settings": 1,
+        "LuaSettings:open": 0,
+        "io.open": 0,
+        "lfs.": 0
+      },
+      "file_writes": {
+        "os.remove": 2
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "db.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 2687,
+      "lua_settings_files": [],
+      "main_present": true,
+      "meta": {
+        "description": "This plugin processes dictionary word lookups and uses spaced repetition to help you remember new words.",
+        "fullname": "Vocabulary builder"
+      },
+      "meta_raw": {
+        "description": "_([[This plugin processes dictionary word lookups and uses spaced repetition to help you remember new words.]])",
+        "fullname": "_(\"Vocabulary builder\")"
+      },
+      "meta_summary": "This plugin processes dictionary word lookups and uses spaced repetition to help you remember new words.",
+      "name": "vocabbuilder",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 0,
+        "modules": []
+      },
+      "patched_objects": [],
+      "path": "plugins/vocabbuilder.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 2,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 19,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 0,
+        "external": [
+          "datastorage",
+          "device",
+          "dispatcher",
+          "ffi/blitbuffer",
+          "ffi/util",
+          "gettext",
+          "logger",
+          "lua-ljsqlite3/init",
+          "luadata",
+          "ui/bidi",
+          "ui/event",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/size",
+          "ui/uimanager",
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/buttontable",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/movablecontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconbutton",
+          "ui/widget/iconwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/sortwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/toggleswitch",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan",
+          "util"
+        ],
+        "local": [
+          "db"
+        ]
+      },
+      "settings_writes": [],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/event",
+          "ui/font",
+          "ui/geometry",
+          "ui/gesturerange",
+          "ui/size",
+          "ui/uimanager",
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/buttontable",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/movablecontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconbutton",
+          "ui/widget/iconwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/sortwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/toggleswitch",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan"
+        ],
+        "widgets": [
+          "ui/widget/button",
+          "ui/widget/buttondialog",
+          "ui/widget/buttontable",
+          "ui/widget/confirmbox",
+          "ui/widget/container/bottomcontainer",
+          "ui/widget/container/centercontainer",
+          "ui/widget/container/framecontainer",
+          "ui/widget/container/inputcontainer",
+          "ui/widget/container/leftcontainer",
+          "ui/widget/container/movablecontainer",
+          "ui/widget/container/rightcontainer",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/focusmanager",
+          "ui/widget/horizontalgroup",
+          "ui/widget/horizontalspan",
+          "ui/widget/iconbutton",
+          "ui/widget/iconwidget",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/linewidget",
+          "ui/widget/notification",
+          "ui/widget/overlapgroup",
+          "ui/widget/sortwidget",
+          "ui/widget/textboxwidget",
+          "ui/widget/textwidget",
+          "ui/widget/titlebar",
+          "ui/widget/toggleswitch",
+          "ui/widget/verticalgroup",
+          "ui/widget/verticalspan"
+        ]
+      }
+    },
+    {
+      "blitbuffer_refs": 0,
+      "debug_calls": [],
+      "device_checks": [],
+      "document_access": {
+        "getPageText": 0,
+        "getTextFromPositions": 0,
+        "self.document": 0,
+        "self.ui.document": 2
+      },
+      "file_access": {
+        "DataStorage": 3,
+        "DocSettings": 5,
+        "G_reader_settings": 0,
+        "LuaSettings:open": 1,
+        "io.open": 1,
+        "lfs.": 8
+      },
+      "file_writes": {
+        "io.open (write mode)": 1,
+        "os.remove": 1
+      },
+      "gating": [],
+      "loader_builtin": true,
+      "lua_files": [
+        "_meta.lua",
+        "main.lua"
+      ],
+      "lua_line_count": 1847,
+      "lua_settings_files": [
+        {
+          "expr": "self.settings_file",
+          "file": "main.lua",
+          "value": "DataStorage:getSettingsDir() .. \"/wallabag.lua\""
+        }
+      ],
+      "main_present": true,
+      "meta": {
+        "description": "Synchronises articles with a Wallabag server.",
+        "fullname": "Wallabag"
+      },
+      "meta_raw": {
+        "description": "_([[Synchronises articles with a Wallabag server.]])",
+        "fullname": "_(\"Wallabag\")"
+      },
+      "meta_summary": "Synchronises articles with a Wallabag server.",
+      "name": "wallabag",
+      "native": {
+        "ffi.cdef": 0,
+        "ffi.load": 0,
+        "io.popen": 0,
+        "os.execute": 0
+      },
+      "network": {
+        "count": 4,
+        "modules": [
+          "socket",
+          "socket.http",
+          "socketutil",
+          "ui/network/manager"
+        ]
+      },
+      "patched_objects": [],
+      "path": "plugins/wallabag.koplugin",
+      "registration": {
+        "Dispatcher:registerAction": 3,
+        "UIManager:nextTick": 0,
+        "UIManager:scheduleIn": 0,
+        "UIManager:show": 32,
+        "addToMainMenu": 1,
+        "onDispatcherRegisterActions": 2,
+        "registerToMainMenu": 1
+      },
+      "requires": {
+        "dynamic_count": 1,
+        "external": [
+          "apps/filemanager/filemanager",
+          "apps/filemanager/filemanagerutil",
+          "datastorage",
+          "dispatcher",
+          "docsettings",
+          "document/documentregistry",
+          "ffi/util",
+          "gettext",
+          "json",
+          "libs/libkoreader-lfs",
+          "logger",
+          "ltn12",
+          "luasettings",
+          "optmath",
+          "readhistory",
+          "socket",
+          "socket.http",
+          "socketutil",
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/event",
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog",
+          "util"
+        ],
+        "local": []
+      },
+      "settings_writes": [
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": null,
+          "method": "flush",
+          "receiver": "self.wb_settings",
+          "sites": 1
+        },
+        {
+          "files": [
+            "main.lua"
+          ],
+          "key": "wallabag",
+          "method": "saveSetting",
+          "receiver": "self.wb_settings",
+          "sites": 1
+        }
+      ],
+      "ui": {
+        "modules": [
+          "ui/bidi",
+          "ui/downloadmgr",
+          "ui/event",
+          "ui/network/manager",
+          "ui/uimanager",
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog"
+        ],
+        "widgets": [
+          "ui/widget/container/widgetcontainer",
+          "ui/widget/infomessage",
+          "ui/widget/inputdialog",
+          "ui/widget/multiconfirmbox",
+          "ui/widget/multiinputdialog"
+        ]
+      }
+    }
+  ]
+}

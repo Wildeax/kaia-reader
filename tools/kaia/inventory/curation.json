@@ -1,0 +1,290 @@
+{
+  "baseline": "Upstream KOReader v2026.07.1 (9192014d8). Plugin tree scanned at b5ad80933, which has no plugin changes since 9192014d8",
+  "community": [
+    {
+      "name": "pencil.koplugin",
+      "url": "https://github.com/mysticknits/pencil.koplugin",
+      "pin": "not yet selected"
+    },
+    {
+      "name": "pagenotes.koplugin",
+      "url": "https://github.com/toastiez/pagenotes.koplugin",
+      "pin": "not yet selected"
+    }
+  ],
+  "plugins": {
+    "SSH": {
+      "platform": "applicable",
+      "platform_basis": "Loads only when a patched `dropbear` binary exists in the working directory (`main.lua` line 21). The Kobo branch mounts `/dev/pts` (line 75).",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses input and info dialogs and the standard container. No core patches or raw drawing.",
+      "workflow": "Install the patched dropbear binary and enable the plugin. Set the SSH public key, start the server from its menu, and connect from a host. Change the force-close option, stop the server, suspend, resume, close and reopen KOReader, and confirm the key and options persist.",
+      "data_note": "Reads `settings/SSH/authorized_keys` at start."
+    },
+    "archiveviewer": {
+      "platform": "applicable",
+      "platform_basis": "No device checks in the code.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the book list, text viewer and image viewer. No core patches.",
+      "workflow": "Enable the plugin. Open the file browser, open a zip file, view a text file and an image inside it, and extract one file to a folder. Suspend, resume, close and reopen the file browser, and confirm the extracted file is still there.",
+      "data_note": "Writes extracted files to the folder the user picks. Stores no settings."
+    },
+    "autodim": {
+      "platform": "applicable",
+      "platform_basis": "Loads only when `Device:hasFrontlight()` is true (`main.lua` line 10). Libra Colour has a frontlight.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Writes core frontlight state (`Powerd.fl_intensity`, `Powerd:setIntensity`) and runs its own idle timer.",
+      "workflow": "Enable the plugin and set the idle time and dim percentage. Open a book, leave the device idle until the dimmer starts, and confirm the brightness drops. Touch the screen to restore it. Change the duration, suspend, resume, close and reopen KOReader, and confirm the values persist."
+    },
+    "autostandby": {
+      "platform": "not applicable",
+      "platform_basis": "Loads only on PocketBook (`main.lua` line 4). The Kobo check is commented out in that line.",
+      "class": "Not applicable on Kobo",
+      "class_basis": "Disabled by its own gate on Kobo.",
+      "workflow": "Not testable on Kobo. After a restart, confirm the plugin is listed as disabled and adds no menu entry."
+    },
+    "autosuspend": {
+      "platform": "applicable",
+      "platform_basis": "Loads when `Device:canSuspend()` is true (`main.lua` line 5). Kobo has its own wait path (line 588).",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the date-time and info widgets and public `Device` power calls. No core patches.",
+      "workflow": "Enable the plugin and set the standby timeout to one minute. Open a book, leave the device idle, confirm standby, and resume with the power button. Change the suspend timeout, close and reopen KOReader, and confirm the value. Test the power-off timeout last, because it shuts the device down."
+    },
+    "autoturn": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. The plugin uses the page timer and the UI event loop that every reader provides.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the date-time and spin widgets. Shares a flag through `PluginShare`. No core patches.",
+      "workflow": "Enable Autoturn from the reader menu and set a 10 second timeout and a scroll distance. Open a book and wait for automatic page turns. Change the timeout, suspend, resume, confirm the timer continues, then close and reopen the book."
+    },
+    "autowarmth": {
+      "platform": "applicable",
+      "platform_basis": "Warmth controls run only when `Device:hasNaturalLight()` is true (`main.lua` line 41). Libra Colour sets it in `frontend/device/kobo/device.lua` (KoboMonza).",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Writes core frontlight state (`Powerd.fl_was_on`) and hooks device and dispatcher events. The plugin is 1962 lines.",
+      "workflow": "Enable warmth and night mode, set a schedule that starts within a few minutes, and open a book. Confirm the warmth and night mode change at the scheduled time. Change the night-mode setting, suspend, resume, confirm the warmth is restored, then close and reopen KOReader and check the saved schedule."
+    },
+    "batterystat": {
+      "platform": "applicable",
+      "platform_basis": "No device checks in the code. It reads battery state through the device power API.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the key-value page and the confirm dialog. No core patches.",
+      "workflow": "Enable the plugin and read a book for a few minutes. Open the battery statistics page, clear the statistics and confirm. Read again, suspend, resume, close and reopen KOReader, and confirm the page shows new samples."
+    },
+    "bookshortcuts": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. Shortcuts work through the standard gesture and dispatcher paths.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the file manager, path chooser and confirm dialog. No core patches.",
+      "workflow": "Enable the plugin. In the file browser, add a shortcut to a folder and to a book, then bind a gesture to one shortcut. Trigger the gesture from the reader, delete one shortcut, suspend, resume, close and reopen KOReader, and confirm the remaining shortcuts."
+    },
+    "calibre": {
+      "platform": "applicable",
+      "platform_basis": "The search code has a Kobo branch (`search.lua` line 29). The Android branch in `wireless.lua` line 185 does not apply on Kobo. Wireless use needs a calibre content server on the same network.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the book list, metadata and input dialogs. It requires reader and file manager modules but patches none.",
+      "workflow": "Start a calibre content server on the same Wi-Fi network. Enable the plugin, enter the server URL and password, and send a book from calibre. Open the book, search calibre metadata from the reader, change the default format, suspend, resume, close and reopen KOReader, and confirm the settings persist.",
+      "data_note": "Caches library lists and metadata in a `Persist` file and a `LuaSettings` file under the cache path (`main.lua` line 136)."
+    },
+    "cloudstorage": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. Network calls go through the shared Wi-Fi manager, which Kobo devices use.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses 14 shared dialog, list and input widgets. No core patches.",
+      "workflow": "Add a test FTP or WebDAV server, enable the plugin, and browse it. Download one file, upload one file, and change the download folder. Suspend, resume, close and reopen KOReader, and confirm the server list and folder setting persist."
+    },
+    "coverbrowser": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It uses Blitbuffer drawing and the bundled SQLite binding, which the shared build includes.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Patches `FileChooser` with its own mosaic and list renderers and draws covers with Blitbuffer. It keeps a SQLite cache.",
+      "workflow": "Enable the plugin and open the file browser. Switch to mosaic mode, let the plugin index books, and check that covers appear. Change the grid size and display mode, open a book, and return to the browser. Suspend, resume, close and reopen KOReader, and check the mode persists. Repeat in History and Collections.",
+      "data_note": "Writes `bookinfo_cache.sqlite3` and `cache/tmpcr3cache` under the data directory."
+    },
+    "coverimage": {
+      "platform": "not applicable",
+      "platform_basis": "Loads only on Android, the emulator, reMarkable or PocketBook (`main.lua` lines 9 and 10). Libra Colour matches none of them.",
+      "class": "Not applicable on Kobo",
+      "class_basis": "Disabled by its own platform gate on Kobo.",
+      "workflow": "Not testable on Kobo. After a restart, confirm the plugin is listed as disabled and adds no menu entry."
+    },
+    "docsettingtweak": {
+      "platform": "applicable",
+      "platform_basis": "Registers its menu when `Device:isTouchDevice()` is true (`main.lua` line 21). Libra Colour is a touch device, so the menu appears.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the input dialog and the standard container. It hooks the `onDocSettingsLoad` event instead of patching a class.",
+      "workflow": "Enable the plugin and open the directory defaults editor from the file browser. Add a tweak for a test folder, such as a font size. Open a new book in that folder and check the tweak applies on first load. Change the tweak, suspend, resume, close and reopen the book.",
+      "data_note": "Reads `directory_defaults.lua` and copies its values into the book's settings when a new document first loads."
+    },
+    "exporter": {
+      "platform": "applicable",
+      "platform_basis": "The My Clippings export runs only on Kindle (`main.lua` line 192). The history path runs on Kobo.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the reader highlight style lists and shared dialogs. Its export targets are separate modules under `target/`.",
+      "summary": "Exports highlights and notes. The Joplin target is marked outdated in `_meta.lua`.",
+      "workflow": "Open a book with highlights. Export highlights to Markdown and to JSON, choose a target folder, and check the files. Change the color filter, suspend, resume, close and reopen the book, export again, and confirm the files match the first export."
+    },
+    "externalkeyboard": {
+      "platform": "applicable",
+      "platform_basis": "Loads only when an OTG role file exists (`/sys/kernel/debug/ci_hdrc.0/role` or `/sys/devices/platform/soc/usbc0/otg_role`) or on Kindle (`main.lua` line 103). Not verified on Libra Colour hardware (KR-002).",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Overwrites `Device` keyboard and key fields at run time and writes USB role files through sysfs and FFI.",
+      "workflow": "Use a device that exposes an OTG role file. Enable OTG mode, connect a USB keyboard, and type in a search box. Disconnect and reconnect the keyboard, suspend, resume, close and reopen KOReader, and confirm the keyboard still works. Confirm the device does not stay in USB mass-storage mode.",
+      "data_note": "Writes the OTG role through sysfs. This is device state, not user data."
+    },
+    "gestures": {
+      "platform": "applicable",
+      "platform_basis": "Loads on touch devices (`main.lua` line 3). Libra Colour is a touch device with multitouch.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Patches `GestureDetector` and `InputContainer` and records multiswipes from the input path.",
+      "workflow": "Enable the plugin and open a book. Perform each default gesture, including corner taps and edge swipes. Change one gesture action, record a multiswipe, suspend, resume, close and reopen the book, and confirm the custom gesture still fires and the defaults are unchanged."
+    },
+    "hello": {
+      "platform": "debug only",
+      "platform_basis": "`main.lua` line 9 runs `if true then return { disabled = true } end` before any other code. It is a developer template and loads in no shipped build.",
+      "class": "Not applicable on Kobo",
+      "class_basis": "Disabled on every platform. It is a developer template and is excluded from release tests.",
+      "workflow": "Not tested as a shipped feature. To test loader behavior, remove the block at line 9 in a local debug build and restore it afterwards."
+    },
+    "hotkeys": {
+      "platform": "not applicable",
+      "platform_basis": "Loads only with a screen keyboard or a physical keyboard (`main.lua` line 15). Libra Colour reports neither `hasScreenKB` nor `hasKeyboard`.",
+      "class": "Not applicable on Kobo",
+      "class_basis": "Disabled by its own gate on Kobo.",
+      "workflow": "Not testable on Kobo. After a restart, confirm the plugin is listed as disabled and adds no shortcut menu."
+    },
+    "httpinspector": {
+      "platform": "applicable",
+      "platform_basis": "Runs on any device. The Kindle branches (`main.lua` lines 85 and 121) add firewall rules and do not run on Kobo.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the TCP server, input dialog and info message. It opens a network port when enabled.",
+      "workflow": "Enable the plugin, set the port, and turn on auto-start. Start the server from the menu and request an object list from a browser on the same network. Stop the server, suspend, resume, close and reopen KOReader, and confirm the server stays off unless auto-start is set. Test only on a trusted network, because the plugin exposes internal objects."
+    },
+    "japanese": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It works on any device with a dictionary installed.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the reader dictionary, spin widget and info message. It creates its own dictionary object and patches no core class.",
+      "workflow": "Install a Japanese StarDict dictionary and enable the plugin. Open a Japanese book, tap and hold an inflected verb, and check the lookup uses deinflection. Change the text scan length, suspend, resume, close and reopen KOReader, and confirm the scan length persists."
+    },
+    "keepalive": {
+      "platform": "applicable",
+      "platform_basis": "The Kobo branch at `main.lua` line 33 sets `PluginShare.pause_auto_suspend`. The disable branch at line 56 runs only on unsupported platforms, so Kobo keeps the plugin.",
+      "class": "Applicable bundled plugin",
+      "class_basis": "Uses the confirm and info dialogs and the standard container. Shares one flag with autosuspend through `PluginShare`.",
+      "workflow": "Enable Keep alive from the menu, open a book, and leave the device idle past the auto-suspend timeout. Confirm it does not suspend. Disable Keep alive, leave the device idle again, and confirm normal suspend. Suspend and resume manually, then close and reopen KOReader.",
+      "data_note": "Stores no settings. It changes the shared `PluginShare.pause_auto_suspend` flag at run time."
+    },
+    "kosync": {
+      "platform": "applicable",
+      "platform_basis": "No platform gate. The device name comes from `Device.model`. Wi-Fi restore uses `hasWifiRestore`, which the Kobo base class sets. The Wi-Fi toggle check uses `hasSeamlessWifiToggle`, which the generic device class sets to true.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses input, confirm and notification widgets and the shared HTTP client. Reads the document position through `self.ui.document`. No core patches.",
+      "workflow": "Create a test account on a KOReader sync server and enable Progress sync. Turn on automatic sync, open a book, read a few pages, and close it. Open the same book on a second device or profile and pull the progress. Suspend, resume, close and reopen KOReader, and confirm the page position."
+    },
+    "movetoarchive": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It copies or moves book files with the file browser APIs.",
+      "class": "Applicable bundled plugin",
+      "class_basis": "Uses only the standard container and the confirm dialog. No core patches.",
+      "workflow": "Enable the plugin and set the archive folder. Open a book, copy it to the archive, and open it from the archive folder. Move a second book, suspend, resume, close and reopen KOReader, and confirm the archive folder setting persists.",
+      "data_note": "Copies or moves book files into the archive folder."
+    },
+    "newsdownloader": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It uses the shared network manager and the file system.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the key-value page, input dialog and multi-confirm dialog. Writes HTML files. No core patches.",
+      "workflow": "Enable the plugin and add a test RSS feed. Sync news feeds, open the news folder, and read one downloaded item. Change the image setting, sync again, suspend, resume, close and reopen KOReader, and confirm the feed list and setting persist.",
+      "data_note": "Writes HTML files to the news folder and a cache at `cache/newsdownloader.sqlite`."
+    },
+    "opds": {
+      "platform": "applicable",
+      "platform_basis": "The Android branch sets the sync folder to the home directory (`opdsbrowser.lua` line 1669). Kobo uses the normal path.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the menu, search, image viewer and text viewer widgets and the shared network manager. No core patches.",
+      "workflow": "Enable the plugin and add a public OPDS catalog. Browse it, search it, and download one book. Set the sync folder, sync the catalog, suspend, resume, close and reopen KOReader, and confirm the catalog list persists."
+    },
+    "perceptionexpander": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. The overlay draws over the page on any reader view.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Overrides `paintTo` to draw two lines over the page with Blitbuffer, so it changes what the reader paints.",
+      "workflow": "Enable the plugin and open a book. Check that the two vertical lines appear over the text. Change the margin, thickness and intensity, and turn pages. Suspend, resume, close and reopen KOReader, and confirm the lines and settings persist."
+    },
+    "profiles": {
+      "platform": "applicable",
+      "platform_basis": "No device checks in the code.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the date-time, spin, confirm and input widgets. Applies settings through the reader's settings API. No core patches.",
+      "workflow": "Enable the plugin and create a profile from the current book's settings. Change the font size, execute the profile, and check the change. Turn on auto-execute, open a second book, suspend, resume, close and reopen KOReader, and confirm the profile list persists."
+    },
+    "qrclipboard": {
+      "platform": "applicable",
+      "platform_basis": "Uses `Device:hasClipboard()`, which the generic device class sets to true.",
+      "class": "Applicable bundled plugin",
+      "class_basis": "Uses the QR message widget and the standard container. No core patches.",
+      "workflow": "Copy a short text inside KOReader, open the menu, and generate a QR code from the clipboard. Check that the code appears. Suspend, resume, close and reopen KOReader."
+    },
+    "readtimer": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It uses the standard UI timer and the dispatcher.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the check button, date-time, input and notification widgets and registers dispatcher actions. No core patches.",
+      "workflow": "Enable the plugin and set an alarm for one minute. Open a book and wait for the alarm. Set a repeating interval and turn on the status bar timer. Suspend before the alarm is due, resume, and check that the timer continues. Close and reopen KOReader, and confirm the alarm state."
+    },
+    "statistics": {
+      "platform": "applicable",
+      "platform_basis": "Color rendering depends on `Device:hasColorScreen()` (`main.lua` line 115). Libra Colour sets `hasColorScreen`, so the color path runs.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Draws its own calendar and graphs with Blitbuffer (51 `Blitbuffer` or `paintTo` references), keeps reading data in SQLite, and hooks reader page events.",
+      "workflow": "Enable the plugin and read a book for five minutes, turning pages. Open Reading statistics and check the time and page counts. Open the calendar view and the book view, and change the color rendering setting. Suspend, resume, close and reopen the book, and confirm the totals match.",
+      "data_note": "Writes reading sessions to `statistics.sqlite3` under the settings directory. The exporter target reads the same file."
+    },
+    "systemstat": {
+      "platform": "applicable",
+      "platform_basis": "The Kobo storage filter is set at `main.lua` line 26. The plugin reads battery and storage state through the device power API and one `io.popen` call.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the key-value page and the standard container. Calls `io.popen` for one system query.",
+      "workflow": "Enable the plugin and open System statistics from the menu. Check the battery and storage rows. Leave the page open for a minute, close it, suspend, resume, reopen the page, and confirm the values update. Close and reopen KOReader."
+    },
+    "terminal": {
+      "platform": "applicable",
+      "platform_basis": "The Kobo branch mounts `/dev/pts` (`main.lua` line 18). The plugin loads only when the pseudo-terminal check passes (line 50), so a missing `/dev/ptmx` disables it.",
+      "class": "Custom-drawing or deeply coupled",
+      "class_basis": "Calls pseudo-terminal functions through FFI and runs shell commands through `os.execute`.",
+      "workflow": "Enable the plugin and open the terminal. Run `ls` and `cat` on a test file. Change the shell path and font size, and run a command that prints many lines. Suspend, resume, close and reopen the terminal, and confirm the shell starts cleanly."
+    },
+    "texteditor": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It uses the on-screen keyboard that Kobo devices show.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses input and text widgets and the document registry. No core patches.",
+      "workflow": "Enable the plugin and create a new file in a test folder. Type text, change the font and monospace setting, and save. Open a file from the history, suspend, resume, close and reopen KOReader, and confirm the file contents and settings persist.",
+      "data_note": "Writes plain text files that the user saves."
+    },
+    "timesync": {
+      "platform": "applicable",
+      "platform_basis": "Runs only as root, and only when busybox `ntpd` or `ntpdate` exists (`main.lua` lines 10 and 28). The comment in `main.lua` says Kobo ships busybox `ntpd`. Not verified on hardware.",
+      "class": "Applicable bundled plugin",
+      "class_basis": "Uses the info message, network manager and standard container. No core patches.",
+      "workflow": "Confirm the device runs KOReader as root and has busybox `ntpd`. Enable Time sync, connect to Wi-Fi, and run Synchronize time. Check the displayed time against a known clock, then suspend, resume, close and reopen KOReader.",
+      "data_note": "Changes the system clock. It stores no settings."
+    },
+    "vocabbuilder": {
+      "platform": "applicable",
+      "platform_basis": "Chooses the key layout with `Device:hasKeys()` and `Device:isTouchDevice()` (lines 80 and 89). Libra Colour has keys and a touch screen.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses dictionary popup buttons and word-list widgets with custom colors. It adds buttons through the popup's button table, not by patching the class. No core patches.",
+      "workflow": "Enable the plugin. Look up three words in the dictionary while reading, and open the vocabulary list. Add and remove a word, start a review session, and answer a card. Suspend, resume, close and reopen KOReader, and confirm the words and review progress persist.",
+      "data_note": "Writes `vocabulary_builder.sqlite3` and `lookup_history.lua` under the settings directory."
+    },
+    "wallabag": {
+      "platform": "applicable",
+      "platform_basis": "No device checks. It uses the shared network manager and standard socket calls.",
+      "class": "Plugin using shared widgets",
+      "class_basis": "Uses the download manager and the document registry. No core patches.",
+      "workflow": "Configure a test Wallabag server and sync. Download one article, mark it read, and open it in the reader. Check the reading position, suspend, resume, close and reopen KOReader, and confirm the article status persists."
+    }
+  }
+}
