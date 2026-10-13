@@ -20,6 +20,7 @@ members = [
     "kaia-book",
     "kaia-id",
     "kaia-sync",
+    "kaia-app",
 ]
 
 [workspace.package]

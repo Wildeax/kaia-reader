@@ -1,0 +1,22 @@
+[package]
+name = "kaia-app"
+description = "The Kaia app: main loop, navigation, surfaces and services, and the kaia binary."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+kaia-display = { path = "../kaia-display" }
+kaia-doc = { path = "../kaia-doc" }
+kaia-events = { path = "../kaia-events" }
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-input = { path = "../kaia-input" }
+kaia-library = { path = "../kaia-library" }
+# Build script only: the binary and the tests need MuPDF's library directories (see build.rs).
+kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
+kaia-platform = { path = "../kaia-platform" }
+kaia-ui = { path = "../kaia-ui" }
