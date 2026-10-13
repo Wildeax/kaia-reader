@@ -7,7 +7,7 @@ Status: proposed, version 1. Target panel: Kobo Libra Colour, 1264 x 1680, 300 P
 1. Grayscale first. Color is an accent on color panels and never the only sign of state. Every colored element also differs in shape, weight or label.
 2. Few surfaces. Home, Library, Reading, Notes and Settings. Each surface has one obvious way back to Home.
 3. No motion. No animations, no blinking, no clock that redraws on its own. Redraw only the region that changed.
-4. Large targets. Minimum touch target 9 mm, which is about 106 px at 300 PPI. Use `Screen:scaleBySize` for every size so other DPIs work.
+4. Large targets. Minimum touch target 9 mm, which is about 106 px at 300 PPI. Use `Screen:scaleBySize` for every size so other DPIs work. On the Libra Colour one scaled unit is about 2.1 px, so the 9 mm target is `scaleBySize(50)`.
 5. Advanced features stay, behind the existing menus. Kaia changes where things are reached, not whether they exist.
 
 ## Tokens
@@ -48,6 +48,7 @@ Fonts are the bundled Noto families, so no new font licenses enter the product.
 | `font.book_title` | NotoSerif-Bold | 22 |
 | `font.body` | NotoSans-Regular | 20 |
 | `font.body_bold` | NotoSans-Bold | 20 |
+| `font.shelf_title` | NotoSans-Bold | 16 |
 | `font.caption` | NotoSans-Regular | 16 |
 | `font.label` | NotoSans-Bold | 15 |
 
@@ -71,7 +72,7 @@ Grays use `Blitbuffer.Color8`. The accent uses `Blitbuffer.ColorRGB32` only when
 
 | Component | Module | Notes |
 |---|---|---|
-| Nav bar | `frontend/kaia/widget/navbar.lua` | Bottom bar with Home, Library, Notes, Settings. Icon plus label. The active item has a bold label and a `line.focus` underline. Height 120 px at 300 PPI scaled. |
+| Nav bar | `frontend/kaia/widget/navbar.lua` | Bottom bar with Home, Library, Notes, Settings. Icon plus label. The active item has a bold label and a `line.focus` underline. Height `scaleBySize(60)`, about 128 px on the Libra Colour. |
 | Header | `frontend/kaia/widget/header.lua` | Surface title in `font.title` on the left, optional right action. Static battery level text, drawn only when the surface repaints. |
 | Book card | `frontend/kaia/widget/bookcard.lua` | Cover, title in `font.book_title`, author in `font.caption` and `ink_secondary`, progress bar and percent. Two sizes: `hero` (Continue reading) and `shelf` (recent row). Missing cover shows a framed placeholder with the title. |
 | Progress bar | `frontend/kaia/widget/progressbar.lua` | `line.progress` tall, `divider` track, `accent` fill, percent text beside it so the value never depends on color. |

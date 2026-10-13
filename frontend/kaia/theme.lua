@@ -39,6 +39,7 @@ local Theme = {
         book_title = { "NotoSerif-Bold.ttf", 22 },
         body = { "NotoSans-Regular.ttf", 20 },
         body_bold = { "NotoSans-Bold.ttf", 20 },
+        shelf_title = { "NotoSans-Bold.ttf", 16 },
         caption = { "NotoSans-Regular.ttf", 16 },
         label = { "NotoSans-Bold.ttf", 15 },
     },
@@ -50,9 +51,15 @@ local Theme = {
         surface = Blitbuffer.COLOR_WHITE,
         surface_alt = Blitbuffer.Color8(0xEE),
     },
-    -- Minimum touch target, about 9 mm on a 300 PPI panel.
-    touch_target = s(106),
-    nav_height = s(120),
+    -- scaleBySize maps 1 unit to about 2.1 px on a 300 PPI panel.
+    -- Minimum touch target: 50 units, about 106 px or 9 mm on the Libra Colour.
+    touch_target = s(50),
+    nav_height = s(60),
+    -- Cover heights. Widths follow each cover's aspect ratio.
+    cover = {
+        hero_h = s(210),
+        shelf_h = s(140),
+    },
 }
 
 --- Returns a font face for a token name such as "title" or "caption".

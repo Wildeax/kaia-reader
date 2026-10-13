@@ -254,7 +254,8 @@ elseif directory then
 else
     -- Get which file to start with
     local last_file = G_reader_settings:readSetting("lastfile")
-    local start_with = G_reader_settings:readSetting("start_with") or "filemanager"
+    -- Kaia: Kaia Home is the default start screen.
+    local start_with = G_reader_settings:readSetting("start_with") or "kaia_home"
 
     local QuickStart = require("ui/quickstart")
     if not QuickStart:isShown() then
@@ -299,6 +300,9 @@ else
             FileManager.instance.collections:onShowColl()
         elseif start_with == "folder_shortcuts" then
             FileManager.instance.folder_shortcuts:onShowFolderShortcutsDialog()
+        elseif start_with == "kaia_home" then
+            -- Kaia: Home opens on top of the file manager, like the modules above.
+            require("kaia/home"):show()
         end
         exit_code = UIManager:run()
     end

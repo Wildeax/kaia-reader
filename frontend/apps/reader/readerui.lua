@@ -593,6 +593,10 @@ function ReaderUI:showFileManager(file, selected_files)
     else
         FileManager:showFiles(last_dir, last_file, selected_files)
     end
+    -- Kaia: closing a book returns to Kaia Home when it is the start screen.
+    if (G_reader_settings:readSetting("start_with") or "kaia_home") == "kaia_home" then
+        require("kaia/home"):show()
+    end
 end
 
 function ReaderUI:onShowingReader()
