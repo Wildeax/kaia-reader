@@ -145,6 +145,7 @@ local order = {
         "terminal",
         "----------------------------",
         "plugin_management",
+        "kaia_extensions", -- Kaia
         "patch_management",
         "advanced_settings",
         "developer_options",

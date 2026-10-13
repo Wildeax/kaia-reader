@@ -44,6 +44,7 @@ local BUILTIN_PLUGINS = {
     ["hotkeys"] = true,
     ["httpinspector"] = true,
     ["japanese"] = true,
+    ["kaiaexample"] = true,
     ["kaiastickers"] = true,
     ["keepalive"] = true,
     ["kosync"] = true,
@@ -247,6 +248,9 @@ function PluginLoader:_load(t)
         local ok, plugin_module = pcall(dofile, mainfile)
         if not ok or not plugin_module then
             logger.warn("Error when loading", mainfile, plugin_module)
+            -- Kaia: keep the error so the Extensions screen can show it.
+            self.load_errors = self.load_errors or {}
+            self.load_errors[v.name] = tostring(plugin_module or "main.lua returned nothing")
         elseif type(plugin_module.disabled) ~= "boolean" or not plugin_module.disabled then
             plugin_module.path = plugin_root
             plugin_module.name = v.name
@@ -582,5 +586,8 @@ function PluginLoader:finalize()
     -- Unpin stale references
     self.loaded_plugins = {}
 end
+
+-- Kaia: the Extensions screen reads which plugins are bundled.
+PluginLoader.builtin_plugins = BUILTIN_PLUGINS
 
 return PluginLoader

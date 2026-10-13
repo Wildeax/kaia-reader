@@ -537,6 +537,13 @@ To:
         text = _("Plugin management"),
         sub_item_table = PluginLoader:genPluginManagerSubItem(),
     }
+    -- Kaia: lists the plugins with their compatibility, state and settings.
+    self.menu_items.kaia_extensions = {
+        text = _("Extensions"),
+        callback = function()
+            require("kaia/extensions"):show()
+        end,
+    }
     self.menu_items.patch_management = dofile("frontend/ui/elements/patch_management.lua")
     self.menu_items.advanced_settings = {
         text = _("Advanced settings"),
