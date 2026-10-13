@@ -1,0 +1,21 @@
+[package]
+name = "kaia-display"
+description = "Display and input-source traits with a desktop window backend and a headless backend."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["desktop"]
+# Desktop window through minifb. The armv7 device build turns it off.
+desktop = ["dep:minifb"]
+
+[dependencies]
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-input = { path = "../kaia-input" }
+minifb = { version = "0.29", optional = true }
+
+[[example]]
+name = "hello_window"
+required-features = ["desktop"]
