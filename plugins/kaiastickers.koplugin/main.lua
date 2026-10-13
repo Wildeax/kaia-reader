@@ -20,7 +20,10 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local DocSettings = require("docsettings")
 local InfoMessage = require("ui/widget/infomessage")
+local InputDialog = require("ui/widget/inputdialog")
 local Layer = require("stickerlayer")
+local Notification = require("ui/widget/notification")
+local TextViewer = require("ui/widget/textviewer")
 local RustLib = require("kaia/rustlib")
 local Store = require("kaia/store")
 local Screen = require("device").screen
@@ -32,7 +35,15 @@ local util = require("util")
 local T = require("ffi/util").template
 local _ = require("gettext")
 
-local DEFAULT_WIDTH = 0.07 -- fraction of the screen width
+-- Size of a new image sticker, as a fraction of the screen width. Paged
+-- stickers scale it to the page width instead.
+local DEFAULT_WIDTH = 0.07
+-- Text notes are wider than images, and the drawn height follows the text.
+local TEXT_NOTE_WIDTH = 0.15
+local TEXT_NOTE_HEIGHT = 0.1 -- stored only, the drawn height follows the text
+local TEXT_MAX_CHARS = 2000
+local TITLE_PREVIEW_CHARS = 80
+local NOTES_PREVIEW_CHARS = 120
 -- Line heights from the anchor line. A margin sticker is centred on its line.
 -- An inline sticker sits just above the line.
 local DEFAULT_DY = { margin = 0, inline = -1.1 }
@@ -43,6 +54,9 @@ local REPAIR_MAX_HITS = 100
 local MIN_SIZE, MAX_SIZE = 0.02, 1
 local MOVE_STEP = 0.5
 local MAX_OFFSET = 50
+-- Seconds that the placement banner stays on screen. Placement mode stays on
+-- after it closes, until a sticker is placed or cancelled.
+local PLACEMENT_BANNER_SECONDS = 6
 
 local BUNDLED_DIR = "resources/kaia/stickers"
 
@@ -52,6 +66,9 @@ local active_store
 -- The md5 and file of the open book, or nil. Lets Notes find the open book
 -- without ReadHistory.
 local active_book
+-- The plugin instance of the open book, or nil. Notes actions that write to
+-- the store clear its sticker cache through this.
+local active_plugin
 
 local function nonEmpty(text)
     if type(text) == "string" and text ~= "" then
@@ -93,6 +110,23 @@ local function firstChars(text, n)
         return text
     end
     return table.concat(chars, "", 1, n)
+end
+
+-- Shortens a text for a title or a list row. Counts characters, not bytes.
+local function preview(text, max_chars)
+    local chars = util.splitToChars(text)
+    if #chars <= max_chars then
+        return text
+    end
+    return table.concat(chars, "", 1, max_chars - 1) .. "…"
+end
+
+-- Placement of a reflowable anchor. Missing values read as margin.
+local function placementOfSticker(anchor)
+    if anchor.placement == "inline" then
+        return "inline"
+    end
+    return "margin"
 end
 
 -- Moves two xpointers out by up to `words` words each side. Returns the
@@ -161,11 +195,14 @@ local function locateQuote(doc, quote)
     return first_exact
 end
 
--- Default size: 12 percent of the screen width, height from the image shape.
-local function defaultSize(asset)
+-- Default size: DEFAULT_WIDTH of the width, height from the image shape. The
+-- height uses the shape of the page: the screen for reflowable books, or the
+-- native page for paged ones. `page_w_over_h` is nil for reflowable books.
+local function defaultSize(asset, page_w_over_h)
     local w = DEFAULT_WIDTH
     local aspect = asset.height / asset.width
-    local h = w * aspect * Screen:getWidth() / Screen:getHeight()
+    local ratio = page_w_over_h or (Screen:getWidth() / Screen:getHeight())
+    local h = w * aspect * ratio
     return { w = w, h = clampRange(h, MIN_SIZE, MAX_SIZE) }
 end
 
@@ -221,7 +258,7 @@ local function noteEntry(sticker)
     end
     return {
         kind = "sticker",
-        text = nonEmpty(sticker.text) or _("Sticker"),
+        text = nonEmpty(sticker.text) and preview(sticker.text, NOTES_PREVIEW_CHARS) or _("Sticker"),
         location = location,
         datetime = sticker.created_at and os.date("%Y-%m-%d %H:%M:%S", sticker.created_at) or nil,
         sticker_id = sticker.id,
@@ -229,18 +266,20 @@ local function noteEntry(sticker)
     }
 end
 
--- Returns a map from partial_md5 to book file for the books in ReadHistory
--- that have a sidecar. The sidecar is read, never written.
+-- Returns two maps from partial_md5 for the books in ReadHistory that have a
+-- sidecar: the book file, and the title from doc_props. The sidecar is read,
+-- never written.
 local function filesByMD5(wanted)
-    local found = {}
+    local found, titles = {}, {}
     if active_book and wanted[active_book.md5] then
         found[active_book.md5] = active_book.file
+        titles[active_book.md5] = active_book.title
     end
     local ok, history = pcall(function()
         return require("readhistory").hist
     end)
     if not ok or not history then
-        return found
+        return found, titles
     end
     for _, item in ipairs(history) do
         local file = item.file
@@ -251,11 +290,13 @@ local function filesByMD5(wanted)
                 local md5 = read and type(stored) == "table" and stored.partial_md5_checksum
                 if md5 and wanted[md5] and not found[md5] then
                     found[md5] = file
+                    local props = stored.doc_props
+                    titles[md5] = type(props) == "table" and nonEmpty(props.title) or nil
                 end
             end
         end
     end
-    return found
+    return found, titles
 end
 
 -- Builds the table that frontend/kaia/notesdata.lua expects from the stickers.
@@ -271,7 +312,7 @@ local function collectForNotes(store)
             wanted[sticker.doc.partial_md5] = true
         end
     end
-    local files = filesByMD5(wanted)
+    local files, titles = filesByMD5(wanted)
     for _, sticker in ipairs(all) do
         local md5 = sticker.doc and sticker.doc.partial_md5
         local file = md5 and files[md5]
@@ -279,6 +320,7 @@ local function collectForNotes(store)
             local entry = noteEntry(sticker)
             if sticker.state == "orphaned" then
                 entry.file = file
+                entry.book_title = titles[md5]
                 table.insert(result.orphaned, entry)
             else
                 result.by_file[file] = result.by_file[file] or {}
@@ -313,7 +355,58 @@ local function stickerProvider()
     return result
 end
 
--- Sets the Notes provider when the notes module loads and no other provider is set.
+-- Runs fn with an open store: the reader's store while a book is open, or a
+-- store opened for this call. Returns what fn returns, or nil when no store
+-- opens or fn fails.
+local function withStore(fn)
+    if active_store then
+        local result = fn(active_store)
+        if active_plugin then
+            active_plugin:invalidate()
+        end
+        return result
+    end
+    local store = Store.open(Store.defaultDir())
+    if not store then
+        return nil
+    end
+    local ok, result = pcall(fn, store)
+    store:close()
+    if not ok then
+        logger.warn("kaia stickers: notes action failed", result)
+        return nil
+    end
+    return result
+end
+
+-- Actions that Notes runs on a sticker row. Notes passes sticker ids. Accept and
+-- remove change the store directly, so they work without opening the book.
+-- place runs after Notes has opened the book, with the reader instance.
+local StickerActions = {}
+
+--- Sets a needs_review sticker back to attached. Returns true on success.
+function StickerActions.accept(sticker_id)
+    return withStore(function(store)
+        return store:setState(sticker_id, "attached")
+    end) == true
+end
+
+--- Removes a sticker. Returns true on success.
+function StickerActions.remove(sticker_id)
+    return withStore(function(store)
+        return store:delete(sticker_id)
+    end) == true
+end
+
+--- Starts placement of an orphaned sticker in the reader that Notes opened.
+function StickerActions.place(ui, sticker_id)
+    if ui and ui.kaiastickers then
+        ui.kaiastickers:beginPlacement(sticker_id)
+    end
+end
+
+-- Sets the Notes provider and actions when the notes module loads and no other
+-- provider is set.
 local function installNotesProvider()
     local loaded, NotesData = pcall(require, "kaia/notesdata")
     if not loaded or type(NotesData) ~= "table" then
@@ -321,6 +414,9 @@ local function installNotesProvider()
     end
     if NotesData.stickerProvider == nil then
         NotesData.stickerProvider = stickerProvider
+    end
+    if NotesData.stickerActions == nil then
+        NotesData.stickerActions = StickerActions
     end
 end
 
@@ -351,7 +447,24 @@ function KaiaStickers:init()
                 end
                 local pos0, pos1 = selected.pos0, selected.pos1
                 this:onClose()
-                self:showStickerPicker(pos0, pos1)
+                if self.placing_id then
+                    self:placeFromHighlight(pos0, pos1)
+                else
+                    self:showStickerPicker(pos0, pos1)
+                end
+            end,
+        }
+    end)
+    -- Shown only while an orphaned sticker waits for a place.
+    self.ui.highlight:addToHighlightDialog("11_sticker_cancel", function(this)
+        return {
+            text = _("Cancel placement"),
+            show_in_highlight_dialog_func = function()
+                return self.placing_id ~= nil
+            end,
+            callback = function()
+                this:onClose()
+                self:cancelPlacement()
             end,
         }
     end)
@@ -388,7 +501,8 @@ function KaiaStickers:onReaderReady()
     end
     self.store = store
     active_store = store
-    active_book = { md5 = md5, file = file }
+    active_plugin = self
+    active_book = { md5 = md5, file = file, title = title }
     self.doc_id = { partial_md5 = md5, file_size = size, title = title }
     if changed then
         UIManager:show(InfoMessage:new{
@@ -410,12 +524,14 @@ function KaiaStickers:closeStore()
         if active_store == self.store then
             active_store = nil
             active_book = nil
+            active_plugin = nil
         end
     end
     self.store = nil
     self.doc_id = nil
     self.cache = nil
     self.repair_failed = nil
+    self.placing_id = nil
 end
 
 --- Gives the reader's tap handler a chance to open a sticker. Returns false
@@ -424,11 +540,15 @@ function KaiaStickers:onTap(_arg, ges)
     if not self.layer or not self.store or not ges or not ges.pos then
         return false
     end
-    local id = self.layer:hitTest(ges.pos)
+    local id, kind = self.layer:hitTest(ges.pos)
     if not id then
         return false
     end
-    self:showStickerMenu(id)
+    if kind == "marker" then
+        self:showTextNote(id)
+    else
+        self:showStickerMenu(id)
+    end
     return true
 end
 
@@ -481,7 +601,7 @@ function KaiaStickers:addStickerAt(pos0, pos1, caption, asset_path)
         anchor = anchor,
         asset = asset.sha256,
         text = nonEmpty(caption),
-        size = defaultSize(asset),
+        size = defaultSize(asset, self:pageRatio(anchor)),
         rotation = 0,
         state = "attached",
     }
@@ -490,6 +610,88 @@ function KaiaStickers:addStickerAt(pos0, pos1, caption, asset_path)
         return nil, msg2
     end
     self:invalidate()
+    UIManager:setDirty(self.view.dialog, "ui")
+    return record
+end
+
+--- Adds a text note at a selection. `text` is trimmed and must be 1 to 2000
+-- characters. Returns the stored record, or nil and a message.
+function KaiaStickers:addTextNoteAt(pos0, pos1, text)
+    if not self.store then
+        return nil, _("Stickers are not available for this book.")
+    end
+    local anchor, err = self:anchorFor(pos0, pos1)
+    if not anchor then
+        return nil, err
+    end
+    local record, code, msg = self.store:put{
+        doc = self.doc_id,
+        anchor = anchor,
+        text = text,
+        size = { w = TEXT_NOTE_WIDTH, h = TEXT_NOTE_HEIGHT },
+        rotation = 0,
+        state = "attached",
+    }
+    if not record then
+        logger.warn("kaia stickers: put failed", code, msg)
+        return nil, msg
+    end
+    self:invalidate()
+    UIManager:setDirty(self.view.dialog, "ui")
+    return record
+end
+
+--- Shows the placement banner and makes the next Sticker action on a selection
+-- move the sticker with this id to that place. Returns false when the sticker
+-- is not in this book.
+function KaiaStickers:beginPlacement(id)
+    if not self.store or not self:findSticker(id) then
+        return false
+    end
+    self.placing_id = id
+    UIManager:show(InfoMessage:new{
+        text = _("Long-press the text where this sticker belongs, then choose Sticker."),
+        timeout = PLACEMENT_BANNER_SECONDS,
+    })
+    return true
+end
+
+--- Ends placement mode without changing the sticker.
+function KaiaStickers:cancelPlacement()
+    self.placing_id = nil
+    UIManager:show(Notification:new{ text = _("Sticker placement cancelled.") })
+end
+
+--- Moves the waiting orphaned sticker to a selection. The id and the other
+-- fields stay the same. The state becomes attached. Returns the record, or nil
+-- and a message.
+function KaiaStickers:placeFromHighlight(pos0, pos1)
+    local id = self.placing_id
+    local sticker = id and self:findSticker(id)
+    if not sticker then
+        self.placing_id = nil
+        return nil, _("This sticker is no longer in this book.")
+    end
+    local anchor, err = self:anchorFor(pos0, pos1)
+    if not anchor then
+        UIManager:show(InfoMessage:new{ text = err or _("The sticker could not be placed.") })
+        return nil, err
+    end
+    -- Keep the placement the sticker had before it was orphaned.
+    if anchor.type == "reflowable" and sticker.anchor.type == "reflowable" then
+        local placement = placementOfSticker(sticker.anchor)
+        anchor.placement = placement
+        anchor.offset.dy = DEFAULT_DY[placement]
+    end
+    sticker.anchor = anchor
+    sticker.state = "attached"
+    local record, msg = self:putSticker(sticker)
+    if not record then
+        UIManager:show(InfoMessage:new{ text = msg or _("The sticker could not be saved.") })
+        return nil, msg
+    end
+    self.placing_id = nil
+    UIManager:show(Notification:new{ text = _("Sticker placed.") })
     UIManager:setDirty(self.view.dialog, "ui")
     return record
 end
@@ -523,6 +725,15 @@ function KaiaStickers:anchorFor(pos0, pos1)
         offset = { dx = 0, dy = DEFAULT_DY.margin },
         placement = "margin",
     }
+end
+
+-- Width over height of the page an anchor is on, or nil for reflowable books.
+function KaiaStickers:pageRatio(anchor)
+    if anchor.type ~= "fixed" then
+        return nil
+    end
+    local dims = self.document:getNativePageDimensions(anchor.page)
+    return dims and dims.w / dims.h or nil
 end
 
 function KaiaStickers:putSticker(sticker)
@@ -624,7 +835,16 @@ function KaiaStickers:showStickerMenu(id)
             { text = _("Smaller"), callback = function() edit(function(s) resize(s, 0.8) end) end },
         },
     }
-    if sticker.anchor.type == "reflowable" then
+    if not sticker.asset then
+        -- The box can be cut short, so the full text is one tap away.
+        table.insert(buttons, {
+            { text = _("Show text"), callback = function()
+                UIManager:close(dialog)
+                self:showTextNote(id)
+            end },
+        })
+    end
+    if sticker.anchor.type == "reflowable" and sticker.asset then
         local in_margin = sticker.anchor.placement ~= "inline"
         table.insert(buttons, {
             { text = _("Move up"), callback = function() edit(function(s) move(s, -MOVE_STEP) end) end },
@@ -656,7 +876,7 @@ function KaiaStickers:showStickerMenu(id)
         { text = _("Close"), callback = function() UIManager:close(dialog) end },
     })
     dialog = ButtonDialog:new{
-        title = sticker.text or _("Sticker"),
+        title = nonEmpty(sticker.text) and preview(sticker.text, TITLE_PREVIEW_CHARS) or _("Sticker"),
         buttons = buttons,
     }
     UIManager:show(dialog)
@@ -664,10 +884,6 @@ end
 
 function KaiaStickers:showStickerPicker(pos0, pos1)
     local files = stickerFiles()
-    if #files == 0 then
-        UIManager:show(InfoMessage:new{ text = _("No sticker images found.") })
-        return
-    end
     local picker
     local rows, row = {}, nil
     for i, file in ipairs(files) do
@@ -686,11 +902,129 @@ function KaiaStickers:showStickerPicker(pos0, pos1)
             end,
         })
     end
+    table.insert(rows, { {
+        text = _("Text note"),
+        callback = function()
+            UIManager:close(picker)
+            self:showTextNotePrompt(pos0, pos1)
+        end,
+    } })
     picker = ButtonDialog:new{
         title = _("Choose a sticker"),
         buttons = rows,
     }
     UIManager:show(picker)
+end
+
+--- Asks for the text of a note. `on_save` gets the trimmed text when it is
+-- 1 to TEXT_MAX_CHARS characters long. `initial` pre-fills the field.
+function KaiaStickers:promptText(title, initial, on_save)
+    local dialog
+    dialog = InputDialog:new{
+        title = title,
+        input = initial or "",
+        input_hint = _("Up to 2000 characters"),
+        allow_newline = true,
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    id = "close",
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+                {
+                    text = _("Save"),
+                    is_enter_default = true,
+                    callback = function()
+                        local text = util.trim(dialog:getInputText() or "")
+                        if text == "" then
+                            return
+                        end
+                        if #util.splitToChars(text) > TEXT_MAX_CHARS then
+                            UIManager:show(InfoMessage:new{
+                                text = T(_("The note is longer than %1 characters."), TEXT_MAX_CHARS),
+                            })
+                            return
+                        end
+                        UIManager:close(dialog)
+                        on_save(text)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
+--- Asks for the text of a new text note, then adds it at the selection.
+function KaiaStickers:showTextNotePrompt(pos0, pos1)
+    self:promptText(_("Text note"), "", function(text)
+        local record, msg = self:addTextNoteAt(pos0, pos1, text)
+        if not record then
+            UIManager:show(InfoMessage:new{ text = msg or _("The note could not be added.") })
+        end
+    end)
+end
+
+--- Replaces the text of a text note. Returns the record, or nil and a message.
+function KaiaStickers:editText(id, text)
+    local sticker = self:findSticker(id)
+    if not sticker or sticker.asset or not text or text == "" then
+        return nil, _("The note could not be changed.")
+    end
+    sticker.text = text
+    local record, msg = self:putSticker(sticker)
+    if record then
+        UIManager:setDirty(self.view.dialog, "ui")
+    end
+    return record, msg
+end
+
+--- Shows the full text of a text note, with Edit, Remove and Close.
+function KaiaStickers:showTextNote(id)
+    local sticker = self:findSticker(id)
+    if not sticker or not sticker.text then
+        return
+    end
+    local viewer
+    viewer = TextViewer:new{
+        title = _("Note"),
+        text = sticker.text,
+        buttons_table = {
+            {
+                {
+                    text = _("Edit"),
+                    callback = function()
+                        UIManager:close(viewer)
+                        self:promptText(_("Edit note"), sticker.text, function(text)
+                            local record, msg = self:editText(id, text)
+                            if not record then
+                                UIManager:show(InfoMessage:new{ text = msg })
+                            end
+                        end)
+                    end,
+                },
+                {
+                    text = _("Remove"),
+                    callback = function()
+                        UIManager:close(viewer)
+                        self:removeSticker(id)
+                        UIManager:setDirty(self.view.dialog, "ui")
+                    end,
+                },
+                {
+                    text = _("Close"),
+                    callback = function()
+                        UIManager:close(viewer)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(viewer)
 end
 
 function KaiaStickers:exportStickers()

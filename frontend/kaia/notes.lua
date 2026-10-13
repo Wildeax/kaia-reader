@@ -16,6 +16,7 @@ under "Needs repair" (orphaned) and in each book's entries.
 ]]
 
 local BookData = require("kaia/bookdata")
+local ButtonDialog = require("ui/widget/buttondialog") -- Kaia stickers: row menu
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local FocusManager = require("ui/widget/focusmanager")
@@ -334,7 +335,13 @@ function Notes:listItems(content_w)
                     primary = primary,
                     secondary = secondary,
                     quote = quote,
-                    callback = function() self:openEntry(self.book.file, entry) end,
+                    callback = function()
+                        if entry.kind == "sticker" then -- Kaia stickers: needs_review rows
+                            self:openSticker(self.book.file, entry)
+                        else
+                            self:openEntry(self.book.file, entry)
+                        end
+                    end,
                 }
             end)
         end
@@ -351,13 +358,14 @@ function Notes:listItems(content_w)
         end)
         for _k, entry in ipairs(orphaned) do
             local primary = entryLines(entry)
-            local source = entry.file and BookData.baseTitle(entry.file) or nil
+            local source = entry.book_title -- Kaia stickers: title from the sidecar
+                or (entry.file and BookData.baseTitle(entry.file) or nil)
             add(repair_h, function()
                 return EntryRow:new{
                     width = content_w,
                     primary = primary,
                     secondary = source,
-                    callback = function() self:openEntry(entry.file, entry) end,
+                    callback = function() self:openSticker(entry.file, entry) end, -- Kaia stickers
                 }
             end)
         end
@@ -546,7 +554,8 @@ end
 
 --- Closes Notes and opens the book at the entry's location.
 -- The location is the same pair the bookmark browser passes to gotoBookmark.
-function Notes:openEntry(file, entry)
+-- `after_open`, when given, runs with the reader instance after the jump.
+function Notes:openEntry(file, entry, after_open)
     if not file then
         return
     end
@@ -559,7 +568,68 @@ function Notes:openEntry(file, entry)
         if ui.bookmark then
             ui.bookmark:gotoBookmark(location.page, location.pos0)
         end
+        if after_open then -- Kaia stickers
+            after_open(ui)
+        end
     end)
+end
+
+-- Kaia stickers: a sticker row needs review or repair before it opens a book.
+-- A needs_review sticker can be accepted, and an orphaned one can be placed
+-- again: the book opens and the reader waits for a Sticker action on a
+-- selection. Both can be removed. Other rows open the book as before.
+function Notes:openSticker(file, entry)
+    local actions = NotesData.stickerActions
+    local state = entry.state
+    if not actions or (state ~= "needs_review" and state ~= "orphaned") then
+        return self:openEntry(file, entry)
+    end
+    local dialog
+    local function close()
+        UIManager:close(dialog)
+    end
+    local function reload()
+        if self.book then
+            self.entries = self:loadEntries(self.book.file)
+        end
+        self.books = NotesData.books(self.history)
+        self:refresh()
+    end
+    local rows = {}
+    local function addRow(text, callback)
+        table.insert(rows, { { text = text, callback = callback } })
+    end
+    if state == "needs_review" then
+        addRow(_("Accept position"), function()
+            close()
+            if actions.accept(entry.sticker_id) then
+                reload()
+            end
+        end)
+        addRow(_("Open book"), function()
+            close()
+            self:openEntry(file, entry)
+        end)
+    else
+        addRow(_("Place sticker"), function()
+            close()
+            self:openEntry(file, entry, function(ui)
+                actions.place(ui, entry.sticker_id)
+            end)
+        end)
+    end
+    addRow(_("Remove sticker"), function()
+        close()
+        if actions.remove(entry.sticker_id) then
+            reload()
+        end
+    end)
+    addRow(_("Close"), close)
+    dialog = ButtonDialog:new{
+        title = entry.text or _("Sticker"),
+        buttons = rows,
+    }
+    UIManager:show(dialog)
 end
 
 --- Closes Notes and Home, then shows Home.
