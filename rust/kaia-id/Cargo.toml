@@ -1,0 +1,16 @@
+[package]
+name = "kaia-id"
+description = "Document identity shared with KOReader: partial MD5 and file name MD5."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+md-5 = "0.11.0"
+
+[dev-dependencies]
+tempfile = "3"

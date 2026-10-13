@@ -18,6 +18,8 @@ members = [
     "kaia-fbink-sys",
     "kaia-dict",
     "kaia-book",
+    "kaia-id",
+    "kaia-sync",
 ]
 
 [workspace.package]

@@ -16,7 +16,7 @@
 pub mod annotation;
 pub mod cache;
 pub mod error;
-pub mod hash;
+
 pub mod layout;
 pub mod pos;
 pub mod session;
@@ -32,9 +32,9 @@ mod time;
 pub use annotation::{Annotation, AnnotationId, Drawer, PageAnnotation};
 pub use cache::CacheStats;
 pub use error::{BookError, Result};
-pub use hash::partial_md5;
 pub use kaia_doc::{Engine, Link, LinkTarget, Location, Margins, Metadata, PageSize, RectF, TocEntry};
 pub use kaia_gfx::{PixelFormat, Pixmap, Point, Rect, Size};
+pub use kaia_id::partial_md5;
 pub use layout::TextLayout;
 pub use pos::Pos;
 pub use session::{BookEvent, BookSession, OpenOptions, PageInfo, SearchResult, Selection};

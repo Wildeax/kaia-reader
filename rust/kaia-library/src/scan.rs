@@ -13,9 +13,9 @@ use rusqlite::{params, OptionalExtension, Row, TransactionBehavior};
 
 use crate::error::Result;
 use crate::extract::{extract_guarded, Cover, Extracted, COVER_MIME};
-use crate::hash::partial_md5;
 use crate::types::{Progress, ScanReport};
 use crate::{now_unix, Library};
+use kaia_id::partial_md5;
 
 /// Extraction attempts before a book is marked failed. A book whose extraction
 /// keeps dying (a crash or a kill during extraction) is not retried after this

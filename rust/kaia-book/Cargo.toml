@@ -16,6 +16,7 @@ cre = ["kaia-doc/cre"]
 unsafe_code = "forbid"
 
 [dependencies]
+kaia-id = { path = "../kaia-id" }
 kaia-doc = { path = "../kaia-doc", default-features = false }
 kaia-gfx = { path = "../kaia-gfx" }
 kaia-events = { path = "../kaia-events" }

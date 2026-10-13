@@ -21,7 +21,6 @@
 
 mod error;
 mod extract;
-mod hash;
 mod import;
 mod query;
 mod scan;
@@ -34,7 +33,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 
 pub use error::{LibraryError, Result};
-pub use hash::partial_md5;
+pub use kaia_id::partial_md5;
 pub use types::{
     Book, Collection, CoverImage, CoverSize, Filter, ImportReport, Progress, ScanReport, Sort, SortKey,
     Status,

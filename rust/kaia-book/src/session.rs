@@ -37,13 +37,13 @@ use crate::annotation::{Annotation, AnnotationId, Drawer, PageAnnotation};
 use crate::cache::{CacheStats, PageCache, RenderKey};
 use crate::engine::{page_from_percent, Event, Facts, Handle, OrderKey, RawSelection, Worker};
 use crate::error::{BookError, Result};
-use crate::hash::partial_md5;
 use crate::layout::TextLayout;
 use crate::pos::Pos;
 use crate::sidecar::{map_sidecar, read_first, sidecar_candidates, ImportReport, SidecarLocation};
 use crate::state::{read_state, write_state, BookState, DocumentId, ReadingTime, MAX_READING_ENTRIES};
 use crate::time::now_datetime;
 use crate::view::{PageTransform, ZoomMode};
+use kaia_id::partial_md5;
 
 /// A visit to a page longer than this is not counted. The device may have slept.
 const MAX_VISIT_SECONDS: f64 = 30.0 * 60.0;

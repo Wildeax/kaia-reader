@@ -12,10 +12,10 @@ use kaia_luadata::{Key, Table, Value};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
 use crate::error::{LibraryError, Result};
-use crate::hash::partial_md5;
 use crate::query::canonical_or;
 use crate::types::ImportReport;
 use crate::{now_unix, Library};
+use kaia_id::partial_md5;
 
 impl Library {
     /// Imports KOReader's `history.lua`: a list of `{ time = <unix seconds>,

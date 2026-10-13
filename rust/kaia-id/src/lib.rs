@@ -1,6 +1,9 @@
-//! KOReader's partial MD5, the same digest as `util.partialMD5` in
-//! `frontend/util.lua`. The reader stores it in the sidecar as
-//! `partial_md5_checksum`, so the library and the reader agree on identity.
+//! Document identity shared with KOReader.
+//!
+//! `partial_md5` is the same digest as `util.partialMD5` in `frontend/util.lua`.
+//! KOReader stores it in the sidecar as `partial_md5_checksum` and uses it as
+//! the document id for progress sync, so the library, the reader and sync all
+//! agree on identity. This crate has no C dependencies.
 
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
@@ -60,6 +63,15 @@ fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
         n += r;
     }
     Ok(n)
+}
+
+/// MD5 of a file name (the last path component), lowercase hex. KOReader's
+/// sync plugin uses this as the document id when the user picks file name
+/// matching instead of content. Returns None when the path has no file name.
+pub fn filename_md5(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_string_lossy();
+    let digest = Md5::digest(name.as_bytes());
+    Some(digest.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 #[cfg(test)]
