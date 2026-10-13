@@ -15,13 +15,13 @@ use std::rc::Rc;
 use kaia_events::{Ctx, DirtyQueue, Event, EventHandler, ShowOpts, WindowId};
 use kaia_gfx::text::FontSystem;
 use kaia_gfx::{draw, Pixmap, Point, Rect, Size};
-use kaia_input::Key;
+use kaia_input::{Key, KeyEvent};
 
 use crate::assets::{Assets, IconCache, SharedAssets};
 use crate::geometry::Constraints;
 use crate::pod::{Dispatch, WidgetId, WidgetPod};
 use crate::theme::Theme;
-use crate::widget::{Handled, LayoutCx, Out, PaintCx, PaintHint, UiEvent, Widget};
+use crate::widget::{Handled, LayoutCx, Out, PaintCx, PaintHint, UiEvent, UpdateCx, Widget};
 
 const ORIGIN: Point = Point::new(0, 0);
 
@@ -103,9 +103,14 @@ impl Window {
             relayout(inner);
             inner.full = true;
         }
+        let mut assets = inner.assets.borrow_mut();
         let mut d = Dispatch {
             ctx: &mut *ctx,
             out: &mut inner.outbox,
+            theme: &inner.theme,
+            fonts: &mut assets.fonts,
+            window: Some(self.clone()),
+            keys: Vec::new(),
             focus: inner.focus,
             focus_request: None,
         };
@@ -130,13 +135,65 @@ impl Window {
         if let Some(id) = d.focus_request.take() {
             set_focus(&mut inner.root, &mut d, id);
         }
-        inner.focus = d.focus;
-        if let Some(id) = inner.id {
-            if inner.root.has_requests() {
-                ctx.dirty.mark(id);
+        // Keys that widgets sent (the on-screen keyboard) go to the focused widget.
+        for key in std::mem::take(&mut d.keys) {
+            if let Some(f) = d.focus {
+                let key_ev = UiEvent::Key(KeyEvent {
+                    key,
+                    pressed: true,
+                    time_us: 0,
+                });
+                inner.root.route_focused(&mut d, ORIGIN, f, &key_ev);
             }
         }
+        inner.focus = d.focus;
+        drop(assets);
+        mark_if_requested(inner, ctx);
         handled
+    }
+
+    /// Runs `f` on the first widget with `key` that has type `T`. The closure
+    /// returns nothing; it requests paint or layout through [`UpdateCx`], and
+    /// the window applies those requests. Returns false when no widget with
+    /// that key has type `T`. The `ctx` is the app context, for the dirty queue.
+    pub fn update<T, F>(&self, ctx: &mut Ctx, key: &str, f: F) -> bool
+    where
+        T: Widget + 'static,
+        F: FnOnce(&mut T, &mut UpdateCx<'_>),
+    {
+        let mut guard = self.inner.borrow_mut();
+        let inner = &mut *guard;
+        let done = match inner.root.find_key(key, ORIGIN) {
+            Some((pod, _)) => run_update::<T, F>(pod, ctx, f),
+            None => false,
+        };
+        mark_if_requested(inner, ctx);
+        done
+    }
+
+    /// Like [`Window::update`], for the widget with `id`. Used by scheduled
+    /// work that holds a widget id rather than a key.
+    pub(crate) fn update_id<T, F>(&self, ctx: &mut Ctx, id: WidgetId, f: F) -> bool
+    where
+        T: Widget + 'static,
+        F: FnOnce(&mut T, &mut UpdateCx<'_>),
+    {
+        let mut guard = self.inner.borrow_mut();
+        let inner = &mut *guard;
+        let done = match inner.root.find_mut(id, ORIGIN) {
+            Some((pod, _)) => run_update::<T, F>(pod, ctx, f),
+            None => false,
+        };
+        mark_if_requested(inner, ctx);
+        done
+    }
+
+    /// The absolute bounds of the first widget with `key`, from the last layout.
+    /// Returns `None` when no widget has the key.
+    pub fn find_rect(&self, key: &str) -> Option<Rect> {
+        let mut guard = self.inner.borrow_mut();
+        let (pod, origin) = guard.root.find_key(key, ORIGIN)?;
+        Some(pod.abs(origin))
     }
 
     /// Takes the events and actions that widgets sent to the app.
@@ -194,6 +251,32 @@ impl Window {
 impl EventHandler for Window {
     fn handle(&mut self, ev: &Event, ctx: &mut Ctx) -> bool {
         self.dispatch(UiEvent::Named(ev.clone()), ctx) == Handled::Yes
+    }
+}
+
+/// Runs a keyed update on `pod` when its widget has type `T`, then applies the
+/// requests the closure made. Returns false when the type does not match.
+fn run_update<T, F>(pod: &mut WidgetPod, ctx: &mut Ctx, f: F) -> bool
+where
+    T: Widget + 'static,
+    F: FnOnce(&mut T, &mut UpdateCx<'_>),
+{
+    let Some(widget) = pod.widget_mut().as_any_mut().downcast_mut::<T>() else {
+        return false;
+    };
+    let mut cx = UpdateCx::new(ctx);
+    f(widget, &mut cx);
+    let (paint, layout) = cx.finish();
+    pod.apply_update(paint, layout);
+    true
+}
+
+/// Marks the window for the app when the tree has pending work.
+fn mark_if_requested(inner: &mut Inner, ctx: &mut Ctx) {
+    if let Some(id) = inner.id {
+        if inner.root.has_requests() {
+            ctx.dirty.mark(id);
+        }
     }
 }
 

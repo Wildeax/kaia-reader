@@ -139,6 +139,27 @@ impl Harness {
         self.window.drain_outbox()
     }
 
+    /// Runs [`Window::update`] on the window under test.
+    pub fn update<T, F>(&mut self, key: &str, f: F) -> bool
+    where
+        T: Widget + 'static,
+        F: FnOnce(&mut T, &mut crate::widget::UpdateCx<'_>),
+    {
+        self.window.update::<T, F>(&mut self.ctx, key, f)
+    }
+
+    /// The absolute bounds of the widget with `key`, from the last layout.
+    pub fn find_rect(&self, key: &str) -> Option<Rect> {
+        self.window.find_rect(key)
+    }
+
+    /// Runs the tasks that are due now, such as the release of a button press.
+    /// The app runs them on its loop. Tests call this instead of waiting.
+    pub fn run_tasks(&mut self) -> usize {
+        let now = self.ctx.scheduler.now();
+        self.ctx.run_due(now)
+    }
+
     /// The focused widget.
     pub fn focus(&self) -> Option<WidgetId> {
         self.window.focus()

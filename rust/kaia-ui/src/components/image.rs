@@ -23,9 +23,19 @@ impl Image {
             scaled: None,
         }
     }
+
+    /// Replaces the picture. The scaled copy is rebuilt on the next paint.
+    /// Call [`UpdateCx::request_layout`](crate::UpdateCx::request_layout) when the
+    /// aspect ratio changes and the layout must follow it.
+    pub fn set_pixmap(&mut self, source: Pixmap) {
+        self.source = source;
+        self.scaled = None;
+    }
 }
 
 impl Widget for Image {
+    crate::impl_as_any!();
+
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         let size = match self.fit {
             FitMode::Contain => fit_size(self.source.size(), c.max, FitMode::Contain),

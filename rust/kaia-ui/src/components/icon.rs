@@ -1,6 +1,6 @@
 //! [`Icon`]: a monochrome SVG from `resources/icons/mdlight`.
 
-use kaia_gfx::{Point, Size};
+use kaia_gfx::{Color, Point, Rect, Size};
 
 use crate::geometry::Constraints;
 use crate::theme::Tone;
@@ -23,9 +23,32 @@ impl Icon {
             tone,
         }
     }
+
+    /// Switches to another icon of the same size.
+    pub fn set_name(&mut self, name: impl Into<String>) {
+        self.name = name.into();
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// Draws the icon `name` at `px` square with its top-left corner at `at`.
+/// A missing icon draws an outline of the box in `color`.
+pub(crate) fn draw_icon_at(cx: &mut PaintCx, name: &str, px: u32, color: Color, at: Point) {
+    match cx.icons.get(name, Size::new(px, px), color) {
+        Ok(mask) => cx.blit_alpha(&mask, at),
+        Err(_) => {
+            let hairline = cx.theme.line.hairline;
+            cx.border(Rect::new(at.x, at.y, px, px), 0, hairline, color);
+        }
+    }
 }
 
 impl Widget for Icon {
+    crate::impl_as_any!();
+
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(Size::new(self.px, self.px))
     }
@@ -33,17 +56,8 @@ impl Widget for Icon {
     fn paint(&mut self, cx: &mut PaintCx) {
         let b = cx.bounds();
         let color = cx.color(self.tone);
-        let size = Size::new(self.px, self.px);
-        match cx.icons.get(&self.name, size, color) {
-            Ok(mask) => {
-                let x = b.x + (b.w as i32 - self.px as i32) / 2;
-                let y = b.y + (b.h as i32 - self.px as i32) / 2;
-                cx.blit_alpha(&mask, Point::new(x, y));
-            }
-            Err(_) => {
-                let hairline = cx.theme.line.hairline;
-                cx.border(b, 0, hairline, color);
-            }
-        }
+        let x = b.x + (b.w as i32 - self.px as i32) / 2;
+        let y = b.y + (b.h as i32 - self.px as i32) / 2;
+        draw_icon_at(cx, &self.name, self.px, color, Point::new(x, y));
     }
 }

@@ -87,6 +87,7 @@ impl Probe {
 }
 
 impl Widget for Probe {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(self.size)
     }
@@ -132,6 +133,7 @@ impl Tapper {
 }
 
 impl Widget for Tapper {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(self.size)
     }
@@ -166,6 +168,7 @@ pub struct Holder {
 }
 
 impl Widget for Holder {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let mut y = 0;
         for child in &mut self.children {

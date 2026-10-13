@@ -8,6 +8,7 @@
 
 pub mod assets;
 pub mod components;
+pub mod controls;
 pub mod geometry;
 pub mod harness;
 mod pod;
@@ -20,5 +21,5 @@ pub use geometry::{Alignment, Constraints, Insets};
 pub use harness::{render, Harness};
 pub use pod::{WidgetId, WidgetPod};
 pub use theme::{FontSpec, Scale, Theme, Tone};
-pub use widget::{AppAction, EventCx, Handled, LayoutCx, Out, PaintCx, PaintHint, UiEvent, Widget};
+pub use widget::{AppAction, EventCx, Handled, LayoutCx, Out, PaintCx, PaintHint, UiEvent, UpdateCx, Widget};
 pub use window::Window;

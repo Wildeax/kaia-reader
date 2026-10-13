@@ -17,6 +17,8 @@ impl Divider {
 }
 
 impl Widget for Divider {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(Size::new(c.max.w, cx.theme.line.divider))
     }

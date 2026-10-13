@@ -255,6 +255,8 @@ macro_rules! linear {
         }
 
         impl Widget for $name {
+            crate::impl_as_any!();
+
             fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
                 self.0.layout(cx, c)
             }
@@ -291,6 +293,8 @@ impl Spacer {
 }
 
 impl Widget for Spacer {
+    crate::impl_as_any!();
+
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.min
     }
@@ -317,6 +321,8 @@ impl Expanded {
 }
 
 impl Widget for Expanded {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let s = self.child.layout(cx, c);
         self.child.set_origin(Point::new(0, 0));

@@ -12,6 +12,7 @@ mod text;
 pub use boxes::{Align, Frame, Padding, SizedBox, Stack};
 pub use divider::Divider;
 pub use flex::{Column, CrossAlign, Expanded, MainAlign, MainSize, Row, Spacer};
+pub(crate) use icon::draw_icon_at;
 pub use icon::Icon;
 pub use image::Image;
 pub use progress::ProgressBar;

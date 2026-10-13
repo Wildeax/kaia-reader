@@ -7,10 +7,14 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use kaia_events::Ctx;
+use kaia_gfx::text::FontSystem;
 use kaia_gfx::{Point, Rect, Size};
+use kaia_input::Key;
 
 use crate::geometry::Constraints;
+use crate::theme::Theme;
 use crate::widget::{EventCx, Handled, LayoutCx, Out, PaintCx, PaintHint, PaintRequest, UiEvent, Widget};
+use crate::window::Window;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -22,6 +26,12 @@ pub struct WidgetId(u64);
 pub(crate) struct Dispatch<'a> {
     pub ctx: &'a mut Ctx,
     pub out: &'a mut Vec<Out>,
+    pub theme: &'a Theme,
+    pub fonts: &'a mut FontSystem,
+    /// The window that routes the event, for widgets that schedule later work.
+    pub window: Option<Window>,
+    /// Keys that widgets sent to the focused widget. The window routes them after the event.
+    pub keys: Vec<Key>,
     pub focus: Option<WidgetId>,
     /// Set by a widget that asked for focus. The window applies it after routing.
     pub focus_request: Option<WidgetId>,
@@ -30,6 +40,7 @@ pub(crate) struct Dispatch<'a> {
 /// A widget in the tree. Containers own their children as pods.
 pub struct WidgetPod {
     id: WidgetId,
+    key: Option<String>,
     widget: Box<dyn Widget>,
     /// Origin relative to the parent, and size from the last layout.
     rect: Rect,
@@ -47,6 +58,7 @@ impl WidgetPod {
     pub fn new(widget: impl Widget + 'static) -> Self {
         Self {
             id: WidgetId(NEXT_ID.fetch_add(1, Ordering::Relaxed)),
+            key: None,
             widget: Box::new(widget),
             rect: Rect::default(),
             visible: true,
@@ -54,6 +66,18 @@ impl WidgetPod {
             needs_layout: true,
             paint: None,
         }
+    }
+
+    /// Names this widget so [`Window::update`] and [`Window::find_rect`] can reach it.
+    /// Keys need not be unique, but the first match in paint order wins.
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// The key set with [`WidgetPod::with_key`].
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
     }
 
     /// Lets this widget take focus through the page-turn keys.
@@ -142,7 +166,23 @@ impl WidgetPod {
         });
     }
 
-    fn abs(&self, origin: Point) -> Rect {
+    /// Applies the requests a keyed update made.
+    pub(crate) fn apply_update(&mut self, paint: Option<PaintRequest>, layout: bool) {
+        if let Some(req) = paint {
+            self.add_paint(req);
+        }
+        if layout {
+            self.needs_layout = true;
+        }
+    }
+
+    /// The widget itself, for downcasting in [`Window::update`].
+    pub(crate) fn widget_mut(&mut self) -> &mut dyn Widget {
+        self.widget.as_mut()
+    }
+
+    /// The absolute bounds, given the absolute origin of the parent.
+    pub(crate) fn abs(&self, origin: Point) -> Rect {
         Rect::new(
             origin.x + self.rect.x,
             origin.y + self.rect.y,
@@ -226,16 +266,26 @@ impl WidgetPod {
         let mut cx = EventCx {
             ctx: &mut *d.ctx,
             out: &mut *d.out,
+            theme: d.theme,
+            fonts: &mut *d.fonts,
+            window: d.window.clone(),
+            id: self.id,
             bounds,
             focused: d.focus == Some(self.id),
             paint: None,
             layout: false,
             focus: false,
+            keys: Vec::new(),
         };
         let handled = self.widget.event(&mut cx, ev);
         let EventCx {
-            paint, layout, focus, ..
+            paint,
+            layout,
+            focus,
+            keys,
+            ..
         } = cx;
+        d.keys.extend(keys);
         if let Some(req) = paint {
             self.add_paint(req);
         }
@@ -333,6 +383,21 @@ impl WidgetPod {
         let o = origin_of(self.abs(origin));
         for child in self.widget.children_mut() {
             if let Some(found) = child.find_mut(id, o) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Finds the first pod with `key` in paint order. Returns it with the
+    /// origin of its parent.
+    pub(crate) fn find_key(&mut self, key: &str, origin: Point) -> Option<(&mut WidgetPod, Point)> {
+        if self.key.as_deref() == Some(key) {
+            return Some((self, origin));
+        }
+        let o = origin_of(self.abs(origin));
+        for child in self.widget.children_mut() {
+            if let Some(found) = child.find_key(key, o) {
                 return Some(found);
             }
         }

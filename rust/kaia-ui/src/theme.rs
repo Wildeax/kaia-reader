@@ -113,6 +113,10 @@ pub struct Theme {
     pub line: Lines,
     pub font: Fonts,
     pub palette: Palette,
+    /// Smallest size of a tappable control: 9 mm, `scaleBySize(50)`.
+    pub touch_target: u32,
+    /// Icon size for controls: `scaleBySize(32)`.
+    pub icon_size: u32,
 }
 
 impl Theme {
@@ -155,6 +159,8 @@ impl Theme {
                 caption: font("Noto Sans", 16, 400),
                 label: font("Noto Sans", 15, 700),
             },
+            touch_target: dp(50),
+            icon_size: dp(32),
             palette: Palette {
                 ink,
                 ink_secondary: Color::gray(0x55),

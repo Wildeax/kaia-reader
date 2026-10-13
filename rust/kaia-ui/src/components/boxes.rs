@@ -21,6 +21,8 @@ impl Stack {
 }
 
 impl Widget for Stack {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let inner = c.loosen();
         let mut size = Size::new(0, 0);
@@ -58,6 +60,8 @@ fn layout_inset(child: &mut WidgetPod, cx: &mut LayoutCx, c: Constraints, insets
 }
 
 impl Widget for Padding {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         layout_inset(&mut self.child, cx, c, self.insets)
     }
@@ -86,6 +90,8 @@ impl Align {
 }
 
 impl Widget for Align {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let size = c.constrain(c.max);
         let s = self.child.layout(cx, c.loosen());
@@ -128,6 +134,8 @@ impl SizedBox {
 }
 
 impl Widget for SizedBox {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let mut inner = c;
         if let Some(w) = self.width {
@@ -202,6 +210,8 @@ impl Frame {
 }
 
 impl Widget for Frame {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         layout_inset(&mut self.child, cx, c, self.padding)
     }

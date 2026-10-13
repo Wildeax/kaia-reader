@@ -19,6 +19,7 @@ struct Toggler {
 }
 
 impl Widget for Toggler {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(Size::new(200, 40))
     }
@@ -58,6 +59,7 @@ struct Bleeder {
 }
 
 impl Widget for Bleeder {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.constrain(Size::new(50, 50))
     }

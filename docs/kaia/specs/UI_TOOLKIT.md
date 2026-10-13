@@ -65,3 +65,9 @@ Foreign: `ForeignWidget` hands its rect and events to a `trait ForeignRenderer {
 - `render(root, size, theme) -> Pixmap` lays out and paints a tree headless.
 - `Harness` wraps a window stack and a headless display: `tap(point)`, `swipe(from, to)`, `key(k)`, `send(event)`, `frame()`, `refreshes()`.
 - Every component has a golden PNG test at 1264x1680 and 300 DPI, plus behavior tests through the harness.
+
+## App loop contract
+
+Each loop iteration runs in this order: read input, dispatch it to the window stack, paint dirty windows and send refreshes, then run the scheduler's due tasks, then paint again if a task made something dirty. Press feedback depends on this order: a tapped button paints its pressed state in the first paint and releases in a `next_tick` task, so the pressed frame reaches the panel before the release.
+
+Controls clear their own bounds to the theme surface color before painting. A control placed on a tinted card needs the card color passed as its background (to be added when the first surface needs it).

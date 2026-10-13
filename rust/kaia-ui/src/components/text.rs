@@ -24,9 +24,22 @@ impl Label {
             layout: None,
         }
     }
+
+    /// Replaces the text. If the new text changes the size, also call
+    /// [`UpdateCx::request_layout`](crate::UpdateCx::request_layout) in the update.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = text.into();
+        self.layout = None;
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 impl Widget for Label {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let style = cx.theme.style(&self.font, self.tone);
         let tl = cx.fonts.layout(&self.text, &style, c.max.w, Some(1), true);
@@ -36,8 +49,13 @@ impl Widget for Label {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        let b = cx.bounds();
+        if self.layout.is_none() {
+            // Text changed since the last layout. Lay it out at the box width.
+            let style = cx.theme.style(&self.font, self.tone);
+            self.layout = Some(cx.fonts.layout(&self.text, &style, b.w, Some(1), true));
+        }
         if let Some(tl) = &self.layout {
-            let b = cx.bounds();
             cx.text(tl, Point::new(b.x, b.y));
         }
     }
@@ -68,9 +86,22 @@ impl Paragraph {
         self.max_lines = Some(n);
         self
     }
+
+    /// Replaces the text. Call [`UpdateCx::request_layout`](crate::UpdateCx::request_layout)
+    /// in the update when the height can change.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = text.into();
+        self.layout = None;
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 impl Widget for Paragraph {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let style = cx.theme.style(&self.font, self.tone);
         let tl = cx.fonts.layout(&self.text, &style, c.max.w, self.max_lines, true);
@@ -80,8 +111,12 @@ impl Widget for Paragraph {
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {
+        let b = cx.bounds();
+        if self.layout.is_none() {
+            let style = cx.theme.style(&self.font, self.tone);
+            self.layout = Some(cx.fonts.layout(&self.text, &style, b.w, self.max_lines, true));
+        }
         if let Some(tl) = &self.layout {
-            let b = cx.bounds();
             cx.text(tl, Point::new(b.x, b.y));
         }
     }

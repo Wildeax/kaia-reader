@@ -172,6 +172,7 @@ fn a_widget_can_take_focus_on_tap() {
 struct Emitter;
 
 impl kaia_ui::Widget for Emitter {
+    kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut kaia_ui::LayoutCx, c: kaia_ui::Constraints) -> Size {
         c.constrain(SCREEN)
     }

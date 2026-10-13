@@ -24,12 +24,24 @@ impl ProgressBar {
         }
     }
 
+    /// Sets the value from 0.0 to 1.0. Values outside that range are clamped.
+    pub fn set_value(&mut self, value: f32) {
+        self.value = value.clamp(0.0, 1.0);
+        self.label = None;
+    }
+
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
     fn percent_text(&self) -> String {
         format!("{}%", (self.value * 100.0).round() as u32)
     }
 }
 
 impl Widget for ProgressBar {
+    crate::impl_as_any!();
+
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let style = cx.theme.style(&cx.theme.font.caption, Tone::Ink);
         let text = self.percent_text();
@@ -42,6 +54,11 @@ impl Widget for ProgressBar {
 
     fn paint(&mut self, cx: &mut PaintCx) {
         let b = cx.bounds();
+        if self.label.is_none() {
+            let style = cx.theme.style(&cx.theme.font.caption, Tone::Ink);
+            let text = self.percent_text();
+            self.label = Some(cx.fonts.layout(&text, &style, b.w, Some(1), false));
+        }
         let bar_h = cx.theme.line.progress;
         let gap = cx.theme.space.sm;
         let label_w = self.label.as_ref().map_or(0, |tl| tl.width);
