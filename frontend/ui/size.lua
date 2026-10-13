@@ -32,8 +32,8 @@ local Size = {
     border = {
         default = Screen:scaleBySize(1),
         thin = Screen:scaleBySize(0.5),
-        button = Screen:scaleBySize(1.5),
-        window = Screen:scaleBySize(1.5),
+        button = Screen:scaleBySize(1), -- Kaia: upstream 1.5
+        window = Screen:scaleBySize(1), -- Kaia: upstream 1.5
         thick = Screen:scaleBySize(2),
         inputtext = Screen:scaleBySize(2),
     },
@@ -47,18 +47,18 @@ local Size = {
         button = 0,
     },
     padding = {
-        default = Screen:scaleBySize(5),
+        default = Screen:scaleBySize(6), -- Kaia: upstream 5
         tiny = Screen:scaleBySize(1),
         small = Screen:scaleBySize(2),
-        large = Screen:scaleBySize(10),
+        large = Screen:scaleBySize(12), -- Kaia: upstream 10
         button = Screen:scaleBySize(2),
-        buttontable = Screen:scaleBySize(4),
+        buttontable = Screen:scaleBySize(6), -- Kaia: upstream 4
         fullscreen = Screen:scaleBySize(15),
     },
     radius = {
         default = Screen:scaleBySize(2),
-        window = Screen:scaleBySize(7),
-        button = Screen:scaleBySize(7),
+        window = Screen:scaleBySize(12), -- Kaia: upstream 7, Theme.radius.card
+        button = Screen:scaleBySize(10), -- Kaia: upstream 7, Theme.radius.button
     },
     line = {
         thin = Screen:scaleBySize(0.5),

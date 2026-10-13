@@ -492,6 +492,19 @@ To:
         end,
     }
     self.menu_items.start_with = self:getStartWithMenuTable()
+    -- Kaia: nav bar under the Library file chooser. Read in frontend/kaia/library.lua.
+    -- sorting_hint puts the item after "Start with" in the Settings submenu.
+    self.menu_items.kaia_library_navbar = {
+        text = _("Kaia navigation bar in Library"),
+        sorting_hint = "filemanager_settings",
+        checked_func = function()
+            return G_reader_settings:nilOrTrue("kaia_library_navbar")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrTrue("kaia_library_navbar")
+            UIManager:askForRestart()
+        end,
+    }
 
     if Device:supportsScreensaver() then
         self.menu_items.screensaver = {
