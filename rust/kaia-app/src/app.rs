@@ -4,28 +4,33 @@
 //!    timer, the exit time, or when the scan thread has news.
 //! 2. Feed touches through the gesture recognizer and dispatch gestures and keys
 //!    to the top window. Unhandled input may close an overlay or go Back.
-//! 3. Run the actions and events the windows queued.
+//! 3. Run the actions and events the windows queued. Each action goes to the top
+//!    surface, then the root surface, then the global commands.
 //! 4. Paint the dirty windows into one frame, bottom up, and present each refresh.
 //! 5. Run the due tasks (button releases among them), apply the window requests
 //!    they made, and paint and present again.
+//!
+//! This file knows no surface. It asks the surfaces in [`crate::surfaces`] for
+//! their windows and applies the [`Outcome`]s they return.
 
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use kaia_display::{DisplayError, InputEvent};
-use kaia_events::{Clock, Ctx, Event, Rect as EventRect, Refresh, RefreshMode, ShowOpts, Value, WindowStack};
+use kaia_events::{Clock, Ctx, Event, Rect as EventRect, RefreshMode, Value, WindowStack};
 use kaia_gfx::{Pixmap, Point, Rect, Size};
 use kaia_input::{Direction, Gesture, GestureConfig, GestureDetector, Key, KeyEvent, Phase, TouchEvent};
 use kaia_ui::widget::{Handled, UiEvent};
 use kaia_ui::{Out, Tone, Window};
 
 use crate::backend::Backend;
-use crate::command::{BookRef, Command, PageStep};
+use crate::command::{BookRef, Command};
 use crate::refresh;
 use crate::router::{Route, Router};
 use crate::scan::{LibraryScan, ScanMessage};
 use crate::services::Services;
+use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces;
 
 /// The longest the loop waits while a library scan runs, so it can show progress.
@@ -37,6 +42,20 @@ const MAX_SETTLE_ROUNDS: usize = 16;
 
 /// Time between the press and the release of a synthetic tap, for [`App::tap`].
 const TAP_HOLD: Duration = Duration::from_millis(50);
+
+/// Builds a [`SurfaceEnv`] from the app's fields. The fields are borrowed one by
+/// one, so the router can be borrowed at the same time.
+macro_rules! env {
+    ($app:expr) => {
+        SurfaceEnv::new(
+            &mut $app.services,
+            &mut $app.ctx,
+            $app.screen,
+            &mut $app.notices,
+            &mut $app.transient,
+        )
+    };
+}
 
 /// Counters for tests and for the desktop run.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -74,13 +93,13 @@ pub struct App<B: Backend> {
     options: AppOptions,
     scan: Option<LibraryScan>,
     scan_progress: Option<(usize, usize)>,
-    /// Set when the library changed while a pushed screen was on top. The root is
-    /// rebuilt when the stack returns to it.
-    library_stale: bool,
     stats: FrameStats,
     modes: Vec<RefreshMode>,
     unknown: Vec<String>,
     notices: Vec<String>,
+    /// Windows that surfaces showed outside the router (dialogs, sheets). Their
+    /// actions are collected with the router's.
+    transient: Vec<Window>,
     last_input_us: u64,
     exit_at: Option<Duration>,
     quitting: bool,
@@ -113,11 +132,11 @@ impl<B: Backend> App<B> {
             options,
             scan: None,
             scan_progress: None,
-            library_stale: false,
             stats: FrameStats::default(),
             modes: Vec::new(),
             unknown: Vec::new(),
             notices: Vec::new(),
+            transient: Vec::new(),
             last_input_us: 0,
             exit_at: None,
             quitting: false,
@@ -127,14 +146,7 @@ impl<B: Backend> App<B> {
 
     /// Shows Home with a full refresh, starts the library scan, and paints the first frame.
     pub fn start(&mut self) -> Result<(), DisplayError> {
-        let home = surfaces::home::build(&self.services, self.screen);
-        self.router.switch_root(
-            Route::Home,
-            home,
-            RefreshMode::Full,
-            &mut self.stack,
-            &mut self.ctx,
-        );
+        self.switch_root_to(Route::Home, RefreshMode::Full);
         if !self.options.library_roots.is_empty() {
             let db = self.services.library_path();
             self.scan = Some(LibraryScan::spawn(db, self.options.library_roots.clone()));
@@ -264,7 +276,7 @@ impl<B: Backend> App<B> {
         &self.modes
     }
 
-    /// Action ids that the app did not recognize.
+    /// Action ids that no surface and no global command recognized.
     pub fn unknown_commands(&self) -> &[String] {
         &self.unknown
     }
@@ -369,15 +381,19 @@ impl<B: Backend> App<B> {
         if handled {
             return;
         }
-        // Taps that the overlay does not use close it. A swipe from the left edge goes Back.
+        // Taps that the screen does not use close it, when it says so. A swipe from
+        // the left edge goes Back.
         let edge = self.services.theme.scale.dp(40) as i32;
-        let overlay_dismissed =
-            matches!(self.router.top_route(), Some(Route::Overlay)) && matches!(gesture, Gesture::Tap { .. });
+        let dismissed = matches!(gesture, Gesture::Tap { .. })
+            && self
+                .router
+                .top_surface()
+                .is_some_and(|surface| surface.closes_on_unused_tap());
         let edge_back = matches!(
             &gesture,
             Gesture::Swipe { pos, direction: Some(Direction::East), .. } if pos.x < edge
         );
-        if overlay_dismissed || edge_back {
+        if dismissed || edge_back {
             self.back();
         }
     }
@@ -414,20 +430,40 @@ impl<B: Backend> App<B> {
         self.stack.broadcast(&ev, &mut self.ctx);
     }
 
+    /// Delivers an app event to the windows and to every surface, bottom up. The
+    /// outcomes are applied after all surfaces have seen the event.
+    fn broadcast_app(&mut self, ev: Event) {
+        self.broadcast(ev.clone());
+        let mut outcomes = Vec::new();
+        for index in 0..self.router.depth() {
+            let outcome = {
+                let mut env = env!(self);
+                match self.router.surface_mut(index) {
+                    Some(surface) => surface.on_event(&ev, &mut env),
+                    None => Outcome::NotMine,
+                }
+            };
+            outcomes.push((index, outcome));
+        }
+        for (index, outcome) in outcomes {
+            self.apply(index, outcome);
+        }
+    }
+
     /// Runs the actions and events that windows queued, until none are left.
     /// Events a window did not use become commands with the same name.
     fn settle(&mut self) {
         for _ in 0..MAX_SETTLE_ROUNDS {
-            let outs = self.router.drain_outboxes();
+            let outs = self.collect_outboxes();
             if outs.is_empty() {
                 return;
             }
             for out in outs {
                 match out {
-                    Out::Action(action) => self.command(&action.id),
+                    Out::Action(action) => self.command(&action.id, &action.args),
                     Out::Event(ev) => {
                         if !self.send(ev.clone()) {
-                            self.command(&ev.name);
+                            self.command(&ev.name, &ev.args);
                         }
                     }
                 }
@@ -435,36 +471,223 @@ impl<B: Backend> App<B> {
         }
     }
 
-    fn command(&mut self, id: &str) {
+    /// The queued actions of the router's windows and of the transient windows.
+    /// Transient windows are dropped once they are closed. The check waits until
+    /// no window request is pending, so a window that is about to show is kept.
+    fn collect_outboxes(&mut self) -> Vec<Out> {
+        if self.ctx.pending_window_requests() == 0 {
+            let stack = &self.stack;
+            self.transient
+                .retain(|w| w.id().is_none_or(|id| stack.contains(id)));
+        }
+        let mut outs = self.router.drain_outboxes();
+        for window in &self.transient {
+            outs.extend(window.drain_outbox());
+        }
+        outs
+    }
+
+    /// Routes an action id: the top surface first, then the root, then the global
+    /// commands. An id nobody knows is recorded.
+    fn command(&mut self, id: &str, args: &[Value]) {
+        let depth = self.router.depth();
+        if let Some(top) = depth.checked_sub(1) {
+            if self.route_command(top, id, args) {
+                return;
+            }
+        }
+        if depth > 1 && self.route_command(0, id, args) {
+            return;
+        }
         match Command::parse(id) {
-            Some(Command::Navigate(route)) => self.navigate(route),
-            Some(Command::OpenBook(book)) => self.open_book(book),
-            Some(Command::Back) => self.back(),
-            Some(Command::LibraryPage(step)) => self.turn_library_page(step),
-            Some(Command::ReaderOverlay) => self.show_overlay(),
-            Some(Command::BookDetails(id)) => self.show_details(id),
-            Some(Command::SettingsSection(name)) => self.show_section(name),
-            Some(Command::Quit) => self.quitting = true,
+            Some(command) => self.global(command),
             None => self.unknown.push(id.to_string()),
         }
     }
 
-    /// `nav:*`: replaces the root. Choosing the root that is already shown does nothing.
-    fn navigate(&mut self, route: Route) {
+    /// Asks the surface at `index` about a command. True when it took the command.
+    fn route_command(&mut self, index: usize, id: &str, args: &[Value]) -> bool {
+        let outcome = {
+            let mut env = env!(self);
+            match self.router.surface_mut(index) {
+                Some(surface) => surface.on_command(id, args, &mut env),
+                None => Outcome::NotMine,
+            }
+        };
+        self.apply(index, outcome)
+    }
+
+    /// Applies what a surface returned. False when the surface did not take the command.
+    fn apply(&mut self, index: usize, outcome: Outcome) -> bool {
+        match outcome {
+            Outcome::NotMine => return false,
+            Outcome::Handled => {}
+            Outcome::Rebuild => self.rebuild(index),
+            Outcome::Navigate(nav) => self.navigate(nav),
+        }
+        true
+    }
+
+    fn global(&mut self, command: Command) {
+        match command {
+            Command::Navigate(route) => self.switch_root_to(route, RefreshMode::Ui),
+            Command::OpenBook(book) => self.open_book(book),
+            Command::Back => self.back(),
+            Command::Quit => self.quitting = true,
+        }
+    }
+
+    fn navigate(&mut self, nav: Nav) {
+        match nav {
+            Nav::Push(surface) => self.push(surface),
+            Nav::Pop => self.pop(RefreshMode::Ui),
+            Nav::SwitchRoot(route) => self.switch_root_to(route, RefreshMode::Ui),
+            Nav::Replace(surface) => {
+                if self.router.depth() < 2 {
+                    self.switch_root(surface, RefreshMode::Ui);
+                } else {
+                    self.pop(RefreshMode::Ui);
+                    self.push(surface);
+                }
+            }
+        }
+    }
+
+    /// Makes the surface for `route` the root. Choosing the root that is already
+    /// shown does nothing.
+    fn switch_root_to(&mut self, route: Route, mode: RefreshMode) {
         if self.router.depth() == 1 && self.router.root_route() == Some(&route) {
             return;
         }
-        self.show_root(route, RefreshMode::Ui);
+        if let Some(surface) = surfaces::create(&route) {
+            self.switch_root(surface, mode);
+        }
     }
 
-    fn show_root(&mut self, route: Route, mode: RefreshMode) {
-        let Some(window) = self.build_window(&route) else {
+    fn switch_root(&mut self, mut surface: Box<dyn Surface>, mode: RefreshMode) {
+        let Some(window) = self.build_surface(&mut *surface) else {
+            return;
+        };
+        self.hide_all();
+        self.router
+            .switch_root(surface, window, mode, &mut self.stack, &mut self.ctx);
+        self.uncover_top();
+        self.reveal_top();
+    }
+
+    /// Shows `surface` above the top screen. A surface that covers the screen
+    /// repaints the frame under it.
+    fn push(&mut self, mut surface: Box<dyn Surface>) {
+        let opts = surface.show_opts();
+        let Some(window) = self.build_surface(&mut *surface) else {
             return;
         };
         self.router
-            .switch_root(route, window, mode, &mut self.stack, &mut self.ctx);
-        self.library_stale = false;
+            .push(surface, window, opts, &mut self.stack, &mut self.ctx);
+        if opts.covers_fullscreen {
+            self.uncover_top();
+        }
+        self.reveal_top();
+    }
+
+    /// Closes the top screen, which runs its `on_hide` first. Does nothing on the root.
+    fn pop(&mut self, mode: RefreshMode) {
+        let Some(top) = self.router.depth().checked_sub(1).filter(|&top| top > 0) else {
+            return;
+        };
+        self.hide(top);
+        self.router.pop(mode, &mut self.stack, &mut self.ctx);
         self.uncover_top();
+        self.reveal_top();
+    }
+
+    /// `back`: closes the top pushed screen (the reader saves its progress on the
+    /// way out). From a root that is not Home, it goes to Home.
+    fn back(&mut self) {
+        match self.router.depth() {
+            0 => {}
+            1 => {
+                if self.router.root_route() != Some(&Route::Home) {
+                    self.switch_root_to(Route::Home, RefreshMode::Ui);
+                }
+            }
+            _ => self.pop(RefreshMode::Ui),
+        }
+    }
+
+    fn open_book(&mut self, book: BookRef) {
+        let found = match &book {
+            BookRef::Id(id) => self.services.library.book(*id),
+            BookRef::Path(path) => self.services.library.book_by_path(path),
+        };
+        match found {
+            Ok(Some(row)) => {
+                if let Some(surface) = surfaces::create(&Route::Reader { book: row.id }) {
+                    self.push(surface);
+                }
+            }
+            Ok(None) => self.notices.push(format!("no book for {book:?}")),
+            Err(e) => self.notices.push(format!("cannot read the library: {e}")),
+        }
+    }
+
+    /// Builds the surface at `index` again. The top screen is swapped at once. A
+    /// covered one is marked and rebuilt when it becomes the top screen.
+    fn rebuild(&mut self, index: usize) {
+        if index + 1 != self.router.depth() {
+            self.router.mark_stale(index);
+            return;
+        }
+        let window = {
+            let mut env = env!(self);
+            self.router
+                .surface_mut(index)
+                .and_then(|surface| surface.build(&mut env))
+        };
+        let Some(window) = window else {
+            return;
+        };
+        self.router
+            .swap_top_window(window, RefreshMode::Ui, &mut self.stack, &mut self.ctx);
+        self.uncover_top();
+    }
+
+    /// Builds `surface` for the screen. None when it has nothing to show.
+    fn build_surface(&mut self, surface: &mut dyn Surface) -> Option<Window> {
+        let mut env = env!(self);
+        surface.build(&mut env)
+    }
+
+    /// Runs `on_hide` on the screen at `index`.
+    fn hide(&mut self, index: usize) {
+        let mut env = env!(self);
+        if let Some(surface) = self.router.surface_mut(index) {
+            surface.on_hide(&mut env);
+        }
+    }
+
+    /// Runs `on_hide` on every screen, top first, before the stack is replaced.
+    fn hide_all(&mut self) {
+        for index in (0..self.router.depth()).rev() {
+            self.hide(index);
+        }
+    }
+
+    /// Runs `on_show` on the top screen. A screen that went stale while it was
+    /// covered is rebuilt now.
+    fn reveal_top(&mut self) {
+        let Some(top) = self.router.depth().checked_sub(1) else {
+            return;
+        };
+        {
+            let mut env = env!(self);
+            if let Some(surface) = self.router.surface_mut(top) {
+                surface.on_show(&mut env);
+            }
+        }
+        if self.router.take_stale(top) {
+            self.rebuild(top);
+        }
     }
 
     /// Makes the top window repaint everything on a clean frame. Widgets only paint
@@ -479,190 +702,9 @@ impl<B: Backend> App<B> {
         }
     }
 
-    fn open_book(&mut self, book: BookRef) {
-        let found = match &book {
-            BookRef::Id(id) => self.services.library.book(*id),
-            BookRef::Path(path) => self.services.library.book_by_path(path),
-        };
-        match found {
-            Ok(Some(row)) => self.push_reader(row.id),
-            Ok(None) => self.notices.push(format!("no book for {book:?}")),
-            Err(e) => self.notices.push(format!("cannot read the library: {e}")),
-        }
-    }
-
-    fn push_reader(&mut self, book_id: i64) {
-        let Some(window) = self.build_window(&Route::Reader { book: book_id }) else {
-            return;
-        };
-        let opts = ShowOpts {
-            covers_fullscreen: true,
-            refresh: Some(Refresh::new(RefreshMode::Full)),
-            ..ShowOpts::default()
-        };
-        self.router.push(
-            Route::Reader { book: book_id },
-            window,
-            opts,
-            &mut self.stack,
-            &mut self.ctx,
-        );
-        self.uncover_top();
-    }
-
-    /// `back`: closes the overlay, or the reader (saving its progress), or the top
-    /// pushed screen. From a root that is not Home, it goes to Home.
-    fn back(&mut self) {
-        match self.router.top_route().cloned() {
-            None => return,
-            Some(Route::Reader { book }) => self.save_progress(book),
-            Some(_) => {}
-        }
-        if self.router.depth() > 1 {
-            self.router.pop(RefreshMode::Ui, &mut self.stack, &mut self.ctx);
-            self.uncover_top();
-            if self.router.depth() == 1 && std::mem::take(&mut self.library_stale) {
-                self.refresh_root();
-            }
-        } else if self.router.root_route() != Some(&Route::Home) {
-            self.show_root(Route::Home, RefreshMode::Ui);
-        }
-    }
-
-    /// Stores the reader's progress in the library. The library API has no
-    /// progress-only call, so this uses `record_open`, which also sets the
-    /// last-opened time.
-    fn save_progress(&mut self, book_id: i64) {
-        let mut progress = None;
-        self.update_top::<surfaces::reader::ReaderPage, _>(surfaces::reader::READER_KEY, |reader, _| {
-            progress = Some(reader.progress());
-        });
-        if let Some(percent) = progress {
-            if let Err(e) = self.services.library.record_open(book_id, percent) {
-                self.notices.push(format!("cannot save progress: {e}"));
-            }
-        }
-    }
-
-    fn turn_library_page(&mut self, step: PageStep) {
-        let Some(Route::Library { page }) = self.router.top_route().cloned() else {
-            return;
-        };
-        let next = match step {
-            PageStep::Next => page + 1,
-            PageStep::Previous => page.saturating_sub(1),
-        };
-        if next != page {
-            self.show_root(Route::Library { page: next }, RefreshMode::Ui);
-        }
-    }
-
-    fn show_overlay(&mut self) {
-        if !matches!(self.router.top_route(), Some(Route::Reader { .. })) {
-            return;
-        }
-        let mut state = None;
-        self.update_top::<surfaces::reader::ReaderPage, _>(surfaces::reader::READER_KEY, |reader, _| {
-            state = Some((reader.title().to_string(), reader.page(), reader.page_count()));
-        });
-        let Some((title, page, count)) = state else {
-            return;
-        };
-        let window = surfaces::reader::overlay(&self.services, self.screen, &title, page, count);
-        let opts = ShowOpts {
-            covers_fullscreen: false,
-            refresh: Some(Refresh::new(RefreshMode::Ui)),
-            ..ShowOpts::default()
-        };
-        self.router
-            .push(Route::Overlay, window, opts, &mut self.stack, &mut self.ctx);
-    }
-
-    fn show_details(&mut self, book_id: i64) {
-        let book = match self.services.library.book(book_id) {
-            Ok(Some(book)) => book,
-            _ => {
-                self.notices.push(format!("no book {book_id}"));
-                return;
-            }
-        };
-        let window = surfaces::placeholder::book_details(&self.services, self.screen, &book);
-        self.push_plain(Route::BookDetails { book: book_id }, window);
-    }
-
-    fn show_section(&mut self, name: String) {
-        let window = surfaces::placeholder::settings_section(&self.services, self.screen, &name);
-        self.push_plain(Route::SettingsSection { name }, window);
-    }
-
-    /// Pushes a full-screen placeholder with the ordinary refresh for a page change.
-    fn push_plain(&mut self, route: Route, window: Window) {
-        let opts = ShowOpts {
-            covers_fullscreen: true,
-            refresh: Some(Refresh::new(RefreshMode::Ui)),
-            ..ShowOpts::default()
-        };
-        self.router
-            .push(route, window, opts, &mut self.stack, &mut self.ctx);
-        self.uncover_top();
-    }
-
-    /// Builds the window for a route. None when the route has no data behind it.
-    fn build_window(&mut self, route: &Route) -> Option<Window> {
-        Some(match route {
-            Route::Home => surfaces::home::build(&self.services, self.screen),
-            Route::Library { page } => surfaces::library::build(&self.services, self.screen, *page),
-            Route::Notes => surfaces::placeholder::notes(&self.services, self.screen),
-            Route::Settings => surfaces::placeholder::settings(&self.services, self.screen),
-            Route::Reader { book } => {
-                let row = match self.services.library.book(*book) {
-                    Ok(Some(row)) => row,
-                    _ => {
-                        self.notices.push(format!("no book {book}"));
-                        return None;
-                    }
-                };
-                let doc = kaia_doc::open(&row.path).map_err(|e| e.to_string());
-                let page = match &doc {
-                    Ok(doc) => surfaces::reader::page_for_progress(row.percent, doc.page_count() as u32),
-                    Err(_) => 0,
-                };
-                // Opening a book is a reading event, so the library records it now.
-                if let Err(e) = self.services.library.record_open(row.id, row.percent) {
-                    self.notices.push(format!("cannot record the open: {e}"));
-                }
-                let title = surfaces::display_title(&row);
-                surfaces::reader::build(&self.services, self.screen, title, doc, page)
-            }
-            Route::Overlay => return None,
-            Route::BookDetails { book } => {
-                let row = self.services.library.book(*book).ok().flatten()?;
-                surfaces::placeholder::book_details(&self.services, self.screen, &row)
-            }
-            Route::SettingsSection { name } => {
-                surfaces::placeholder::settings_section(&self.services, self.screen, name)
-            }
-        })
-    }
-
-    /// Rebuilds the root when it is Home or Library, as the library changed.
-    /// Otherwise it waits until the stack returns to the root.
-    fn library_changed(&mut self) {
-        if self.router.depth() == 1 {
-            self.refresh_root();
-        } else {
-            self.library_stale = true;
-        }
-    }
-
-    fn refresh_root(&mut self) {
-        if let Some(route @ (Route::Home | Route::Library { .. })) = self.router.root_route().cloned() {
-            self.show_root(route, RefreshMode::Ui);
-        }
-    }
-
     /// Turns the scan thread's messages into events. Progress and the end of the
     /// scan become `LibraryScanProgress`, `LibraryUpdated` and `LibraryScanFailed`.
+    /// The surfaces that answer `LibraryUpdated` with `Rebuild` refresh themselves.
     fn pump_scan(&mut self) {
         loop {
             let Some(message) = self.scan.as_ref().and_then(|s| s.try_next()) else {
@@ -671,7 +713,7 @@ impl<B: Backend> App<B> {
             match message {
                 ScanMessage::Progress { done, total } => {
                     self.scan_progress = Some((done, total));
-                    self.broadcast(Event::with_args(
+                    self.broadcast_app(Event::with_args(
                         "LibraryScanProgress",
                         vec![Value::Number(done as f64), Value::Number(total as f64)],
                     ));
@@ -681,7 +723,7 @@ impl<B: Backend> App<B> {
                     self.scan_progress = None;
                     match result {
                         Ok(report) => {
-                            self.broadcast(Event::with_args(
+                            self.broadcast_app(Event::with_args(
                                 "LibraryUpdated",
                                 vec![
                                     Value::Number(report.added as f64),
@@ -689,11 +731,13 @@ impl<B: Backend> App<B> {
                                     Value::Number(report.removed as f64),
                                 ],
                             ));
-                            self.library_changed();
                         }
                         Err(message) => {
                             self.notices.push(format!("library scan failed: {message}"));
-                            self.broadcast(Event::with_args("LibraryScanFailed", vec![Value::Str(message)]));
+                            self.broadcast_app(Event::with_args(
+                                "LibraryScanFailed",
+                                vec![Value::Str(message)],
+                            ));
                         }
                     }
                     return;
@@ -716,12 +760,11 @@ impl<B: Backend> App<B> {
         let color = self.services.theme.color_panel;
         let mut sent = 0;
         for refresh in refreshes {
-            // Pictures (covers on Home, pages in the reader) are dithered. Plain UI is not.
-            let content_dither = match self.router.top_route() {
-                Some(Route::Home) => true,
-                Some(Route::Reader { .. }) => refresh.mode == RefreshMode::Full,
-                _ => false,
-            };
+            // Surfaces say which refreshes dither their pictures (covers, pages). Plain UI is not dithered.
+            let content_dither = self
+                .router
+                .top_surface()
+                .is_some_and(|surface| surface.content_dither(refresh.mode));
             let Some(panel) = refresh::to_panel(&refresh, self.screen, color, content_dither) else {
                 continue;
             };

@@ -1,29 +1,24 @@
-//! App commands: the action ids that widgets send, such as `nav:library` or `open_book:42`.
+//! Global commands: the action ids the app owns. They are `nav:home`,
+//! `nav:library`, `nav:notes`, `nav:settings`, `open_book:<id or path>`, `back`
+//! and `quit`.
 //!
-//! Widgets send them as [`kaia_ui::AppAction`]s or as named events. The app turns
-//! them into navigation, and an id it does not know is recorded and ignored.
+//! Every other id belongs to a surface. Each surface parses its own ids in its
+//! own module (`surfaces/<name>/commands.rs`). See the crate README for the
+//! naming rule.
 
 use std::path::PathBuf;
 
-use crate::router::Route;
+use crate::surfaces::Route;
 
-/// What an action id asks the app to do.
+/// A global command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    /// `nav:home`, `nav:library`, `nav:notes`, `nav:settings`: replace the root surface.
+    /// `nav:home`, `nav:library`, `nav:notes`, `nav:settings`: replace the root.
     Navigate(Route),
     /// `open_book:<id or path>`: open the book in the reader.
     OpenBook(BookRef),
-    /// `back`: close the top pushed surface, or go to Home from a root.
+    /// `back`: close the top pushed screen, or go to Home from a root.
     Back,
-    /// `library:next` and `library:prev`: turn a page of the library list.
-    LibraryPage(PageStep),
-    /// `reader:overlay`: show the reader overlay (Back button and page number).
-    ReaderOverlay,
-    /// `book:<id>`: open the details of a book.
-    BookDetails(i64),
-    /// `settings:<name>`: open a settings section.
-    SettingsSection(String),
     /// `quit`: stop the loop after this iteration.
     Quit,
 }
@@ -35,14 +30,8 @@ pub enum BookRef {
     Path(PathBuf),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PageStep {
-    Next,
-    Previous,
-}
-
 impl Command {
-    /// Parses an action id. Returns None for ids the app does not know.
+    /// Parses a global action id. Returns None for every other id.
     pub fn parse(id: &str) -> Option<Command> {
         let (head, arg) = match id.split_once(':') {
             Some((head, arg)) => (head, Some(arg)),
@@ -60,11 +49,6 @@ impl Command {
                 }))
             }
             ("back", None) => Some(Command::Back),
-            ("library", Some("next")) => Some(Command::LibraryPage(PageStep::Next)),
-            ("library", Some("prev")) => Some(Command::LibraryPage(PageStep::Previous)),
-            ("reader", Some("overlay")) => Some(Command::ReaderOverlay),
-            ("book", Some(arg)) => arg.parse::<i64>().ok().map(Command::BookDetails),
-            ("settings", Some(name)) if !name.is_empty() => Some(Command::SettingsSection(name.to_string())),
             ("quit", None) => Some(Command::Quit),
             _ => None,
         }
@@ -76,7 +60,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_navigation_and_book_ids() {
+    fn parses_navigation_and_books() {
         assert_eq!(Command::parse("nav:home"), Some(Command::Navigate(Route::Home)));
         assert_eq!(
             Command::parse("nav:library"),
@@ -91,14 +75,15 @@ mod tests {
             Some(Command::OpenBook(BookRef::Path(PathBuf::from("/books/a:b.epub"))))
         );
         assert_eq!(Command::parse("back"), Some(Command::Back));
-        assert_eq!(Command::parse("book:7"), Some(Command::BookDetails(7)));
+        assert_eq!(Command::parse("quit"), Some(Command::Quit));
     }
 
     #[test]
-    fn rejects_unknown_and_empty_ids() {
+    fn leaves_surface_ids_and_rejects_bad_ids() {
+        assert_eq!(Command::parse("library:next"), None);
+        assert_eq!(Command::parse("reader:overlay"), None);
         assert_eq!(Command::parse("nav:nowhere"), None);
         assert_eq!(Command::parse("open_book:"), None);
-        assert_eq!(Command::parse("settings:"), None);
         assert_eq!(Command::parse("Back"), None);
     }
 }

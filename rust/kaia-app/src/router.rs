@@ -1,50 +1,30 @@
-//! The route stack. The bottom screen is a top-level surface (Home, Library,
-//! Notes or Settings). Pushed screens (the reader, its overlay, book details and
-//! settings sections) sit above it.
+//! The route stack. The bottom screen is a root (Home, Library, Notes or
+//! Settings). Pushed screens (the reader, its overlay, book details, settings
+//! sections) sit above it.
 //!
-//! The router owns one `kaia_ui::Window` per screen and keeps the window stack in
-//! step with the route stack. Switching the root replaces every screen with a
-//! `ui` refresh. Pushing and popping show and close one screen.
+//! The router owns one [`Surface`] and one `kaia_ui::Window` per screen, and
+//! keeps the window stack in step with the stack. It does not call the surface
+//! hooks. The app does, because the hooks need the services.
+//!
+//! Switching the root replaces every screen with a `ui` refresh. Pushing and
+//! popping show and close one screen.
 
 use kaia_events::{Ctx, Refresh, RefreshMode, ShowOpts, WindowId, WindowStack};
 use kaia_ui::{Out, Window};
 
-/// A screen the app can show.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Route {
-    Home,
-    Library {
-        page: usize,
-    },
-    Notes,
-    Settings,
-    Reader {
-        book: i64,
-    },
-    /// The reader's overlay: a transparent layer with a Back button.
-    Overlay,
-    BookDetails {
-        book: i64,
-    },
-    SettingsSection {
-        name: String,
-    },
-}
-
-impl Route {
-    /// Home, Library, Notes and Settings.
-    pub fn is_top_level(&self) -> bool {
-        matches!(
-            self,
-            Route::Home | Route::Library { .. } | Route::Notes | Route::Settings
-        )
-    }
-}
+use crate::surface::Surface;
+pub use crate::surfaces::Route;
 
 struct Screen {
+    /// Cached from the surface when the screen is built.
     route: Route,
+    surface: Box<dyn Surface>,
     window: Window,
     id: WindowId,
+    /// The options the window was shown with. A rebuild shows it with the same options.
+    opts: ShowOpts,
+    /// Set when the surface asked for a rebuild while another screen was on top.
+    stale: bool,
 }
 
 /// The route stack. Index 0 is the root.
@@ -85,11 +65,21 @@ impl Router {
         self.screens.iter().find(|s| s.id == id).map(|s| s.window.clone())
     }
 
-    /// Replaces every screen with `window` as the new root. `mode` is the refresh
-    /// the new root asks for when it is shown.
+    pub fn top_surface(&self) -> Option<&dyn Surface> {
+        self.screens.last().map(|s| &*s.surface)
+    }
+
+    /// The surface at `index`, root at 0.
+    pub fn surface_mut(&mut self, index: usize) -> Option<&mut dyn Surface> {
+        let screen = self.screens.get_mut(index)?;
+        Some(&mut *screen.surface)
+    }
+
+    /// Replaces every screen with `surface` shown in `window`. `mode` is the
+    /// refresh the new root asks for when it is shown.
     pub fn switch_root(
         &mut self,
-        route: Route,
+        surface: Box<dyn Surface>,
         window: Window,
         mode: RefreshMode,
         stack: &mut WindowStack,
@@ -100,9 +90,8 @@ impl Router {
             refresh: Some(Refresh::new(mode)),
             ..ShowOpts::default()
         };
-        let id = window.show(ctx, opts);
-        stack.apply_requests(ctx);
-        let old = std::mem::replace(&mut self.screens, vec![Screen { route, window, id }]);
+        let screen = Self::show_screen(surface, window, opts, stack, ctx);
+        let old = std::mem::replace(&mut self.screens, vec![screen]);
         for screen in old.into_iter().rev() {
             stack.close(screen.id, None, ctx);
         }
@@ -111,23 +100,64 @@ impl Router {
     /// Shows `window` above the top screen.
     pub fn push(
         &mut self,
-        route: Route,
+        surface: Box<dyn Surface>,
         window: Window,
         opts: ShowOpts,
         stack: &mut WindowStack,
         ctx: &mut Ctx,
     ) {
-        let id = window.show(ctx, opts);
-        stack.apply_requests(ctx);
-        self.screens.push(Screen { route, window, id });
+        let screen = Self::show_screen(surface, window, opts, stack, ctx);
+        self.screens.push(screen);
     }
 
-    /// Closes the top screen and returns its route. Does nothing and returns None
-    /// on an empty stack. The root can be popped too, so callers check the depth.
+    /// Closes the top screen and returns its route. Does nothing on the root.
     pub fn pop(&mut self, mode: RefreshMode, stack: &mut WindowStack, ctx: &mut Ctx) -> Option<Route> {
+        if self.screens.len() < 2 {
+            return None;
+        }
         let screen = self.screens.pop()?;
         stack.close(screen.id, Some(Refresh::new(mode)), ctx);
         Some(screen.route)
+    }
+
+    /// Shows `window` in place of the top screen. The surface stays the same, and
+    /// the window gets the `mode` refresh. The old window closes.
+    pub fn swap_top_window(
+        &mut self,
+        window: Window,
+        mode: RefreshMode,
+        stack: &mut WindowStack,
+        ctx: &mut Ctx,
+    ) {
+        let Some(top) = self.screens.last_mut() else {
+            return;
+        };
+        let opts = ShowOpts {
+            refresh: Some(Refresh::new(mode)),
+            ..top.opts
+        };
+        let id = window.show(ctx, opts);
+        stack.apply_requests(ctx);
+        let old_id = std::mem::replace(&mut top.id, id);
+        top.window = window;
+        top.route = top.surface.route();
+        top.stale = false;
+        stack.close(old_id, None, ctx);
+    }
+
+    /// Marks the screen at `index` for a rebuild when it becomes the top screen.
+    pub fn mark_stale(&mut self, index: usize) {
+        if let Some(screen) = self.screens.get_mut(index) {
+            screen.stale = true;
+        }
+    }
+
+    /// Clears the stale flag of the screen at `index` and returns whether it was set.
+    pub fn take_stale(&mut self, index: usize) -> bool {
+        match self.screens.get_mut(index) {
+            Some(screen) => std::mem::take(&mut screen.stale),
+            None => false,
+        }
     }
 
     /// Takes the actions and events that every screen queued since the last call.
@@ -136,5 +166,25 @@ impl Router {
             .iter()
             .flat_map(|s| s.window.drain_outbox())
             .collect()
+    }
+
+    fn show_screen(
+        surface: Box<dyn Surface>,
+        window: Window,
+        opts: ShowOpts,
+        stack: &mut WindowStack,
+        ctx: &mut Ctx,
+    ) -> Screen {
+        let route = surface.route();
+        let id = window.show(ctx, opts);
+        stack.apply_requests(ctx);
+        Screen {
+            route,
+            surface,
+            window,
+            id,
+            opts,
+            stale: false,
+        }
     }
 }

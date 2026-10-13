@@ -1,5 +1,7 @@
 //! Home: the featured book with its cover and progress, and a Library button.
+//! Home has no commands of its own. Its buttons send global and library actions.
 
+use kaia_events::{Event, RefreshMode};
 use kaia_gfx::image::FitMode;
 use kaia_gfx::Size;
 use kaia_library::{Book, Filter, Library, Sort, SortKey};
@@ -7,8 +9,37 @@ use kaia_ui::components::{Column, Expanded, Image, Label, ProgressBar, Row, Size
 use kaia_ui::controls::ButtonStyle;
 use kaia_ui::{Tone, WidgetPod, Window};
 
-use super::{body, button, cover, display_title, fill, nav_bar, page, title, window};
 use crate::services::Services;
+use crate::surface::{Outcome, Surface, SurfaceEnv};
+use crate::surfaces::common::{body, button, cover, display_title, fill, nav_bar, page, title, window};
+use crate::surfaces::Route;
+
+/// The Home root.
+pub struct HomeSurface;
+
+impl Surface for HomeSurface {
+    fn route(&self) -> Route {
+        Route::Home
+    }
+
+    fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        Some(build(env.services, env.screen))
+    }
+
+    /// Home shows covers, so every refresh dithers its pictures.
+    fn content_dither(&self, _mode: RefreshMode) -> bool {
+        true
+    }
+
+    /// Home features a book from the library, so a library change rebuilds it.
+    fn on_event(&mut self, ev: &Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if ev.name == "LibraryUpdated" {
+            Outcome::Rebuild
+        } else {
+            Outcome::NotMine
+        }
+    }
+}
 
 /// The book Home features: the last one opened, or else the newest one added.
 pub fn featured_book(library: &Library) -> Option<Book> {

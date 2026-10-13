@@ -1,24 +1,17 @@
-//! The reader: one page of a book, full screen, with the overlay that the
-//! center tap opens.
+//! The reader widget: one page of a book, rendered by `kaia-doc`.
 //!
-//! This is a stand-in until `kaia-book` lands. It renders pages with
-//! `kaia-doc` and keeps only a page index. Tap zones: the left third goes back a
-//! page, the rest goes forward, and the middle square opens the overlay. The
-//! page-turn keys and the left and right swipes turn pages too.
+//! The widget owns the document and the page index. [`super::ReaderSurface`]
+//! reads the page through `Window::update` when it saves progress or opens the
+//! overlay.
 
 use kaia_doc::{Document, Layout, PageSize};
 use kaia_gfx::{PixelFormat, Pixmap, Point, Size};
 use kaia_input::{Direction, Gesture};
-use kaia_ui::components::{Expanded, Row, Stack};
-use kaia_ui::controls::ButtonStyle;
 use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, PaintHint, UiEvent};
-use kaia_ui::{Tone, Widget, WidgetPod, Window};
+use kaia_ui::{Tone, Widget};
 
-use super::{button, fill, page, window};
-use crate::services::Services;
-
-/// The key of the reader widget. The app finds it with `Window::update`.
+/// The key of the reader widget. The reader surface finds it with `Window::update`.
 pub const READER_KEY: &str = "reader";
 
 /// Em size, in points, for reflowable books. Matches a comfortable Kobo default.
@@ -259,35 +252,4 @@ impl ReaderPage {
         }
         Handled::Yes
     }
-}
-
-/// The reader window for a book. `doc` is the opened document, or the error text.
-pub fn build(
-    services: &Services,
-    screen: Size,
-    title: String,
-    doc: Result<Box<dyn Document>, String>,
-    page_index: u32,
-) -> Window {
-    let dpi = services.theme.scale.dpi.unwrap_or(160);
-    let reader = ReaderPage::new(title, doc, page_index, screen, dpi);
-    window(
-        services,
-        screen,
-        Stack::new(vec![WidgetPod::new(reader).with_key(READER_KEY)]),
-    )
-}
-
-/// The overlay over the reader: a Back button and the page number. Tapping
-/// outside its buttons closes it (the app does that for unhandled taps).
-pub fn overlay(services: &Services, screen: Size, title: &str, page_index: u32, count: u32) -> Window {
-    let t = &services.theme;
-    let back = button(ButtonStyle::Secondary, "Back", "back", "back");
-    let label = WidgetPod::new(kaia_ui::components::Label::new(
-        format!("{title}, page {} of {count}", page_index + 1),
-        t.font.body.clone(),
-        Tone::Ink,
-    ));
-    let bar = WidgetPod::new(Row::new(vec![back, WidgetPod::new(Expanded::new(label, 1))]).gap(t.space.md));
-    window(services, screen, page(services, vec![bar, fill()]))
 }
