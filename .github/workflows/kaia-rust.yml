@@ -22,6 +22,8 @@ jobs:
   test:
     name: fmt, clippy and test
     runs-on: ubuntu-24.04
+    env:
+      PURE_CRATES: -p kaia-core -p kaia-storage -p kaia-ffi -p kaia-gfx -p kaia-events -p kaia-input -p kaia-luadata -p kaia-ui -p kaia-platform
     timeout-minutes: 30
     steps:
 
@@ -51,13 +53,24 @@ jobs:
         working-directory: rust
         run: cargo fmt --all -- --check
 
+      # Crates that link KOReader's native build (kaia-mupdf-sys,
+      # kaia-cre-sys, kaia-doc, kaia-library) are tested in the kaia-lua
+      # emulator job, which builds those libraries. kaia-display is checked
+      # without its desktop window (minifb needs X11) and without the Kobo
+      # backend (needs FBInk).
       - name: Clippy
         working-directory: rust
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: |
+          cargo clippy --locked --all-targets ${PURE_CRATES} -- -D warnings
+          cargo clippy --locked --all-targets -p kaia-ffi --features test-panic -- -D warnings
+          cargo clippy --locked --all-targets -p kaia-display --no-default-features -- -D warnings
 
       - name: Test
         working-directory: rust
-        run: cargo test --workspace --all-features --locked
+        run: |
+          cargo test --locked ${PURE_CRATES}
+          cargo test --locked -p kaia-ffi --features test-panic
+          cargo test --locked -p kaia-display --no-default-features
 
   deny:
     name: cargo deny

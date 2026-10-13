@@ -1,7 +1,8 @@
 name: kaia-lua
 
 # Gates the Kaia Lua code: luacheck, then the desktop emulator build with the
-# Kaia specs and the full front-end suite. The build job runs in the same
+# Kaia specs and the full front-end suite, plus the Rust crates that link
+# KOReader's native build (MuPDF, CREngine). The build job runs in the same
 # image that upstream CircleCI uses (koreader/kobase). Pull requests from forks
 # get a read-only token and no secrets.
 
@@ -16,6 +17,10 @@ on:
       - 'frontend/**'
       - '.luacheckrc'
       - '.github/workflows/kaia-lua.yml'
+      - 'rust/kaia-mupdf-sys/**'
+      - 'rust/kaia-cre-sys/**'
+      - 'rust/kaia-doc/**'
+      - 'rust/kaia-library/**'
   pull_request:
     paths:
       - 'frontend/kaia/**'
@@ -25,6 +30,10 @@ on:
       - 'frontend/**'
       - '.luacheckrc'
       - '.github/workflows/kaia-lua.yml'
+      - 'rust/kaia-mupdf-sys/**'
+      - 'rust/kaia-cre-sys/**'
+      - 'rust/kaia-doc/**'
+      - 'rust/kaia-library/**'
 
 permissions:
   contents: read
@@ -134,6 +143,12 @@ jobs:
           test "${#names[@]}" -gt 0
           printf 'Kaia specs: %s\n' "${names[*]}"
           ./kodev test front "${names[@]}"
+
+      - name: Rust crates that link KOReader's native build
+        working-directory: rust
+        run: |
+          export PATH="${HOME}/.cargo/bin:${PATH}"
+          cargo test --locked -p kaia-mupdf-sys -p kaia-doc -p kaia-library
 
       - name: Front suite
         run: ./kodev test front
