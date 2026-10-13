@@ -616,8 +616,10 @@ dependencies = [
 name = "kaia-display"
 version = "0.1.0"
 dependencies = [
+ "kaia-fbink-sys",
  "kaia-gfx",
  "kaia-input",
+ "libc",
  "minifb",
 ]
 
@@ -636,6 +638,10 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
 ]
+
+[[package]]
+name = "kaia-fbink-sys"
+version = "0.1.0"
 
 [[package]]
 name = "kaia-ffi"

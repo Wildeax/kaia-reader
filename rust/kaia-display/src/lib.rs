@@ -3,7 +3,8 @@
 //! [`Display`] shows frames on a screen and [`InputSource`] yields touch, key and
 //! window events. Two backends ship here: [`HeadlessDisplay`] and [`ScriptedInput`]
 //! for tests, and [`DesktopDisplay`], a window through minifb, behind the `desktop`
-//! feature. The Kobo backend (FBInk and evdev) will implement the same traits.
+//! feature. The Kobo backend (FBInk and evdev) implements the same traits behind the
+//! `kobo` feature.
 //!
 //! Frames are always drawn in logical orientation. [`Refresh`] names the region to
 //! update and the [`Waveform`] to use. The waveform table on [`Waveform`] maps
@@ -18,6 +19,9 @@ pub mod waveform;
 #[cfg(feature = "desktop")]
 pub mod desktop;
 
+#[cfg(feature = "kobo")]
+pub mod kobo;
+
 pub use display::{check_present, Display, DisplayError, PanelSpec};
 pub use headless::{HeadlessDisplay, ScriptedInput};
 pub use input::{InputEvent, InputSource};
@@ -26,3 +30,6 @@ pub use waveform::{Refresh, Waveform};
 
 #[cfg(feature = "desktop")]
 pub use desktop::{DesktopDisplay, DesktopOptions};
+
+#[cfg(all(feature = "kobo", target_os = "linux"))]
+pub use kobo::{EvdevInput, KoboDisplay};

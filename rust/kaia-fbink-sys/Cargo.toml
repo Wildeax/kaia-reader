@@ -1,0 +1,10 @@
+[package]
+name = "kaia-fbink-sys"
+description = "Hand-written FFI declarations for FBInk, the E Ink library KOReader builds for Kobo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+links = "fbink"
+
+[dependencies]

@@ -15,6 +15,7 @@ members = [
     "kaia-platform",
     "kaia-cre-sys",
     "kaia-library",
+    "kaia-fbink-sys",
 ]
 
 [workspace.package]
