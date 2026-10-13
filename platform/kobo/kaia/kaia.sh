@@ -1,0 +1,649 @@
+#!/bin/sh
+
+# Kaia: launcher for Kaia Reader, derived from KOReader's platform/kobo/koreader.sh.
+# Kaia: Changed lines carry a "# Kaia:" comment. See docs/kaia/INSTALL_KOBO.md.
+
+export LC_ALL="en_US.UTF-8"
+
+# Compute our working directory in an extremely defensive manner
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+# NOTE: We need to remember the *actual* KOREADER_DIR, not the relocalized version in /tmp...
+export KOREADER_DIR="${KOREADER_DIR:-${SCRIPT_DIR}}"
+# Kaia: KAIA_DIR is the install and data directory. KOREADER_DIR keeps its name
+# Kaia: because nickel.sh and the upstream environment read it.
+KAIA_DIR="${KOREADER_DIR}"
+# Kaia: UNPACK_DIR was used only by the OTA step, which is removed.
+
+# We rely on starting from our working directory, and it needs to be set, sane and absolute.
+cd "${KOREADER_DIR:-/dev/null}" || exit
+
+# To make USBMS behave, relocalize ourselves outside of onboard.
+# Kaia: The copy is kaia.sh, so it never shares a name with KOReader's copy in /tmp.
+# Kaia: The copy no longer serves update detection, because the OTA step is removed.
+if [ "${SCRIPT_DIR}" != "/tmp" ] && [ "${SCRIPT_DIR}" != "/var/volatile/tmp" ]; then
+    # Kaia: The copy in /tmp is kaia.sh, so stock KOReader keeps its own copy.
+    cp -pf "${0}" "/tmp/kaia.sh"
+    # Kaia: The copy in /tmp is kaia.sh, so stock KOReader keeps its own copy.
+    chmod 777 "/tmp/kaia.sh"
+    # Kaia: The copy in /tmp is kaia.sh, so stock KOReader keeps its own copy.
+    exec "/tmp/kaia.sh" "$@"
+fi
+
+# Attempt to switch to a sensible CPUFreq governor when that's not already the case...
+# Swap every CPU at once if available
+if [ -d "/sys/devices/system/cpu/cpufreq/policy0" ]; then
+    CPUFREQ_SYSFS_PATH="/sys/devices/system/cpu/cpufreq/policy0"
+else
+    CPUFREQ_SYSFS_PATH="/sys/devices/system/cpu/cpu0/cpufreq"
+fi
+IFS= read -r current_cpufreq_gov <"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+# NOTE: What's available depends on the HW, so, we'll have to take it step by step...
+#       Roughly follow Nickel's behavior (which prefers interactive), and prefer interactive, then ondemand, and finally conservative/dvfs.
+if [ "${current_cpufreq_gov}" != "interactive" ]; then
+    if grep -q "interactive" "${CPUFREQ_SYSFS_PATH}/scaling_available_governors"; then
+        ORIG_CPUFREQ_GOV="${current_cpufreq_gov}"
+        echo "interactive" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+    elif [ "${current_cpufreq_gov}" != "ondemand" ]; then
+        if grep -q "ondemand" "${CPUFREQ_SYSFS_PATH}/scaling_available_governors"; then
+            # NOTE: This should never really happen: every kernel that supports ondemand already supports interactive ;).
+            #       They were both introduced on Mk. 6
+            ORIG_CPUFREQ_GOV="${current_cpufreq_gov}"
+            echo "ondemand" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+        elif [ -e "/sys/devices/platform/mxc_dvfs_core.0/enable" ]; then
+            # The rest of this block assumes userspace is available...
+            if grep -q "userspace" "${CPUFREQ_SYSFS_PATH}/scaling_available_governors"; then
+                ORIG_CPUFREQ_GOV="${current_cpufreq_gov}"
+                export CPUFREQ_DVFS="true"
+
+                # If we can use conservative, do so, but we'll tweak it a bit to make it somewhat useful given our load patterns...
+                # We unfortunately don't have any better choices on those kernels,
+                # the only other governors available are powersave & performance (c.f., #4114)...
+                if grep -q "conservative" "${CPUFREQ_SYSFS_PATH}/scaling_available_governors"; then
+                    export CPUFREQ_CONSERVATIVE="true"
+                    echo "conservative" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+                    # NOTE: The knobs survive a governor switch, which is why we do this now ;).
+                    echo "2" >"/sys/devices/system/cpu/cpufreq/conservative/sampling_down_factor"
+                    echo "50" >"/sys/devices/system/cpu/cpufreq/conservative/freq_step"
+                    echo "11" >"/sys/devices/system/cpu/cpufreq/conservative/down_threshold"
+                    echo "12" >"/sys/devices/system/cpu/cpufreq/conservative/up_threshold"
+                    # NOTE: The default sampling_rate is a bit high for my tastes,
+                    #       but it unfortunately defaults to its lowest possible setting...
+                fi
+
+                # NOTE: Now, here comes the freaky stuff... On a H2O, DVFS is only enabled when Wi-Fi is *on*.
+                #       When it's off, DVFS is off, which pegs the CPU @ max clock given that DVFS means the userspace governor.
+                #       The flip may originally have been switched by the sdio_wifi_pwr module itself,
+                #       via ntx_wifi_power_ctrl @ arch/arm/mach-mx5/mx50_ntx_io.c (which is also the CM_WIFI_CTRL (208) ntx_io ioctl),
+                #       but the code in the published H2O kernel sources actually does the reverse, and is commented out ;).
+                #       It is now entirely handled by Nickel, right *before* loading/unloading that module.
+                #       (There's also a bug(?) where that behavior is inverted for the *first* Wi-Fi session after a cold boot...)
+                if grep -q "^sdio_wifi_pwr " "/proc/modules"; then
+                    # Wi-Fi is enabled, make sure DVFS is on
+                    echo "userspace" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+                    echo "1" >"/sys/devices/platform/mxc_dvfs_core.0/enable"
+                else
+                    # Wi-Fi is disabled, make sure DVFS is off
+                    echo "0" >"/sys/devices/platform/mxc_dvfs_core.0/enable"
+
+                    # Switch to conservative to avoid being stuck at max clock if we can...
+                    if [ -n "${CPUFREQ_CONSERVATIVE}" ]; then
+                        echo "conservative" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+                    else
+                        # Otherwise, we'll be pegged at max clock...
+                        echo "userspace" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+                        # The kernel should already be taking care of that...
+                        cat "${CPUFREQ_SYSFS_PATH}/scaling_max_freq" >"${CPUFREQ_SYSFS_PATH}/scaling_setspeed"
+                    fi
+                fi
+            fi
+        fi
+    fi
+fi
+
+# Kaia: The OTA step is removed. Kaia has no update channel yet (see docs/kaia/RELEASE_PROCESS.md).
+# Kaia: This function never reads ota/koreader.updated.tar and never extracts a package.
+# Kaia: Keep the call sites. An update step goes into this function once the release process has one.
+ko_update_check() {
+    :
+}
+ko_update_check
+# If an update happened, and was successful, reexec
+if [ -n "${fail}" ] && [ "${fail}" -eq 0 ]; then
+    # By now, we know we're in the right directory, and our script name is pretty much set in stone, so we can forgo using $0
+    # Kaia: The re-exec name follows the launcher name.
+    exec ./kaia.sh "${@}"
+fi
+
+# export dict directory
+export STARDICT_DATA_DIR="data/dict"
+
+# export external font directory
+export EXT_FONT_DIR="/mnt/onboard/fonts"
+
+# Quick'n dirty way of checking if we were started while Nickel was running (e.g., KFMon),
+# or from another launcher entirely, outside of Nickel (e.g., KSM).
+VIA_NICKEL="false"
+if pkill -0 nickel; then
+    VIA_NICKEL="true"
+fi
+# NOTE: Do not delete this line because KSM detects newer versions of KOReader by the presence of the phrase 'from_nickel'.
+
+if [ "${VIA_NICKEL}" = "true" ]; then
+    # Detect if we were started from KFMon
+    FROM_KFMON="false"
+    if pkill -0 kfmon; then
+        # That's a start, now check if KFMon truly is our parent...
+        if [ "$(pidof -s kfmon)" -eq "${PPID}" ]; then
+            FROM_KFMON="true"
+        fi
+    fi
+
+    # Check if Nickel is our parent...
+    FROM_NICKEL="false"
+    if [ -n "${NICKEL_HOME}" ]; then
+        FROM_NICKEL="true"
+    fi
+
+    # If we were spawned outside of Nickel, we'll need a few extra bits from its own env...
+    if [ "${FROM_NICKEL}" = "false" ]; then
+        # Siphon a few things from nickel's env (namely, stuff exported by rcS *after* on-animator.sh has been launched)...
+        # shellcheck disable=SC2046
+        export $(grep -s -E -e '^(DBUS_SESSION_BUS_ADDRESS|NICKEL_HOME|WIFI_MODULE|LANG|INTERFACE)=' "/proc/$(pidof -s nickel)/environ")
+        # NOTE: Quoted variant, w/ the busybox RS quirk (c.f., https://unix.stackexchange.com/a/125146):
+        #eval "$(awk -v 'RS="\0"' '/^(DBUS_SESSION_BUS_ADDRESS|NICKEL_HOME|WIFI_MODULE|LANG|INTERFACE)=/{gsub("\047", "\047\\\047\047"); print "export \047" $0 "\047"}' "/proc/$(pidof -s nickel)/environ")"
+    fi
+
+    # If bluetooth is enabled, kill it.
+    if [ -e "/sys/devices/platform/bt/rfkill/rfkill0/state" ]; then
+        # That's on sunxi, at least
+        IFS= read -r bt_state <"/sys/devices/platform/bt/rfkill/rfkill0/state"
+        if [ "${bt_state}" = "1" ]; then
+            echo "0" >"/sys/devices/platform/bt/rfkill/rfkill0/state"
+
+            # Power the chip down
+            ./luajit frontend/device/kobo/ntx_io.lua 126 0
+        fi
+    fi
+    if grep -q "^sdio_bt_pwr " "/proc/modules"; then
+        # And that's on NXP SoCs
+        rmmod sdio_bt_pwr
+    fi
+
+    # Flush disks, might help avoid trashing nickel's DB...
+    sync
+    # And we can now stop the full Kobo software stack
+    # NOTE: We don't need to kill KFMon, it's smart enough not to allow running anything else while we're up
+    # NOTE: We kill Nickel's master dhcpcd daemon on purpose,
+    #       as we want to be able to use our own per-if processes w/ custom args later on.
+    #       A SIGTERM does not break anything, it'll just prevent automatic lease renewal until the time
+    #       KOReader actually sets the if up itself (i.e., it'll do)...
+    killall -q -TERM nickel hindenburg sickel fickel strickel fontickel adobehost foxitpdf iink dhcpcd-dbus dhcpcd bluealsa bluetoothd fmon nanoclock.lua memorylogger QtWebEngineProcess
+
+    # Wait for Nickel to die... (oh, procps with killall -w, how I miss you...)
+    kill_timeout=0
+    while pkill -0 nickel; do
+        # Stop waiting after 4s
+        if [ ${kill_timeout} -ge 15 ]; then
+            break
+        fi
+        usleep 250000
+        kill_timeout=$((kill_timeout + 1))
+    done
+    # Remove Nickel's FIFO to avoid udev & udhcpc scripts hanging on open() on it...
+    rm -f /tmp/nickel-hardware-status
+
+    # We don't need to grab input devices (unless MiniClock is running, in which case that neatly inhibits it while we run).
+    if [ ! -d "/tmp/MiniClock" ]; then
+        export KO_DONT_GRAB_INPUT="true"
+    fi
+fi
+
+# check whether PLATFORM & PRODUCT have a value assigned by rcS
+if [ -z "${PRODUCT}" ]; then
+    # shellcheck disable=SC2046
+    export $(grep -s -e '^PRODUCT=' "/proc/$(pidof -s udevd)/environ")
+fi
+
+if [ -z "${PRODUCT}" ]; then
+    PRODUCT="$(/bin/kobo_config.sh 2>/dev/null)"
+    export PRODUCT
+fi
+
+if [ -z "${PRODUCT}" ]; then
+    # FW >= 5.18 uses a binary hwdetect instead of the hwdetect.sh script. If hwdetect is available, we can use
+    # utils.sh for convenience.
+    if [ -e "/usr/bin/hwdetect" ]; then
+        # shellcheck disable=SC1091
+        . /usr/libexec/platform/utils.sh
+        PRODUCT="$(get_product_name)"
+    else
+        PRODUCT="$(/usr/bin/hwdetect.sh 2>/dev/null)"
+    fi
+
+    export PRODUCT
+fi
+
+# PLATFORM is used in koreader for the path to the Wi-Fi drivers (as well as when restarting nickel)
+if [ -z "${PLATFORM}" ]; then
+    # shellcheck disable=SC2046
+    export $(grep -s -e '^PLATFORM=' "/proc/$(pidof -s udevd)/environ")
+fi
+
+if [ -z "${PLATFORM}" ]; then
+    PLATFORM="freescale"
+    if dd if="/dev/mmcblk0" bs=512 skip=1024 count=1 | grep -q "HW CONFIG"; then
+        CPU="$(ntx_hwconfig -s -p /dev/mmcblk0 CPU 2>/dev/null)"
+        PLATFORM="${CPU}-ntx"
+    fi
+
+    if [ "${PLATFORM}" != "freescale" ] && [ ! -e "/etc/u-boot/${PLATFORM}/u-boot.mmc" ]; then
+        PLATFORM="ntx508"
+    fi
+    export PLATFORM
+fi
+
+# Make sure we have a sane-ish INTERFACE env var set...
+if [ -z "${INTERFACE}" ]; then
+    # That's what we used to hardcode anyway
+    INTERFACE="eth0"
+    export INTERFACE
+fi
+
+# We'll enforce UR in ko_do_fbdepth, so make sure further FBInk usage (USBMS)
+# will also enforce UR... (Only actually meaningful on sunxi).
+if [ "${PLATFORM}" = "b300-ntx" ]; then
+    export FBINK_FORCE_ROTA=0
+    # On sunxi, non-REAGL waveform modes suffer from weird merging quirks...
+    FBINK_WFM="REAGL"
+    # And we also cannot use batched updates for the crash screen, as buffers are private,
+    # so each invocation essentially draws in a different buffer...
+    FBINK_BATCH_FLAG=""
+    # Same idea for backgroundless...
+    FBINK_BGLESS_FLAG="-B GRAY9"
+    # It also means we need explicit background padding in the OT codepath...
+    FBINK_OT_PADDING=",padding=BOTH"
+
+    # Make sure we poke the right input device
+    KOBO_TS_INPUT="/dev/input/by-path/platform-0-0010-event"
+else
+    FBINK_WFM="GL16"
+    FBINK_BATCH_FLAG="-b"
+    FBINK_BGLESS_FLAG="-O"
+    FBINK_OT_PADDING=""
+    KOBO_TS_INPUT="/dev/input/event1"
+fi
+
+# We'll want to ensure Portrait rotation to allow us to use faster blitting codepaths @ 8bpp,
+# so remember the current one before fbdepth does its thing.
+IFS= read -r ORIG_FB_ROTA <"/sys/class/graphics/fb0/rotate"
+echo "Original fb rotation is set @ ${ORIG_FB_ROTA}" >>crash.log 2>&1
+
+# In the same vein, swap to 8bpp,
+# because 16bpp is the worst idea in the history of time, as RGB565 is generally a PITA without hardware blitting,
+# and 32bpp usually gains us nothing except a performance hit (we're not Qt5 with its QPainter constraints).
+# The reduced size & complexity should hopefully make things snappier,
+# (and hopefully prevent the JIT from going crazy on high-density screens...).
+# NOTE: Even though both pickel & Nickel appear to restore their preferred fb setup, we'll have to do it ourselves,
+#       as they fail to flip the grayscale flag properly. Plus, we get to play nice with every launch method that way.
+#       So, remember the current bitdepth, so we can restore it on exit.
+IFS= read -r ORIG_FB_BPP <"/sys/class/graphics/fb0/bits_per_pixel"
+echo "Original fb bitdepth is set @ ${ORIG_FB_BPP}bpp" >>crash.log 2>&1
+# Sanity check...
+case "${ORIG_FB_BPP}" in
+    8) ;;
+    16) ;;
+    32) ;;
+    *)
+        # Uh oh? Don't do anything...
+        unset ORIG_FB_BPP
+        ;;
+esac
+
+# The actual swap is done in a function, because we can disable it in the Developer settings, and we want to honor it on restart.
+ko_do_fbdepth() {
+    # On sunxi, the fb state is meaningless, and the minimal disp fb doesn't actually support 8bpp anyway...
+    if [ "${PLATFORM}" = "b300-ntx" ]; then
+        # NOTE: The fb state is *completely* meaningless on this platform.
+        #       This is effectively a noop, we're just keeping it for logging purposes...
+        echo "Making sure that rotation is set to Portrait" >>crash.log 2>&1
+        ./fbdepth -R UR >>crash.log 2>&1
+        # We haven't actually done anything, so don't do anything on exit either ;).
+        unset ORIG_FB_BPP
+
+        return
+    fi
+
+    # On color panels, we target 32bpp for, well, color, and sane addressing (it also happens to be their default) ;o).
+    eval "$(./fbink -e | tr ';' '\n' | grep -e hasColorPanel | tr '\n' ';')"
+    # shellcheck disable=SC2154
+    if [ "${hasColorPanel}" = "1" ]; then
+        # If color rendering has been disabled by the user, switch to 8bpp to completely skip CFA processing
+        if grep -q '\["color_rendering"\] = false' 'settings.reader.lua' 2>/dev/null; then
+            echo "Switching fb bitdepth to 8bpp (to disable CFA) & rotation to Portrait" >>crash.log 2>&1
+            ./fbdepth -d 8 -R UR >>crash.log 2>&1
+        else
+            echo "Switching fb bitdepth to 32bpp & rotation to Portrait" >>crash.log 2>&1
+            ./fbdepth -d 32 -R UR >>crash.log 2>&1
+        fi
+
+        return
+    fi
+
+    # Check if the swap has been disabled...
+    if grep -q '\["dev_startup_no_fbdepth"\] = true' 'settings.reader.lua' 2>/dev/null; then
+        # Swap back to the original bitdepth (in case this was a restart)
+        if [ -n "${ORIG_FB_BPP}" ]; then
+            # Unless we're a Forma/Libra, don't even bother to swap rotation if the fb is @ 16bpp, because RGB565 is terrible anyways,
+            # so there's no faster codepath to achieve, and running in Portrait @ 16bpp might actually be broken on some setups...
+            if [ "${ORIG_FB_BPP}" -eq "16" ] && [ "${PRODUCT}" != "frost" ] && [ "${PRODUCT}" != "storm" ]; then
+                echo "Making sure we're using the original fb bitdepth @ ${ORIG_FB_BPP}bpp & rotation @ ${ORIG_FB_ROTA}" >>crash.log 2>&1
+                ./fbdepth -d "${ORIG_FB_BPP}" -r "${ORIG_FB_ROTA}" >>crash.log 2>&1
+            else
+                echo "Making sure we're using the original fb bitdepth @ ${ORIG_FB_BPP}bpp, and that rotation is set to Portrait" >>crash.log 2>&1
+                ./fbdepth -d "${ORIG_FB_BPP}" -R UR >>crash.log 2>&1
+            fi
+        fi
+    else
+        # Swap to 8bpp if things looke sane
+        if [ -n "${ORIG_FB_BPP}" ]; then
+            echo "Switching fb bitdepth to 8bpp & rotation to Portrait" >>crash.log 2>&1
+            ./fbdepth -d 8 -R UR >>crash.log 2>&1
+        fi
+    fi
+}
+
+# Ensure we start with a valid nameserver in resolv.conf, otherwise we're stuck with broken name resolution (#6421, #6424).
+# Fun fact: this wouldn't be necessary if Kobo were using a non-prehistoric glibc... (it was fixed in glibc 2.26).
+ko_do_dns() {
+    # If there aren't any servers listed, append CloudFlare's
+    if ! grep -q '^nameserver' "/etc/resolv.conf"; then
+        # Kaia: The message names Kaia Reader.
+        echo "# Added by Kaia Reader because your setup is broken" >>"/etc/resolv.conf"
+        echo "nameserver 1.1.1.1" >>"/etc/resolv.conf"
+    fi
+}
+
+# Remount the SD card RW if it's inserted and currently RO
+if awk '$4~/(^|,)ro($|,)/' /proc/mounts | grep ' /mnt/sd '; then
+    mount -o remount,rw /mnt/sd
+fi
+
+# we keep at most 500KB worth of crash log
+if [ -e crash.log ]; then
+    tail -c 500000 crash.log >crash.log.new
+    mv -f crash.log.new crash.log
+fi
+
+CRASH_COUNT=0
+CRASH_TS=0
+CRASH_PREV_TS=0
+# List of supported special return codes
+KO_RC_RESTART=85
+KO_RC_USBMS=86
+KO_RC_HALT=88
+# Because we *want* an initial fbdepth pass ;).
+RETURN_VALUE=${KO_RC_RESTART}
+while [ ${RETURN_VALUE} -ne 0 ]; do
+    if [ ${RETURN_VALUE} -eq ${KO_RC_RESTART} ]; then
+        # Do an update check now, so we can actually update KOReader via the "Restart KOReader" menu entry ;).
+        ko_update_check
+        # Do or double-check the fb depth switch, or restore original bitdepth if requested
+        ko_do_fbdepth
+        # Make sure we have a sane resolv.conf
+        ko_do_dns
+    fi
+
+    # Kaia: Safe mode. The Lua side reads the same file (frontend/kaia/safemode.lua).
+    # Kaia: The check runs before every start, so removing the file clears KAIA_SAFE_MODE.
+    if [ -f "${KAIA_DIR}/safemode" ]; then
+        export KAIA_SAFE_MODE=1
+        echo "Kaia: safe mode requested by ${KAIA_DIR}/safemode" >>crash.log 2>&1
+    else
+        unset KAIA_SAFE_MODE
+    fi
+    ./reader.lua "$@" >>crash.log 2>&1
+    RETURN_VALUE=$?
+
+    # Did we crash?
+    if [ ${RETURN_VALUE} -ne 0 ] && [ ${RETURN_VALUE} -ne ${KO_RC_RESTART} ] && [ ${RETURN_VALUE} -ne ${KO_RC_USBMS} ] && [ ${RETURN_VALUE} -ne ${KO_RC_HALT} ]; then
+        # Increment the crash counter
+        CRASH_COUNT=$((CRASH_COUNT + 1))
+        CRASH_TS=$(date +'%s')
+        # Reset it to a first crash if it's been a while since our last crash...
+        # Kaia: The crash window is 60 seconds (upstream: 20). Five crashes in a row, each less than
+        # Kaia: 60 seconds after the previous one, stop the restart loop. The loop then exits through
+        # Kaia: the normal path, which restarts Nickel or reboots.
+        if [ $((CRASH_TS - CRASH_PREV_TS)) -ge 60 ]; then
+            CRASH_COUNT=1
+        fi
+
+        # Check if the user requested to always abort on crash
+        if grep -q '\["dev_abort_on_crash"\] = true' 'settings.reader.lua' 2>/dev/null; then
+            ALWAYS_ABORT="true"
+            # In which case, make sure we pause on *every* crash
+            CRASH_COUNT=1
+        else
+            ALWAYS_ABORT="false"
+        fi
+
+        # Show a fancy bomb on screen
+        viewWidth=600
+        viewHeight=800
+        FONTH=16
+        eval "$(./fbink -e | tr ';' '\n' | grep -e viewWidth -e viewHeight -e FONTH | tr '\n' ';')"
+        # Compute margins & sizes relative to the screen's resolution, so we end up with a similar layout, no matter the device.
+        # Height @ ~56.7%, w/ a margin worth 1.5 lines
+        bombHeight=$((viewHeight / 2 + viewHeight / 15))
+        bombMargin=$((FONTH + FONTH / 2))
+        # Start with a big gray screen of death, and our friendly old school crash icon ;)
+        # U+1F4A3, the hard way, because we can't use \u or \U escape sequences...
+        # shellcheck disable=SC2039,SC3003,SC2086
+        ./fbink -q ${FBINK_BATCH_FLAG} -c -B GRAY9 -m -t regular=./fonts/freefont/FreeSerif.ttf,px=${bombHeight},top=${bombMargin} -W ${FBINK_WFM} -- $'\xf0\x9f\x92\xa3'
+        # With a little notice at the top of the screen, on a big gray screen of death ;).
+        # shellcheck disable=SC2086
+        ./fbink -q ${FBINK_BATCH_FLAG} ${FBINK_BGLESS_FLAG} -m -y 1 -W ${FBINK_WFM} -- "Don't Panic! (Crash n°${CRASH_COUNT} -> ${RETURN_VALUE})"
+        if [ ${CRASH_COUNT} -eq 1 ]; then
+            # Warn that we're waiting on a tap to continue...
+            # shellcheck disable=SC2086
+            ./fbink -q ${FBINK_BATCH_FLAG} ${FBINK_BGLESS_FLAG} -m -y 2 -W ${FBINK_WFM} -- "Tap the screen to continue."
+        fi
+        # And then print the tail end of the log on the bottom of the screen...
+        crashLog="$(tail -n 25 crash.log | sed -e 's/\t/    /g')"
+        # The idea for the margins being to leave enough room for an fbink -Z bar, small horizontal margins, and a font size based on what 6pt looked like @ 265dpi
+        # shellcheck disable=SC2086
+        ./fbink -q ${FBINK_BATCH_FLAG} ${FBINK_BGLESS_FLAG} -t regular=./fonts/droid/DroidSansMono.ttf,top=$((viewHeight / 2 + FONTH * 2 + FONTH / 2)),left=$((viewWidth / 60)),right=$((viewWidth / 60)),px=$((viewHeight / 64))${FBINK_OT_PADDING} -W ${FBINK_WFM} -- "${crashLog}"
+        if [ "${PLATFORM}" != "b300-ntx" ]; then
+            # So far, we hadn't triggered an actual screen refresh, do that now, to make sure everything is bundled in a single flashing refresh.
+            ./fbink -q -f -s
+        fi
+        # Cue a lemming's faceplant sound effect!
+
+        {
+            echo "!!!!"
+            echo "Uh oh, something went awry... (Crash n°${CRASH_COUNT}: $(date +'%x @ %X'))"
+            echo "Running FW $(cut -f3 -d',' /mnt/onboard/.kobo/version) on Linux $(uname -r) ($(uname -v))"
+        } >>crash.log 2>&1
+        if [ ${CRASH_COUNT} -lt 5 ] && [ "${ALWAYS_ABORT}" = "false" ]; then
+            # Kaia: The message names Kaia Reader.
+            echo "Attempting to restart Kaia Reader . . ." >>crash.log 2>&1
+            echo "!!!!" >>crash.log 2>&1
+        fi
+
+        # Pause a bit if it's the first crash in a while, so that it actually has a chance of getting noticed ;).
+        if [ ${CRASH_COUNT} -eq 1 ]; then
+            # NOTE: We don't actually care about what read read, we're just using it as a fancy sleep ;).
+            #       i.e., we pause either until the 15s timeout, or until the user touches the screen.
+            # shellcheck disable=SC2039,SC3045
+            read -r -t 15 <"${KOBO_TS_INPUT}"
+        fi
+        # Cycle the last crash timestamp
+        CRASH_PREV_TS=${CRASH_TS}
+
+        # But if we've crashed more than 5 consecutive times, exit, because we wouldn't want to be stuck in a loop...
+        # NOTE: No need to check for ALWAYS_ABORT, CRASH_COUNT will always be 1 when it's true ;).
+        if [ ${CRASH_COUNT} -ge 5 ]; then
+            echo "Too many consecutive crashes, aborting . . ." >>crash.log 2>&1
+            echo "!!!! ! !!!!" >>crash.log 2>&1
+            break
+        fi
+
+        # If the user requested to always abort on crash, do so.
+        if [ "${ALWAYS_ABORT}" = "true" ]; then
+            echo "Aborting . . ." >>crash.log 2>&1
+            echo "!!!! ! !!!!" >>crash.log 2>&1
+            break
+        fi
+    else
+        # Reset the crash counter if that was a sane exit/restart
+        CRASH_COUNT=0
+    fi
+
+    if [ ${RETURN_VALUE} -eq ${KO_RC_USBMS} ]; then
+        # User requested an USBMS session, setup the tool outside of onboard
+        USBMS_HOME="/mnt/usbms"
+        mkdir -p "${USBMS_HOME}"
+        # We're using a custom tmpfs in case /tmp is too small (mainly because we may need to import a large CJK font in there...)
+        if ! mount -t tmpfs tmpfs ${USBMS_HOME} -o defaults,size=32M,mode=1777,noatime; then
+            # Kaia: The message names Kaia Reader.
+            echo "Failed to create the USBMS tmpfs, restarting Kaia Reader . . ." >>crash.log 2>&1
+            continue
+        fi
+
+        if ! ./tar xzf "./data/KoboUSBMS.tar.gz" -C "${USBMS_HOME}"; then
+            # Kaia: The message names Kaia Reader.
+            echo "Couldn't unpack KoboUSBMS, restarting Kaia Reader . . ." >>crash.log 2>&1
+            if ! umount "${USBMS_HOME}"; then
+                echo "Couldn't unmount the USBMS tmpfs, shutting down in 30 sec!" >>crash.log 2>&1
+                sleep 30
+                poweroff -f
+            fi
+            rm -rf "${USBMS_HOME}"
+            continue
+        fi
+
+        # Then siphon KOReader's language for i18n...
+        if grep -q '\["language"\]' 'settings.reader.lua' 2>/dev/null; then
+            usbms_lang="$(grep '\["language"\]' 'settings.reader.lua' | cut -d'"' -f4)"
+        else
+            usbms_lang="C"
+        fi
+
+        # If the language is CJK, copy the CJK font, too...
+        case "${usbms_lang}" in
+            ja* | ko* | zh*)
+                cp -pf "${KOREADER_DIR}/fonts/noto/NotoSansCJKsc-Regular.otf" "${USBMS_HOME}/resources/fonts/NotoSansCJKsc-Regular.otf"
+                ;;
+        esac
+
+        # Here we go!
+        if ! cd "${USBMS_HOME}"; then
+            # Kaia: The message names Kaia Reader.
+            echo "Couldn't chdir to ${USBMS_HOME}, restarting Kaia Reader . . ." >>crash.log 2>&1
+            if ! umount "${USBMS_HOME}"; then
+                echo "Couldn't unmount the USBMS tmpfs, shutting down in 30 sec!" >>crash.log 2>&1
+                sleep 30
+                poweroff -f
+            fi
+            rm -rf "${USBMS_HOME}"
+            continue
+        fi
+        env LANGUAGE="${usbms_lang}" ./usbms
+        fail=$?
+        if [ ${fail} -ne 0 ]; then
+            # NOTE: Early init failures return KO_RC_USBMS,
+            #       to allow simply restarting KOReader when we know the integrity of onboard hasn't been compromised...
+            if [ ${fail} -eq ${KO_RC_USBMS} ]; then
+                # Kaia: The message names Kaia Reader.
+                echo "KoboUSBMS failed to setup an USBMS session, restarting Kaia Reader . . ." >>"${KOREADER_DIR}/crash.log" 2>&1
+            else
+                # Hu, oh, something went wrong... Stay around for 90s (enough time to look at the syslog over Wi-Fi), and then shutdown.
+                # Kaia: The log tag is kaia.sh.
+                logger -p "DAEMON.CRIT" -t "kaia.sh[$$]" "USBMS session failed (${fail}), shutting down in 90 sec!"
+                sleep 90
+                poweroff -f
+            fi
+        fi
+
+        # Jump back to the right place, and keep on trucking
+        if ! cd "${KOREADER_DIR}"; then
+            # Kaia: The log tag is kaia.sh.
+            logger -p "DAEMON.CRIT" -t "kaia.sh[$$]" "Couldn't chdir back to KOREADER_DIR (${KOREADER_DIR}), shutting down in 30 sec!"
+            sleep 30
+            poweroff -f
+        fi
+
+        # Tear down the tmpfs...
+        if ! umount "${USBMS_HOME}"; then
+            # Kaia: The log tag is kaia.sh.
+            logger -p "DAEMON.CRIT" -t "kaia.sh[$$]" "Couldn't unmount the USBMS tmpfs, shutting down in 30 sec!"
+            sleep 30
+            poweroff -f
+        fi
+        rm -rf "${USBMS_HOME}"
+    fi
+
+    # Did we request a reboot/shutdown?
+    if [ ${RETURN_VALUE} -eq ${KO_RC_HALT} ]; then
+        break
+    fi
+done
+
+# If we requested a reboot/shutdown, no need to bother with this...
+if [ ${RETURN_VALUE} -ne ${KO_RC_HALT} ]; then
+    # Restore original fb bitdepth if need be...
+    # Since we also (almost) always enforce Portrait, we also have to restore the original rotation no matter what ;).
+    if [ -n "${ORIG_FB_BPP}" ]; then
+        echo "Restoring original fb bitdepth @ ${ORIG_FB_BPP}bpp & rotation @ ${ORIG_FB_ROTA}" >>crash.log 2>&1
+        ./fbdepth -d "${ORIG_FB_BPP}" -r "${ORIG_FB_ROTA}" >>crash.log 2>&1
+    else
+        echo "Restoring original fb rotation @ ${ORIG_FB_ROTA}" >>crash.log 2>&1
+        ./fbdepth -r "${ORIG_FB_ROTA}" >>crash.log 2>&1
+    fi
+
+    # Restore original CPUFreq governor if need be...
+    if [ -n "${ORIG_CPUFREQ_GOV}" ]; then
+        echo "${ORIG_CPUFREQ_GOV}" >"${CPUFREQ_SYSFS_PATH}/scaling_governor"
+
+        # NOTE: Leave DVFS alone, it'll be handled by Nickel if necessary.
+    fi
+
+    if [ "${VIA_NICKEL}" = "true" ]; then
+        if [ "${FROM_KFMON}" = "true" ]; then
+            # KFMon is the only launcher that has a toggle to either reboot or restart Nickel on exit
+            # Kaia: KFMon reads the config of the Kaia entry, kaia.ini, not koreader.ini.
+            if grep -q "reboot_on_exit=false" "/mnt/onboard/.adds/kfmon/config/kaia.ini" 2>/dev/null; then
+                # KFMon asked us to restart nickel on exit (default since KFMon 0.9.5)
+                ./nickel.sh &
+            else
+                # KFMon asked us to restart the device on exit
+                /sbin/reboot
+            fi
+        else
+            # Otherwise, just restart Nickel
+            ./nickel.sh &
+        fi
+    else
+        # if we were called from advboot then we must reboot to go to the menu
+        # NOTE: This is actually achieved by checking if KSM or a KSM-related script is running:
+        #       This might lead to false-positives if you use neither KSM nor advboot to launch KOReader *without nickel running*.
+        if ! pkill -0 -f kbmenu; then
+            /sbin/reboot
+        fi
+    fi
+else
+    if [ "${VIA_NICKEL}" = "false" ]; then
+        if pkill -0 -f kbmenu; then
+            # If we were started by KSM and requested an exit, attempt to *NOT* exit the script,
+            # so as not to re-enter KSM at all, to make sure the device powers off with our own ScreenSaver displayed.
+            # NOTE: This might not be fool-proof, as a poweroff might take longer than that,
+            #       or we might be interrupted early by signals.
+            sleep 10
+        fi
+    fi
+fi
+
+# Wipe the clones on exit
+# Kaia: The copy in /tmp is kaia.sh, so stock KOReader keeps its own copy.
+rm -f "/tmp/kaia.sh"
+
+exit ${RETURN_VALUE}
