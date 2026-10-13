@@ -7,3 +7,5 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# float_roundtrip: exact f64 parsing, so settings values survive a save and load.
+serde_json = { version = "1", features = ["float_roundtrip"] }
