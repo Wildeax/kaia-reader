@@ -282,8 +282,8 @@ describe("kaia notes", function()
             paint(notes)
             assert.are.equal(a_file, notes.book.file)
             assert.are.equal(3, #notes.entries)
-            -- Back button, three entry rows, nav bar row.
-            assert.are.equal(5, #notes.layout)
+            -- Three entry rows and the nav bar row. The back action is in the header.
+            assert.are.equal(4, #notes.layout)
 
             -- Back in the entries view goes to the book list, not out of Notes.
             notes:onClose()

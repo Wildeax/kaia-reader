@@ -16,7 +16,6 @@ under "Needs repair" (orphaned) and in each book's entries.
 ]]
 
 local BookData = require("kaia/bookdata")
-local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local FocusManager = require("ui/widget/focusmanager")
@@ -24,6 +23,7 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local Header = require("kaia/widget/header")
+local Home = require("kaia/home")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local InputContainer = require("ui/widget/container/inputcontainer")
@@ -31,6 +31,7 @@ local LineWidget = require("ui/widget/linewidget")
 local ListRow = require("kaia/widget/listrow")
 local NavBar = require("kaia/widget/navbar")
 local NotesData = require("kaia/notesdata")
+local PageButton = require("kaia/widget/pagebutton")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local Theme = require("kaia/theme")
@@ -45,8 +46,6 @@ local Screen = Device.screen
 
 -- Lines of quoted text per entry row before the text is cut with an ellipsis.
 local QUOTE_LINES = 2
--- Name of the Home widget. Set in home.lua.
-local HOME_NAME = "kaia_home"
 
 local Notes = FocusManager:extend{
     name = "kaia_notes",
@@ -70,23 +69,31 @@ local function flatten(text)
     return s
 end
 
--- Primary and secondary lines for an annotation. A quote is the primary line
--- when there is one. The secondary line is the note, else the chapter.
+-- "Page 12" for a numeric page. EPUB locations are XPointer strings and have no page number.
+local function pageLabel(entry)
+    local page = entry.location and entry.location.page
+    if type(page) == "number" then
+        return T(_("Page %1"), page)
+    end
+end
+
+-- Primary and secondary lines for an annotation.
+-- Highlights and notes: the quote is the primary line, the note or chapter the secondary.
+-- Bookmarks: "Bookmark", then the chapter or page.
+-- Stickers: the caption or "Sticker", then the chapter or page.
 local function entryLines(entry)
+    if entry.kind == "bookmark" then
+        return _("Bookmark"), flatten(entry.chapter) or pageLabel(entry)
+    elseif entry.kind == "sticker" then
+        local caption = flatten(entry.text) or flatten(entry.note) or _("Sticker")
+        return caption, flatten(entry.chapter) or pageLabel(entry)
+    end
     local quote = flatten(entry.text)
     local note = flatten(entry.note)
     if quote then
         return "“" .. quote .. "”", note or flatten(entry.chapter)
     end
-    local fallback
-    if entry.kind == "bookmark" then
-        fallback = _("Bookmark")
-    elseif entry.kind == "sticker" then
-        fallback = _("Sticker")
-    else
-        fallback = _("Highlight")
-    end
-    return flatten(entry.chapter) or fallback, note
+    return flatten(entry.chapter) or _("Highlight"), note
 end
 
 -- "3 highlights, 1 note, 2 bookmarks". Zero counts are left out.
@@ -103,17 +110,25 @@ local function countsLine(book)
     return table.concat(parts, ", ")
 end
 
--- A row of up to QUOTE_LINES lines of quoted text, then one secondary line.
--- The height does not depend on the text, so paging can measure it once.
+-- A row with a primary line and one secondary line. A quote takes up to
+-- QUOTE_LINES lines. Other primary text (a label or a sticker caption) takes one.
+-- The height depends only on `quote`, so paging can measure one row per kind.
+-- Text starts at the content edge, and the divider spans the same width.
 local EntryRow = InputContainer:extend{
     width = 0,
     primary = "",
     secondary = nil,
+    quote = true,
     callback = nil,
 }
 
+-- Lines of primary text for a row.
+local function primaryLines(quote)
+    return quote and QUOTE_LINES or 1
+end
+
 function EntryRow:init()
-    local text_w = math.max(1, self.width - 2 * Theme.space.md)
+    local text_w = math.max(1, self.width)
     local quote_face = Theme:font("body")
     -- Same line height as TextBoxWidget uses for this face.
     local line_h = math.floor((1 + 0.3) * quote_face.size + 0.5)
@@ -125,7 +140,7 @@ function EntryRow:init()
             face = quote_face,
             fgcolor = Theme.color.ink,
             width = text_w,
-            height = line_h * QUOTE_LINES,
+            height = line_h * primaryLines(self.quote),
             height_adjust = false,
             height_overflow_show_ellipsis = true,
         },
@@ -142,11 +157,7 @@ function EntryRow:init()
             background = Theme.color.divider,
         },
     }
-    self[1] = HorizontalGroup:new{
-        align = "top",
-        HorizontalSpan:new{ width = Theme.space.md },
-        column,
-    }
+    self[1] = column
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self:getSize().h }
     self.ges_events = {
         TapEntryRow = {
@@ -220,19 +231,11 @@ local function paginate(items, avail)
     return pages
 end
 
--- Closes this Notes and any Home widget on the stack. Home sits under Notes
+-- Closes this Notes and the Home widget, if Home is shown. Home sits under Notes
 -- when Notes is opened from Home, and it must not reappear after a jump to a book.
 local function closeKaiaSurfaces(notes)
-    local found = {}
-    for _k, entry in ipairs(UIManager._window_stack) do
-        local w = entry.widget
-        if w == notes or (w and w.name == HOME_NAME) then
-            found[#found + 1] = w
-        end
-    end
-    for _k, w in ipairs(found) do
-        UIManager:close(w)
-    end
+    UIManager:close(notes)
+    Home.closeIfShown()
 end
 
 --- Shows Notes on top of the current screen. Replaces an open Notes.
@@ -308,16 +311,21 @@ function Notes:listItems(content_w)
     end
 
     if self.book then
-        local row_h = measure(function()
-            return EntryRow:new{ width = content_w, primary = "Ag", secondary = "Ag" }
-        end)
+        local heights = {}
+        for _k, quote in ipairs({ true, false }) do
+            heights[quote] = measure(function()
+                return EntryRow:new{ width = content_w, primary = "Ag", secondary = "Ag", quote = quote }
+            end)
+        end
         for _k, entry in ipairs(self.entries or {}) do
             local primary, secondary = entryLines(entry)
-            add(row_h, function()
+            local quote = entry.kind ~= "bookmark" and entry.kind ~= "sticker" and flatten(entry.text) ~= nil
+            add(heights[quote], function()
                 return EntryRow:new{
                     width = content_w,
                     primary = primary,
                     secondary = secondary,
+                    quote = quote,
                     callback = function() self:openEntry(self.book.file, entry) end,
                 }
             end)
@@ -379,22 +387,9 @@ function Notes:buildContent()
         title = self.book and self.book.title or _("Notes"),
         width = content_w,
         battery_percent = power,
+        back_callback = self.book and function() self:showBooks() end or nil,
     })
     table.insert(top, VerticalSpan:new{ width = gap })
-    if self.book then
-        local back = Button:new{
-            text = _("Back to books"),
-            width = math.floor(content_w / 2),
-            height = Theme.touch_target,
-            text_font_face = Theme.fonts.body_bold[1],
-            text_font_size = Theme.fonts.body_bold[2],
-            show_parent = self,
-            callback = function() self:showBooks() end,
-        }
-        table.insert(top, back)
-        table.insert(top, VerticalSpan:new{ width = gap })
-        table.insert(self.layout, { back })
-    end
 
     local navbar = NavBar:new{
         width = screen_w,
@@ -442,24 +437,16 @@ function Notes:buildContent()
     local footer
     if #pages > 1 then
         local btn_w = math.floor(content_w * 0.3)
-        local prev = Button:new{
+        local prev = PageButton:new{
             text = _("Previous"),
             width = btn_w,
-            height = Theme.touch_target,
             enabled = self.page > 1,
-            text_font_face = Theme.fonts.body_bold[1],
-            text_font_size = Theme.fonts.body_bold[2],
-            show_parent = self,
             callback = function() self:turnPage(-1) end,
         }
-        local next_button = Button:new{
+        local next_button = PageButton:new{
             text = _("Next"),
             width = btn_w,
-            height = Theme.touch_target,
             enabled = self.page < #pages,
-            text_font_face = Theme.fonts.body_bold[1],
-            text_font_size = Theme.fonts.body_bold[2],
-            show_parent = self,
             callback = function() self:turnPage(1) end,
         }
         local label_w = content_w - 2 * btn_w - 2 * gap

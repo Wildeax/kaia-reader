@@ -177,6 +177,27 @@ describe("kaia home", function()
             home:onClose()
         end)
 
+        it("closeIfShown closes the shown Home and does nothing when none is shown", function()
+            Home.closeIfShown()
+            local closed = {}
+            local UIManager = require("ui/uimanager")
+            local orig_close = UIManager.close
+            UIManager.close = function(self, widget, ...)
+                closed[#closed + 1] = widget
+                return orig_close(self, widget, ...)
+            end
+            local ok, err = pcall(function()
+                local home = Home:show()
+                Home.closeIfShown()
+                assert.are.equal(home, closed[#closed])
+                local count = #closed
+                Home.closeIfShown()
+                assert.are.equal(count, #closed)
+            end)
+            UIManager.close = orig_close
+            assert.is_true(ok, err)
+        end)
+
         it("builds with more books than the shelf shows", function()
             local history = {}
             for i = 1, 8 do

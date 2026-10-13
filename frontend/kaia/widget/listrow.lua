@@ -1,7 +1,8 @@
 --[[--
 Two-line list row for Notes: primary text, secondary text and a hairline divider.
 
-Text is truncated to one line each. Padding is `space.md` on both sides.
+Text is truncated to one line each. Text and the divider start at the left edge
+of the row and span its full width, so the caller sets the side margin.
 
 @module kaia.widget.listrow
 ]]
@@ -9,8 +10,6 @@ Text is truncated to one line each. Padding is `space.md` on both sides.
 local Device = require("device")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
-local HorizontalGroup = require("ui/widget/horizontalgroup")
-local HorizontalSpan = require("ui/widget/horizontalspan")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
 local TextWidget = require("ui/widget/textwidget")
@@ -29,7 +28,7 @@ local ListRow = InputContainer:extend{
 
 function ListRow:init()
     self.width = self.width or Screen:getWidth()
-    local text_w = math.max(1, self.width - 2 * Theme.space.md)
+    local text_w = math.max(1, self.width)
     local column = VerticalGroup:new{
         align = "left",
         VerticalSpan:new{ width = Theme.space.md },
@@ -55,11 +54,7 @@ function ListRow:init()
         background = Theme.color.divider,
     })
 
-    self[1] = HorizontalGroup:new{
-        align = "top",
-        HorizontalSpan:new{ width = Theme.space.md },
-        column,
-    }
+    self[1] = column
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self:getSize().h }
     if self.callback then
         self.ges_events = {

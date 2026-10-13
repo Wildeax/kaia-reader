@@ -201,14 +201,20 @@ end
 
 --- Shows Home on top of the file manager. Replaces an open Home.
 function Home:show()
-    if current then
-        UIManager:close(current)
-        current = nil
-    end
+    Home.closeIfShown()
     local widget = self:new{}
     current = widget
     UIManager:show(widget)
     return widget
+end
+
+--- Closes the shown Home, if there is one. Does nothing otherwise.
+function Home.closeIfShown()
+    if current then
+        local widget = current
+        current = nil
+        UIManager:close(widget)
+    end
 end
 
 function Home:init()
@@ -248,8 +254,8 @@ function Home:buildContent()
         title = "Kaia",
         width = content_w,
         battery_percent = power,
-        icon = "appbar.settings",
-        icon_callback = function() self:openSettings() end,
+        right_icon = "appbar.settings",
+        right_callback = function() self:openSettings() end,
     })
     table.insert(body, VerticalSpan:new{ width = section_gap })
 

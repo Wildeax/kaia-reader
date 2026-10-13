@@ -21,6 +21,7 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local InputDialog = require("ui/widget/inputdialog")
+local Library = require("kaia/library") -- Kaia: nav bar and default display mode
 local LanguageSupport = require("languagesupport")
 local MultiConfirmBox = require("ui/widget/multiconfirmbox")
 local NetworkListener = require("ui/network/networklistener")
@@ -115,6 +116,7 @@ FileManager.onPathChanged = FileManager.updateTitleBarPath
 
 function FileManager:setupLayout()
     self.show_parent = self.show_parent or self
+    Library.applyDefaultDisplayMode(self) -- Kaia: before the chooser reads the mode
     self.title_bar = TitleBar:new{
         show_parent = self.show_parent,
         fullscreen = "true",
@@ -141,6 +143,7 @@ function FileManager:setupLayout()
         focused_path = self.focused_file,
         show_parent = self.show_parent,
         file_filter = function(filename) return DocumentRegistry:hasProvider(filename) end,
+        height = Library.chooserHeight(), -- Kaia: leaves room for the nav bar
         close_callback = function() return self:onClose() end,
         -- allow left bottom tap gesture, otherwise it is eaten by hidden return button
         return_arrow_propagation = true,
@@ -350,7 +353,7 @@ function FileManager:setupLayout()
         file_chooser,
     }
 
-    self[1] = fm_ui
+    self[1] = Library.attachNavBar(self, fm_ui) -- Kaia: nav bar under the chooser
 
     -- No need to reinvent the wheel, use FileChooser's layout
     self.layout = file_chooser.layout

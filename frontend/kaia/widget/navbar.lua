@@ -56,7 +56,9 @@ local NavItem = InputContainer:extend{
 }
 
 function NavItem:init()
-    local icon_size = math.floor(Theme.nav_height * 0.4)
+    -- The SVG has padding inside its box, so the glyph is about 70 percent of the box.
+    -- At 0.68 of the bar height the glyph is about 47 percent of the bar.
+    local icon_size = math.floor(Theme.nav_height * 0.68)
     local label = TextWidget:new{
         text = self.label,
         face = Theme:font(self.active and "label" or "caption"),
@@ -71,9 +73,9 @@ function NavItem:init()
             -- Transparent background, so the divider above the bar shows through.
             alpha = true,
         },
-        VerticalSpan:new{ width = Theme.space.xs },
+        VerticalSpan:new{ width = math.floor(Theme.space.xs / 2) },
         label,
-        VerticalSpan:new{ width = Theme.space.xs },
+        VerticalSpan:new{ width = math.floor(Theme.space.xs / 2) },
     }
     if self.active then
         table.insert(column, Rule:new{
