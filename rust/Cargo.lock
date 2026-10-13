@@ -328,6 +328,7 @@ version = "0.1.0"
 dependencies = [
  "kaia-core",
  "kaia-storage",
+ "libc",
  "proptest",
  "regex",
  "serde",

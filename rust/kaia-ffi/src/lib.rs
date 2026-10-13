@@ -9,6 +9,8 @@
 
 mod args;
 mod buf;
+#[cfg(all(feature = "glibc215", target_os = "linux"))]
+mod glibc215;
 mod error;
 mod registry;
 
