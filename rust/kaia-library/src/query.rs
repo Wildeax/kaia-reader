@@ -128,6 +128,9 @@ impl Library {
                 format!("last_opened_at IS NULL, last_opened_at {dir}, {LAST_OPEN_SEQ} {dir}, id")
             }
             SortKey::Progress => format!("percent {dir}, COALESCE(title, path) COLLATE NOCASE, id"),
+            SortKey::Series => format!(
+                "series IS NULL, series COLLATE NOCASE {dir}, series_index IS NULL, series_index {dir}, COALESCE(title, path) COLLATE NOCASE {dir}, id"
+            ),
             SortKey::Manual => match filter.collection {
                 Some(cid) => {
                     args.push(Value::Integer(cid));
@@ -176,7 +179,7 @@ impl Library {
             "SELECT c.id, c.name, COUNT(b.id)
              FROM collections c LEFT JOIN collection_books cb ON cb.collection_id = c.id
              LEFT JOIN books b ON b.id = cb.book_id AND b.missing_since IS NULL
-             GROUP BY c.id ORDER BY c.name COLLATE NOCASE",
+             GROUP BY c.id ORDER BY c.position, c.id",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(Collection {
@@ -188,19 +191,150 @@ impl Library {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// Adds a book to a collection and creates the collection if needed. The
-    /// book goes last in the manual order. Adding it twice changes nothing.
-    pub fn add_to_collection(&mut self, book_id: i64, name: &str) -> Result<()> {
+    /// Creates an empty collection and returns its id, name and book count.
+    pub fn create_collection(&mut self, name: &str) -> Result<Collection> {
         let name = name.trim();
-        if name.is_empty() {
-            return Err(LibraryError::InvalidArgument("collection name is empty".into()));
+        let key = collection_key(name)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if collection_id_by_key(&tx, &key)?.is_some() {
+            return Err(LibraryError::CollectionNameExists(name.to_string()));
         }
+        let position: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM collections",
+            [],
+            |r| r.get(0),
+        )?;
+        tx.execute(
+            "INSERT INTO collections (name, position, name_key) VALUES (?1, ?2, ?3)",
+            params![name, position, key],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        Ok(Collection {
+            id,
+            name: name.to_string(),
+            books: 0,
+        })
+    }
+
+    /// Renames a collection. Names are unique without regard to case.
+    pub fn rename_collection(&mut self, collection_id: i64, name: &str) -> Result<()> {
+        let name = name.trim();
+        let key = collection_key(name)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM collections WHERE id = ?1)",
+            [collection_id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Err(LibraryError::CollectionNotFound(collection_id));
+        }
+        if collection_id_by_key(&tx, &key)?.is_some_and(|id| id != collection_id) {
+            return Err(LibraryError::CollectionNameExists(name.to_string()));
+        }
+        tx.execute(
+            "UPDATE collections SET name = ?2, name_key = ?3 WHERE id = ?1",
+            params![collection_id, name, key],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Deletes a collection and its book memberships. Returns false if absent.
+    pub fn delete_collection(&mut self, collection_id: i64) -> Result<bool> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM collections WHERE id = ?1", [collection_id])?
+            > 0)
+    }
+
+    /// Moves a collection to `position`, where zero is the first position.
+    pub fn reorder_collection(&mut self, collection_id: i64, position: usize) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut ids = {
+            let mut stmt = tx.prepare("SELECT id FROM collections ORDER BY position, id")?;
+            let rows = stmt.query_map([], |r| r.get::<_, i64>(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let Some(index) = ids.iter().position(|id| *id == collection_id) else {
+            return Err(LibraryError::CollectionNotFound(collection_id));
+        };
+        let id = ids.remove(index);
+        ids.insert(position.min(ids.len()), id);
+        for (index, id) in ids.into_iter().enumerate() {
+            tx.execute(
+                "UPDATE collections SET position = ?2 WHERE id = ?1",
+                params![id, index as i64],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Deletes a book row and its indexed covers, collections and history.
+    /// Returns false when the id was not present. The book file is untouched.
+    pub fn remove_book(&mut self, book_id: i64) -> Result<bool> {
+        Ok(self.conn.execute("DELETE FROM books WHERE id = ?1", [book_id])? > 0)
+    }
+
+    /// Removes a book from the reading history. Deletes its history rows and
+    /// clears its last-opened time. Progress and status do not change, because
+    /// the book's own state holds them. The book file is untouched.
+    pub fn remove_from_history(&mut self, book_id: i64) -> Result<()> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         ensure_book(&tx, book_id)?;
-        tx.execute("INSERT OR IGNORE INTO collections (name) VALUES (?1)", [name])?;
-        let cid: i64 = tx.query_row("SELECT id FROM collections WHERE name = ?1", [name], |r| r.get(0))?;
+        tx.execute("DELETE FROM history WHERE book_id = ?1", [book_id])?;
+        tx.execute("UPDATE books SET last_opened_at = NULL WHERE id = ?1", [book_id])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Removes every book from the reading history. Deletes all history rows and
+    /// clears the last-opened time of every book. Progress and status do not
+    /// change. Book files are untouched.
+    pub fn clear_history(&mut self) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute("DELETE FROM history", [])?;
+        tx.execute("UPDATE books SET last_opened_at = NULL", [])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Adds a book to a collection and creates the collection if needed. The
+    /// book goes last in the manual order. Adding it twice changes nothing.
+    pub fn add_to_collection(&mut self, book_id: i64, name: &str) -> Result<()> {
+        let name = name.trim();
+        let key = collection_key(name)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure_book(&tx, book_id)?;
+        let cid = match collection_id_by_key(&tx, &key)? {
+            Some(id) => id,
+            None => {
+                let position: i64 = tx.query_row(
+                    "SELECT COALESCE(MAX(position), -1) + 1 FROM collections",
+                    [],
+                    |r| r.get(0),
+                )?;
+                tx.execute(
+                    "INSERT INTO collections (name, position, name_key) VALUES (?1, ?2, ?3)",
+                    params![name, position, key],
+                )?;
+                tx.last_insert_rowid()
+            }
+        };
         tx.execute(
             "INSERT OR IGNORE INTO collection_books (collection_id, book_id, position)
              VALUES (?1, ?2, (SELECT COALESCE(MAX(position), 0) + 1 FROM collection_books WHERE collection_id = ?1))",
@@ -213,10 +347,11 @@ impl Library {
     /// Removes a book from a collection. Returns false when it was not there. The
     /// collection itself stays, even when it becomes empty.
     pub fn remove_from_collection(&mut self, book_id: i64, name: &str) -> Result<bool> {
+        let key = collection_key(name.trim())?;
         let n = self.conn.execute(
             "DELETE FROM collection_books WHERE book_id = ?1
-             AND collection_id = (SELECT id FROM collections WHERE name = ?2)",
-            params![book_id, name.trim()],
+             AND collection_id = (SELECT id FROM collections WHERE name_key = ?2)",
+            params![book_id, key],
         )?;
         Ok(n > 0)
     }
@@ -339,6 +474,21 @@ fn ensure_book(conn: &Connection, book_id: i64) -> Result<()> {
         Some(_) => Ok(()),
         None => Err(LibraryError::NotFound(book_id)),
     }
+}
+
+pub(crate) fn collection_key(name: &str) -> Result<String> {
+    if name.is_empty() {
+        return Err(LibraryError::InvalidArgument("collection name is empty".into()));
+    }
+    Ok(name.to_lowercase())
+}
+
+pub(crate) fn collection_id_by_key(conn: &Connection, key: &str) -> Result<Option<i64>> {
+    Ok(conn
+        .query_row("SELECT id FROM collections WHERE name_key = ?1", [key], |r| {
+            r.get(0)
+        })
+        .optional()?)
 }
 
 #[cfg(test)]

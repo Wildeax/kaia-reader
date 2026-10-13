@@ -12,7 +12,7 @@ use kaia_luadata::{Key, Table, Value};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
 use crate::error::{LibraryError, Result};
-use crate::query::canonical_or;
+use crate::query::{canonical_or, collection_id_by_key, collection_key};
 use crate::types::ImportReport;
 use crate::{now_unix, Library};
 use kaia_id::partial_md5;
@@ -88,14 +88,23 @@ impl Library {
                 report.skipped_invalid += 1;
                 continue;
             }
-            tx.execute(
-                "INSERT OR IGNORE INTO collections (name) VALUES (?1)",
-                [name.trim()],
-            )?;
-            let cid: i64 =
-                tx.query_row("SELECT id FROM collections WHERE name = ?1", [name.trim()], |r| {
-                    r.get(0)
-                })?;
+            let name = name.trim();
+            let key = collection_key(name)?;
+            let cid = match collection_id_by_key(&tx, &key)? {
+                Some(id) => id,
+                None => {
+                    let position: i64 = tx.query_row(
+                        "SELECT COALESCE(MAX(position), -1) + 1 FROM collections",
+                        [],
+                        |r| r.get(0),
+                    )?;
+                    tx.execute(
+                        "INSERT INTO collections (name, position, name_key) VALUES (?1, ?2, ?3)",
+                        rusqlite::params![name, position, key],
+                    )?;
+                    tx.last_insert_rowid()
+                }
+            };
 
             let mut index: i64 = 0;
             for (k, item) in collection {

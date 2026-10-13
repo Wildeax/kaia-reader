@@ -115,7 +115,14 @@ WHERE id IN (SELECT book_id FROM covers
              WHERE (small IS NULL OR large IS NULL) AND (source_w > 0 OR source_h > 0));
 ";
 
-pub(crate) const MIGRATIONS: [Migration; 3] = [
+/// Version 4 adds collection ordering and a normalized name key. The step
+/// below merges names that differ only by case before it adds the unique key.
+const SCHEMA_V4: &str = "
+ALTER TABLE collections ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE collections ADD COLUMN name_key TEXT NOT NULL DEFAULT '';
+";
+
+pub(crate) const MIGRATIONS: [Migration; 4] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -131,7 +138,45 @@ pub(crate) const MIGRATIONS: [Migration; 3] = [
         sql: SCHEMA_V3,
         step: None,
     },
+    Migration {
+        version: 4,
+        sql: SCHEMA_V4,
+        step: Some(migrate_collections),
+    },
 ];
+
+fn migrate_collections(tx: &Transaction<'_>) -> Result<()> {
+    let mut stmt = tx.prepare("SELECT id, name FROM collections ORDER BY name COLLATE NOCASE, id")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+    let rows: Vec<(i64, String)> = rows.collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    let mut keys = std::collections::HashMap::<String, i64>::new();
+    let mut ordered = Vec::new();
+    for (id, name) in rows {
+        let key = name.to_lowercase();
+        if let Some(&keep_id) = keys.get(&key) {
+            tx.execute(
+                "INSERT OR IGNORE INTO collection_books (collection_id, book_id, position)
+                 SELECT ?1, book_id, position FROM collection_books WHERE collection_id = ?2",
+                params![keep_id, id],
+            )?;
+            tx.execute("DELETE FROM collections WHERE id = ?1", [id])?;
+        } else {
+            keys.insert(key.clone(), id);
+            ordered.push((id, key));
+        }
+    }
+
+    for (position, (id, key)) in ordered.into_iter().enumerate() {
+        tx.execute(
+            "UPDATE collections SET position = ?2, name_key = ?3 WHERE id = ?1",
+            params![id, position as i64, key],
+        )?;
+    }
+    tx.execute_batch("CREATE UNIQUE INDEX collections_name_key ON collections(name_key);")?;
+    Ok(())
+}
 
 /// Re-encodes version 1 PNG covers as JPEG at the same pixel size. One book is
 /// handled at a time, so memory use stays at one cover. A cover that does not
@@ -251,7 +296,7 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 3);
+        assert_eq!(v, 4);
         let fts: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name = 'book_fts'",
@@ -276,7 +321,7 @@ mod tests {
             err,
             LibraryError::SchemaTooNew {
                 found: 99,
-                supported: 3
+                supported: 4
             }
         ));
         assert_eq!(fs::read(&path).unwrap(), before, "file is unchanged");
@@ -344,7 +389,7 @@ mod tests {
     }
 
     /// A version 1 database with PNG covers, opened by this build, comes out at
-    /// version 3 with JPEG covers of the same pixel size.
+    /// version 4 with JPEG covers of the same pixel size.
     #[test]
     fn version_one_png_covers_are_reencoded_to_jpeg() {
         let dir = tempfile::tempdir().unwrap();
@@ -383,7 +428,7 @@ mod tests {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 3);
+        assert_eq!(v, 4);
         assert_eq!(
             fs::read_dir(dir.path().join("backups")).unwrap().count(),
             1,
@@ -411,5 +456,55 @@ mod tests {
             !lib.book(2).unwrap().unwrap().extracted,
             "book is queued for extraction"
         );
+    }
+
+    #[test]
+    fn version_three_upgrade_keeps_books_and_merges_case_only_collections() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.sqlite3");
+        {
+            let conn = open_with_migrations(&path, &MIGRATIONS[..3]).unwrap();
+            conn.execute(
+                "INSERT INTO books (id, path, size, mtime, partial_md5, title, series,
+                   series_index, format, added_at, last_opened_at, percent, status)
+                 VALUES (7, '/books/a.epub', 12, 3, 'hash', 'Title', 'Saga', 2,
+                   'epub', 4, 5, 0.4, 'reading')",
+                [],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO collections (id, name) VALUES (10, 'Books')", [])
+                .unwrap();
+            conn.execute("INSERT INTO collections (id, name) VALUES (11, 'books')", [])
+                .unwrap();
+            conn.execute(
+                "INSERT INTO collection_books (collection_id, book_id, position)
+                 VALUES (10, 7, 3), (11, 7, 1)",
+                [],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO history (book_id, opened_at) VALUES (7, 5)", [])
+                .unwrap();
+        }
+
+        let lib = Library::open(&path).unwrap();
+        let book = lib.book(7).unwrap().unwrap();
+        assert_eq!(book.title.as_deref(), Some("Title"));
+        assert_eq!(book.series.as_deref(), Some("Saga"));
+        assert_eq!(book.series_index, Some(2.0));
+        assert_eq!(book.last_opened_at, Some(5));
+        assert_eq!(book.percent, 0.4);
+        let collections = lib.collections().unwrap();
+        assert_eq!(collections.len(), 1);
+        assert_eq!(collections[0].name, "Books");
+        assert_eq!(collections[0].books, 1);
+        let raw = Connection::open(&path).unwrap();
+        let history: i64 = raw
+            .query_row("SELECT COUNT(*) FROM history", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(history, 1);
+        let version: u32 = raw
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 4);
     }
 }

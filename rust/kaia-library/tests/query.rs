@@ -1,7 +1,7 @@
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use common::*;
 use kaia_library::{Book, Filter, LibraryError, Sort, SortKey, Status};
@@ -22,6 +22,17 @@ fn titles(books: &[Book]) -> Vec<String> {
         .iter()
         .map(|b| b.title.clone().unwrap_or_default())
         .collect()
+}
+
+/// The number of history rows of a book, read straight from the database.
+fn history_rows(dir: &Path, book_id: i64) -> i64 {
+    raw_connection(dir)
+        .query_row(
+            "SELECT COUNT(*) FROM history WHERE book_id = ?1",
+            [book_id],
+            |r| r.get(0),
+        )
+        .unwrap()
 }
 
 #[test]
@@ -204,6 +215,39 @@ fn manual_collection_order_follows_insertion() {
 }
 
 #[test]
+fn series_sort_uses_name_index_and_title_then_unassigned_last() {
+    let (tmp, root) = setup();
+    let files = fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let ids: Vec<i64> = files
+        .iter()
+        .map(|path| lib.book_by_path(path).unwrap().unwrap().id)
+        .collect();
+    let raw = raw_connection(tmp.path());
+    raw.execute(
+        "UPDATE books SET series = 'B', series_index = 1 WHERE id = ?1",
+        [ids[0]],
+    )
+    .unwrap();
+    raw.execute(
+        "UPDATE books SET series = 'A', series_index = 2 WHERE id = ?1",
+        [ids[1]],
+    )
+    .unwrap();
+    raw.execute(
+        "UPDATE books SET series = 'A', series_index = 1 WHERE id = ?1",
+        [ids[2]],
+    )
+    .unwrap();
+    let sorted = all(&lib, Sort::new(SortKey::Series, false), &Filter::default());
+    assert_eq!(
+        sorted.iter().map(|book| book.id).collect::<Vec<_>>(),
+        [ids[2], ids[1], ids[0], ids[3]]
+    );
+}
+
+#[test]
 fn search_matches_prefixes_across_fields() {
     let (tmp, root) = setup();
     let files = fixture_set(&root);
@@ -333,6 +377,73 @@ fn collections_add_remove_and_count() {
         lib.add_to_collection(9999, "Work"),
         Err(LibraryError::NotFound(9999))
     ));
+}
+
+#[test]
+fn collection_management_enforces_names_and_order() {
+    let (tmp, root) = setup();
+    let files = fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&files[0]).unwrap().unwrap().id;
+    let first = lib.create_collection("  First  ").unwrap();
+    let second = lib.create_collection("Second").unwrap();
+    assert_eq!(first.name, "First");
+    assert!(matches!(
+        lib.create_collection("first"),
+        Err(LibraryError::CollectionNameExists(_))
+    ));
+    lib.add_to_collection(id, "SECOND").unwrap();
+    assert!(matches!(
+        lib.rename_collection(second.id, "fIrSt"),
+        Err(LibraryError::CollectionNameExists(_))
+    ));
+    lib.rename_collection(second.id, "Renamed").unwrap();
+    lib.reorder_collection(second.id, 0).unwrap();
+    let collections = lib.collections().unwrap();
+    assert_eq!(
+        collections.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        ["Renamed", "First"]
+    );
+    assert_eq!(collections[0].books, 1);
+    assert!(lib.delete_collection(second.id).unwrap());
+    assert!(!lib.delete_collection(second.id).unwrap());
+    assert_eq!(lib.collections().unwrap().len(), 1);
+}
+
+#[test]
+fn history_removal_and_book_removal_only_change_the_index() {
+    let (tmp, root) = setup();
+    let files = fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let first = lib.book_by_path(&files[0]).unwrap().unwrap().id;
+    let second = lib.book_by_path(&files[1]).unwrap().unwrap().id;
+    lib.record_open(first, 0.6).unwrap();
+    lib.record_open(second, 0.2).unwrap();
+
+    lib.remove_from_history(first).unwrap();
+    let removed = lib.book(first).unwrap().unwrap();
+    assert_eq!(removed.last_opened_at, None);
+    assert_eq!(removed.percent, 0.6, "progress is kept");
+    assert_eq!(removed.status, Status::Reading, "status is kept");
+    assert_eq!(history_rows(tmp.path(), first), 0);
+    assert_eq!(history_rows(tmp.path(), second), 1);
+    let recent: Vec<i64> = lib.recent(10).unwrap().iter().map(|b| b.id).collect();
+    assert_eq!(recent, [second]);
+    assert!(files[0].exists());
+
+    lib.clear_history().unwrap();
+    let cleared = lib.book(second).unwrap().unwrap();
+    assert_eq!(cleared.last_opened_at, None);
+    assert_eq!(cleared.percent, 0.2, "progress is kept");
+    assert_eq!(cleared.status, Status::Reading, "status is kept");
+    assert_eq!(history_rows(tmp.path(), second), 0);
+    assert!(lib.recent(10).unwrap().is_empty());
+    assert!(lib.remove_book(first).unwrap());
+    assert!(!lib.remove_book(first).unwrap());
+    assert!(lib.book(first).unwrap().is_none());
+    assert!(files[0].exists());
 }
 
 #[test]

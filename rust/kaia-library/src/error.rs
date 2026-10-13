@@ -21,6 +21,14 @@ pub enum LibraryError {
     #[error("no book with id {0}")]
     NotFound(i64),
 
+    /// A collection with this name already exists, ignoring case.
+    #[error("collection name already exists: {0}")]
+    CollectionNameExists(String),
+
+    /// No collection has this id.
+    #[error("no collection with id {0}")]
+    CollectionNotFound(i64),
+
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
 

@@ -82,6 +82,8 @@ pub enum SortKey {
     /// Last `record_open`. Books never opened sort last in either direction.
     LastRead,
     Progress,
+    /// Series name, series index, then title.
+    Series,
     /// Manual order inside the collection named by `Filter::collection`. Falls
     /// back to title when no collection is set.
     Manual,

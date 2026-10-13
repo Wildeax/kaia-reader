@@ -359,9 +359,16 @@ fn same_file(old: &Path, new: &Path) -> bool {
 /// the document layer does not expose stay NULL.
 fn write_extracted(tx: &rusqlite::Transaction<'_>, id: i64, stem: &str, ex: &Extracted) -> Result<()> {
     tx.execute(
-        "UPDATE books SET title = ?1, authors = ?2, pages = ?3, extracted = 1, failure = NULL, attempts = 0
-         WHERE id = ?4",
-        params![ex.title.as_deref().unwrap_or(stem), ex.authors, ex.pages, id],
+        "UPDATE books SET title = ?1, authors = ?2, series = ?3, series_index = ?4,
+         pages = ?5, extracted = 1, failure = NULL, attempts = 0 WHERE id = ?6",
+        params![
+            ex.title.as_deref().unwrap_or(stem),
+            ex.authors,
+            ex.series,
+            ex.series_index,
+            ex.pages,
+            id
+        ],
     )?;
     write_cover(tx, id, ex.cover.as_ref())
 }

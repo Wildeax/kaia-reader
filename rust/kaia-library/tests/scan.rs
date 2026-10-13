@@ -267,8 +267,14 @@ fn dropped_cover_is_extracted_after_version_three_migration() {
         [id],
     )
     .unwrap();
-    raw.execute_batch("DROP INDEX books_missing_since; ALTER TABLE books DROP COLUMN missing_since;")
-        .unwrap();
+    raw.execute_batch(
+        "DROP INDEX books_missing_since;
+         ALTER TABLE books DROP COLUMN missing_since;
+         DROP INDEX collections_name_key;
+         ALTER TABLE collections DROP COLUMN name_key;
+         ALTER TABLE collections DROP COLUMN position;",
+    )
+    .unwrap();
     raw.pragma_update(None, "user_version", 2).unwrap();
     drop(raw);
     let mut lib = open_library(tmp.path());

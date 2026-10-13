@@ -18,8 +18,12 @@ kaia-luadata = { path = "../kaia-luadata" }
 kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 md-5 = "0.11"
+roxmltree = "0.21"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 thiserror = "2"
+# Reads EPUB entries with plain deflate only. The `deflate` feature also builds
+# zopfli, which only compresses.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 tempfile = "3"
