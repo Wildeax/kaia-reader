@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension};
 
-use crate::{Error, Result, DB_SCHEMA_VERSION};
+use crate::{Result, DB_SCHEMA_VERSION};
 
 const BOOK_TABLE: &str = r#"
         -- book
@@ -151,7 +151,7 @@ fn create(conn: &mut Connection) -> Result<()> {
 
 /// Brings an existing database to `DB_SCHEMA_VERSION`, or creates it when it has no `book` table.
 ///
-/// A database with a schema newer than this crate is refused and left untouched.
+/// A newer schema logs a warning and remains open, as KOReader does.
 pub(crate) fn prepare(conn: &mut Connection, path: &Path) -> Result<()> {
     let has_book: Option<i64> = conn
         .query_row(
@@ -165,10 +165,8 @@ pub(crate) fn prepare(conn: &mut Connection, path: &Path) -> Result<()> {
     }
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     if version > DB_SCHEMA_VERSION {
-        return Err(Error::NewerSchema {
-            found: version,
-            supported: DB_SCHEMA_VERSION,
-        });
+        eprintln!("warning: statistics schema {version} is newer than supported schema {DB_SCHEMA_VERSION}");
+        return Ok(());
     }
     if version < DB_SCHEMA_VERSION {
         backup(conn, path, version)?;

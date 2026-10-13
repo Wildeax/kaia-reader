@@ -1,7 +1,7 @@
 mod common;
 
 use common::{add_book, koreader_db, legacy_db, local, Scratch};
-use kaia_stats::{Error, Stats, DB_SCHEMA_VERSION};
+use kaia_stats::{Stats, DB_SCHEMA_VERSION};
 use rusqlite::{Connection, OpenFlags};
 
 /// Every schema object with its SQL, whitespace collapsed, sorted by name.
@@ -45,27 +45,15 @@ fn new_database_matches_the_koreader_layout() {
 }
 
 #[test]
-fn newer_schema_is_refused_and_left_alone() {
+fn newer_schema_warns_and_opens_without_migrating() {
     let dir = Scratch::new();
     let path = dir.path("stats.sqlite3");
     {
         let conn = koreader_db(&path);
         conn.execute_batch("PRAGMA user_version=20221112;").unwrap();
     }
-    let before = std::fs::read(&path).unwrap();
-
-    let err = Stats::open(&path).unwrap_err();
-    assert!(
-        matches!(
-            err,
-            Error::NewerSchema {
-                found: 20221112,
-                supported: 20221111
-            }
-        ),
-        "{err:?}"
-    );
-    assert_eq!(std::fs::read(&path).unwrap(), before);
+    drop(Stats::open(&path).unwrap());
+    assert_eq!(user_version(&path), 20221112);
     assert!(!dir.path("stats.sqlite3.bkp.20221112-to-20221111").exists());
 }
 

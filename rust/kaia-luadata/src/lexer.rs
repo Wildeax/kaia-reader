@@ -202,10 +202,10 @@ fn read_quoted(src: &str, start: usize) -> Result<(String, usize), Failure> {
             }
         }
     }
-    match String::from_utf8(out) {
-        Ok(s) => Ok((s, p)),
-        Err(_) => fail(start, "string escapes produce bytes that are not UTF-8"),
-    }
+    // The shared Value type stores UTF-8 strings. Preserve valid text and
+    // replace invalid byte sequences so one old Lua byte string cannot reject
+    // the rest of a settings or sidecar file.
+    Ok((String::from_utf8_lossy(&out).into_owned(), p))
 }
 
 /// Decodes one escape. `p` is the offset just after the backslash. Returns

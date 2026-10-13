@@ -20,6 +20,14 @@ pub enum Error {
     #[error("statistics schema {found} is newer than supported schema {supported}")]
     NewerSchema { found: i64, supported: i64 },
 
+    /// A book cannot be recorded without a positive page count.
+    #[error("statistics page count must be greater than zero, got {0}")]
+    InvalidPageCount(i64),
+
+    /// The compatibility start method cannot create a frozen finished book.
+    #[error("finished book is frozen by statistics settings")]
+    FrozenFinishedBook,
+
     /// An import source has a schema this crate cannot read.
     #[error("cannot import statistics schema {found}: open the database once in KOReader to upgrade it")]
     UnsupportedSource { found: i64 },

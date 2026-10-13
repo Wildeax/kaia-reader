@@ -50,14 +50,18 @@ impl Stats {
         if is_same_file(source, self.path()) {
             return Err(Error::SameDatabase(source.to_path_buf()));
         }
+        let source_uri = immutable_uri(source)?;
         let src = Connection::open_with_flags(
-            source,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            source_uri,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_URI,
         )?;
         src.pragma_update(None, "query_only", true)?;
         let version: i64 = src.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if !(20201010..=DB_SCHEMA_VERSION).contains(&version) {
+        if version < 20201010 {
             return Err(Error::UnsupportedSource { found: version });
+        }
+        if version > DB_SCHEMA_VERSION {
+            eprintln!("warning: importing statistics schema {version}, newer than supported schema {DB_SCHEMA_VERSION}");
         }
 
         let clock = self.clock;
@@ -67,6 +71,36 @@ impl Stats {
         tx.commit()?;
         Ok(report)
     }
+}
+
+/// Builds a SQLite URI that opens the source without creating WAL sidecars.
+fn immutable_uri(path: &Path) -> Result<String> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    #[cfg(unix)]
+    let encoded = {
+        use std::os::unix::ffi::OsStrExt;
+        percent_encode(absolute.as_os_str().as_bytes())
+    };
+    #[cfg(not(unix))]
+    let encoded = percent_encode(absolute.to_string_lossy().replace('\\', "/").as_bytes());
+    Ok(format!("file:{encoded}?mode=ro&immutable=1"))
+}
+
+fn percent_encode(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .copied()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 /// Copies books and spans from `src` into `tx`, then recomputes totals of the touched books.

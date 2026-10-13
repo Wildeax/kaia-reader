@@ -93,6 +93,43 @@ fn the_source_file_is_never_written() {
 }
 
 #[test]
+fn importing_a_wal_database_does_not_create_sidecars() {
+    let dir = Scratch::new();
+    let source_path = dir.path("wal-source.sqlite3");
+    {
+        let source = koreader_db(&source_path);
+        source.pragma_update(None, "journal_mode", "WAL").unwrap();
+        let book = add_book(&source, "Wal book", Some("Author"), "walmd5", 10);
+        add_span(&source, book, 1, 1000, 20, 10);
+    }
+    let target_path = dir.path("target.sqlite3");
+    drop(koreader_db(&target_path));
+    assert!(!dir.path("wal-source.sqlite3-wal").exists());
+    assert!(!dir.path("wal-source.sqlite3-shm").exists());
+
+    let mut stats = Stats::open(&target_path).unwrap();
+    assert_eq!(stats.import_koreader(&source_path).unwrap().books_added, 1);
+    assert!(!dir.path("wal-source.sqlite3-wal").exists());
+    assert!(!dir.path("wal-source.sqlite3-shm").exists());
+}
+
+#[test]
+fn importing_a_newer_user_version_warns_and_continues() {
+    let dir = Scratch::new();
+    let source_path = dir.path("newer.sqlite3");
+    {
+        let source = koreader_db(&source_path);
+        let book = add_book(&source, "Newer", Some("Author"), "newermd5", 10);
+        add_span(&source, book, 1, 1000, 20, 10);
+        source.execute_batch("PRAGMA user_version=20221112;").unwrap();
+    }
+    let target_path = dir.path("target.sqlite3");
+    drop(koreader_db(&target_path));
+    let mut stats = Stats::open(&target_path).unwrap();
+    assert_eq!(stats.import_koreader(&source_path).unwrap().books_added, 1);
+}
+
+#[test]
 fn a_source_at_schema_zero_is_refused() {
     let dir = Scratch::new();
     let source = dir.path("legacy.sqlite3");

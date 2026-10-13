@@ -821,20 +821,14 @@ dependencies = [
 name = "kaia-app"
 version = "0.1.0"
 dependencies = [
- "kaia-book",
- "kaia-dict",
  "kaia-display",
  "kaia-doc",
  "kaia-events",
  "kaia-gfx",
- "kaia-id",
  "kaia-input",
  "kaia-library",
  "kaia-mupdf-sys",
- "kaia-opds",
  "kaia-platform",
- "kaia-stats",
- "kaia-sync",
  "kaia-ui",
 ]
 
@@ -927,8 +921,8 @@ name = "kaia-ffi"
 version = "0.1.0"
 dependencies = [
  "kaia-core",
- "kaia-glibc-compat",
  "kaia-storage",
+ "libc",
  "proptest",
  "regex",
  "serde",
@@ -944,13 +938,6 @@ dependencies = [
  "image",
  "resvg",
  "unicode-script",
-]
-
-[[package]]
-name = "kaia-glibc-compat"
-version = "0.1.0"
-dependencies = [
- "libc",
 ]
 
 [[package]]

@@ -84,12 +84,32 @@ pub fn write_file(path: &Path, value: &Value) -> Result<(), WriteError> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
     let tmp = dir.join(format!(".{}.{}.tmp", name.to_string_lossy(), std::process::id()));
 
-    let result = write_and_rename(&tmp, path, dir, contents.as_bytes());
+    let result =
+        backup_old_file(path, dir).and_then(|()| write_and_rename(&tmp, path, dir, contents.as_bytes()));
     if result.is_err() {
         // Best effort: the temporary file may not exist if creating it failed.
         let _ = fs::remove_file(&tmp);
     }
     result.map_err(WriteError::Io)
+}
+
+fn backup_old_file(path: &Path, dir: &Path) -> io::Result<()> {
+    let Ok(metadata) = fs::metadata(path) else {
+        return Ok(());
+    };
+    let old_enough = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age.as_secs() > 60);
+    if !old_enough {
+        return Ok(());
+    }
+    let mut old_name = path.as_os_str().to_owned();
+    old_name.push(".old");
+    fs::rename(path, Path::new(&old_name))?;
+    File::open(dir)?.sync_all()?;
+    Ok(())
 }
 
 fn write_and_rename(tmp: &Path, path: &Path, dir: &Path, contents: &[u8]) -> io::Result<()> {
@@ -160,30 +180,26 @@ fn write_key(out: &mut String, key: &Key) {
     }
 }
 
-/// The order `dump.lua` uses: `util.orderedPairs` sorts keys with `<`. Numbers
-/// come first, sorted by value, then strings sorted bytewise (the C locale), then
-/// booleans. Mixing key kinds makes Lua's comparison inconsistent, so this
-/// order is a fixed choice and not a copy of Lua's.
+/// The order `dump.lua` uses: keys of different kinds sort by their Lua string
+/// form. Keys of the same kind use Lua's `<` ordering.
 fn key_order(a: &Key, b: &Key) -> Ordering {
-    fn class(k: &Key) -> u8 {
+    fn lua_string(k: &Key) -> String {
         match k {
-            Key::Int(_) | Key::Num(_) => 0,
-            Key::Str(_) => 1,
-            Key::Bool(_) => 2,
+            Key::Int(i) => i.to_string(),
+            Key::Num(n) => number(n.get()),
+            Key::Str(s) => s.clone(),
+            Key::Bool(b) => b.to_string(),
         }
     }
-    fn as_f64(k: &Key) -> f64 {
-        match k {
-            Key::Int(i) => *i as f64,
-            Key::Num(n) => n.get(),
-            _ => 0.0,
-        }
-    }
-    class(a).cmp(&class(b)).then_with(|| match (a, b) {
+    match (a, b) {
+        (Key::Int(x), Key::Int(y)) => x.cmp(y),
+        (Key::Int(x), Key::Num(y)) => (*x as f64).total_cmp(&y.get()),
+        (Key::Num(x), Key::Int(y)) => x.get().total_cmp(&(*y as f64)),
+        (Key::Num(x), Key::Num(y)) => x.get().total_cmp(&y.get()),
         (Key::Str(x), Key::Str(y)) => x.as_bytes().cmp(y.as_bytes()),
         (Key::Bool(x), Key::Bool(y)) => x.cmp(y),
-        _ => as_f64(a).total_cmp(&as_f64(b)),
-    })
+        _ => lua_string(a).as_bytes().cmp(lua_string(b).as_bytes()),
+    }
 }
 
 /// Formats a number as a Lua numeral that reads back as the same bits.

@@ -101,9 +101,8 @@ fn bad_escapes_are_errors() {
     assert!(parse(r"return '\256'").is_err());
     assert!(parse(r"return '\xG1'").is_err());
     assert!(parse(r"return '\x4'").is_err());
-    // \255 is a single byte that is not UTF-8 on its own.
-    let e = err(r"return '\255'");
-    assert!(e.message.contains("not UTF-8"), "{e}");
+    // Invalid UTF-8 bytes are replaced in the shared UTF-8 value type.
+    assert_eq!(ok(r"return '\255'"), Value::from("\u{fffd}"));
 }
 
 #[test]
@@ -275,7 +274,7 @@ fn writer_output_for_a_nested_table() {
 }
 
 #[test]
-fn writer_orders_numbers_by_value_then_strings_then_booleans() {
+fn writer_orders_keys_like_ordered_pairs() {
     let v = table(vec![
         (Key::from("b"), Value::Bool(true)),
         (Key::Bool(true), Value::from(1i64)),
@@ -299,6 +298,17 @@ fn writer_orders_numbers_by_value_then_strings_then_booleans() {
             "[true] = 1,",
         ]
     );
+}
+
+#[test]
+fn writer_places_string_key_before_numeric_key_when_lua_string_sorts_first() {
+    let value = table(vec![
+        (Key::Int(2), Value::from("number")),
+        (Key::from("!x"), Value::from("text")),
+    ]);
+    let text = to_string(&value);
+    let lines: Vec<&str> = text.lines().skip(1).take(2).map(str::trim).collect();
+    assert_eq!(lines, vec!["[\"!x\"] = \"text\",", "[2] = \"number\","]);
 }
 
 #[test]
@@ -329,6 +339,28 @@ fn write_file_replaces_the_file_and_leaves_no_temporary_file() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(names, vec!["metadata.epub.lua".to_owned()]);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn write_file_keeps_a_backup_of_an_old_file() {
+    use std::fs::{File, FileTimes};
+    use std::time::SystemTime;
+
+    let dir = scratch_dir("write-file-old");
+    let path = dir.join("metadata.lua");
+    fs::write(&path, "old contents").unwrap();
+    File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(FileTimes::new().set_modified(SystemTime::UNIX_EPOCH))
+        .unwrap();
+    write_file(&path, &Value::from("new")).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.join("metadata.lua.old")).unwrap(),
+        "old contents"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 

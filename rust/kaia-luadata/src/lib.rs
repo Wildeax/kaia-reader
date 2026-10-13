@@ -10,6 +10,11 @@
 //! and table constructors. Names, calls and operators are errors, except
 //! unary minus and division by the literal `0`, which is how infinities and
 //! NaN are spelled.
+//!
+//! Lua strings can contain arbitrary bytes. Since [`Value::Str`] stores UTF-8,
+//! the parser replaces invalid UTF-8 sequences with U+FFFD. This keeps the
+//! containing file readable, but writing the value back cannot recover those
+//! original bytes.
 
 mod lexer;
 mod parser;

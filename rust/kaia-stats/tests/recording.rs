@@ -3,7 +3,7 @@
 mod common;
 
 use common::{local, span_count, view_pages, Scratch};
-use kaia_stats::Stats;
+use kaia_stats::{BookInfo, Stats, StatsOptions};
 use rusqlite::{params, Connection, OpenFlags};
 
 const MD5: &str = "recmd5";
@@ -19,6 +19,123 @@ fn start(dir: &Scratch, at: &str, page: i64) -> (Stats, i64) {
 
 fn reader(stats: &Stats) -> Connection {
     Connection::open_with_flags(stats.path(), OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
+}
+
+#[test]
+fn legacy_mupdf_nul_title_row_is_reused() {
+    let dir = Scratch::new();
+    let path = dir.path("stats.sqlite3");
+    let stats = Stats::open(&path).unwrap();
+    let conn = Connection::open(&path).unwrap();
+    conn.execute(
+        "INSERT INTO book (title, authors, notes, last_open, highlights, pages, series, language, md5, total_read_time, total_read_pages) \
+         VALUES (?1, 'Tester', 3, 0, 4, 10, 'N/A', 'N/A', ?2, 0, 0)",
+        params!["Recorded\0", MD5],
+    ).unwrap();
+    drop(stats);
+
+    let mut stats = Stats::open(&path).unwrap();
+    let id = stats.start_book(MD5, "Recorded", "Tester", 10, 1, 1_000).unwrap();
+    let count: i64 = reader(&stats)
+        .query_row("SELECT count(*) FROM book", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+    assert_eq!(id, 1);
+}
+
+#[test]
+fn new_book_uses_sidecar_metadata_and_rejects_zero_pages() {
+    let dir = Scratch::new();
+    let mut stats = Stats::open(dir.path("stats.sqlite3")).unwrap();
+    let info = BookInfo {
+        md5: "sidecar-md5",
+        display_title: "Display",
+        authors: "Author",
+        series: "Series #2",
+        language: "fr",
+        notes: 5,
+        highlights: 8,
+    };
+    let id = stats
+        .start_book_with_info(info, 20, 1, 1000, false)
+        .unwrap()
+        .unwrap();
+    let row: (String, String, i64, i64, String, String, String) = reader(&stats)
+        .query_row(
+            "SELECT title, authors, notes, highlights, series, language, md5 FROM book WHERE id=?1",
+            [id],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                ))
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        row,
+        (
+            "Display".into(),
+            "Author".into(),
+            5,
+            8,
+            "Series #2".into(),
+            "fr".into(),
+            "sidecar-md5".into()
+        )
+    );
+    assert!(matches!(
+        stats.start_book("zero", "Zero", "N/A", 0, 1, 1001),
+        Err(kaia_stats::Error::InvalidPageCount(0))
+    ));
+}
+
+#[test]
+fn freeze_finished_books_and_open_options_are_respected() {
+    let dir = Scratch::new();
+    let mut stats = Stats::open_with_options(
+        dir.path("stats.sqlite3"),
+        StatsOptions {
+            min_sec: 10,
+            max_sec: 30,
+            freeze_finished_books: true,
+        },
+    )
+    .unwrap();
+    let info = BookInfo {
+        md5: "frozen",
+        display_title: "Finished",
+        authors: "N/A",
+        series: "N/A",
+        language: "N/A",
+        notes: 0,
+        highlights: 0,
+    };
+    assert_eq!(
+        stats
+            .start_book_with_info(info.clone(), 5, 1, 1000, true)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        reader(&stats)
+            .query_row("SELECT count(*) FROM book", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    let id = stats
+        .start_book_with_info(info, 5, 1, 1000, false)
+        .unwrap()
+        .unwrap();
+    stats.page_turn(2, 1009).unwrap();
+    stats.page_turn(3, 1069).unwrap();
+    stats.end_book(1069).unwrap();
+    assert_eq!(stats.book_totals(id).unwrap().unwrap().total_seconds, 30);
 }
 
 #[test]

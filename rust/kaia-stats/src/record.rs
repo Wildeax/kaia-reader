@@ -17,6 +17,46 @@ use crate::{schema, Result, DEFAULT_MAX_READ_SEC, DEFAULT_MIN_READ_SEC};
 /// Page turns between automatic flushes, as in KOReader.
 const MAX_PAGETURNS_BEFORE_FLUSH: u32 = 50;
 
+/// Settings read by KOReader's statistics plugin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatsOptions {
+    /// Minimum seconds on a page for the stay to count.
+    pub min_sec: i64,
+    /// Maximum seconds credited to one page stay.
+    pub max_sec: i64,
+    /// Do not create a statistics row for a finished document.
+    pub freeze_finished_books: bool,
+}
+
+impl Default for StatsOptions {
+    fn default() -> Self {
+        Self {
+            min_sec: DEFAULT_MIN_READ_SEC,
+            max_sec: DEFAULT_MAX_READ_SEC,
+            freeze_finished_books: false,
+        }
+    }
+}
+
+/// Metadata used to find or create a KOReader statistics book row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookInfo<'a> {
+    /// The sidecar's stored `partial_md5_checksum` value.
+    pub md5: &'a str,
+    /// KOReader's document `display_title`.
+    pub display_title: &'a str,
+    /// Document authors, or `N/A` when missing.
+    pub authors: &'a str,
+    /// Series name, including ` #<index>` when present. Use `N/A` when absent.
+    pub series: &'a str,
+    /// Language, or `N/A` when absent.
+    pub language: &'a str,
+    /// Current note count from the document sidecar.
+    pub notes: i64,
+    /// Current highlight count from the document sidecar.
+    pub highlights: i64,
+}
+
 /// One visit to a page: when it started and how many seconds count.
 /// A span with `duration == 0` is still open (its duration is set when the reader leaves).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +83,8 @@ struct OpenBook {
     notes: i64,
 }
 
+type ExistingBook = (i64, Option<i64>, Option<i64>);
+
 /// A statistics database and the reading session of the book that is open in it.
 ///
 /// Every method that takes `now` uses that value as the clock. Callers pass the
@@ -53,6 +95,7 @@ pub struct Stats {
     path: PathBuf,
     min_sec: i64,
     pub(crate) max_sec: i64,
+    freeze_finished_books: bool,
     /// The last `now` seen. `flush` uses it as the time of the write.
     pub(crate) clock: i64,
     /// Start of the current reading session (book opened or resumed).
@@ -64,8 +107,13 @@ impl Stats {
     /// Opens the statistics database at `path`, creating it when it does not exist.
     ///
     /// An older schema is backed up next to the file and upgraded. A newer schema
-    /// returns [`crate::Error::NewerSchema`] and the file is not changed.
+    /// logs a warning and remains open, as KOReader does.
     pub fn open(path: impl AsRef<Path>) -> Result<Stats> {
+        Self::open_with_options(path, StatsOptions::default())
+    }
+
+    /// Opens a statistics database with settings read from KOReader's user settings.
+    pub fn open_with_options(path: impl AsRef<Path>, options: StatsOptions) -> Result<Stats> {
         let path = path.as_ref().to_path_buf();
         let mut conn = Connection::open(&path)?;
         conn.busy_timeout(Duration::from_secs(5))?;
@@ -73,8 +121,9 @@ impl Stats {
         Ok(Stats {
             conn,
             path,
-            min_sec: DEFAULT_MIN_READ_SEC,
-            max_sec: DEFAULT_MAX_READ_SEC,
+            min_sec: options.min_sec,
+            max_sec: options.max_sec,
+            freeze_finished_books: options.freeze_finished_books,
             clock: 0,
             session_start: None,
             book: None,
@@ -101,10 +150,7 @@ impl Stats {
         }
     }
 
-    /// Opens a book at `page`, creating its row when the (title, authors, md5) key is new.
-    ///
-    /// Any book that is still open is ended first. Returns the book id.
-    /// KOReader uses `"N/A"` for missing authors, so pass that to match its rows.
+    /// Opens a book using default metadata for compatibility with existing callers.
     pub fn start_book(
         &mut self,
         md5: &str,
@@ -114,27 +160,61 @@ impl Stats {
         page: i64,
         now: i64,
     ) -> Result<i64> {
+        self.start_book_with_info(
+            BookInfo {
+                md5,
+                display_title: title,
+                authors,
+                series: "N/A",
+                language: "N/A",
+                notes: 0,
+                highlights: 0,
+            },
+            pages,
+            page,
+            now,
+            false,
+        )?
+        .ok_or(crate::Error::FrozenFinishedBook)
+    }
+
+    /// Opens a book using its sidecar identity and metadata.
+    ///
+    /// Returns `None` when the document is finished, freezing is enabled, and
+    /// no matching row exists. Existing rows remain active as in KOReader.
+    pub fn start_book_with_info(
+        &mut self,
+        info: BookInfo<'_>,
+        pages: i64,
+        page: i64,
+        now: i64,
+        is_finished: bool,
+    ) -> Result<Option<i64>> {
+        if pages <= 0 {
+            return Err(crate::Error::InvalidPageCount(pages));
+        }
         self.end_book(now)?;
         self.clock = now;
         self.session_start = Some(now);
 
-        let existing: Option<(i64, Option<i64>, Option<i64>)> = self
-            .conn
-            .query_row(
-                "SELECT id, highlights, notes FROM book WHERE title = ?1 AND authors = ?2 AND md5 = ?3",
-                params![title, authors, md5],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .optional()?;
+        let existing = find_book(&self.conn, &info)?;
         let (id, highlights, notes) = match existing {
-            Some((id, highlights, notes)) => (id, highlights.unwrap_or(0), notes.unwrap_or(0)),
+            Some((id, highlights, notes)) => (
+                id,
+                highlights.unwrap_or(info.highlights),
+                notes.unwrap_or(info.notes),
+            ),
             None => {
+                if is_finished && self.freeze_finished_books {
+                    self.session_start = None;
+                    return Ok(None);
+                }
                 self.conn.execute(
                     "INSERT INTO book (title, authors, notes, last_open, highlights, pages, series, language, md5, \
-                     total_read_time, total_read_pages) VALUES (?1, ?2, 0, ?3, 0, ?4, 'N/A', 'N/A', ?5, 0, 0)",
-                    params![title, authors, now, pages, md5],
+                     total_read_time, total_read_pages) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0)",
+                    params![info.display_title, info.authors, info.notes, now, info.highlights, pages, info.series, info.language, info.md5],
                 )?;
-                (self.conn.last_insert_rowid(), 0, 0)
+                (self.conn.last_insert_rowid(), info.highlights, info.notes)
             }
         };
 
@@ -157,7 +237,7 @@ impl Stats {
             highlights,
             notes,
         });
-        Ok(id)
+        Ok(Some(id))
     }
 
     /// Reports a page turn to `page` at time `now`. Turns to the current page are ignored.
@@ -352,6 +432,29 @@ impl Stats {
         reset_volatile(book, Some(cur_start));
         Ok(())
     }
+}
+
+fn find_book(conn: &Connection, info: &BookInfo<'_>) -> Result<Option<ExistingBook>> {
+    let mut stmt = conn
+        .prepare("SELECT id, highlights, notes FROM book WHERE title = ?1 AND authors = ?2 AND md5 = ?3")?;
+    let title_nul = format!("{}\0", info.display_title);
+    let authors_nul = format!("{}\0", info.authors);
+    for (title, authors) in [
+        (info.display_title, info.authors),
+        (title_nul.as_str(), info.authors),
+        (title_nul.as_str(), authors_nul.as_str()),
+        (info.display_title, authors_nul.as_str()),
+    ] {
+        let found = stmt
+            .query_row(params![title, authors, info.md5], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .optional()?;
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    Ok(None)
 }
 
 /// Clears pending spans. The current page gets an open span at `start` when one is given.
