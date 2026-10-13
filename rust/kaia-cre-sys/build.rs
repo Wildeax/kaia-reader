@@ -86,16 +86,35 @@ fn main() {
         .warnings(false)
         .extra_warnings(false)
         .flag_if_supported("-Wno-unused-parameter");
-    // CREngine is built with DEBUG in debug profiles (see koreader-cre in
-    // the CMake build). Match it so the class layouts agree.
-    if env::var("PROFILE").map(|p| p == "debug").unwrap_or(true) {
-        build.define("DEBUG", None);
-    }
+    // The class layouts must match the ones libcrengine.a was built with.
+    // CREngine's headers add fields under `_DEBUG` (lvarray.h, lvstring.h,
+    // lvtinydom.h). The generated crsetup.h defines `_DEBUG` and is force
+    // included above, so the shim sees the same layout whatever the Cargo
+    // profile is. No `DEBUG` define is needed.
     build.compile("kaia_cre");
 
+    // Native test binaries need the shared dependencies at run time. Cargo
+    // applies rustc-link-arg to this crate's own targets only, so dependents
+    // read the list from DEP_KAIA_CRE_RPATH_DIRS.
+    let host = env::var("HOST").unwrap_or_default();
+    let target = env::var("TARGET").unwrap_or_default();
+    let native = host == target && (host.contains("apple-darwin") || host.contains("linux"));
+    let mut rpath_dirs: Vec<PathBuf> = Vec::new();
     for dir in &paths.lib_dirs {
         println!("cargo:rustc-link-search=native={}", dir.display());
+        if native && !rpath_dirs.contains(dir) {
+            rpath_dirs.push(dir.clone());
+        }
     }
+    for dir in &rpath_dirs {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+    }
+    let rpath_list = env::join_paths(&rpath_dirs)
+        .expect("rpath directories contain no path separator")
+        .to_string_lossy()
+        .into_owned();
+    println!("cargo:rpath_dirs={rpath_list}");
+
     println!("cargo:rustc-link-lib=static=crengine");
     println!("cargo:rustc-link-lib=static=antiword");
     println!("cargo:rustc-link-lib=static=chmlib");
@@ -109,7 +128,6 @@ fn main() {
             ),
         }
     }
-    let target = env::var("TARGET").unwrap_or_default();
     if target.contains("apple") {
         println!("cargo:rustc-link-lib=c++");
     } else {
@@ -131,31 +149,35 @@ struct Paths {
 }
 
 fn locate(repo: &Path) -> Paths {
-    let root = env_path("KAIA_CRE_ROOT")
-        .or_else(|| desktop_build(repo))
-        .unwrap_or_else(|| {
-            panic!(
-                "kaia-cre-sys: no KOReader build with thirdparty/crengine/build/libcrengine.a \
-                 found under base/build. Build the desktop emulator (./kodev build) or set \
-                 KAIA_CRE_ROOT, or set KAIA_CRE_INCLUDE, KAIA_CRE_LIB and KAIA_CRE_DEP_LIBS."
-            )
-        });
-    let crengine_build = root.join("thirdparty/crengine/build");
-    let staging = root.join("staging");
-
+    // The build root is only needed for the values that the explicit variables
+    // do not set. A cross build sets them all and has no desktop root.
+    let root = env_path("KAIA_CRE_ROOT").or_else(|| desktop_build(repo));
+    let from_root = |rel: &str, var: &str| -> PathBuf {
+        match &root {
+            Some(root) => root.join(rel),
+            None => panic!(
+                "kaia-cre-sys: {var} is not set and no KOReader build with \
+                 thirdparty/crengine/build/libcrengine.a was found under base/build. Set \
+                 KAIA_CRE_ROOT, or set the explicit variables (KAIA_CRE_LIB, KAIA_CRE_SETUP, \
+                 KAIA_CRE_DEP_LIBS, KAIA_CRE_DEP_INCLUDE)."
+            ),
+        }
+    };
     let include = env_path("KAIA_CRE_INCLUDE")
         .unwrap_or_else(|| repo.join("base/thirdparty/kpvcrlib/crengine/crengine/include"));
-    let lib = env_path("KAIA_CRE_LIB").unwrap_or_else(|| crengine_build.clone());
-    let setup = env_path("KAIA_CRE_SETUP").unwrap_or_else(|| crengine_build.clone());
+    let lib =
+        env_path("KAIA_CRE_LIB").unwrap_or_else(|| from_root("thirdparty/crengine/build", "KAIA_CRE_LIB"));
+    let setup = env_path("KAIA_CRE_SETUP")
+        .unwrap_or_else(|| from_root("thirdparty/crengine/build", "KAIA_CRE_SETUP"));
     let dep_dirs: Vec<PathBuf> = match env::var_os("KAIA_CRE_DEP_LIBS") {
         Some(v) => env::split_paths(&v).collect(),
-        None => vec![staging.join("lib")],
+        None => vec![from_root("staging", "KAIA_CRE_DEP_LIBS").join("lib")],
     };
     let staging_include = match env::var_os("KAIA_CRE_DEP_INCLUDE") {
         Some(v) => env::split_paths(&v)
             .next()
-            .unwrap_or_else(|| staging.join("include")),
-        None => staging.join("include"),
+            .unwrap_or_else(|| from_root("staging", "KAIA_CRE_DEP_INCLUDE").join("include")),
+        None => from_root("staging", "KAIA_CRE_DEP_INCLUDE").join("include"),
     };
 
     for (what, file) in [

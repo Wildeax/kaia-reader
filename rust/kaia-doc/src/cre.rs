@@ -9,13 +9,23 @@
 //! scale other than 1 renders at the layout size and resamples the result.
 //! Line positions returned by `page_text` and `search` are in those units.
 //!
+//! Threads: CREngine keeps the hyphenation dictionary and the preferred font
+//! in process-wide state, and the shim's lock covers only one call. Two
+//! threads that each open documents (the library scan and the reader) could
+//! change each other's settings between calls. So [`ENGINE`] is held for each
+//! whole document operation: [`CreDocument::doc_mut`] takes it, applies this
+//! document's hyphenation dictionary and font face, and the caller then goes
+//! to a page and renders or extracts under the same guard. Every operation
+//! applies the settings again, so a document never sees another's.
+//!
 //! Locations: `Location::Page` and `Location::Engine` (an xpointer) both
 //! resolve. Internal links resolve to pages when the target id exists.
 
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::fs;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use kaia_cre_sys::{CharBox, Doc, DocFormat, Meta};
 use kaia_gfx::image::scale_pixmap;
@@ -87,6 +97,36 @@ impl Kind {
     }
 }
 
+/// Held for each whole document operation. See the module docs.
+static ENGINE: Mutex<()> = Mutex::new(());
+
+/// Takes [`ENGINE`]. A panic in another thread leaves no half-applied state
+/// that matters here, because every operation applies its settings first.
+fn engine_lock() -> MutexGuard<'static, ()> {
+    ENGINE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// One document operation: the engine lock and the document's handle, with
+/// this document's process-wide settings applied. Dropping it releases both.
+struct Session<'a> {
+    // Declared before the lock so the handle is released first.
+    doc: std::cell::RefMut<'a, Doc>,
+    _engine: MutexGuard<'static, ()>,
+}
+
+impl Deref for Session<'_> {
+    type Target = Doc;
+    fn deref(&self) -> &Doc {
+        &self.doc
+    }
+}
+
+impl DerefMut for Session<'_> {
+    fn deref_mut(&mut self) -> &mut Doc {
+        &mut self.doc
+    }
+}
+
 /// Starts CREngine once with the repository's fonts and data files.
 fn engine_ready() -> Result<()> {
     static READY: OnceLock<std::result::Result<(), String>> = OnceLock::new();
@@ -151,6 +191,9 @@ pub struct CreDocument {
     /// The hyphenation dictionary this document uses. CREngine keeps the
     /// active dictionary process-wide, so `doc_mut` applies it before work.
     hyphenation: Option<String>,
+    /// The font face this document uses. CREngine keeps the preferred font
+    /// process-wide, so `doc_mut` applies it before work.
+    font_face: String,
 }
 
 impl CreDocument {
@@ -169,45 +212,55 @@ impl CreDocument {
     /// kind accepts.
     pub fn open_as(path: &Path, kind: Kind) -> Result<Self> {
         engine_ready()?;
-        let mut doc = Doc::new(DEFAULT_WIDTH, DEFAULT_HEIGHT).map_err(engine_err)?;
-        if !doc.load(path).map_err(engine_err)? {
-            return Err(DocError::Engine(format!(
-                "CREngine cannot read {}",
-                path.display()
-            )));
-        }
-        // CREngine reads unidentified bytes as plain text. A file whose
-        // extension names another format is damaged, so refuse it.
-        let found = doc.doc_format().map_err(engine_err)?;
-        if !kind.accepts(found) {
-            return Err(DocError::Engine(format!(
-                "CREngine read {} as {found:?}, not as {kind:?}",
-                path.display()
-            )));
-        }
+        let doc = {
+            // Loading can lay the book out, so it runs under the engine lock
+            // with this document's settings.
+            let _engine = engine_lock();
+            let mut doc = Doc::new(DEFAULT_WIDTH, DEFAULT_HEIGHT).map_err(engine_err)?;
+            doc.set_hyphenation(None).map_err(engine_err)?;
+            if !doc.load(path).map_err(engine_err)? {
+                return Err(DocError::Engine(format!(
+                    "CREngine cannot read {}",
+                    path.display()
+                )));
+            }
+            // CREngine reads unidentified bytes as plain text. A file whose
+            // extension names another format is damaged, so refuse it.
+            let found = doc.doc_format().map_err(engine_err)?;
+            if !kind.accepts(found) {
+                return Err(DocError::Engine(format!(
+                    "CREngine read {} as {found:?}, not as {kind:?}",
+                    path.display()
+                )));
+            }
+            doc.set_font_face(DEFAULT_FONT).map_err(engine_err)?;
+            doc
+        };
         let mut this = Self {
             doc: RefCell::new(doc),
             kind,
             path: path.to_path_buf(),
             applied: None,
             hyphenation: None,
+            font_face: DEFAULT_FONT.to_string(),
         };
-        this.doc
-            .get_mut()
-            .set_font_face(DEFAULT_FONT)
-            .map_err(engine_err)?;
         let default = Layout::new(DEFAULT_WIDTH as f32, DEFAULT_HEIGHT as f32, DEFAULT_EM);
         this.set_layout(&default)?;
         Ok(this)
     }
 
-    /// The engine handle, with this document's hyphenation dictionary active.
-    /// The engine re-lays out only when the dictionary changes.
-    fn doc_mut(&self) -> Result<RefMut<'_, Doc>> {
+    /// Starts one operation: takes the engine lock, then applies this
+    /// document's hyphenation dictionary and font face. The engine re-lays
+    /// out only when one of them differs from the last call. Hold the result
+    /// for the whole operation and do not call another `doc_mut` meanwhile:
+    /// the lock is not reentrant.
+    fn doc_mut(&self) -> Result<Session<'_>> {
+        let engine = engine_lock();
         let mut doc = self.doc.borrow_mut();
         doc.set_hyphenation(self.hyphenation.as_deref())
             .map_err(engine_err)?;
-        Ok(doc)
+        doc.set_font_face(&self.font_face).map_err(engine_err)?;
+        Ok(Session { doc, _engine: engine })
     }
 
     pub fn kind(&self) -> Kind {
@@ -221,15 +274,12 @@ impl CreDocument {
     /// Selects a hyphenation dictionary, such as `English_US.pattern`. None turns hyphenation off.
     pub fn set_hyphenation(&mut self, dict: Option<&str>) -> Result<()> {
         self.hyphenation = dict.map(str::to_string);
-        self.doc.get_mut().set_hyphenation(dict).map_err(engine_err)
+        self.doc_mut().map(drop)
     }
 
     /// Turns the book's own CSS on or off. Off ignores the book's styles.
     pub fn set_embedded_styles(&mut self, enabled: bool) -> Result<()> {
-        self.doc
-            .get_mut()
-            .set_embedded_styles(enabled)
-            .map_err(engine_err)
+        self.doc_mut()?.set_embedded_styles(enabled).map_err(engine_err)
     }
 
     /// The xpointer at the top of a page.
@@ -545,6 +595,10 @@ impl Document for CreDocument {
         }
         let prev = self.applied.clone();
         let css_path = data_dir().join(self.kind.default_css());
+        if let Some(face) = &layout.font_family {
+            // `doc_mut` applies the face with the other process-wide settings.
+            self.font_face.clone_from(face);
+        }
         let mut doc = self.doc_mut()?;
 
         // Stylesheet first. It re-lays out the book, so the other settings follow.
@@ -585,11 +639,6 @@ impl Document for CreDocument {
         });
         if prev_percent != Some(percent) {
             doc.set_interline_percent(percent).map_err(engine_err)?;
-        }
-        if let Some(face) = &layout.font_family {
-            if prev.as_ref().and_then(|p| p.font_family.as_ref()) != Some(face) {
-                doc.set_font_face(face).map_err(engine_err)?;
-            }
         }
         drop(doc);
         self.applied = Some(layout.clone());
@@ -844,6 +893,94 @@ mod tests {
         );
         doc.set_hyphenation(None).expect("disable hyphenation");
         assert_eq!(doc.page_text(mid).expect("text again").text, plain);
+    }
+
+    /// What one thread reads back from a book under one settings pair.
+    #[derive(Debug, PartialEq)]
+    struct Snapshot {
+        pages: usize,
+        text: Vec<String>,
+        /// A hash per page, so a failure prints a short message.
+        pixel_hashes: Vec<u64>,
+    }
+
+    /// Opens juliet.epub on a narrow column with the given hyphenation
+    /// dictionary and font face, and reads pages from the middle of the book.
+    fn snapshot(hyphenation: Option<&str>, face: &str) -> Snapshot {
+        let mut doc = CreDocument::open(&juliet()).expect("open juliet");
+        let mut layout = Layout::new(300.0, 500.0, 26.0);
+        layout.font_family = Some(face.to_string());
+        doc.set_layout(&layout).expect("layout");
+        doc.set_hyphenation(hyphenation).expect("hyphenation");
+        let pages = doc.page_count();
+        let first = (pages / 2) as u32;
+        let mut text = Vec::new();
+        let mut pixel_hashes = Vec::new();
+        for page in first..first + 3 {
+            text.push(doc.page_text(page).expect("page text").text);
+            let pix = doc.render(page, 1.0, PixelFormat::Gray8).expect("render");
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(pix.data(), &mut hasher);
+            pixel_hashes.push(std::hash::Hasher::finish(&hasher));
+        }
+        Snapshot {
+            pages,
+            text,
+            pixel_hashes,
+        }
+    }
+
+    #[test]
+    fn concurrent_documents_keep_their_own_hyphenation_and_font() {
+        const ROUNDS: usize = 12;
+        let a = ("English_US.pattern", "Noto Serif");
+        let b = ("@none", "Noto Sans");
+        fn hyph(name: &str) -> Option<&str> {
+            (name != "@none").then_some(name)
+        }
+
+        // Single-threaded references.
+        let want_a = snapshot(hyph(a.0), a.1);
+        let want_b = snapshot(hyph(b.0), b.1);
+        assert_ne!(want_a, want_b, "the two settings must give different pages");
+
+        let (got_a, got_b) = std::thread::scope(|scope| {
+            let run = |name: &'static str, face: &'static str| {
+                scope.spawn(move || {
+                    (0..ROUNDS)
+                        .map(|_| snapshot(hyph(name), face))
+                        .collect::<Vec<_>>()
+                })
+            };
+            let ta = run(a.0, a.1);
+            let tb = run(b.0, b.1);
+            (ta.join().expect("thread A"), tb.join().expect("thread B"))
+        });
+        for (round, got) in got_a.iter().enumerate() {
+            assert_eq!(got, &want_a, "thread A, round {round}");
+        }
+        for (round, got) in got_b.iter().enumerate() {
+            assert_eq!(got, &want_b, "thread B, round {round}");
+        }
+    }
+
+    #[test]
+    fn two_open_documents_on_one_thread_keep_their_settings() {
+        // Same rule on one thread: use A, then B, then A again.
+        let mut a = CreDocument::open(&juliet()).expect("open a");
+        let mut b = CreDocument::open(&juliet()).expect("open b");
+        let mut la = Layout::new(300.0, 500.0, 26.0);
+        la.font_family = Some("Noto Serif".to_string());
+        let mut lb = Layout::new(300.0, 500.0, 26.0);
+        lb.font_family = Some("Noto Sans".to_string());
+        a.set_layout(&la).expect("layout a");
+        b.set_layout(&lb).expect("layout b");
+        a.set_hyphenation(Some("English_US.pattern")).expect("hyph a");
+        let mid = (a.page_count() / 2) as u32;
+        let first = a.page_text(mid).expect("a text").text;
+        let _ = b.page_text(mid).expect("b text");
+        b.set_hyphenation(None).expect("hyph b");
+        assert_eq!(a.page_text(mid).expect("a again").text, first);
     }
 
     #[test]

@@ -4,7 +4,12 @@
 //! [`Doc`] type wraps one open document: it owns the handle, frees C strings
 //! and arrays, and turns return codes into [`Error`]. CREngine keeps global
 //! state, so the shim serializes calls with one lock. [`init`] must run before
-//! any document is opened.
+//! any document is opened: [`Doc::new`] returns an error until it has.
+//!
+//! The shim lock covers one call. CREngine's hyphenation dictionary and
+//! preferred font are process-wide, so a caller that uses documents from
+//! several threads must hold its own lock across a whole operation and set
+//! those two before it works. `kaia-doc` does this.
 //!
 //! This crate is the only place with `unsafe` code for CREngine. Every
 //! `unsafe` block states the invariant it relies on.
@@ -20,6 +25,9 @@ pub const DATA_DIR: &str = env!("KAIA_CRE_DATA_DIR");
 
 /// Font files for CREngine's font manager. The default is `resources/fonts`.
 pub const FONTS_DIR: &str = env!("KAIA_CRE_FONTS_DIR");
+
+/// Largest width or height that [`Doc::render`] accepts, in pixels.
+pub const MAX_RENDER_SIDE: u32 = 16384;
 
 /// Raw declarations for `csrc/kaia_cre.h`.
 #[allow(non_camel_case_types, missing_docs)]
@@ -338,7 +346,8 @@ pub struct Doc {
 }
 
 impl Doc {
-    /// Creates a view of the given size. Load a file before using it.
+    /// Creates a view of the given size. Load a file before using it. Fails
+    /// until [`init`] has succeeded.
     pub fn new(width: u32, height: u32) -> Result<Doc> {
         let w = c_int::try_from(width).map_err(|_| Error::BadInput("width too large".into()))?;
         let h = c_int::try_from(height).map_err(|_| Error::BadInput("height too large".into()))?;
@@ -443,10 +452,17 @@ impl Doc {
     }
 
     /// Renders the current page. Returns gray8 bytes (`width*height`) or rgb24
-    /// bytes (`width*height*3`).
+    /// bytes (`width*height*3`). Each side is at most [`MAX_RENDER_SIDE`].
     pub fn render(&mut self, width: u32, height: u32, color: bool) -> Result<Vec<u8>> {
-        let pixels = width as usize * height as usize;
-        let len = if color { pixels * 3 } else { pixels };
+        if width == 0 || height == 0 || width > MAX_RENDER_SIDE || height > MAX_RENDER_SIDE {
+            return Err(Error::BadInput(format!(
+                "render size {width}x{height} is outside 1..={MAX_RENDER_SIDE}"
+            )));
+        }
+        let len = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(if color { 3 } else { 1 }))
+            .ok_or_else(|| Error::BadInput(format!("render size {width}x{height} overflows")))?;
         let mut buf = vec![0u8; len];
         // SAFETY: `buf` holds `len` bytes, the size the shim checks against.
         // The shim writes at most `len` bytes and returns before we read.

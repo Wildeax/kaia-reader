@@ -51,6 +51,10 @@ impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Largest side of a rendered area in device pixels. Matches `KAIA_MAX_SIDE` in
+/// the C shim.
+const MAX_RENDER_SIDE: i64 = 20_000;
+
 /// Rendered pixels. Rows are tightly packed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pixels {
@@ -234,6 +238,23 @@ impl Document {
     /// `None` renders the whole page. Scale 1.0 is 72 dpi.
     pub fn render(&self, page: u32, scale: f32, gray: bool, clip: Option<[i32; 4]>) -> Result<Pixels> {
         let page = Self::page_arg(page)?;
+        if let Some([x0, y0, x1, y1]) = clip {
+            // Subtract in i64: the corners can be anywhere in the i32 range.
+            let w = i64::from(x1) - i64::from(x0);
+            let h = i64::from(y1) - i64::from(y0);
+            if w <= 0 || h <= 0 {
+                return Err(Error {
+                    kind: ErrorKind::Argument,
+                    message: "render clip is empty".to_string(),
+                });
+            }
+            if w > MAX_RENDER_SIDE || h > MAX_RENDER_SIDE {
+                return Err(Error {
+                    kind: ErrorKind::Argument,
+                    message: "render clip is too large".to_string(),
+                });
+            }
+        }
         let mut out = kaia_pixels {
             width: 0,
             height: 0,
@@ -341,8 +362,8 @@ impl Document {
         Ok(page_text)
     }
 
-    /// Hit quads for `needle` on a page, at most `max_hits` of them. Each quad
-    /// is `[ul.x, ul.y, ur.x, ur.y, ll.x, ll.y, lr.x, lr.y]`.
+    /// Hit quads for `needle` on a page, at most `max_hits` of them. The shim
+    /// clamps `max_hits` to 65536. Each quad is `[ul.x, ul.y, ur.x, ur.y, ll.x, ll.y, lr.x, lr.y]`.
     pub fn search(&self, page: u32, needle: &str, max_hits: u32) -> Result<Vec<[f32; 8]>> {
         let page = Self::page_arg(page)?;
         let n = to_cstring(needle)?;
@@ -525,5 +546,81 @@ mod tests {
             ErrorKind::PageRange
         );
         assert_eq!(Document::page_arg(7).unwrap(), 7);
+    }
+
+    fn sample_pdf() -> Document {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/sample.pdf");
+        Document::open(&path).expect("open test/sample.pdf")
+    }
+
+    #[test]
+    fn extreme_clips_are_rejected_in_rust() {
+        let doc = sample_pdf();
+        for clip in [
+            [i32::MIN, 0, i32::MAX, 10],
+            [0, i32::MIN, 10, i32::MAX],
+            [i32::MAX, 0, i32::MIN, 10],
+            [0, 0, 0, 10],
+            [0, 0, 20_001, 10],
+        ] {
+            let err = doc.render(0, 1.0, true, Some(clip)).unwrap_err();
+            assert_eq!(err.kind, ErrorKind::Argument, "clip {clip:?}");
+        }
+        let ok = doc
+            .render(0, 1.0, true, Some([0, 0, 20, 10]))
+            .expect("small clip");
+        assert_eq!((ok.width, ok.height), (20, 10));
+    }
+
+    #[test]
+    fn extreme_clips_are_rejected_in_c_without_overflow() {
+        let doc = sample_pdf();
+        // Call the shim directly: the Rust wrapper would reject these first.
+        for clip in [
+            [i32::MIN, i32::MIN, i32::MAX, i32::MAX],
+            [i32::MIN, 0, i32::MAX, 10],
+            [i32::MAX, 0, i32::MIN, 10],
+        ] {
+            let mut out = kaia_pixels {
+                width: 0,
+                height: 0,
+                stride: 0,
+                format: 0,
+                len: 0,
+                data: ptr::null_mut(),
+            };
+            // SAFETY: `doc.raw` is live, `clip` holds four ints for the call and
+            // `out` is a valid out pointer.
+            let status = unsafe { kaia_doc_render(doc.raw.as_ptr(), 0, 1.0, clip.as_ptr(), 1, &mut out) };
+            assert_ne!(status, KAIA_OK, "clip {clip:?}");
+            assert!(out.data.is_null());
+        }
+    }
+
+    #[test]
+    fn huge_hit_limit_is_clamped_not_overflowed() {
+        let doc = sample_pdf();
+        // The result is whatever the page holds; the call must neither fail nor
+        // try to allocate max_hits * sizeof(fz_quad) bytes.
+        let mut out: *mut f32 = ptr::null_mut();
+        let mut count: i32 = 0;
+        let needle = CString::new("the").unwrap();
+        // SAFETY: `doc.raw` is live, `needle` is NUL-terminated and the out
+        // pointers are valid. On success `out` is a malloc'd array or null.
+        let status = unsafe {
+            kaia_doc_search(
+                doc.raw.as_ptr(),
+                0,
+                needle.as_ptr(),
+                i32::MAX,
+                &mut out,
+                &mut count,
+            )
+        };
+        assert_eq!(status, KAIA_OK);
+        assert!(count >= 0);
+        // SAFETY: `out` came from the shim's malloc, or is null (kaia_free accepts it).
+        unsafe { kaia_free(out.cast()) };
+        assert!(doc.search(0, "the", u32::MAX).is_ok());
     }
 }

@@ -6,8 +6,11 @@
 
 #include "kaia_cre.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -32,6 +35,12 @@ namespace {
 
 std::mutex g_lock;
 bool g_inited = false;
+
+// Largest side of a rendered page in pixels. Also bounds the size checks below.
+constexpr int kMaxRenderSide = 16384;
+
+// Multiplies two sizes. False when the product does not fit in size_t.
+bool mul_size(size_t a, size_t b, size_t *out) { return !__builtin_mul_overflow(a, b, out); }
 thread_local std::string g_error;
 
 // Thrown by the shim for errors it detects. The guard turns it into a return code.
@@ -76,6 +85,14 @@ char *dup_utf8(const std::string &s) {
     std::memcpy(out, s.data(), s.size());
     out[s.size()] = '\0';
     return out;
+}
+
+// CREngine's font manager is a global that kaia_cre_init creates. Without it,
+// code that reaches for `fontMan` dereferences null.
+void require_init() {
+    if (!g_inited || !fontMan) {
+        fail("CREngine is not initialized: call kaia_cre_init first");
+    }
 }
 
 LVDocView *view_of(kaia_cre_doc *doc) {
@@ -141,12 +158,14 @@ void walk_toc(LVTocItem *item, std::vector<kaia_cre_toc_entry> &out) {
     int n = item->getChildCount();
     for (int i = 0; i < n; i++) {
         LVTocItem *child = item->getChild(i);
-        kaia_cre_toc_entry e{};
+        // Push the entry first and fill the strings in place, so a failing
+        // allocation leaves every string already made reachable from `out`.
+        out.push_back(kaia_cre_toc_entry{});
+        kaia_cre_toc_entry &e = out.back();
         e.level = child->getLevel();
         e.page = child->getPage();
         e.title = dup_utf8(child->getName());
         e.xpointer = dup_utf8(child->getPath());
-        out.push_back(e);
         walk_toc(child, out);
     }
 }
@@ -199,19 +218,31 @@ int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
         if (width <= 0 || height <= 0 || !out) {
             fail("view size must be positive");
         }
+        require_init();
         // Same constructor and mode as newDocView in base/cre.cpp. The page
         // header is off so the page holds only the text.
         LVDocView *view = new LVDocView(-1, true);
-        view->setViewMode(DVM_PAGES, -1);
-        view->Resize(width, height);
-        view->setPageHeaderInfo(0);
-        // The fallback values from readDefaults in base/cre.cpp, used when no
-        // cr3.ini exists: autohinting (2) and harfbuzz kerning (3).
-        CRPropRef props = LVCreatePropsContainer();
-        props->setInt("font.hinting.mode", 2);
-        props->setInt("font.kerning.mode", 3);
-        view->propsApply(props);
-        kaia_cre_doc *doc = new kaia_cre_doc{view};
+        kaia_cre_doc *doc = nullptr;
+        try {
+            view->setViewMode(DVM_PAGES, -1);
+            view->Resize(width, height);
+            view->setPageHeaderInfo(0);
+            // The fallback values from readDefaults in base/cre.cpp, used when no
+            // cr3.ini exists: autohinting (2) and harfbuzz kerning (3).
+            CRPropRef props = LVCreatePropsContainer();
+            props->setInt("font.hinting.mode", 2);
+            props->setInt("font.kerning.mode", 3);
+            view->propsApply(props);
+            doc = new kaia_cre_doc{view};
+        } catch (...) {
+            // Nothing owns the view yet. Release it before the error leaves.
+            try {
+                view->close();
+            } catch (...) {
+            }
+            delete view;
+            throw;
+        }
         *out = doc;
         return KAIA_CRE_OK;
     });
@@ -273,8 +304,17 @@ int kaia_cre_set_font_size(kaia_cre_doc *doc, int px) {
 
 int kaia_cre_set_font_face(kaia_cre_doc *doc, const char *face) {
     return guard([&]() -> int {
+        require_init();
         LVDocView *view = view_of(doc);
-        view->setDefaultFontFace(lString8(face));
+        if (!face) {
+            fail("font face is null");
+        }
+        // setDefaultFontFace drops the layout, so skip it when the face is
+        // already set. Callers re-apply the face before each operation because
+        // the preferred font below is process-wide.
+        if (view->getDefaultFontFace() != lString8(face)) {
+            view->setDefaultFontFace(lString8(face));
+        }
         // Same bias as CreDocument:setFontFace in credocument.lua, so the
         // requested face wins over real italic or bold matches.
         fontMan->SetAsPreferredFontWithBias(lString8(face), 1 + 128 * 5 + 256 * 5, true);
@@ -351,8 +391,18 @@ int kaia_cre_render(kaia_cre_doc *doc, int width, int height, int color, uint8_t
         if (width <= 0 || height <= 0) {
             fail("render size must be positive");
         }
-        size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
-        size_t need = color ? pixels * 3 : pixels;
+        if (width > kMaxRenderSide || height > kMaxRenderSide) {
+            fail("render size is too large");
+        }
+        // Checked multiplications: size_t is 32 bits on armv7. Each product
+        // is also the size of a buffer used below.
+        size_t pixels = 0;
+        size_t need = 0;
+        size_t bgra = 0;
+        if (!mul_size(static_cast<size_t>(width), static_cast<size_t>(height), &pixels) ||
+            !mul_size(pixels, color ? 3 : 1, &need) || !mul_size(pixels, 4, &bgra)) {
+            fail("render size is too large");
+        }
         if (!out || out_len < need) {
             fail("render buffer is too small");
         }
@@ -366,7 +416,7 @@ int kaia_cre_render(kaia_cre_doc *doc, int width, int height, int color, uint8_t
         }
         // CREngine draws BGRA with an inverted alpha byte. Keep B, G, R in
         // RGB order and drop alpha.
-        std::vector<uint8_t> tmp(pixels * 4, 0xFF);
+        std::vector<uint8_t> tmp(bgra, 0xFF);
         LVColorDrawBuf buf(width, height, tmp.data(), 32);
         buf.setInvertImages(false);
         view->Draw(buf, false);
@@ -475,44 +525,60 @@ int kaia_cre_page_links(kaia_cre_doc *doc, kaia_cre_link_box **out, size_t *coun
         ldomXRangeList links;
         view->getCurrentPageLinks(links);
         std::vector<kaia_cre_link_box> boxes;
-        for (int i = 0; i < links.length(); i++) {
-            ldomXPointer a_xpointer;
-            lString32 href = links[i]->getHRef(a_xpointer);
-            int32_t target = -1;
-            if (!href.empty() && href[0] == '#') {
-                ldomNode *node = dom->getElementById(href.c_str() + 1);
-                if (node) {
-                    target = view->getBookmarkPage(ldomXPointer(node, 0), false);
+        // Frees the hrefs made so far. Runs on every error path below.
+        auto release = [&boxes]() {
+            for (auto &b : boxes) {
+                std::free(b.href);
+            }
+            boxes.clear();
+        };
+        try {
+            for (int i = 0; i < links.length(); i++) {
+                ldomXPointer a_xpointer;
+                lString32 href = links[i]->getHRef(a_xpointer);
+                int32_t target = -1;
+                if (!href.empty() && href[0] == '#') {
+                    ldomNode *node = dom->getElementById(href.c_str() + 1);
+                    if (node) {
+                        target = view->getBookmarkPage(ldomXPointer(node, 0), false);
+                    }
+                }
+                ldomXRange range(*links[i]);
+                LVArray<lvRect> rects;
+                range.getSegmentRects(rects, true);
+                for (int k = 0; k < rects.length(); k++) {
+                    lvRect rc = rects[k];
+                    if (rc.isEmpty() || !doc_to_window_rect(view, rc)) {
+                        continue;
+                    }
+                    // Push the box first, then fill the href in place, so the
+                    // vector owns the string as soon as it exists.
+                    boxes.push_back(kaia_cre_link_box{});
+                    kaia_cre_link_box &b = boxes.back();
+                    b.x0 = static_cast<float>(rc.left);
+                    b.y0 = static_cast<float>(rc.top);
+                    b.x1 = static_cast<float>(rc.right);
+                    b.y1 = static_cast<float>(rc.bottom);
+                    b.page = target;
+                    b.href = dup_utf8(href);
                 }
             }
-            ldomXRange range(*links[i]);
-            LVArray<lvRect> rects;
-            range.getSegmentRects(rects, true);
-            for (int k = 0; k < rects.length(); k++) {
-                lvRect rc = rects[k];
-                if (rc.isEmpty() || !doc_to_window_rect(view, rc)) {
-                    continue;
-                }
-                kaia_cre_link_box b{};
-                b.x0 = static_cast<float>(rc.left);
-                b.y0 = static_cast<float>(rc.top);
-                b.x1 = static_cast<float>(rc.right);
-                b.y1 = static_cast<float>(rc.bottom);
-                b.page = target;
-                b.href = dup_utf8(href);
-                boxes.push_back(b);
+            if (boxes.empty()) {
+                return KAIA_CRE_OK;
             }
-        }
-        *count = boxes.size();
-        if (boxes.empty()) {
+            kaia_cre_link_box *arr =
+                static_cast<kaia_cre_link_box *>(std::malloc(sizeof(kaia_cre_link_box) * boxes.size()));
+            if (!arr) {
+                fail("out of memory");
+            }
+            std::memcpy(arr, boxes.data(), sizeof(kaia_cre_link_box) * boxes.size());
+            *count = boxes.size();
+            *out = arr;
             return KAIA_CRE_OK;
+        } catch (...) {
+            release();
+            throw;
         }
-        *out = static_cast<kaia_cre_link_box *>(std::malloc(sizeof(kaia_cre_link_box) * boxes.size()));
-        if (!*out) {
-            fail("out of memory");
-        }
-        std::memcpy(*out, boxes.data(), sizeof(kaia_cre_link_box) * boxes.size());
-        return KAIA_CRE_OK;
     });
 }
 
@@ -541,16 +607,23 @@ int kaia_cre_toc(kaia_cre_doc *doc, kaia_cre_toc_entry **out, size_t *count) {
             }
             throw;
         }
-        *count = entries.size();
+        *count = 0;
+        *out = nullptr;
         if (entries.empty()) {
-            *out = nullptr;
             return KAIA_CRE_OK;
         }
-        *out = static_cast<kaia_cre_toc_entry *>(std::malloc(sizeof(kaia_cre_toc_entry) * entries.size()));
-        if (!*out) {
+        kaia_cre_toc_entry *arr =
+            static_cast<kaia_cre_toc_entry *>(std::malloc(sizeof(kaia_cre_toc_entry) * entries.size()));
+        if (!arr) {
+            for (auto &e : entries) {
+                std::free(e.title);
+                std::free(e.xpointer);
+            }
             fail("out of memory");
         }
-        std::memcpy(*out, entries.data(), sizeof(kaia_cre_toc_entry) * entries.size());
+        std::memcpy(arr, entries.data(), sizeof(kaia_cre_toc_entry) * entries.size());
+        *count = entries.size();
+        *out = arr;
         return KAIA_CRE_OK;
     });
 }
@@ -664,22 +737,36 @@ int kaia_cre_search(kaia_cre_doc *doc, const char *pattern, int case_insensitive
         // Search the whole document in one pass: y from 0 to the full height.
         dom->findText(needle, case_insensitive != 0, false, 0, full, hits, max_hits, full);
         std::vector<kaia_cre_range> ranges;
-        for (int i = 0; i < hits.length(); i++) {
-            kaia_cre_range r{};
-            r.start = dup_utf8(hits[i]->getStart().toString());
-            r.end = dup_utf8(hits[i]->getEnd().toString());
-            ranges.push_back(r);
-        }
-        *count = ranges.size();
-        if (ranges.empty()) {
+        auto release = [&ranges]() {
+            for (auto &r : ranges) {
+                free_strings(r.start, r.end);
+            }
+            ranges.clear();
+        };
+        try {
+            for (int i = 0; i < hits.length(); i++) {
+                // Push first and fill in place, so the vector owns each string
+                // as soon as it exists.
+                ranges.push_back(kaia_cre_range{});
+                kaia_cre_range &r = ranges.back();
+                r.start = dup_utf8(hits[i]->getStart().toString());
+                r.end = dup_utf8(hits[i]->getEnd().toString());
+            }
+            if (ranges.empty()) {
+                return KAIA_CRE_OK;
+            }
+            kaia_cre_range *arr = static_cast<kaia_cre_range *>(std::malloc(sizeof(kaia_cre_range) * ranges.size()));
+            if (!arr) {
+                fail("out of memory");
+            }
+            std::memcpy(arr, ranges.data(), sizeof(kaia_cre_range) * ranges.size());
+            *count = ranges.size();
+            *out = arr;
             return KAIA_CRE_OK;
+        } catch (...) {
+            release();
+            throw;
         }
-        *out = static_cast<kaia_cre_range *>(std::malloc(sizeof(kaia_cre_range) * ranges.size()));
-        if (!*out) {
-            fail("out of memory");
-        }
-        std::memcpy(*out, ranges.data(), sizeof(kaia_cre_range) * ranges.size());
-        return KAIA_CRE_OK;
     });
 }
 
@@ -698,24 +785,47 @@ int kaia_cre_metadata(kaia_cre_doc *doc, char **title, char **authors, char **la
         LVDocView *view = view_of(doc);
         if (title) {
             *title = nullptr;
-            lString32 v = view->getTitle();
-            if (!v.empty()) {
-                *title = dup_utf8(v);
-            }
         }
         if (authors) {
             *authors = nullptr;
-            lString32 v = view->getAuthors();
-            if (!v.empty()) {
-                *authors = dup_utf8(v);
-            }
         }
         if (language) {
             *language = nullptr;
-            lString32 v = view->getLanguage();
-            if (!v.empty()) {
-                *language = dup_utf8(v);
+        }
+        try {
+            if (title) {
+                lString32 v = view->getTitle();
+                if (!v.empty()) {
+                    *title = dup_utf8(v);
+                }
             }
+            if (authors) {
+                lString32 v = view->getAuthors();
+                if (!v.empty()) {
+                    *authors = dup_utf8(v);
+                }
+            }
+            if (language) {
+                lString32 v = view->getLanguage();
+                if (!v.empty()) {
+                    *language = dup_utf8(v);
+                }
+            }
+        } catch (...) {
+            // Report no strings on failure, so the caller has nothing to free.
+            if (title) {
+                std::free(*title);
+                *title = nullptr;
+            }
+            if (authors) {
+                std::free(*authors);
+                *authors = nullptr;
+            }
+            if (language) {
+                std::free(*language);
+                *language = nullptr;
+            }
+            throw;
         }
         return KAIA_CRE_OK;
     });

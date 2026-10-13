@@ -11,6 +11,7 @@
  */
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,8 @@
 
 /* Largest render side in device pixels. Guards malloc against absurd sizes. */
 #define KAIA_MAX_SIDE 20000
+/* Largest hit limit kaia_doc_search accepts. A larger request is clamped. */
+#define KAIA_MAX_HITS 65536
 
 struct kaia_doc {
     fz_context *ctx;
@@ -416,6 +419,7 @@ int kaia_doc_render(kaia_doc *d, int page_no, float scale, const int *clip, int 
         fz_rect bounds;
         fz_irect area;
         fz_colorspace *cs;
+        long long area_w, area_h;
         int w, h, n, y, row;
 
         page = fz_load_page(ctx, d->doc, page_no);
@@ -427,12 +431,15 @@ int kaia_doc_render(kaia_doc *d, int page_no, float scale, const int *clip, int 
         else
             area = fz_round_rect(bounds);
 
-        w = area.x1 - area.x0;
-        h = area.y1 - area.y0;
-        if (w <= 0 || h <= 0)
+        /* The corners can be anywhere in the int range, so subtract in 64 bits. */
+        area_w = (long long)area.x1 - (long long)area.x0;
+        area_h = (long long)area.y1 - (long long)area.y0;
+        if (area_w <= 0 || area_h <= 0)
             fz_throw(ctx, FZ_ERROR_GENERIC, "render area is empty");
-        if (w > KAIA_MAX_SIDE || h > KAIA_MAX_SIDE)
+        if (area_w > KAIA_MAX_SIDE || area_h > KAIA_MAX_SIDE)
             fz_throw(ctx, FZ_ERROR_GENERIC, "render area is too large");
+        w = (int)area_w;
+        h = (int)area_h;
 
         cs = gray ? fz_device_gray(ctx) : fz_device_rgb(ctx);
         pix = fz_new_pixmap_with_bbox(ctx, cs, fz_make_irect(0, 0, w, h), NULL, 0);
@@ -818,6 +825,8 @@ int kaia_doc_search(kaia_doc *d, int page_no, const char *needle, int max_hits,
     *count = 0;
     if (!needle || !*needle || max_hits <= 0)
         return arg_error(d, "empty search text or bad hit limit");
+    if (max_hits > KAIA_MAX_HITS)
+        max_hits = KAIA_MAX_HITS;
     status = check_page(d, page_no);
     if (status != KAIA_OK)
         return status;
@@ -836,6 +845,10 @@ int kaia_doc_search(kaia_doc *d, int page_no, const char *needle, int max_hits,
         stext_options(&opts);
         page = fz_load_page(ctx, d->doc, page_no);
         text = fz_new_stext_page_from_page(ctx, page, &opts);
+        /* max_hits is at most KAIA_MAX_HITS, so these products fit in 32-bit
+         * size_t. The checks keep that true if the constant grows. */
+        if ((size_t)max_hits > SIZE_MAX / sizeof *hits || (size_t)max_hits > SIZE_MAX / sizeof *marks)
+            fz_throw(ctx, FZ_ERROR_GENERIC, "hit limit is too large");
         hits = malloc((size_t)max_hits * sizeof *hits);
         marks = malloc((size_t)max_hits * sizeof *marks);
         if (!hits || !marks)

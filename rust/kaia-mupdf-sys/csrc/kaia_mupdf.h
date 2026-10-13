@@ -7,8 +7,13 @@
  * so setjmp/longjmp never crosses a Rust frame.
  *
  * Threading: a kaia_doc owns one fz_context. Use one kaia_doc from one thread at
- * a time. Different kaia_doc handles share no state except the process
- * environment (FONTDIR is read when MuPDF loads a fallback font).
+ * a time. Different kaia_doc handles may run on different threads at once.
+ * They share the process environment (FONTDIR is read when MuPDF loads a
+ * fallback font) and one MuPDF global: fz_hb_lock() stores the active context
+ * in the static fz_hb_secret. Only MuPDF's HarfBuzz allocator hooks
+ * (fz_hb_malloc and friends) read it, and KOReader links the system HarfBuzz,
+ * which does not call them, so concurrent handles do not depend on it.
+ * MuPDF's color management library (lcms2mt) is thread safe.
  *
  * Ownership: pointers returned through out parameters are allocated with
  * malloc and must be released with kaia_free() or the matching *_free function.
@@ -118,7 +123,8 @@ int kaia_doc_layout(kaia_doc *d, float width, float height, float em);
 int kaia_doc_page_bounds(kaia_doc *d, int page, float box[4]);
 
 /* Renders a page at scale (1.0 is 72 dpi). clip, when not NULL, is x0, y0, x1,
- * y1 in scaled device pixels. When it is NULL the whole page is rendered.
+ * y1 in scaled device pixels. When it is NULL the whole page is rendered. An
+ * empty area, or one wider or taller than 20000 pixels, is an error.
  * gray is nonzero for Gray8 output and zero for Rgb24. */
 int kaia_doc_render(kaia_doc *d, int page, float scale, const int *clip, int gray,
                     kaia_pixels *out);
@@ -136,8 +142,9 @@ void kaia_links_free(kaia_link *links, int count);
 int kaia_doc_stext(kaia_doc *d, int page, kaia_stext *out);
 void kaia_stext_free(kaia_stext *out);
 
-/* Searches a page. On success *quads points to count * 8 floats in the order
- * ul.x ul.y ur.x ur.y ll.x ll.y lr.x lr.y. Free with kaia_free(). */
+/* Searches a page. max_hits above 65536 is clamped to 65536. On success *quads
+ * points to count * 8 floats in the order ul.x ul.y ur.x ur.y ll.x ll.y lr.x
+ * lr.y. Free with kaia_free(). */
 int kaia_doc_search(kaia_doc *d, int page, const char *needle, int max_hits,
                     float **quads, int *count);
 

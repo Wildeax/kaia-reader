@@ -59,6 +59,7 @@ const char *kaia_cre_last_error(void);
  * first call does work. `registered` receives the number of fonts accepted. */
 int kaia_cre_init(const char *const *font_files, size_t font_count, const char *hyph_dir, int *registered);
 
+/* Fails with KAIA_CRE_ERROR until kaia_cre_init has succeeded. */
 int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out);
 void kaia_cre_doc_free(kaia_cre_doc *doc);
 
@@ -71,6 +72,9 @@ int kaia_cre_doc_format(kaia_cre_doc *doc, int32_t *out);
 
 int kaia_cre_set_size(kaia_cre_doc *doc, int width, int height);
 int kaia_cre_set_font_size(kaia_cre_doc *doc, int px);
+/* The preferred font is process-wide in CREngine, so a caller that works with
+ * several documents applies the face again before each operation. A repeat
+ * call with the same face does not re-layout the document. */
 int kaia_cre_set_font_face(kaia_cre_doc *doc, const char *face);
 int kaia_cre_set_interline_percent(kaia_cre_doc *doc, int percent);
 int kaia_cre_set_margins(kaia_cre_doc *doc, int left, int top, int right, int bottom);
@@ -83,7 +87,7 @@ int kaia_cre_set_stylesheet(kaia_cre_doc *doc, const char *css_file, const char 
 
 /* Renders the current page at width x height. `out` holds width*height bytes
  * when `color` is 0 (gray8, 0 is black) and width*height*3 bytes when it is 1
- * (rgb24). */
+ * (rgb24). Each side is at most 16384 pixels. */
 int kaia_cre_render(kaia_cre_doc *doc, int width, int height, int color, uint8_t *out, size_t out_len);
 
 int kaia_cre_page_count(kaia_cre_doc *doc, int32_t *out);
