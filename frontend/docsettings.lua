@@ -267,6 +267,17 @@ function DocSettings:open(doc_path)
     }
     -- We get back an array of tables for *existing* candidates, sorted MRU first (insertion order breaks ties).
     local candidates = buildCandidates(candidates_list)
+    -- Kaia: when Kaia writes outside the book folder, its own copy always wins.
+    -- A sidecar next to the book (possibly stock KOReader's) is only read when
+    -- Kaia has no copy yet, so Kaia never trades its data for another app's.
+    if G_reader_settings:readSetting("document_metadata_folder", "doc") ~= "doc" then
+        local own, doc_location = {}, {}
+        for _, t in ipairs(candidates) do
+            table.insert(new:isInDocLocation(t.path) and doc_location or own, t)
+        end
+        for _, t in ipairs(doc_location) do table.insert(own, t) end
+        candidates = own
+    end
 
     local candidate_path, ok, stored
     for _, t in ipairs(candidates) do
@@ -318,6 +329,9 @@ function DocSettings:flush(data, no_custom_metadata)
     data = data or self.data
     local sidecar_dirs
     local preferred_location = G_reader_settings:readSetting("document_metadata_folder", "doc")
+    -- Kaia: when writing outside the book folder, leave the sidecar next to the
+    -- book untouched. It may belong to stock KOReader on the same device.
+    local keep_doc_location = preferred_location ~= "doc"
     if preferred_location == "doc" then
         sidecar_dirs = { self.doc_sidecar_dir,  self.dir_sidecar_dir } -- fallback for read-only book storage
     elseif preferred_location == "dir" then
@@ -346,7 +360,9 @@ function DocSettings:flush(data, no_custom_metadata)
                     filepath, filename = util.splitFilePathName(metadata_file)
                     if filepath ~= sidecar_dir_slash then
                         ffiutil.copyFile(metadata_file, sidecar_dir_slash .. filename)
-                        os.remove(metadata_file)
+                        if not (keep_doc_location and self:isInDocLocation(metadata_file)) then
+                            os.remove(metadata_file)
+                        end
                         self:getCustomCoverFile(true) -- reset cache
                     end
                 end
@@ -356,13 +372,15 @@ function DocSettings:flush(data, no_custom_metadata)
                     filepath, filename = util.splitFilePathName(metadata_file)
                     if filepath ~= sidecar_dir_slash then
                         ffiutil.copyFile(metadata_file, sidecar_dir_slash .. filename)
-                        os.remove(metadata_file)
+                        if not (keep_doc_location and self:isInDocLocation(metadata_file)) then
+                            os.remove(metadata_file)
+                        end
                         self:getCustomMetadataFile(true) -- reset cache
                     end
                 end
             end
 
-            self:purge(sidecar_file) -- remove old candidates and empty sidecar folders
+            self:purge(sidecar_file, nil, keep_doc_location) -- remove old candidates and empty sidecar folders
 
             return sidecar_dir
         end
@@ -370,7 +388,13 @@ function DocSettings:flush(data, no_custom_metadata)
 end
 
 --- Purges (removes) sidecar directory.
-function DocSettings:purge(sidecar_to_keep, data_to_purge)
+--- Kaia: true when path is inside the sidecar folder next to the book.
+function DocSettings:isInDocLocation(path)
+    local dir = self.doc_sidecar_dir
+    return dir ~= nil and path ~= nil and path:sub(1, #dir + 1) == dir .. "/"
+end
+
+function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
     local custom_cover_file, custom_metadata_file
     if sidecar_to_keep == nil then
         custom_cover_file    = self:getCustomCoverFile()
@@ -388,7 +412,7 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge)
     if data_to_purge.doc_settings and self.candidates then
         for _, t in ipairs(self.candidates) do
             local candidate_path = t.path
-            if isFile(candidate_path) then
+            if isFile(candidate_path) and not (keep_doc_location and self:isInDocLocation(candidate_path)) then
                 if (not sidecar_to_keep)
                         or (candidate_path ~= sidecar_to_keep and candidate_path ~= sidecar_to_keep .. ".old") then
                     os.remove(candidate_path)
@@ -411,7 +435,9 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge)
     -- Remove empty sidecar dirs
     if data_to_purge.doc_settings or data_to_purge.custom_cover_file or data_to_purge.custom_metadata_file then
         for _, dir in ipairs({ self.doc_sidecar_dir, self.dir_sidecar_dir, self.hash_sidecar_dir }) do
-            DocSettings.removeSidecarDir(dir)
+            if not (keep_doc_location and dir == self.doc_sidecar_dir) then
+                DocSettings.removeSidecarDir(dir)
+            end
         end
     end
 

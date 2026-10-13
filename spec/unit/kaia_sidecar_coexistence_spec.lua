@@ -1,0 +1,90 @@
+-- Kaia must not delete or move stock KOReader's sidecar next to a book.
+describe("Kaia sidecar coexistence", function()
+    local DocSettings, DataStorage, lfs, util, ffiutil
+    local book, ko_sidecar_dir, ko_sidecar
+
+    setup(function()
+        require("commonrequire")
+        DocSettings = require("docsettings")
+        DataStorage = require("datastorage")
+        lfs = require("libs/libkoreader-lfs")
+        util = require("util")
+        ffiutil = require("ffi/util")
+    end)
+
+    before_each(function()
+        local dir = DataStorage:getDataDir() .. "/kaia-coexist-test"
+        util.makePath(dir)
+        book = dir .. "/book.epub"
+        ffiutil.copyFile("spec/front/unit/data/juliet.epub", book)
+        ko_sidecar_dir = dir .. "/book.sdr"
+        util.makePath(ko_sidecar_dir)
+        ko_sidecar = ko_sidecar_dir .. "/metadata.epub.lua"
+        local f = io.open(ko_sidecar, "w")
+        f:write('return { ["percent_finished"] = 0.25, ["koreader_only"] = "keep me" }\n')
+        f:close()
+        local cover = io.open(ko_sidecar_dir .. "/cover.png", "w")
+        cover:write("not really a png")
+        cover:close()
+    end)
+
+    after_each(function()
+        G_reader_settings:delSetting("document_metadata_folder")
+        DocSettings:open(book):purge()
+        os.remove(ko_sidecar)
+        os.remove(ko_sidecar_dir .. "/cover.png")
+        os.remove(ko_sidecar .. ".old")
+        lfs.rmdir(ko_sidecar_dir)
+        os.remove(book)
+    end)
+
+    it("reads the KOReader sidecar, writes its own copy and leaves the original", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local ds = DocSettings:open(book)
+        assert.are.equal(0.25, ds:readSetting("percent_finished"))
+        assert.are.equal("keep me", ds:readSetting("koreader_only"))
+        ds:saveSetting("percent_finished", 0.5)
+        local written_dir = ds:flush()
+        assert.is_not_nil(written_dir)
+        assert.are_not.equal(ko_sidecar_dir, written_dir)
+        -- KOReader's file is still there and unchanged.
+        local original = dofile(ko_sidecar)
+        assert.are.equal(0.25, original.percent_finished)
+        assert.is_truthy(lfs.attributes(ko_sidecar_dir .. "/cover.png", "mode"))
+        -- Kaia reopens its own copy.
+        assert.are.equal(0.5, DocSettings:open(book):readSetting("percent_finished"))
+    end)
+
+    it("keeps reading its own copy after KOReader writes a newer sidecar", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local ds = DocSettings:open(book)
+        ds:saveSetting("kaia_only_highlight", true)
+        ds:flush()
+        -- Stock KOReader saves later, with a newer modification time.
+        local f = io.open(ko_sidecar, "w")
+        f:write('return { ["percent_finished"] = 0.9 }\n')
+        f:close()
+        lfs.touch(ko_sidecar, os.time() + 3600, os.time() + 3600)
+        local reopened = DocSettings:open(book)
+        assert.is_true(reopened:readSetting("kaia_only_highlight"))
+        assert.are.equal(0.9, dofile(ko_sidecar).percent_finished)
+    end)
+
+    it("keeps upstream behavior when the user chooses the book folder", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "doc")
+        local ds = DocSettings:open(book)
+        ds:saveSetting("percent_finished", 0.75)
+        assert.are.equal(ko_sidecar_dir, ds:flush())
+        assert.are.equal(0.75, dofile(ko_sidecar).percent_finished)
+    end)
+
+    it("applies the Kaia default only when unset", function()
+        local Defaults = require("kaia/defaults")
+        G_reader_settings:delSetting("document_metadata_folder")
+        Defaults:apply(G_reader_settings)
+        assert.are.equal("dir", G_reader_settings:readSetting("document_metadata_folder"))
+        G_reader_settings:saveSetting("document_metadata_folder", "doc")
+        Defaults:apply(G_reader_settings)
+        assert.are.equal("doc", G_reader_settings:readSetting("document_metadata_folder"))
+    end)
+end)

@@ -42,6 +42,8 @@ G_defaults = require("luadefaults"):open()
 local DataStorage = require("datastorage")
 G_reader_settings = require("luasettings"):open(
     DataStorage:getDataDir().."/settings.reader.lua")
+-- Kaia: defaults that differ from stock KOReader, applied only when unset.
+require("kaia/defaults"):apply(G_reader_settings)
 -- Runtime compatibility trace (KR-012), enabled only when KAIA_TRACE names an output file.
 if os.getenv("KAIA_TRACE") then require("kaia/trace"):install{ path = os.getenv("KAIA_TRACE") } end
 
