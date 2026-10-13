@@ -11,6 +11,8 @@ members = [
     "kaia-mupdf-sys",
     "kaia-doc",
     "kaia-display",
+    "kaia-ui",
+    "kaia-platform",
 ]
 
 [workspace.package]

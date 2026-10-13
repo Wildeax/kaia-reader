@@ -1,0 +1,12 @@
+[package]
+name = "kaia-ui"
+description = "Retained widget toolkit for the Kaia UI: layout, painting, events, theme and components."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-events = { path = "../kaia-events" }
+kaia-input = { path = "../kaia-input" }

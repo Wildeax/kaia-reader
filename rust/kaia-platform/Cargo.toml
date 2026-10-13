@@ -1,0 +1,12 @@
+[package]
+name = "kaia-platform"
+description = "Device services: battery, frontlight and warmth, suspend and standby, Wi-Fi, USB storage handover, device info and paths."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = "3"

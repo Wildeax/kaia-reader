@@ -46,7 +46,7 @@ pub enum UiEvent {
 
 ## Theme
 
-`Theme` holds the tokens from `docs/kaia/specs/DESIGN.md`: spacing, radii, lines, fonts (family, weight, size), colors and the accent rule (green on color panels, ink on grayscale). Sizes are given in device-independent units and scaled with `dp(x) = round(x * dpi / 160)`, the same rule as KOReader's `scaleBySize`, so DESIGN.md values carry over. Widgets never hardcode sizes or colors.
+`Theme` holds the tokens from `docs/kaia/specs/DESIGN.md`: spacing, radii, lines, fonts (family, weight, size), colors and the accent rule (green on color panels, ink on grayscale). Sizes are given in device-independent units and scaled with KOReader's `scaleBySize` rule from `base/ffi/framebuffer.lua`: `ceil(x * (size_scale + dpi_scale) / 2)` with `size_scale = min(w, h) / 600` and `dpi_scale` equal to `size_scale` unless a DPI override is set. DESIGN.md values therefore carry over (`dp(50)` is 106 px on the Libra Colour). Widgets never hardcode sizes or colors.
 
 ## Components (version 1)
 

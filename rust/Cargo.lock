@@ -608,6 +608,9 @@ dependencies = [
 [[package]]
 name = "kaia-cre-sys"
 version = "0.1.0"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "kaia-display"
@@ -622,6 +625,7 @@ dependencies = [
 name = "kaia-doc"
 version = "0.1.0"
 dependencies = [
+ "kaia-cre-sys",
  "kaia-gfx",
  "kaia-mupdf-sys",
 ]
@@ -667,6 +671,16 @@ dependencies = [
 [[package]]
 name = "kaia-library"
 version = "0.1.0"
+dependencies = [
+ "kaia-doc",
+ "kaia-gfx",
+ "kaia-luadata",
+ "kaia-mupdf-sys",
+ "md-5",
+ "rusqlite",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "kaia-luadata"
@@ -686,6 +700,9 @@ dependencies = [
 [[package]]
 name = "kaia-platform"
 version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "kaia-storage"
@@ -704,6 +721,11 @@ dependencies = [
 [[package]]
 name = "kaia-ui"
 version = "0.1.0"
+dependencies = [
+ "kaia-events",
+ "kaia-gfx",
+ "kaia-input",
+]
 
 [[package]]
 name = "kurbo"
@@ -784,6 +806,16 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+
+[[package]]
+name = "md-5"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
+dependencies = [
+ "cfg-if",
+ "digest",
+]
 
 [[package]]
 name = "memchr"
