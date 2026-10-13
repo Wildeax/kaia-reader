@@ -11,6 +11,7 @@ mod image;
 mod store;
 mod transfer;
 
+pub use assets::PENDING_ASSET_GRACE_SECS;
 pub use error::StoreError;
 pub use kaia_core::{
     is_partial_md5, is_sha256, Anchor, AssetRef, DocumentId, Offset, Sticker, StickerSize, StickerState,

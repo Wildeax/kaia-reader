@@ -13,7 +13,11 @@ use uuid::Uuid;
 
 use crate::error::StoreError;
 use crate::image::{self, ext_for_mime};
-use crate::store::{asset_exists, Store};
+use crate::store::{asset_exists, now_unix, Store};
+
+/// Seconds that `gc` keeps an asset after its last add, while no sticker has saved it.
+/// A sticker that saves the asset ends the wait at once.
+pub const PENDING_ASSET_GRACE_SECS: i64 = 60 * 60;
 
 impl Store {
     /// Adds a PNG or JPEG file to `assets/` and returns its record.
@@ -23,6 +27,9 @@ impl Store {
     /// stored under its SHA-256 through a temp file, fsync and rename. If the same
     /// image is already stored, the existing record is returned and `license` is
     /// not changed.
+    ///
+    /// Each add makes the asset pending until a sticker saves it or
+    /// `PENDING_ASSET_GRACE_SECS` seconds have passed. See `gc`.
     pub fn add_asset_file(&mut self, path: &Path, license: &str) -> Result<AssetRef, StoreError> {
         self.add_asset_inner(path, license, None)
     }
@@ -51,8 +58,13 @@ impl Store {
         let sha = sha256_hex(&bytes);
         let file_name = format!("{sha}.{}", ext_for_mime(info.mime));
         let final_path = self.assets_dir().join(&file_name);
+        let now = now_unix();
 
         if asset_exists(self.conn(), &sha)? && final_path.is_file() {
+            self.conn().execute(
+                "UPDATE assets SET pending_since = ?2 WHERE sha256 = ?1",
+                params![sha, now],
+            )?;
             return self.asset_record(&sha);
         }
 
@@ -72,9 +84,12 @@ impl Store {
         let tx = self
             .conn_mut()
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        // If the row exists but its file was missing, the upsert keeps the stored
+        // license and sets a new pending time.
         tx.execute(
-            "INSERT OR IGNORE INTO assets (sha256, mime, width, height, bytes, source_name, license)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO assets (sha256, mime, width, height, bytes, source_name, license, pending_since)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT (sha256) DO UPDATE SET pending_since = excluded.pending_since",
             params![
                 asset.sha256,
                 asset.mime,
@@ -83,6 +98,7 @@ impl Store {
                 i64::try_from(asset.bytes).unwrap_or(i64::MAX),
                 asset.source_name,
                 asset.license,
+                now,
             ],
         )?;
         tx.commit()?;
@@ -113,20 +129,28 @@ impl Store {
         Ok(path)
     }
 
-    /// Removes assets that no sticker references, and their files. Also removes
-    /// asset files that have no row, such as leftovers from an interrupted write.
-    /// Returns the number of assets removed. Never runs during ordinary writes.
+    /// Removes assets that no sticker references, and their files. A pending asset,
+    /// one that no sticker has saved since its last add, stays until
+    /// `PENDING_ASSET_GRACE_SECS` have passed since that add. If the add time is later
+    /// than the clock, for example after the clock moved back, the asset stays until
+    /// the clock passes the add time plus the grace period.
+    ///
+    /// Also removes asset files that have no row, such as leftovers from an
+    /// interrupted write. Returns the number of assets removed. Never runs during
+    /// ordinary writes.
     pub fn gc(&mut self) -> Result<u32, StoreError> {
         let assets_dir = self.assets_dir();
+        let grace_cutoff = now_unix() - PENDING_ASSET_GRACE_SECS;
         let tx = self
             .conn_mut()
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let unreferenced: Vec<(String, String)> = {
             let mut stmt = tx.prepare(
                 "SELECT sha256, mime FROM assets
-                 WHERE sha256 NOT IN (SELECT asset FROM stickers WHERE asset IS NOT NULL)",
+                 WHERE sha256 NOT IN (SELECT asset FROM stickers WHERE asset IS NOT NULL)
+                   AND (pending_since IS NULL OR pending_since < ?1)",
             )?;
-            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let rows = stmt.query_map([grace_cutoff], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
         for (sha, _) in &unreferenced {
@@ -196,6 +220,15 @@ pub(crate) fn query_assets(conn: &Connection) -> Result<Vec<AssetRef>, StoreErro
         .query_map([], asset_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+/// Ends the pending state of an asset. Called when a sticker saves a reference to it.
+pub(crate) fn clear_pending(conn: &Connection, sha256: &str) -> Result<(), StoreError> {
+    conn.execute(
+        "UPDATE assets SET pending_since = NULL WHERE sha256 = ?1",
+        [sha256],
+    )?;
+    Ok(())
 }
 
 /// Reads a file, refusing anything over the 4 MiB limit. Reads at most one byte

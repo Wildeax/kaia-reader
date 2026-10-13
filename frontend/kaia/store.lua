@@ -205,6 +205,7 @@ function Store:assetPath(sha256)
 end
 
 --- Removes assets that no sticker uses. Returns the number removed.
+-- An asset added in the last 60 minutes and not yet saved by a sticker is kept.
 function Store:gc()
     local lib = self.lib
     local removed = ffi.new("uint32_t[1]")

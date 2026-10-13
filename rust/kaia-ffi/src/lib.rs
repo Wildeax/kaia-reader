@@ -226,7 +226,9 @@ pub unsafe extern "C" fn kaia_asset_path(handle: u64, sha256: *const c_char, out
     })
 }
 
-/// Removes unreferenced assets and writes the count to `out_removed`.
+/// Removes unreferenced assets and writes the count to `out_removed`. An asset
+/// added in the last 60 minutes that no sticker has saved yet is kept, so a
+/// sticker being created does not lose its image.
 ///
 /// # Safety
 /// `out_removed` must be valid for a `u32` write.

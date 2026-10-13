@@ -102,7 +102,12 @@ A font, margin or rotation change never changes stored data. Stickers are positi
 - Maximum encoded size 4 MiB. Maximum decoded size 2048 x 2048 pixels, read from the header before decoding.
 - The file is named by its SHA-256 and written to `assets/` with write to temp file, fsync, rename.
 - `AssetRef { sha256, mime, width, height, bytes, source_name, license }`. `license` is free text the user may leave empty.
-- Assets with no referencing sticker are removed by `kaia_store_gc`, never during ordinary writes.
+- An asset is pending from each add until a sticker saves a reference to it. Adding the same image again makes it pending again.
+- `kaia_store_gc` removes an asset that no sticker references. A pending asset stays until 60 minutes (`PENDING_ASSET_GRACE_SECS`) have passed since its last add. gc never runs during ordinary writes.
+- If gc runs after the 60 minutes and before the sticker is saved, the image is removed and the save fails with `unknown asset`. Adding the image again fixes it.
+- After a crash between an add and its save, the next gc that runs more than 60 minutes after the add removes the image.
+- Asset files with no row, such as leftovers from an interrupted write, are removed at once.
+- A pending time later than the clock, which happens when the clock moves back after an add, keeps the asset until the clock passes that time plus 60 minutes.
 
 ## Database rules
 
@@ -153,6 +158,14 @@ CREATE TABLE library_cache (
 ```
 
 `library_cache` may be dropped and rebuilt at any time.
+
+### Schema version 2
+
+```sql
+ALTER TABLE assets ADD COLUMN pending_since INTEGER;
+```
+
+`pending_since` holds the unix time of the last add of an asset, if no sticker has saved that asset since. Otherwise it is NULL, and so is every row that existed before version 2. Exports do not carry it, and an import leaves the assets it adds not pending.
 
 ## Export format
 

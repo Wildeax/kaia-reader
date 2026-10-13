@@ -7,7 +7,7 @@ use std::path::Path;
 
 use kaia_core::{quote, Anchor, StickerState, TextQuote};
 use kaia_storage::{ImportReport, Migration, Store, StoreError, DB_FILE, MIGRATIONS};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 use common::*;
 
@@ -139,7 +139,7 @@ fn disk_full_during_asset_write_leaves_no_file_and_no_row() {
 fn failed_migration_rolls_back_and_keeps_backup() {
     let (_tmp, dir) = temp_store_dir();
     {
-        let mut store = Store::open(&dir).expect("open v1");
+        let mut store = Store::open_with_migrations(&dir, &MIGRATIONS[..1]).expect("open v1");
         store.put_sticker(&book_text(MD5_A, "keep me")).expect("put");
     }
     let db = dir.join(DB_FILE);
@@ -197,7 +197,7 @@ fn newer_schema_is_refused_without_writing() {
             err,
             StoreError::SchemaTooNew {
                 found: 99,
-                supported: 1
+                supported: 2
             }
         ),
         "got {err:?}"
@@ -327,4 +327,34 @@ fn reanchoring_follows_insertions_and_orphans_removed_quotes() {
     let kept = store.get_sticker(&id).expect("still stored");
     assert_eq!(kept.state, StickerState::Orphaned);
     assert_eq!(store.list_stickers(MD5_A).expect("list").len(), 1);
+}
+
+// Schema version 2 adds `assets.pending_since`. A version 1 store keeps its assets. Its rows
+// are not pending, so gc removes an unreferenced one at once, as it did before version 2.
+#[test]
+fn version_1_store_upgrades_and_keeps_its_assets() {
+    let (_tmp, dir) = temp_store_dir();
+    let sha = sha256_of(PNG_RED);
+    drop(Store::open_with_migrations(&dir, &MIGRATIONS[..1]).expect("create v1"));
+    {
+        // A version 1 row and its file, as written before schema version 2.
+        let conn = Connection::open(dir.join(DB_FILE)).expect("raw");
+        conn.execute(
+            "INSERT INTO assets (sha256, mime, width, height, bytes, source_name, license)
+             VALUES (?1, 'image/png', 1, 1, ?2, 'red.png', '')",
+            params![sha, PNG_RED.len() as i64],
+        )
+        .expect("v1 row");
+    }
+    write_file(&dir.join("assets"), &format!("{sha}.png"), PNG_RED);
+
+    let mut store = Store::open(&dir).expect("open with version 2");
+    assert_eq!(user_version(&dir.join(DB_FILE)), 2);
+    assert_eq!(backup_names(&dir).len(), 1, "the upgrade takes a backup first");
+    assert!(
+        store.asset_path(&sha).is_ok(),
+        "the version 1 asset stays readable"
+    );
+    assert_eq!(store.gc().expect("gc"), 1);
+    assert!(matches!(store.asset_path(&sha), Err(StoreError::NotFound(_))));
 }

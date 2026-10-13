@@ -8,6 +8,7 @@ use kaia_core::{Anchor, DocumentId, Sticker, StickerSize, StickerState, Validati
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row, TransactionBehavior};
 use uuid::Uuid;
 
+use crate::assets::clear_pending;
 use crate::error::StoreError;
 
 /// Database file name inside the store directory.
@@ -54,6 +55,10 @@ CREATE TABLE library_cache (
 );
 ";
 
+/// Version 2 adds `assets.pending_since`. Rows written by version 1 get NULL, which
+/// means not pending.
+const SCHEMA_V2: &str = "ALTER TABLE assets ADD COLUMN pending_since INTEGER;";
+
 /// One schema step. `version` is the `user_version` after the step runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Migration {
@@ -62,10 +67,16 @@ pub struct Migration {
 }
 
 /// The migrations this build supports, in order.
-pub const MIGRATIONS: [Migration; 1] = [Migration {
-    version: 1,
-    sql: SCHEMA_V1,
-}];
+pub const MIGRATIONS: [Migration; 2] = [
+    Migration {
+        version: 1,
+        sql: SCHEMA_V1,
+    },
+    Migration {
+        version: 2,
+        sql: SCHEMA_V2,
+    },
+];
 
 /// An open store. One connection, one writer.
 pub struct Store {
@@ -164,6 +175,9 @@ impl Store {
     /// The document is inserted from `sticker.doc` if it is not known yet. For an
     /// existing document, `file_size` and `title` in `sticker.doc` are ignored.
     /// Use `document_seen` to change them.
+    ///
+    /// The asset must already be stored. Saving the sticker ends the pending state
+    /// of its asset, see `gc`.
     pub fn put_sticker(&mut self, sticker: &Sticker) -> Result<Sticker, StoreError> {
         sticker.validate()?;
         let now = now_unix();
@@ -175,6 +189,7 @@ impl Store {
             if !asset_exists(&tx, sha)? {
                 return Err(ValidationError::new("asset", "unknown asset, add the file first").into());
             }
+            clear_pending(&tx, sha)?;
         }
         let id = match &sticker.id {
             None => {

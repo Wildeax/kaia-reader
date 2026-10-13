@@ -6,7 +6,7 @@ use std::fs;
 
 use kaia_core::limits::ASSET_MAX_BYTES;
 use kaia_core::StickerState;
-use kaia_storage::{Migration, Store, StoreError, MIGRATIONS};
+use kaia_storage::{Migration, Store, StoreError, MIGRATIONS, PENDING_ASSET_GRACE_SECS};
 
 use common::*;
 
@@ -219,7 +219,7 @@ fn asset_path_errors() {
 
 #[test]
 fn gc_removes_only_unreferenced_assets() {
-    let (tmp, _dir, mut store) = open();
+    let (tmp, dir, mut store) = open();
     let kept = store
         .add_asset_file(&write_file(tmp.path(), "red.png", PNG_RED), "")
         .expect("red");
@@ -229,6 +229,8 @@ fn gc_removes_only_unreferenced_assets() {
     store
         .put_sticker(&fixed_with_asset(MD5_A, &kept.sha256))
         .expect("sticker");
+    // `dropped` was never saved. Age it past the grace period so gc treats it as an orphan.
+    age_pending_asset(&dir, &dropped.sha256, PENDING_ASSET_GRACE_SECS + 1);
 
     // An orphan file with no row, as left by an interrupted write.
     let orphan = store.dir().join("assets").join(format!("{}.png", "e".repeat(64)));
@@ -242,6 +244,95 @@ fn gc_removes_only_unreferenced_assets() {
     ));
     assert!(!orphan.exists());
     assert_eq!(store.gc().expect("second gc"), 0);
+}
+
+#[test]
+fn gc_keeps_an_asset_picked_for_a_sticker_that_is_not_saved_yet() {
+    let (tmp, _dir, mut store) = open();
+    let asset = store
+        .add_asset_file(&write_file(tmp.path(), "red.png", PNG_RED), "")
+        .expect("add");
+    // The sticker that references the image is saved a moment later.
+    assert_eq!(store.gc().expect("gc between add and save"), 0);
+    store
+        .put_sticker(&fixed_with_asset(MD5_A, &asset.sha256))
+        .expect("save the sticker");
+    assert!(store.asset_path(&asset.sha256).is_ok());
+    assert_eq!(store.gc().expect("gc after save"), 0);
+    assert!(store.asset_path(&asset.sha256).is_ok());
+}
+
+#[test]
+fn gc_collects_an_unsaved_asset_once_the_grace_period_has_passed() {
+    let (tmp, dir, mut store) = open();
+    let asset = store
+        .add_asset_file(&write_file(tmp.path(), "red.png", PNG_RED), "")
+        .expect("add");
+    assert_eq!(store.gc().expect("gc inside the grace period"), 0);
+
+    age_pending_asset(&dir, &asset.sha256, PENDING_ASSET_GRACE_SECS + 1);
+    assert_eq!(store.gc().expect("gc after the grace period"), 1);
+    assert!(matches!(
+        store.asset_path(&asset.sha256),
+        Err(StoreError::NotFound(_))
+    ));
+    assert!(!dir.join("assets").join(format!("{}.png", asset.sha256)).exists());
+}
+
+#[test]
+fn asset_added_before_a_crash_is_collected_after_the_grace_period() {
+    let (tmp, dir) = temp_store_dir();
+    let png = write_file(tmp.path(), "red.png", PNG_RED);
+    let sha = {
+        let mut store = Store::open(&dir).expect("open");
+        let asset = store.add_asset_file(&png, "").expect("add");
+        // The store closes here with no sticker saved, as after a crash.
+        asset.sha256
+    };
+
+    let mut store = Store::open(&dir).expect("reopen");
+    assert_eq!(store.gc().expect("gc after the crash"), 0);
+    assert!(store.asset_path(&sha).is_ok());
+
+    age_pending_asset(&dir, &sha, PENDING_ASSET_GRACE_SECS + 1);
+    assert_eq!(store.gc().expect("gc after the grace period"), 1);
+    assert!(matches!(store.asset_path(&sha), Err(StoreError::NotFound(_))));
+}
+
+#[test]
+fn asset_is_collected_at_once_when_its_last_sticker_is_deleted() {
+    let (tmp, _dir, mut store) = open();
+    let asset = store
+        .add_asset_file(&write_file(tmp.path(), "red.png", PNG_RED), "")
+        .expect("add");
+    let sticker = store
+        .put_sticker(&fixed_with_asset(MD5_A, &asset.sha256))
+        .expect("save");
+    store
+        .delete_sticker(sticker.id.as_deref().expect("id"))
+        .expect("delete");
+    assert_eq!(store.gc().expect("gc"), 1);
+}
+
+#[test]
+fn picking_an_image_again_makes_it_wait_for_its_sticker_again() {
+    let (tmp, _dir, mut store) = open();
+    let path = write_file(tmp.path(), "red.png", PNG_RED);
+    let asset = store.add_asset_file(&path, "").expect("add");
+    let sticker = store
+        .put_sticker(&fixed_with_asset(MD5_A, &asset.sha256))
+        .expect("save");
+    store
+        .delete_sticker(sticker.id.as_deref().expect("id"))
+        .expect("delete");
+
+    // The same image is picked again for a new sticker.
+    store.add_asset_file(&path, "").expect("add again");
+    assert_eq!(store.gc().expect("gc between add and save"), 0);
+    store
+        .put_sticker(&fixed_with_asset(MD5_B, &asset.sha256))
+        .expect("save again");
+    assert!(store.asset_path(&asset.sha256).is_ok());
 }
 
 #[test]

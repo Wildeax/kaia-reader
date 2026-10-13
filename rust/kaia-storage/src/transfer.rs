@@ -8,7 +8,7 @@ use kaia_core::{AssetRef, DocumentId, Sticker, ValidationError};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 
-use crate::assets::{read_bounded, sha256_hex, write_atomic};
+use crate::assets::{clear_pending, read_bounded, sha256_hex, write_atomic};
 use crate::error::StoreError;
 use crate::image::{self, ext_for_mime};
 use crate::store::{
@@ -182,6 +182,7 @@ impl Store {
                 if !asset_exists(&tx, sha)? {
                     return Err(ValidationError::new("asset", "unknown asset").into());
                 }
+                clear_pending(&tx, sha)?;
             }
             insert_sticker_row(&tx, id, sticker, sticker.created_at, sticker.updated_at)?;
             report.stickers_added += 1;

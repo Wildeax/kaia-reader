@@ -82,6 +82,7 @@ int32_t  kaia_quote_locate(const char *haystack, const char *exact, const char *
 - `kaia_sticker_put` inserts when the JSON has no `id`, otherwise updates. Returns the stored sticker JSON with `id`, `created_at` and `updated_at` filled. Validation errors return `KAIA_E_VALIDATION` with a message naming the field.
 - `kaia_sticker_list` returns `[]` for an unknown document.
 - `kaia_document_seen` records the document and sets `*out_changed = 1` when the stored `file_size` differs. In that case every `attached` sticker of the document moves to `needs_review` in the same transaction.
+- `kaia_store_gc` removes assets that no sticker references, except an asset added in the last 60 minutes that no sticker has saved yet. The store keeps that time in its database (schema version 2), so the grace period survives a close and reopen.
 - `kaia_quote_locate` returns the character index (Unicode scalar values, 0-based) of the start of `exact` in `haystack`, following the rules in STORAGE.md, or `-1` with `KAIA_OK` when there is no match.
 
 ## Lua wrapper contract

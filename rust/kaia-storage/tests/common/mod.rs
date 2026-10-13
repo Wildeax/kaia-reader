@@ -51,6 +51,19 @@ pub fn write_file(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
     path
 }
 
+/// Moves `pending_since` of an asset back by `secs`, as if that much time had passed
+/// since its last add. The store must not hold a write open.
+pub fn age_pending_asset(dir: &Path, sha256: &str, secs: i64) {
+    let conn = rusqlite::Connection::open(dir.join(kaia_storage::DB_FILE)).expect("open db");
+    let changed = conn
+        .execute(
+            "UPDATE assets SET pending_since = pending_since - ?2 WHERE sha256 = ?1",
+            rusqlite::params![sha256, secs],
+        )
+        .expect("age asset");
+    assert_eq!(changed, 1, "asset {sha256} must exist and be pending");
+}
+
 pub fn sha256_of(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
