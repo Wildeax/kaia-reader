@@ -2,7 +2,7 @@
 //!
 //! Names and field meanings follow KOReader's `frontend/device/gesturedetector.lua`.
 //! `pos` is the field KOReader sets as `pos`, and it means what KOReader means by it
-//! for each gesture. Midpoints round down. Distances and spans are in pixels.
+//! for each gesture. Midpoints use KOReader's rounding rule. Distances and spans are in pixels.
 
 use kaia_gfx::Point;
 
@@ -71,6 +71,22 @@ impl Axis {
     }
 }
 
+/// A hold pan can keep a compass direction or the axis of an inward or outward pan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldPanDirection {
+    Compass(Direction),
+    Axis(Axis),
+}
+
+impl HoldPanDirection {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Compass(direction) => direction.name(),
+            Self::Axis(axis) => axis.name(),
+        }
+    }
+}
+
 /// The turn of a rotate gesture. KOReader names are "cw" and "ccw".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Turn {
@@ -117,8 +133,11 @@ pub enum Gesture {
     HoldPan {
         pos: Point,
         start_pos: Option<Point>,
-        direction: Option<Direction>,
+        end_pos: Option<Point>,
+        direction: Option<HoldPanDirection>,
         distance: f64,
+        span: Option<f64>,
+        start_span: Option<f64>,
         time_us: u64,
     },
     Pan {

@@ -4,7 +4,7 @@
 use kaia_gfx::Point;
 use kaia_input::{
     replay, replay_with, Axis, DesktopPointer, Direction, Gesture, GestureConfig, GestureDetector,
-    MouseButton, TouchEvent, Turn,
+    HoldPanDirection, MouseButton, TouchEvent, Turn,
 };
 
 fn names(gestures: &[Gesture]) -> Vec<&'static str> {
@@ -167,7 +167,7 @@ fn hold_pan_then_hold_release_for_one_finger() {
         } => {
             assert_eq!(*pos, Point::new(500, 840));
             assert_eq!(*start_pos, Some(Point::new(500, 800)));
-            assert_eq!(*direction, Some(Direction::South));
+            assert_eq!(*direction, Some(HoldPanDirection::Compass(Direction::South)));
             assert!(close(*distance, 40.0));
         }
         other => panic!("expected hold_pan, got {}", other.name()),
@@ -570,5 +570,199 @@ fn two_finger_hold_then_release() {
             assert!(close(*span, 100.0));
         }
         other => panic!("expected two_finger_hold, got {}", other.name()),
+    }
+}
+
+/// KOReader reference output from /tmp/kaia_gd/harness.lua, with frame samples
+/// separated by semicolons in the script.
+#[test]
+fn reviewer_scenarios_match_koreader() {
+    fn point(p: Option<Point>) -> String {
+        p.map_or("-".into(), |p| format!("({},{})", p.x, p.y))
+    }
+    fn number(n: Option<f64>) -> String {
+        n.map_or("-".into(), |n| format!("{n:.2}"))
+    }
+    fn line(g: &Gesture) -> String {
+        let (
+            mut start,
+            mut end,
+            mut direction,
+            mut distance,
+            mut span,
+            mut start_span,
+            mut angle,
+            multiswipe,
+        ) = (
+            None,
+            None,
+            "-".to_string(),
+            None,
+            None,
+            None,
+            None,
+            "-".to_string(),
+        );
+        match g {
+            Gesture::Pan {
+                start_pos,
+                direction: d,
+                distance: n,
+                ..
+            }
+            | Gesture::TwoFingerPan {
+                start_pos,
+                direction: d,
+                distance: n,
+                ..
+            }
+            | Gesture::TwoFingerHoldPan {
+                start_pos,
+                direction: d,
+                distance: n,
+                ..
+            } => {
+                start = Some(*start_pos);
+                direction = d.map_or("-", Direction::name).into();
+                distance = Some(*n);
+            }
+            Gesture::HoldPan {
+                start_pos,
+                end_pos,
+                direction: d,
+                distance: n,
+                span: s,
+                start_span: ss,
+                ..
+            } => {
+                start = *start_pos;
+                end = *end_pos;
+                direction = d.map_or("-", HoldPanDirection::name).into();
+                distance = Some(*n);
+                span = *s;
+                start_span = *ss;
+            }
+            Gesture::Swipe {
+                end_pos,
+                direction: d,
+                distance: n,
+                ..
+            }
+            | Gesture::TwoFingerSwipe {
+                end_pos,
+                direction: d,
+                distance: n,
+                ..
+            } => {
+                end = Some(*end_pos);
+                direction = d.map_or("-", Direction::name).into();
+                distance = Some(*n);
+            }
+            Gesture::InwardPan {
+                start_pos,
+                axis,
+                distance: n,
+                span: s,
+                start_span: ss,
+                ..
+            }
+            | Gesture::Pinch {
+                start_pos,
+                axis,
+                distance: n,
+                span: s,
+                start_span: ss,
+                ..
+            } => {
+                start = Some(*start_pos);
+                direction = axis.map_or("-", Axis::name).into();
+                distance = Some(*n);
+                span = Some(*s);
+                start_span = Some(*ss);
+            }
+            Gesture::OutwardPan {
+                end_pos,
+                axis,
+                distance: n,
+                span: s,
+                start_span: ss,
+                ..
+            }
+            | Gesture::Spread {
+                end_pos,
+                axis,
+                distance: n,
+                span: s,
+                start_span: ss,
+                ..
+            } => {
+                end = Some(*end_pos);
+                direction = axis.map_or("-", Axis::name).into();
+                distance = Some(*n);
+                span = Some(*s);
+                start_span = Some(*ss);
+            }
+            Gesture::Rotate { angle: n, turn, .. } => {
+                angle = Some(*n);
+                direction = turn.name().into();
+            }
+            Gesture::TwoFingerTap { span: s, .. }
+            | Gesture::TwoFingerHold { span: s, .. }
+            | Gesture::TwoFingerHoldRelease { span: s, .. }
+            | Gesture::TwoFingerHoldPanRelease { span: s, .. } => span = Some(*s),
+            _ => {}
+        }
+        let p = g.pos();
+        format!(
+            "{} pos=({},{}) start={} end={} dir={} dist={} span={} sspan={} angle={} ms={} t={}",
+            g.name(),
+            p.x,
+            p.y,
+            point(start),
+            point(end),
+            direction,
+            number(distance),
+            number(span),
+            number(start_span),
+            number(angle),
+            multiswipe,
+            g.time_us() / 1000
+        )
+    }
+    let cases = [
+        ("12", "down 0 100 100 0\ndown 1 201 301 10\nup 0 100 100 100\nup 1 201 301 110\n", "touch pos=(100,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(201,301) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ntwo_finger_tap pos=(151,201) start=- end=- dir=- dist=- span=224.95 sspan=- angle=- ms=- t=100"),
+        ("15", "down 0 100 500 0\ndown 1 501 500 10\nmove 0 200 500 50\nmove 1 401 500 60\nmove 0 250 500 100\nmove 1 351 500 110\nup 0 250 500 150\nup 1 351 500 160\n", "touch pos=(100,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(501,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ninward_pan pos=(351,500) start=(301,500) end=- dir=horizontal dist=100.00 span=301.00 sspan=401.00 angle=- ms=- t=50\ninward_pan pos=(326,500) start=(301,500) end=- dir=horizontal dist=250.00 span=151.00 sspan=401.00 angle=- ms=- t=100\npinch pos=(301,500) start=(301,500) end=- dir=horizontal dist=300.00 span=101.00 sspan=401.00 angle=- ms=- t=150"),
+        ("16", "down 0 250 500 0\ndown 1 351 500 10\nmove 0 200 500 50\nmove 1 401 500 60\nmove 0 100 500 100\nmove 1 501 500 110\nup 0 100 500 150\nup 1 501 500 160\n", "touch pos=(250,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(351,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\noutward_pan pos=(301,500) start=- end=(276,500) dir=horizontal dist=50.00 span=151.00 sspan=101.00 angle=- ms=- t=50\noutward_pan pos=(301,500) start=- end=(251,500) dir=horizontal dist=200.00 span=301.00 sspan=101.00 angle=- ms=- t=100\nspread pos=(301,500) start=- end=(301,500) dir=horizontal dist=300.00 span=401.00 sspan=101.00 angle=- ms=- t=150"),
+        ("18", "down 0 100 100 0\ndown 1 301 101 10\npoll 600\nup 0 100 100 700\nup 1 301 101 710\n", "touch pos=(100,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(301,101) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ntwo_finger_hold pos=(201,101) start=- end=- dir=- dist=- span=201.00 sspan=- angle=- ms=- t=0\ntwo_finger_hold_release pos=(201,101) start=- end=- dir=- dist=- span=201.00 sspan=- angle=- ms=- t=700"),
+        ("19", "down 0 100 100 0\ndown 1 300 100 10\npoll 600\nmove 0 100 200 650\nmove 1 300 200 660\nmove 0 100 300 700\nmove 1 300 300 710\nup 0 100 300 800\nup 1 300 300 810\n", "touch pos=(100,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(300,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ntwo_finger_hold pos=(200,100) start=- end=- dir=- dist=- span=200.00 sspan=- angle=- ms=- t=0\nhold_pan pos=(200,100) start=- end=(200,150) dir=vertical dist=100.00 span=223.61 sspan=200.00 angle=- ms=- t=650\ntwo_finger_hold_pan pos=(200,250) start=(200,100) end=- dir=south dist=150.00 span=- sspan=- angle=- ms=- t=700\ntwo_finger_hold_pan_release pos=(200,300) start=- end=- dir=- dist=- span=200.00 sspan=- angle=- ms=- t=800"),
+        ("22b", "down 0 300 300 0\ndown 1 500 300 10\npoll 600\nmove 1 480 380 650\nmove 1 400 480 700\nmove 1 300 500 750\nup 0 300 300 800;up 1 300 500 800\n", "touch pos=(300,300) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(500,300) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ntwo_finger_hold pos=(400,300) start=- end=- dir=- dist=- span=200.00 sspan=- angle=- ms=- t=0\nrotate pos=(300,300) start=- end=- dir=cw dist=- span=- sspan=- angle=90.00 ms=- t=800"),
+        ("25", "down 0 100 500 0;down 1 501 500 0\nmove 0 200 500 50;move 1 401 500 50\nmove 0 250 500 100;move 1 351 500 100\nup 0 250 500 150;up 1 351 500 150\n", "touch pos=(100,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(501,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ninward_pan pos=(301,500) start=(301,500) end=- dir=horizontal dist=200.00 span=201.00 sspan=401.00 angle=- ms=- t=50\ninward_pan pos=(301,500) start=(301,500) end=- dir=horizontal dist=300.00 span=101.00 sspan=401.00 angle=- ms=- t=100\npinch pos=(301,500) start=(301,500) end=- dir=horizontal dist=300.00 span=101.00 sspan=401.00 angle=- ms=- t=150"),
+        ("26", "down 0 100 100 0;down 1 300 100 0\nmove 0 100 200 50;move 1 300 200 50\nmove 0 100 300 100;move 1 300 300 100\nup 0 100 300 150;up 1 300 300 150\n", "touch pos=(100,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(300,100) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntwo_finger_pan pos=(200,200) start=(200,100) end=- dir=south dist=100.00 span=- sspan=- angle=- ms=- t=50\ntwo_finger_pan pos=(200,300) start=(200,100) end=- dir=south dist=200.00 span=- sspan=- angle=- ms=- t=100\ntwo_finger_swipe pos=(200,100) start=- end=(200,300) dir=south dist=200.00 span=- sspan=- angle=- ms=- t=150"),
+        ("27", "down 0 100 500 0\ndown 1 501 500 10\npoll 600\nmove 0 200 500 650\nmove 1 401 500 660\nup 0 200 500 700\nup 1 401 500 710\n", "touch pos=(100,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(501,500) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=10\ntwo_finger_hold pos=(301,500) start=- end=- dir=- dist=- span=401.00 sspan=- angle=- ms=- t=0\nhold_pan pos=(351,500) start=(301,500) end=- dir=horizontal dist=100.00 span=301.00 sspan=401.00 angle=- ms=- t=650\ntwo_finger_hold_pan_release pos=(301,500) start=- end=- dir=- dist=- span=201.00 sspan=- angle=- ms=- t=700"),
+        ("30", "down 0 300 300 0;down 1 500 300 0\nmove 1 480 380 50\nmove 1 400 480 100\nmove 1 300 500 150\nup 0 300 300 200;up 1 300 500 200\n", "touch pos=(300,300) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ntouch pos=(500,300) start=- end=- dir=- dist=- span=- sspan=- angle=- ms=- t=0\ninward_pan pos=(390,340) start=(400,300) end=- dir=vertical dist=82.46 span=196.98 sspan=200.00 angle=- ms=- t=50\noutward_pan pos=(400,300) start=- end=(350,390) dir=vertical dist=205.91 span=205.91 sspan=200.00 angle=- ms=- t=100\noutward_pan pos=(400,300) start=- end=(300,400) dir=diagonal dist=282.84 span=200.00 sspan=200.00 angle=- ms=- t=150\nrotate pos=(300,300) start=- end=- dir=cw dist=- span=- sspan=- angle=90.00 ms=- t=200"),
+    ];
+    for (name, script, expected) in cases {
+        let mut detector = GestureDetector::default();
+        let mut got = Vec::new();
+        for row in script.lines() {
+            let mut frame = Vec::new();
+            for part in row.split(';') {
+                for step in kaia_input::parse_script(part).unwrap() {
+                    match step {
+                        kaia_input::Step::Touch(event) => frame.push(event),
+                        kaia_input::Step::Poll(time) => got.extend(detector.poll(time)),
+                    }
+                }
+            }
+            if let Some(last) = frame.last() {
+                let time = last.time_us;
+                for event in &mut frame {
+                    event.time_us = time;
+                }
+                got.extend(detector.feed_frame(&frame));
+            }
+        }
+        let actual = got.iter().map(line).collect::<Vec<_>>().join("\n");
+        assert_eq!(actual, expected, "case {name}");
     }
 }

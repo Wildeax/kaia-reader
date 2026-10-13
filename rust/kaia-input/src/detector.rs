@@ -5,9 +5,8 @@
 //! and double tap timers live on the contact. They fire from [`GestureDetector::poll`],
 //! or before the next event whose time has passed their deadline.
 //!
-//! Each [`GestureDetector::feed`] call handles one slot sample as its own input
-//! frame. KOReader groups the samples of a frame. That only changes results when
-//! one frame carries samples for both buddy slots.
+//! [`GestureDetector::feed_frame`] updates all slots before processing them in
+//! their order of appearance in the input frame.
 //!
 //! Function names in comments refer to KOReader's `gesturedetector.lua`.
 
@@ -16,7 +15,7 @@ use std::collections::BTreeMap;
 use kaia_gfx::Point;
 
 use crate::event::{Phase, TouchEvent};
-use crate::gesture::{Axis, Direction, Gesture, Turn};
+use crate::gesture::{Axis, Direction, Gesture, HoldPanDirection, Turn};
 
 /// Recognizer settings. The defaults match KOReader's `GestureDetector` and `Input`.
 ///
@@ -149,6 +148,7 @@ enum Timer {
 #[derive(Debug, Clone)]
 pub struct GestureDetector {
     config: GestureConfig,
+    tap_interval_override_ms: Option<u64>,
     pan_px: i64,
     two_finger_region_px: i64,
     /// Used for the double tap distance, the bounce distance and the multiswipe threshold.
@@ -171,6 +171,7 @@ impl GestureDetector {
             two_finger_region_px: dp_to_px(config.two_finger_tap_region_dp, config.dpi),
             double_tap_px: dp_to_px(config.double_tap_distance_dp, config.dpi),
             config,
+            tap_interval_override_ms: None,
             contacts: BTreeMap::new(),
             previous_tap: BTreeMap::new(),
         }
@@ -180,15 +181,51 @@ impl GestureDetector {
         &self.config
     }
 
+    /// Changes whether a tap waits for a possible second tap.
+    pub fn set_disable_double_tap(&mut self, disabled: bool) {
+        self.config.double_tap_enabled = !disabled;
+    }
+
+    /// Overrides the tap bounce interval in milliseconds. None restores the configured interval.
+    pub fn set_tap_interval_override(&mut self, interval_ms: Option<u64>) {
+        self.tap_interval_override_ms = interval_ms;
+    }
+
     /// Feeds one touch sample. Timers that expired before the sample's time fire first.
     pub fn feed(&mut self, ev: TouchEvent) -> Vec<Gesture> {
-        let mut out = self.fire_due(ev.time_us);
-        let sample = Sample {
-            pos: ev.pos,
-            time_us: ev.time_us,
-            lifted: ev.phase == Phase::Up,
+        self.feed_frame(&[ev])
+    }
+
+    /// Feeds one input frame. The last sample for each slot wins, while slots are
+    /// processed in the order they first appeared in the frame.
+    pub fn feed_frame(&mut self, events: &[TouchEvent]) -> Vec<Gesture> {
+        let Some(last) = events.last() else {
+            return Vec::new();
         };
-        out.extend(self.process(ev.slot, sample));
+        let mut out = self.fire_due(last.time_us);
+        let mut slots = Vec::new();
+        let mut samples = BTreeMap::new();
+        for ev in events {
+            if !samples.contains_key(&ev.slot) {
+                slots.push(ev.slot);
+            }
+            samples.insert(
+                ev.slot,
+                Sample {
+                    pos: ev.pos,
+                    time_us: ev.time_us,
+                    lifted: ev.phase == Phase::Up,
+                },
+            );
+        }
+        for (&slot, &sample) in &samples {
+            if let Some(contact) = self.contacts.get_mut(&slot) {
+                contact.current = sample;
+            }
+        }
+        for slot in slots {
+            out.extend(self.process(slot, samples[&slot]));
+        }
         out
     }
 
@@ -412,7 +449,9 @@ impl GestureDetector {
         }
         let cur = (c.current.pos, c.current.time_us);
         let prev = self.previous_tap.get(&slot).copied();
-        let bounce_us = ms(self.config.tap_interval_ms);
+        let bounce_us = ms(self
+            .tap_interval_override_ms
+            .unwrap_or(self.config.tap_interval_ms));
         if bounce_us != 0 {
             if let Some(p) = prev {
                 if self.is_tap_bounce(p, cur, bounce_us) {
@@ -902,35 +941,47 @@ fn to_hold_pan(g: Gesture) -> Gesture {
         } => Gesture::HoldPan {
             pos,
             start_pos: Some(start_pos),
-            direction,
+            end_pos: None,
+            direction: direction.map(HoldPanDirection::Compass),
             distance,
+            span: None,
+            start_span: None,
             time_us,
         },
-        // KOReader keeps the axis string here. This port has no axis field on HoldPan,
-        // so the direction is left empty.
         Gesture::InwardPan {
             pos,
             start_pos,
+            axis,
             distance,
+            span,
+            start_span,
             time_us,
-            ..
         } => Gesture::HoldPan {
             pos,
             start_pos: Some(start_pos),
-            direction: None,
+            end_pos: None,
+            direction: axis.map(HoldPanDirection::Axis),
             distance,
+            span: Some(span),
+            start_span: Some(start_span),
             time_us,
         },
         Gesture::OutwardPan {
             pos,
+            end_pos,
+            axis,
             distance,
+            span,
+            start_span,
             time_us,
-            ..
         } => Gesture::HoldPan {
             pos,
             start_pos: None,
-            direction: None,
+            end_pos: Some(end_pos),
+            direction: axis.map(HoldPanDirection::Axis),
             distance,
+            span: Some(span),
+            start_span: Some(start_span),
             time_us,
         },
         other => other,
@@ -1003,9 +1054,12 @@ fn within(a: Point, b: Point, radius: i64) -> bool {
     dx < radius && dy < radius
 }
 
-/// Midpoint, rounded down.
+/// Midpoint, rounded with KOReader's `floor(x + 0.5)` rule.
 fn midpoint(a: Point, b: Point) -> Point {
-    Point::new((a.x + b.x).div_euclid(2), (a.y + b.y).div_euclid(2))
+    Point::new(
+        ((i64::from(a.x) + i64::from(b.x) + 1).div_euclid(2)) as i32,
+        ((i64::from(a.y) + i64::from(b.y) + 1).div_euclid(2)) as i32,
+    )
 }
 
 fn distance(a: Point, b: Point) -> f64 {
@@ -1033,6 +1087,27 @@ mod tests {
         assert_eq!(dp_to_px(35, 160), 35);
         assert_eq!(dp_to_px(20, 320), 40);
         assert_eq!(dp_to_px(1, 160), 1);
+    }
+
+    #[test]
+    fn midpoint_rounds_half_up() {
+        assert_eq!(
+            midpoint(Point::new(100, -2), Point::new(201, -1)),
+            Point::new(151, -1)
+        );
+    }
+
+    #[test]
+    fn runtime_tap_settings_update() {
+        let mut detector = GestureDetector::default();
+        detector.set_disable_double_tap(false);
+        assert!(detector.config().double_tap_enabled);
+        detector.set_disable_double_tap(true);
+        assert!(!detector.config().double_tap_enabled);
+        detector.set_tap_interval_override(Some(25));
+        assert_eq!(detector.tap_interval_override_ms, Some(25));
+        detector.set_tap_interval_override(None);
+        assert_eq!(detector.tap_interval_override_ms, None);
     }
 
     #[test]
@@ -1068,7 +1143,7 @@ mod tests {
     }
 
     #[test]
-    fn hold_pan_drops_direction_for_inward_pans() {
+    fn hold_pan_keeps_inward_fields() {
         let inward = Gesture::InwardPan {
             pos: Point::new(1, 1),
             start_pos: Point::new(0, 0),
@@ -1080,10 +1155,16 @@ mod tests {
         };
         match to_hold_pan(inward) {
             Gesture::HoldPan {
-                direction, start_pos, ..
+                direction,
+                start_pos,
+                span,
+                start_span,
+                ..
             } => {
-                assert_eq!(direction, None);
+                assert_eq!(direction, Some(HoldPanDirection::Axis(Axis::Horizontal)));
                 assert_eq!(start_pos, Some(Point::new(0, 0)));
+                assert_eq!(span, Some(1.0));
+                assert_eq!(start_span, Some(2.0));
             }
             other => panic!("expected hold_pan, got {}", other.name()),
         }

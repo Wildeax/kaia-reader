@@ -101,6 +101,10 @@ pub struct App<B: Backend> {
     /// actions are collected with the router's.
     transient: Vec<Window>,
     last_input_us: u64,
+    /// Input event time minus scheduler time at the latest touch. Evdev
+    /// timestamps use the kernel clock, the scheduler counts from app start, so
+    /// gesture timers (hold, double tap) convert through this offset.
+    input_clock_offset_us: i64,
     exit_at: Option<Duration>,
     quitting: bool,
     /// Set by `KAIA_TRACE_INPUT`. Logs every gesture and the top route to stderr.
@@ -138,6 +142,7 @@ impl<B: Backend> App<B> {
             notices: Vec::new(),
             transient: Vec::new(),
             last_input_us: 0,
+            input_clock_offset_us: 0,
             exit_at: None,
             quitting: false,
             trace_input: std::env::var_os("KAIA_TRACE_INPUT").is_some(),
@@ -322,6 +327,7 @@ impl<B: Backend> App<B> {
         for event in input {
             match event {
                 InputEvent::Touch(t) => self.touch(t),
+                InputEvent::TouchFrame(frame) => self.touch_frame(frame),
                 InputEvent::Key(k) => self.key_event(k),
                 InputEvent::Quit => self.quitting = true,
                 InputEvent::Resize(_) => {}
@@ -353,8 +359,17 @@ impl<B: Backend> App<B> {
     }
 
     fn touch(&mut self, t: TouchEvent) {
-        self.last_input_us = self.last_input_us.max(t.time_us);
-        for gesture in self.gestures.feed(t) {
+        self.touch_frame(vec![t]);
+    }
+
+    fn touch_frame(&mut self, frame: Vec<TouchEvent>) {
+        let Some(latest) = frame.iter().map(|t| t.time_us).max() else {
+            return;
+        };
+        self.last_input_us = self.last_input_us.max(latest);
+        let clock = self.ctx.scheduler.now().as_micros() as i64;
+        self.input_clock_offset_us = latest as i64 - clock;
+        for gesture in self.gestures.feed_frame(&frame) {
             self.gesture(gesture);
         }
     }
@@ -781,9 +796,13 @@ impl<B: Backend> App<B> {
 
     /// The time the gesture recognizer and the scheduler share, in microseconds.
     /// Input timestamps can run ahead of the app clock, so the larger one wins.
+    /// Now in the input clock: the scheduler time shifted by the offset seen at
+    /// the latest touch. It keeps advancing while a finger rests, so a hold fires
+    /// after its interval instead of at lift.
     fn gesture_now_us(&self) -> u64 {
-        let clock = self.ctx.scheduler.now().as_micros() as u64;
-        clock.max(self.last_input_us)
+        let clock = self.ctx.scheduler.now().as_micros() as i64;
+        let now = clock.saturating_add(self.input_clock_offset_us).max(0) as u64;
+        now.max(self.last_input_us)
     }
 
     /// How long the backend may wait: the earliest of the timeout the caller gave,

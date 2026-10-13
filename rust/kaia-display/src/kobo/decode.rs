@@ -10,7 +10,7 @@
 //! Each slot holds a tracking id (`ABS_MT_TRACKING_ID`). A value of -1 lifts the
 //! contact. Positions come from `ABS_MT_POSITION_X` and `ABS_MT_POSITION_Y`. KOReader
 //! also accepts `ABS_X` and `ABS_Y` in the same slot, and so does this decoder.
-//! Touch samples are emitted on `SYN_REPORT`, one event per slot change, in slot order.
+//! Touch frames are emitted on `SYN_REPORT`, with slots in their order of appearance.
 //!
 //! Protocol A and the single-touch path are not implemented, because no Libra Colour
 //! code path uses them.
@@ -80,6 +80,13 @@ pub struct RawEvent {
     pub kind: u16,
     pub code: u16,
     pub value: i32,
+}
+
+/// One decoded key or a complete touch frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DecodedEvent {
+    Key(KeyEvent),
+    TouchFrame(Vec<TouchEvent>),
 }
 
 /// How raw touch coordinates become logical screen pixels.
@@ -165,6 +172,7 @@ pub struct EvdevDecoder {
     /// The slot that the next position and tracking events apply to. A value of
     /// [`MAX_SLOTS`] means an out-of-range slot, and those events are dropped.
     current: usize,
+    frame_order: Vec<usize>,
 }
 
 impl EvdevDecoder {
@@ -173,6 +181,7 @@ impl EvdevDecoder {
             cal,
             slots: [Slot::default(); MAX_SLOTS],
             current: 0,
+            frame_order: Vec::new(),
         }
     }
 
@@ -185,16 +194,29 @@ impl EvdevDecoder {
     /// arrival order. A touch frame is only final at its `SYN_REPORT`, so a partial
     /// frame at the end of the batch produces nothing yet.
     pub fn feed(&mut self, events: &[RawEvent]) -> Vec<InputEvent> {
+        self.feed_frames(events)
+            .into_iter()
+            .flat_map(|event| match event {
+                DecodedEvent::Key(key) => vec![InputEvent::Key(key)],
+                DecodedEvent::TouchFrame(frame) => frame.into_iter().map(InputEvent::Touch).collect(),
+            })
+            .collect()
+    }
+
+    /// Returns a separate touch frame for each `SYN_REPORT`.
+    pub fn feed_frames(&mut self, events: &[RawEvent]) -> Vec<DecodedEvent> {
         let mut out = Vec::new();
         for ev in events {
             match ev.kind {
                 code::EV_ABS => self.abs(ev),
                 code::EV_KEY => {
                     if let Some(key) = key_event(ev) {
-                        out.push(InputEvent::Key(key));
+                        out.push(DecodedEvent::Key(key));
                     }
                 }
-                code::EV_SYN if ev.code == code::SYN_REPORT => self.report(ev.time_us, &mut out),
+                code::EV_SYN if ev.code == code::SYN_REPORT => {
+                    out.push(DecodedEvent::TouchFrame(self.report(ev.time_us)));
+                }
                 _ => {}
             }
         }
@@ -213,6 +235,17 @@ impl EvdevDecoder {
         let Some(slot) = self.slots.get_mut(self.current) else {
             return;
         };
+        if matches!(
+            ev.code,
+            code::ABS_MT_TRACKING_ID
+                | code::ABS_MT_POSITION_X
+                | code::ABS_MT_POSITION_Y
+                | code::ABS_X
+                | code::ABS_Y
+        ) && !self.frame_order.contains(&self.current)
+        {
+            self.frame_order.push(self.current);
+        }
         match ev.code {
             code::ABS_MT_TRACKING_ID => {
                 slot.id = if ev.value < 0 { None } else { Some(ev.value) };
@@ -224,17 +257,17 @@ impl EvdevDecoder {
     }
 
     /// Emits the changes of the frame that ended with `SYN_REPORT`.
-    fn report(&mut self, time_us: u64, out: &mut Vec<InputEvent>) {
+    fn report(&mut self, time_us: u64) -> Vec<TouchEvent> {
         let cal = self.cal;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
+        let mut out = Vec::new();
+        for index in self.frame_order.drain(..) {
+            let slot = &mut self.slots[index];
             let pos = cal.map(slot.raw_x, slot.raw_y);
-            let touch = |phase| {
-                InputEvent::Touch(TouchEvent {
-                    slot: index as u8,
-                    phase,
-                    pos,
-                    time_us,
-                })
+            let touch = |phase| TouchEvent {
+                slot: index as u8,
+                phase,
+                pos,
+                time_us,
             };
             match (slot.reported, slot.id) {
                 (None, None) => {}
@@ -260,6 +293,7 @@ impl EvdevDecoder {
             }
             slot.moved = false;
         }
+        out
     }
 }
 
@@ -365,6 +399,47 @@ mod tests {
             pos: Point::new(x, y),
             time_us: t,
         })
+    }
+
+    #[test]
+    fn frames_keep_slot_appearance_order_and_sync_boundaries() {
+        let mut decoder = EvdevDecoder::new(identity());
+        let frames = decoder.feed_frames(&[
+            abs(code::ABS_MT_SLOT, 1, 0),
+            abs(code::ABS_MT_TRACKING_ID, 11, 0),
+            abs(code::ABS_MT_POSITION_X, 300, 0),
+            abs(code::ABS_MT_SLOT, 0, 0),
+            abs(code::ABS_MT_TRACKING_ID, 10, 0),
+            abs(code::ABS_MT_POSITION_X, 100, 0),
+            syn(1),
+            abs(code::ABS_MT_POSITION_Y, 200, 2),
+            syn(2),
+        ]);
+        assert_eq!(
+            frames,
+            vec![
+                DecodedEvent::TouchFrame(vec![
+                    TouchEvent {
+                        slot: 1,
+                        phase: Phase::Down,
+                        pos: Point::new(300, 0),
+                        time_us: 1
+                    },
+                    TouchEvent {
+                        slot: 0,
+                        phase: Phase::Down,
+                        pos: Point::new(100, 0),
+                        time_us: 1
+                    },
+                ]),
+                DecodedEvent::TouchFrame(vec![TouchEvent {
+                    slot: 0,
+                    phase: Phase::Move,
+                    pos: Point::new(100, 200),
+                    time_us: 2
+                },]),
+            ]
+        );
     }
 
     #[test]

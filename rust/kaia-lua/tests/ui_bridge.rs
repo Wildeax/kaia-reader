@@ -9,7 +9,7 @@ use std::time::Duration;
 use common::{lua_ui, serial, TempDir};
 use kaia_events::{Rect, Refresh, RefreshMode, Value};
 use kaia_gfx::{Color, Point, Size};
-use kaia_input::{Direction, Gesture, Key};
+use kaia_input::{Direction, Gesture, HoldPanDirection, Key};
 use kaia_lua::LuaUi;
 
 /// A widget that logs the events it gets to `LOG`. `consume` makes its
@@ -563,12 +563,16 @@ fn gesture_tables_carry_the_fields_koreader_code_reads() {
     let hold_pan = Gesture::HoldPan {
         pos: at(100, 100),
         start_pos: Some(at(90, 120)),
-        direction: Some(Direction::North),
+        end_pos: None,
+        direction: Some(HoldPanDirection::Compass(Direction::North)),
         distance: 20.0,
+        span: None,
+        start_span: None,
         time_us: 6,
     };
     assert!(ui.gesture(&hold_pan));
     assert_eq!(eval_string(&ui, "SEEN.ges"), "hold_pan");
+    assert_eq!(eval_string(&ui, "SEEN.direction"), "north");
     assert_eq!(eval_number(&ui, "SEEN.relative.x"), 10.0);
     assert_eq!(eval_number(&ui, "SEEN.relative.y"), -20.0);
 
@@ -576,8 +580,11 @@ fn gesture_tables_carry_the_fields_koreader_code_reads() {
     let hold_pan_unknown = Gesture::HoldPan {
         pos: at(100, 100),
         start_pos: None,
+        end_pos: None,
         direction: None,
         distance: 0.0,
+        span: None,
+        start_span: None,
         time_us: 7,
     };
     assert!(ui.gesture(&hold_pan_unknown));

@@ -14,5 +14,5 @@ pub mod script;
 pub use desktop::{DesktopPointer, MouseButton};
 pub use detector::{dp_to_px, GestureConfig, GestureDetector};
 pub use event::{Key, KeyEvent, PenEvent, Phase, TouchEvent};
-pub use gesture::{Axis, Direction, Gesture, Turn};
+pub use gesture::{Axis, Direction, Gesture, HoldPanDirection, Turn};
 pub use script::{parse_script, replay, replay_with, ScriptError, Step};

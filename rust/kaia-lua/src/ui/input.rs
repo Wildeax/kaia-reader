@@ -74,14 +74,22 @@ fn fields(g: &Gesture) -> Fields {
         Gesture::HoldPan {
             pos,
             start_pos,
+            end_pos,
             direction,
             distance,
+            span,
+            start_span,
             ..
         } => {
             f.start_pos = *start_pos;
+            f.end_pos = *end_pos;
             f.relative = start_pos.map(|s| delta(*pos, s));
-            f.direction = direction_name(direction);
+            // A compass direction for a one-finger hold_pan, or the axis name
+            // when KOReader turns an inward or outward pan into a hold_pan.
+            f.direction = direction.map(|d| d.name());
             f.distance = Some(*distance);
+            f.span = *span;
+            f.start_span = *start_span;
         }
         Gesture::Pan {
             pos,

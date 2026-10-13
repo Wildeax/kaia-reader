@@ -37,7 +37,7 @@ impl<T: Display + InputSource> Backend for T {}
 const IDLE: Duration = Duration::from_millis(10);
 
 /// One item of a scripted session.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Item {
     Input(InputEvent),
     Wait(Duration),
@@ -168,7 +168,7 @@ impl InputSource for ScriptInput {
         loop {
             match self.items.front_mut() {
                 Some(Item::Input(event)) => {
-                    out.push(*event);
+                    out.push(event.clone());
                     self.items.pop_front();
                 }
                 Some(Item::Wait(left)) => {

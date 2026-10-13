@@ -15,7 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::input::{InputEvent, InputSource};
-use crate::kobo::decode::{code, Calibration, EvdevDecoder, RawEvent};
+use crate::kobo::decode::{code, Calibration, DecodedEvent, EvdevDecoder, RawEvent};
 use crate::rotation::Rotation;
 
 /// Keys and switches on the Kobo (KOReader's `ntx_dev`).
@@ -170,7 +170,17 @@ impl InputSource for EvdevInput {
                     .min(i32::MAX as u128) as i32,
             };
             let raw = self.read_ready(timeout_ms);
-            let events = self.decoder.feed(&raw);
+            // One frame per SYN_REPORT, so two fingers that move together reach
+            // the gesture detector together, as in KOReader.
+            let events: Vec<InputEvent> = self
+                .decoder
+                .feed_frames(&raw)
+                .into_iter()
+                .map(|decoded| match decoded {
+                    DecodedEvent::Key(k) => InputEvent::Key(k),
+                    DecodedEvent::TouchFrame(frame) => InputEvent::TouchFrame(frame),
+                })
+                .collect();
             if !events.is_empty() {
                 return events;
             }
