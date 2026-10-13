@@ -22,6 +22,8 @@ mod persistence;
 #[cfg(feature = "lua")]
 mod plugins;
 mod state;
+mod sticker_actions;
+pub mod stickers;
 mod work;
 
 use std::cell::RefCell;
@@ -374,8 +376,8 @@ impl Surface for ReaderSurface {
             if c.session.is_none() {
                 c.open(&row.path, opts);
             }
-            if let Some(location) = self.location.take().and_then(location_value) {
-                c.go_to(env.ctx, location);
+            if let Some(value) = self.location.take() {
+                c.queued.push_back(("reader:location".into(), vec![value]));
             }
             if c.job.is_none() {
                 c.repaint_page(env.ctx, PaintHint::Full);
@@ -531,6 +533,55 @@ impl Surface for ReaderSurface {
             return Outcome::Handled;
         }
         if cmd == "reader:location" {
+            if let Some(value) = args.first() {
+                if let Some(id) = value
+                    .get("repair_sticker")
+                    .as_str()
+                    .or_else(|| value.get("open_sticker").as_str())
+                {
+                    let mut c = self.core.borrow_mut();
+                    let result = c
+                        .session
+                        .as_ref()
+                        .ok_or("No book is open.".to_string())
+                        .and_then(stickers::store)
+                        .and_then(|s| s.get_sticker(id).map_err(|e| e.to_string()));
+                    match result {
+                        Ok(sticker)
+                            if c.session
+                                .as_ref()
+                                .is_some_and(|s| s.identity().partial_md5 == sticker.doc.partial_md5) =>
+                        {
+                            if value.get("repair_sticker").as_str().is_some() {
+                                c.moving_sticker = Some(id.into());
+                                env.toast("Long-press the new place, then choose Sticker.", 6.0);
+                            } else {
+                                let location = match sticker.anchor {
+                                    kaia_storage::Anchor::Reflowable { locator, .. } => {
+                                        kaia_book::Location::Engine(locator)
+                                    }
+                                    kaia_storage::Anchor::Fixed { page, .. } => {
+                                        kaia_book::Location::Page(page.saturating_sub(1))
+                                    }
+                                    kaia_storage::Anchor::Book {} => kaia_book::Location::Page(0),
+                                };
+                                c.go_to(env.ctx, location);
+                                c.queued
+                                    .push_back((format!("reader:sticker:open:{id}"), Vec::new()));
+                            }
+                        }
+                        Ok(_) => {
+                            env.toast("This sticker belongs to another book.", 4.0);
+                        }
+                        Err(e) => {
+                            env.toast(e, 4.0);
+                        }
+                    }
+                    drop(c);
+                    schedule_if_pending(&self.core, env.ctx);
+                    return Outcome::Handled;
+                }
+            }
             if let Some(location) = args.first().cloned().and_then(location_value) {
                 self.core.borrow_mut().go_to(env.ctx, location);
             }
@@ -604,6 +655,10 @@ pub(super) fn command(
         schedule_if_pending(rc, env.ctx);
         return Outcome::Handled;
     }
+    if let Some(outcome) = sticker_actions::command(rc, cmd, env) {
+        schedule_if_pending(rc, env.ctx);
+        return outcome;
+    }
     let Some(command) = commands::parse(cmd, args) else {
         return Outcome::NotMine;
     };
@@ -620,6 +675,18 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
         let mut c = rc.borrow_mut();
         match command {
             Command::Tap(x, y) => {
+                if let Some(id) = c
+                    .stickers
+                    .iter()
+                    .rev()
+                    .find(|s| {
+                        s.hit_rect(env.theme().touch_target)
+                            .contains(Point::new(x as i32, y as i32))
+                    })
+                    .map(|s| s.id.clone())
+                {
+                    return sticker_actions::open(rc, &mut c, &id, env);
+                }
                 if c.selection.is_some() {
                     c.clear_selection(env.ctx);
                     return Outcome::Handled;
@@ -662,7 +729,12 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
             Command::Release => {
                 if c.release() && c.panel.is_none() {
                     let word = c.selection.as_ref().map(|s| s.text.clone()).unwrap_or_default();
-                    let window = panels::popover(env.services, env.screen, &word);
+                    let window = panels::selection_popover(
+                        env.services,
+                        env.screen,
+                        &word,
+                        c.moving_sticker.is_some(),
+                    );
                     return push_panel(rc, &mut c, env.ctx, window);
                 }
                 Outcome::Handled

@@ -3,6 +3,7 @@
 //! surface from a route. Adding a screen means one variant in [`Route`], one line
 //! in [`create`], and the surface's own folder. See the crate README.
 
+pub mod catalogs;
 pub mod common;
 pub mod home;
 pub mod library;
@@ -22,6 +23,9 @@ pub enum Route {
     },
     Notes,
     Settings,
+    Catalogs,
+    CatalogBook,
+    Calibre,
     Reader {
         book: i64,
     },
@@ -50,6 +54,8 @@ impl Route {
 /// overlay with the title and page it has, and pushes it.
 pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
     let surface: Box<dyn Surface> = match route {
+        Route::Catalogs => Box::new(catalogs::CatalogSurface::default()),
+        Route::Calibre => Box::new(catalogs::CatalogSurface::calibre()),
         Route::Home => Box::new(home::HomeSurface::default()),
         Route::Library { page } => Box::new(library::LibrarySurface::new(*page)),
         Route::Notes => Box::new(notes::NotesSurface),
@@ -59,7 +65,7 @@ pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
         Route::SettingsSection { name } => {
             Box::new(settings::section::SettingsSectionSurface::new(name.clone()))
         }
-        Route::Overlay | Route::ReaderPanel => return None,
+        Route::Overlay | Route::ReaderPanel | Route::CatalogBook => return None,
     };
     Some(surface)
 }

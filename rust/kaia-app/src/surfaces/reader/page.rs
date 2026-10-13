@@ -44,6 +44,7 @@ pub struct PageView {
     pub page: Option<Arc<Pixmap>>,
     /// Highlights on the page.
     pub marks: Vec<Mark>,
+    pub stickers: Vec<super::stickers::Drawing>,
     /// The selected word, one box per line.
     pub selection: Vec<Rect>,
     /// Search hits on the page.
@@ -61,6 +62,7 @@ impl PageView {
             #[cfg(feature = "lua")]
             plugins: None,
             marks: Vec::new(),
+            stickers: Vec::new(),
             selection: Vec::new(),
             hits: Vec::new(),
             message: None,
@@ -153,6 +155,9 @@ impl Widget for PageView {
         for rect in &self.selection {
             cx.dim(*rect, 80);
             cx.border(*rect, 0, 2, ink);
+        }
+        for sticker in &self.stickers {
+            sticker.paint(cx);
         }
         #[cfg(feature = "lua")]
         if let Some(ui) = self.plugins.as_ref().and_then(|ui| ui.upgrade()) {

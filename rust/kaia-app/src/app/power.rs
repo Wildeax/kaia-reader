@@ -1,26 +1,45 @@
-//! The scheduler runs suspend timers and frontlight ramp steps on the app thread.
+//! Suspend timers and frontlight ramp steps run on the app thread. The device
+//! plans (Wi-Fi scripts, suspend, resume) run on the worker in `network.rs`, and
+//! the sleep picture is prepared in `sleep_picture.rs`.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, TaskId, WindowId};
+use kaia_gfx::Pixmap;
 use kaia_platform::frontlight::RampStep;
+use kaia_platform::plan::Outcome;
 use kaia_platform::power::{PowerContext, ResumeContext};
 use kaia_platform::suspend::{Effect, PrepareResult, SuspendFlow, Timer, WakeupCause, SUSPEND_WAIT_TIMEOUT};
+use kaia_platform::sysfs::SystemIo;
 use kaia_ui::Window;
 
+use super::sleep_picture::{self, SleepPicture};
 use super::App;
 use crate::backend::Backend;
 use crate::surfaces::{settings, Route};
 
-#[derive(Default)]
+/// Jobs on the plan worker. Prepare jobs count up from 1, so these never collide with them.
+const WIFI_JOB: u64 = 0;
+const FINISH_JOB: u64 = u64::MAX;
+const RESUME_JOB: u64 = u64::MAX - 1;
+
+/// How often the loop polls a worker while one of its jobs runs.
+const POLL: Duration = Duration::from_millis(50);
+
 pub(super) struct State {
     flow: SuspendFlow,
     pub(super) scripts: super::network::Scripts,
+    /// Wi-Fi jobs in flight. Suspend turns Wi-Fi off when it is on or a job is turning it on.
+    wifi_jobs: usize,
     prepare_generation: u64,
-    prepare_rest: Option<kaia_platform::plan::Plan>,
+    /// The finish plan is running: `sync`, then the suspend write. Power and Resume wait for it.
+    finishing: bool,
+    /// A Power press or Resume came while `finishing`. The resume runs when the finish plan returns.
+    resume_queued: bool,
     last_activity: Duration,
     battery_due: Duration,
     battery_warned: bool,
@@ -28,6 +47,11 @@ pub(super) struct State {
     timers: Vec<(Timer, TaskId)>,
     queue: Rc<RefCell<VecDeque<Due>>>,
     screen: Option<WindowId>,
+    /// The book that the sleep screen belongs to.
+    sleep_book: Option<i64>,
+    /// Whether the sleep screen shows its final picture. It is false while the cover is still being prepared.
+    sleep_covered: bool,
+    picture: SleepPicture,
     restore_light: bool,
     ramp_generation: u64,
 }
@@ -35,12 +59,51 @@ pub(super) struct State {
 enum Due {
     Timer(Timer),
     Light(u64, RampStep),
-    Resume(kaia_platform::plan::Plan),
+}
+
+impl State {
+    /// `io` writes device files for the plan worker. It must share the platform's root.
+    /// `library` is the library database that the sleep picture reads covers from.
+    pub(super) fn new(io: SystemIo, library: PathBuf) -> Self {
+        Self {
+            flow: SuspendFlow::default(),
+            scripts: super::network::Scripts::new(io),
+            wifi_jobs: 0,
+            prepare_generation: 0,
+            finishing: false,
+            resume_queued: false,
+            last_activity: Duration::ZERO,
+            battery_due: Duration::ZERO,
+            battery_warned: false,
+            charge_screen: false,
+            timers: Vec::new(),
+            queue: Rc::default(),
+            screen: None,
+            sleep_book: None,
+            sleep_covered: true,
+            picture: SleepPicture::new(library),
+            restore_light: false,
+            ramp_generation: 0,
+        }
+    }
 }
 
 impl<B: Backend> App<B> {
     pub fn sleeping(&self) -> bool {
         self.power.screen.is_some()
+    }
+
+    /// Whether the sleep picture of the book being read is ready. Tests wait for it.
+    pub fn sleep_picture_ready(&self) -> bool {
+        self.reader_book()
+            .is_some_and(|book| self.power.picture.ready(book, self.screen).is_some())
+    }
+
+    /// Starts the sleep picture of `book` on the worker, so that Power can draw it at once.
+    pub(super) fn prepare_sleep_picture(&mut self, book: i64) {
+        if settings::sleep::shows_cover(&self.services) {
+            self.power.picture.request(book, self.screen);
+        }
     }
 
     pub(super) fn sleep(&mut self) {
@@ -51,35 +114,22 @@ impl<B: Backend> App<B> {
         if let Err(e) = self.services.settings.flush(&self.services.settings_path()) {
             self.notices.push(format!("Cannot save settings: {e}"));
         }
-        let book = self.router.routes().iter().find_map(|r| match r {
-            Route::Reader { book } => Some(*book),
-            _ => None,
-        });
-        let window = Window::new(
-            settings::sleep::sleep_screen_with_label(
-                &self.services,
-                self.screen,
-                book,
-                if self.power.charge_screen {
-                    "Please charge your reader"
-                } else {
-                    settings::sleep::SLEEP_LABEL
-                },
-            ),
-            self.services.theme.clone(),
-            self.services.assets.clone(),
-            self.screen,
-        );
-        let id = window.show(
-            &mut self.ctx,
-            ShowOpts {
-                modal: true,
-                covers_fullscreen: true,
-                refresh: Some(Refresh::new(RefreshMode::Full)),
-                ..ShowOpts::default()
-            },
-        );
-        self.transient.push(window);
+        let book = self.reader_book();
+        // None: the picture is not ready yet, so the screen shows the label on a blank page.
+        // Some(None): the screen has no cover, because the book has none or the setting is blank.
+        let picture = match book {
+            Some(book) if settings::sleep::shows_cover(&self.services) => {
+                self.power.picture.request(book, self.screen);
+                self.power
+                    .picture
+                    .ready(book, self.screen)
+                    .map(|picture| picture.cloned())
+            }
+            _ => Some(None),
+        };
+        self.power.sleep_book = book;
+        self.power.sleep_covered = picture.is_some();
+        let id = self.show_sleep_screen(picture.flatten());
         self.power.screen = Some(id);
         self.power.restore_light = self.services.platform.frontlight.is_on();
         if self.power.restore_light {
@@ -90,10 +140,15 @@ impl<B: Backend> App<B> {
     }
 
     pub(super) fn resume(&mut self) {
+        if self.power.finishing {
+            // KOReader handles a Power press after the suspend write returns. This one waits too.
+            self.power.resume_queued = true;
+            return;
+        }
+        self.power.resume_queued = false;
         self.note_activity();
         self.power.charge_screen = false;
         self.power.prepare_generation += 1;
-        self.power.prepare_rest = None;
         let effects = self.power.flow.resume();
         self.power_effects(effects);
         let Some(id) = self.power.screen.take() else {
@@ -101,34 +156,11 @@ impl<B: Backend> App<B> {
         };
         self.stack
             .close(id, Some(Refresh::new(RefreshMode::Full)), &mut self.ctx);
-        let mut plan = self.services.platform.power.resume(ResumeContext {
+        let plan = self.services.platform.power.resume(ResumeContext {
             sync_system_clock: true,
             ..ResumeContext::default()
         });
-        // Split the plan's short delay as well, so input remains responsive on resume.
-        if let Some(index) = plan
-            .steps
-            .iter()
-            .position(|s| matches!(s.action, kaia_platform::plan::Action::Sleep(_)))
-        {
-            let rest = plan.steps.split_off(index + 1);
-            let delay = match plan.steps.pop().unwrap().action {
-                kaia_platform::plan::Action::Sleep(d) => d,
-                _ => unreachable!(),
-            };
-            self.services.platform.run_plan(&plan);
-            let queue = self.power.queue.clone();
-            self.ctx.scheduler.schedule_in(
-                delay.as_secs_f64(),
-                Box::new(move |_: &mut Ctx| {
-                    queue
-                        .borrow_mut()
-                        .push_back(Due::Resume(kaia_platform::plan::Plan::new(rest)));
-                }),
-            );
-        } else {
-            self.services.platform.run_plan(&plan);
-        }
+        self.power.scripts.submit(RESUME_JOB, plan);
         if self.power.restore_light {
             self.toggle_light();
         }
@@ -177,7 +209,8 @@ impl<B: Backend> App<B> {
                 step.on_error = OnError::Abort;
             }
         }
-        self.power.scripts.submit(0, Plan::new(plan.steps));
+        self.power.wifi_jobs += 1;
+        self.power.scripts.submit(WIFI_JOB, Plan::new(plan.steps));
     }
 
     pub(super) fn note_activity(&mut self) {
@@ -185,6 +218,16 @@ impl<B: Backend> App<B> {
     }
 
     pub(super) fn power_wait(&self) -> Duration {
+        let wait = self.idle_wait();
+        if self.power.picture.busy() {
+            wait.min(POLL)
+        } else {
+            wait
+        }
+    }
+
+    /// How long the idle timers allow the loop to wait.
+    fn idle_wait(&self) -> Duration {
         let now = self.ctx.scheduler.now();
         let battery = self.power.battery_due.saturating_sub(now);
         #[cfg(feature = "lua")]
@@ -251,18 +294,9 @@ impl<B: Backend> App<B> {
 
     pub(super) fn power_due(&mut self) {
         self.check_idle_power();
-        while let Some((generation, outcome)) = self.power.scripts.poll() {
-            if generation == 0 {
-                if !matches!(outcome, kaia_platform::plan::Outcome::Completed) {
-                    self.notices.push(format!("Wi-Fi did not change: {outcome:?}"));
-                }
-            } else if generation == self.power.prepare_generation && self.sleeping() {
-                if let Some(rest) = self.power.prepare_rest.take() {
-                    let result = self.services.platform.run_plan(&rest);
-                    let effects = self.power.flow.prepare_done(PrepareResult::from_outcome(&result));
-                    self.power_effects(effects);
-                }
-            }
+        self.sleep_picture_due();
+        while let Some((job, outcome)) = self.power.scripts.poll() {
+            self.plan_done(job, outcome);
         }
         loop {
             let next = self.power.queue.borrow_mut().pop_front();
@@ -291,12 +325,99 @@ impl<B: Backend> App<B> {
                         self.notices.push(format!("Cannot change the light: {e}"));
                     }
                 }
-                Due::Resume(plan) => {
-                    self.services.platform.run_plan(&plan);
-                }
                 _ => {}
             }
         }
+    }
+
+    /// Acts on a plan that the worker finished.
+    fn plan_done(&mut self, job: u64, outcome: Outcome) {
+        match job {
+            WIFI_JOB => {
+                self.power.wifi_jobs = self.power.wifi_jobs.saturating_sub(1);
+                if !matches!(outcome, Outcome::Completed) {
+                    self.notices.push(format!("Wi-Fi did not change: {outcome:?}"));
+                }
+            }
+            FINISH_JOB => {
+                // The suspend write returned. The device woke up, or the kernel refused to suspend.
+                self.power.finishing = false;
+                let effects = self.power.flow.finish_done();
+                self.power_effects(effects);
+                if std::mem::take(&mut self.power.resume_queued) {
+                    self.resume();
+                }
+            }
+            RESUME_JOB => {}
+            generation if generation == self.power.prepare_generation && self.sleeping() => {
+                let effects = self
+                    .power
+                    .flow
+                    .prepare_done(PrepareResult::from_outcome(&outcome));
+                self.power_effects(effects);
+            }
+            _ => {}
+        }
+    }
+
+    /// Swaps the blank sleep screen for the cover once the picture is ready.
+    fn sleep_picture_due(&mut self) {
+        self.power.picture.poll();
+        if !self.sleeping() || self.power.sleep_covered {
+            return;
+        }
+        let Some(book) = self.power.sleep_book else {
+            return;
+        };
+        let Some(ready) = self.power.picture.ready(book, self.screen) else {
+            return;
+        };
+        let picture = ready.cloned();
+        self.power.sleep_covered = true;
+        // A book without a cover keeps the blank sleep screen.
+        let Some(picture) = picture else {
+            return;
+        };
+        if let Some(old) = self.power.screen.take() {
+            self.stack.close(old, None, &mut self.ctx);
+        }
+        let id = self.show_sleep_screen(Some(picture));
+        self.power.screen = Some(id);
+    }
+
+    /// Builds the sleep screen and queues it as a full-screen modal window.
+    fn show_sleep_screen(&mut self, picture: Option<Pixmap>) -> WindowId {
+        let label = if self.power.charge_screen {
+            "Please charge your reader"
+        } else {
+            settings::sleep::SLEEP_LABEL
+        };
+        let stack = sleep_picture::sleep_screen(&self.services, self.screen, picture, label);
+        let window = Window::new(
+            stack,
+            self.services.theme.clone(),
+            self.services.assets.clone(),
+            self.screen,
+        );
+        let id = window.show(
+            &mut self.ctx,
+            ShowOpts {
+                modal: true,
+                covers_fullscreen: true,
+                refresh: Some(Refresh::new(RefreshMode::Full)),
+                ..ShowOpts::default()
+            },
+        );
+        self.transient.push(window);
+        id
+    }
+
+    /// The book of the reader screen, when one is open.
+    fn reader_book(&self) -> Option<i64> {
+        self.router.routes().iter().find_map(|r| match r {
+            Route::Reader { book } => Some(*book),
+            _ => None,
+        })
     }
 
     fn power_effects(&mut self, effects: Vec<Effect>) {
@@ -325,33 +446,21 @@ impl<B: Backend> App<B> {
                         continue;
                     }
                     self.broadcast_app(Event::new("SaveState"));
-                    let platform = &mut self.services.platform;
-                    let mut plan = platform.power.prepare_suspend(PowerContext {
-                        wifi_on: platform.network.is_wifi_on() || self.power.scripts.busy(),
+                    let platform = &self.services.platform;
+                    let plan = platform.power.prepare_suspend(PowerContext {
+                        wifi_on: platform.network.is_wifi_on() || self.power.wifi_jobs > 0,
                         charging: platform.battery.is_charging().unwrap_or(false),
                     });
-                    let count = plan
-                        .steps
-                        .iter()
-                        .take_while(|s| matches!(s.action, kaia_platform::plan::Action::Run { .. }))
-                        .count();
-                    if count > 0 {
-                        let rest = plan.steps.split_off(count);
-                        self.power.prepare_generation += 1;
-                        self.power.prepare_rest = Some(kaia_platform::plan::Plan::new(rest));
-                        self.power.scripts.submit(self.power.prepare_generation, plan);
-                        continue;
-                    }
-                    let result = platform.run_plan(&plan);
-                    let next = self.power.flow.prepare_done(PrepareResult::from_outcome(&result));
-                    self.power_effects(next);
+                    self.power.prepare_generation += 1;
+                    self.power.scripts.submit(self.power.prepare_generation, plan);
                 }
                 Effect::RunFinishSuspend => {
+                    // The panel finishes its last update first. Only the sync and the
+                    // suspend write run on the worker.
                     self.backend.wait_idle();
                     let plan = self.services.platform.power.finish_suspend();
-                    self.services.platform.run_plan(&plan);
-                    let next = self.power.flow.finish_done();
-                    self.power_effects(next);
+                    self.power.finishing = true;
+                    self.power.scripts.submit(FINISH_JOB, plan);
                 }
                 Effect::GiveUp => self.broadcast_app(Event::new("UnexpectedWakeupLimit")),
             }
@@ -494,8 +603,8 @@ mod fence_tests {
         );
         app.start().unwrap();
         app.sleep();
+        // A prepare job is on the worker when Power comes.
         app.power.prepare_generation = 1;
-        app.power.prepare_rest = Some(kaia_platform::plan::Plan::new(vec![]));
         app.power.scripts.submit(
             1,
             kaia_platform::plan::Plan::new(vec![kaia_platform::plan::Step::sleep(
@@ -513,6 +622,120 @@ mod fence_tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(!app.power.flow.finish_pending());
-        assert!(app.power.prepare_rest.is_none());
+    }
+}
+
+#[cfg(test)]
+mod latency_tests {
+    use super::*;
+    use crate::{AppOptions, HeadlessBackend, ScriptInput, Services};
+    use kaia_events::ManualClock;
+    use kaia_platform::battery::MONZA_BATTERY_DIR;
+    use kaia_platform::power::PRE_SUSPEND_DELAY;
+    use kaia_platform::{Env, Platform};
+    use std::path::Path;
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    fn put(root: &Path, device_path: &str, text: &str) {
+        let path = root.join(device_path.trim_start_matches('/'));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    /// Runs the loop until `done` holds. Fails after ten seconds.
+    fn wait_until(app: &mut App<HeadlessBackend>, what: &str, done: impl Fn(&App<HeadlessBackend>) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(app) {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            app.process(Vec::new()).unwrap();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// A Libra Colour tree where `/sys/power/state` is a FIFO with no reader. The
+    /// suspend write blocks until a reader opens the FIFO, as it blocks until wakeup.
+    #[test]
+    fn power_is_fast_while_the_suspend_plan_runs() {
+        let dir = std::env::temp_dir().join(format!("kaia-suspend-latency-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        put(
+            &dir,
+            "/mnt/onboard/.kobo/version",
+            "N3-0-0,4.38.23171,4.38.23171,4.38.23171,x,y,z,320\n",
+        );
+        put(&dir, &format!("{MONZA_BATTERY_DIR}/status"), "Discharging\n");
+        put(&dir, &format!("{MONZA_BATTERY_DIR}/capacity"), "60\n");
+        put(&dir, "/sys/power/state", "mem\n");
+        put(&dir, "/sys/power/state-extended", "0");
+        let env = Env {
+            product: Some("monza".to_string()),
+            ..Env::default()
+        };
+        let platform = Platform::detect_in(&dir, &env).unwrap();
+        let state = dir.join("sys/power/state");
+        std::fs::remove_file(&state).unwrap();
+        assert!(std::process::Command::new("mkfifo")
+            .arg(&state)
+            .status()
+            .unwrap()
+            .success());
+
+        // The Kobo reads its fonts from the installed copy. The tree links the repository copy.
+        let install = dir.join("mnt/onboard/.adds/kaia");
+        std::fs::create_dir_all(&install).unwrap();
+        std::os::unix::fs::symlink(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources"),
+            install.join("resources"),
+        )
+        .unwrap();
+
+        let panel = kaia_display::PanelSpec::LIBRA_COLOUR;
+        let services = Services::open(platform, panel, Some(dir.join("data"))).unwrap();
+        let clock = ManualClock::new();
+        let mut app = App::new(
+            HeadlessBackend::new(panel, ScriptInput::idle()),
+            services,
+            Box::new(clock.clone()),
+            AppOptions::default(),
+        );
+        app.start().unwrap();
+        app.sleep();
+        clock.advance(SUSPEND_WAIT_TIMEOUT);
+        // The suspend timer starts the prepare plan. Its result starts the 2 s wait.
+        app.process(Vec::new()).unwrap();
+        wait_until(&mut app, "the prepare plan", |a| a.power.flow.finish_pending());
+
+        // The reader opens the FIFO once the test releases it. The helper also
+        // gives up after ten seconds, so a blocked app thread fails the test instead
+        // of hanging it.
+        let (release, released) = mpsc::channel::<()>();
+        let reader = std::thread::spawn({
+            let state = state.clone();
+            move || {
+                let _ = released.recv_timeout(Duration::from_secs(10));
+                std::fs::File::open(&state).unwrap()
+            }
+        });
+
+        clock.advance(PRE_SUSPEND_DELAY);
+        let start = Instant::now();
+        app.process(Vec::new()).unwrap();
+        let finish_step = start.elapsed();
+        eprintln!("Finish step on the app thread: {finish_step:?}");
+        assert!(finish_step < Duration::from_millis(100), "{finish_step:?}");
+        assert!(app.power.finishing);
+
+        let start = Instant::now();
+        app.key(kaia_input::Key::Power).unwrap();
+        let power = start.elapsed();
+        eprintln!("Power dispatch while the suspend plan runs: {power:?}");
+        assert!(power < Duration::from_millis(100), "{power:?}");
+        assert!(app.sleeping());
+
+        release.send(()).unwrap();
+        wait_until(&mut app, "the suspend write to return", |a| !a.power.finishing);
+        wait_until(&mut app, "the queued resume", |a| !a.sleeping());
+        drop(reader.join().unwrap());
     }
 }

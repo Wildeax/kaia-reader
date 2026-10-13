@@ -20,8 +20,13 @@ desktop = ["kaia-display/desktop"]
 kobo = ["kaia-display/kobo"]
 
 [dependencies]
+kaia-calibre = { path = "../kaia-calibre" }
+tempfile = "3"
+fs2 = "0.4"
+url = "2"
 kaia-lua = { path = "../kaia-lua", optional = true }
 kaia-book = { path = "../kaia-book" }
+kaia-storage = { path = "../kaia-storage" }
 kaia-dict = { path = "../kaia-dict" }
 kaia-stats = { path = "../kaia-stats" }
 kaia-sync = { path = "../kaia-sync" }

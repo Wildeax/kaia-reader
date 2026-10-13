@@ -17,6 +17,7 @@ mod network;
 #[cfg(feature = "lua")]
 mod plugins;
 mod power;
+mod sleep_picture;
 
 use std::io;
 use std::path::PathBuf;
@@ -145,7 +146,7 @@ impl<B: Backend> App<B> {
         });
         App {
             backend,
-            power: power::State::default(),
+            power: power::State::new(services.platform.io_handle(), services.library_path()),
             services,
             ctx,
             stack: WindowStack::new(),
@@ -373,6 +374,7 @@ impl<B: Backend> App<B> {
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
         }
+        self.broadcast_app(Event::new("CatalogTick"));
         self.broadcast_app(Event::new("ReaderTick"));
         if !self.reader_busy() {
             if let Some((id, args)) = self.pending_navigation.take() {
@@ -952,6 +954,7 @@ impl<B: Backend> App<B> {
         };
         match found {
             Ok(Some(row)) => {
+                self.prepare_sleep_picture(row.id);
                 let existing = self.router.routes().iter().position(|route| match route {
                     Route::Reader { book } => {
                         *book == row.id

@@ -33,6 +33,14 @@ use data::{BookNotes, Filter, Note};
 pub struct NotesSurface;
 
 impl Surface for NotesSurface {
+    fn on_event(&mut self, event: &kaia_events::Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if event.name == "LibraryUpdated" {
+            Outcome::Rebuild
+        } else {
+            Outcome::NotMine
+        }
+    }
+
     fn route(&self) -> Route {
         Route::Notes
     }
@@ -56,6 +64,14 @@ pub struct NotesView {
 }
 
 impl Surface for NotesView {
+    fn on_event(&mut self, event: &kaia_events::Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if event.name == "LibraryUpdated" {
+            Outcome::Rebuild
+        } else {
+            Outcome::NotMine
+        }
+    }
+
     fn route(&self) -> Route {
         Route::Notes
     }
@@ -78,6 +94,26 @@ impl Surface for NotesView {
 
 /// Runs a notes command against `state`. Returns NotMine for another id.
 fn handle(state: &NotesView, cmd: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
+    if let Some(id) = cmd.strip_prefix("notes:sticker:") {
+        for book in load_books(env.services) {
+            if let Some(note) = book.notes.iter().find(|n| n.sticker.as_deref() == Some(id)) {
+                if let Some(book) = book.library_id {
+                    let key = if note.orphaned {
+                        "repair_sticker"
+                    } else {
+                        "open_sticker"
+                    };
+                    let value = Value::Table([(kaia_events::Key::from(key), Value::from(id))].into());
+                    return Outcome::Navigate(Nav::OpenBook {
+                        book,
+                        location: Some(value),
+                    });
+                }
+            }
+        }
+        env.toast("This sticker's book is not in the library.", 4.0);
+        return Outcome::Handled;
+    }
     match commands::parse(cmd) {
         Some(Command::Filter(filter)) => replace(NotesView {
             filter,
@@ -149,6 +185,7 @@ pub fn load_books(services: &Services) -> Vec<BookNotes> {
 /// One line of a list: a book, or an entry of the open book.
 #[derive(Clone)]
 enum Item {
+    Heading(String),
     Book {
         md5: String,
         title: String,
@@ -165,26 +202,36 @@ enum Item {
 }
 
 fn filter_row(services: &Services, filter: Filter) -> WidgetPod {
-    let buttons: Vec<WidgetPod> = Filter::ALL
-        .into_iter()
-        .map(|f| {
-            let style = if f == filter {
-                ButtonStyle::Primary
-            } else {
-                ButtonStyle::Secondary
-            };
-            WidgetPod::new(Expanded::new(
-                button(
-                    style,
-                    f.label(),
-                    &format!("notes:filter:{}", f.name()),
-                    &format!("notes-filter-{}", f.name()),
-                ),
-                1,
-            ))
+    let rows = Filter::ALL
+        .chunks(3)
+        .map(|group| {
+            let buttons = group
+                .iter()
+                .map(|&f| {
+                    let style = if f == filter {
+                        ButtonStyle::Primary
+                    } else {
+                        ButtonStyle::Secondary
+                    };
+                    WidgetPod::new(Expanded::new(
+                        button(
+                            style,
+                            f.label(),
+                            &format!("notes:filter:{}", f.name()),
+                            &format!("notes-filter-{}", f.name()),
+                        ),
+                        1,
+                    ))
+                })
+                .collect();
+            WidgetPod::new(Row::new(buttons).gap(services.theme.space.sm))
         })
         .collect();
-    WidgetPod::new(Row::new(buttons).gap(services.theme.space.sm))
+    WidgetPod::new(
+        kaia_ui::components::Column::new(rows)
+            .shrink()
+            .gap(services.theme.space.sm),
+    )
 }
 
 fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Filter) -> Window {
@@ -207,7 +254,7 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
             "No highlights, notes or bookmarks yet. Select text in a book to start.",
         ));
     } else {
-        let items: Vec<Item> = books
+        let mut items: Vec<Item> = books
             .iter()
             .filter_map(|book| {
                 let matching: Vec<&Note> = book.notes.iter().filter(|n| filter.matches(n)).collect();
@@ -221,6 +268,20 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
                 })
             })
             .collect();
+        let mut repairs = Vec::new();
+        for book in books {
+            for note in book.notes.iter().filter(|n| n.orphaned && filter.matches(n)) {
+                if repairs.is_empty() {
+                    repairs.push(Item::Heading("Needs repair".into()));
+                }
+                repairs.push(entry_item(book, note, repairs.len()));
+            }
+        }
+        if !repairs.is_empty() {
+            repairs.push(Item::Heading("Books".into()));
+            repairs.append(&mut items);
+            items = repairs;
+        }
         children.push(list(items));
     }
     children.push(
@@ -236,11 +297,21 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
     let theme = &services.theme;
     let header = WidgetPod::new(Header::new(theme, book.title.clone()).back("notes:books"));
     let matching: Vec<&Note> = book.notes.iter().filter(|n| filter.matches(n)).collect();
-    let items: Vec<Item> = matching
-        .iter()
-        .enumerate()
-        .map(|(index, note)| entry_item(book, note, index))
-        .collect();
+    let mut items = Vec::new();
+    for repair in [true, false] {
+        let group: Vec<_> = matching.iter().filter(|n| n.orphaned == repair).collect();
+        if group.is_empty() {
+            continue;
+        }
+        if repair {
+            items.push(Item::Heading("Needs repair".into()));
+        } else if matching.iter().any(|n| n.orphaned) {
+            items.push(Item::Heading("In the book".into()));
+        }
+        for note in group {
+            items.push(entry_item(book, note, items.len()));
+        }
+    }
     let mut children = vec![header, filter_row(services, filter)];
     if items.is_empty() {
         children.push(body(services, "Nothing matches this filter."));
@@ -262,11 +333,19 @@ fn entry_item(book: &BookNotes, note: &Note, index: usize) -> Item {
             data::Location::Xpointer(xp) => Value::from(xp.as_str()),
             data::Location::Page(p) => Value::from(*p as i64),
         };
-        (format!("open_book:{id}"), vec![location])
+        if let Some(sticker) = &note.sticker {
+            (format!("notes:sticker:{sticker}"), Vec::new())
+        } else {
+            (format!("open_book:{id}"), vec![location])
+        }
     });
     Item::Entry {
         primary: note.primary(),
-        secondary: note.secondary(),
+        secondary: if note.orphaned && note.sticker.is_some() {
+            format!("{} · Repair", book.title)
+        } else {
+            note.secondary()
+        },
         open,
         index,
     }
@@ -277,10 +356,14 @@ fn counts(notes: &[&Note]) -> String {
     let highlights = notes.iter().filter(|n| n.highlight).count();
     let with_note = notes
         .iter()
-        .filter(|n| n.note.as_deref().is_some_and(|t| !t.trim().is_empty()))
+        .filter(|n| n.sticker.is_none() && n.note.as_deref().is_some_and(|t| !t.trim().is_empty()))
         .count();
     let bookmarks = notes.iter().filter(|n| n.bookmark).count();
     let mut parts = Vec::new();
+    let stickers = notes.iter().filter(|n| n.sticker.is_some()).count();
+    if stickers > 0 {
+        parts.push(plural(stickers, "sticker"));
+    }
     if highlights > 0 {
         parts.push(plural(highlights, "highlight"));
     }
@@ -309,8 +392,13 @@ fn list(items: Vec<Item>) -> WidgetPod {
     ))
 }
 
-fn build_item(item: &Item, _theme: &Theme) -> WidgetPod {
+fn build_item(item: &Item, theme: &Theme) -> WidgetPod {
     match item {
+        Item::Heading(text) => WidgetPod::new(kaia_ui::components::Label::new(
+            text.clone(),
+            theme.font.title.clone(),
+            kaia_ui::Tone::Ink,
+        )),
         Item::Book { md5, title, detail } => {
             let row = ListRow::new(title.clone())
                 .secondary(detail.clone())
@@ -348,6 +436,7 @@ mod tests {
     #[test]
     fn counts_name_each_kind() {
         let note = |highlight: bool, bookmark: bool, text: Option<&str>| Note {
+            sticker: None,
             id: 0,
             text: text.map(str::to_string),
             note: None,

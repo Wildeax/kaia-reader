@@ -99,6 +99,7 @@ fn json_note(note: &Note) -> String {
     };
     let fields = [
         format!("\"id\": {}", note.id),
+        format!("\"sticker_id\": {}", json_opt(note.sticker.as_deref())),
         format!("\"datetime\": {}", json_string(&note.datetime)),
         format!("\"highlight\": {}", note.highlight),
         format!("\"bookmark\": {}", note.bookmark),

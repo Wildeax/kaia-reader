@@ -1,6 +1,7 @@
-//! Script plans run in order on one worker. The app polls completion.
+//! Device plans run in order on one worker: the Wi-Fi scripts, and the suspend,
+//! resume and wakeup plans from `power.rs`. The app polls completion.
 use kaia_platform::plan::{execute, Outcome, Plan};
-use kaia_platform::sysfs::{Root, SystemIo};
+use kaia_platform::sysfs::SystemIo;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 pub(super) struct Scripts {
@@ -8,12 +9,13 @@ pub(super) struct Scripts {
     replies: Receiver<(u64, Outcome)>,
     pending: usize,
 }
-impl Default for Scripts {
-    fn default() -> Self {
+impl Scripts {
+    /// Starts the worker. Its plans write through `io`, which must share the root
+    /// of the platform, so a fake device tree in tests stays fake.
+    pub fn new(mut io: SystemIo) -> Self {
         let (send, requests) = mpsc::channel::<(u64, Plan)>();
         let (done, replies) = mpsc::channel();
         std::thread::spawn(move || {
-            let mut io = SystemIo::new(Root::new("/"));
             while let Ok((generation, plan)) = requests.recv() {
                 let result = execute(&plan, &mut io, &mut std::thread::sleep);
                 if done.send((generation, result)).is_err() {
@@ -27,8 +29,6 @@ impl Default for Scripts {
             pending: 0,
         }
     }
-}
-impl Scripts {
     pub fn submit(&mut self, generation: u64, plan: Plan) {
         if self.send.send((generation, plan)).is_ok() {
             self.pending += 1;
@@ -47,10 +47,11 @@ impl Scripts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kaia_platform::sysfs::Root;
     use std::time::{Duration, Instant};
     #[test]
     fn slow_script_submission_and_poll_do_not_wait() {
-        let mut scripts = Scripts::default();
+        let mut scripts = Scripts::new(SystemIo::new(Root::new(std::env::temp_dir())));
         let start = Instant::now();
         scripts.submit(
             7,

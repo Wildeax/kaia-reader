@@ -370,8 +370,29 @@ pub fn more(services: &Services, screen: Size) -> Window {
     sheet(services, screen, Some("More"), children, None)
 }
 
-/// The selection popover: the word and five actions.
+/// The selection popover and its annotation actions.
 pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
+    selection_popover(services, screen, word, false)
+}
+
+pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, moving: bool) -> Window {
+    if word.is_empty() {
+        let mut children = vec![button(
+            ButtonStyle::Primary,
+            "Sticker",
+            "reader:sel:sticker",
+            "sel-sticker",
+        )];
+        if moving {
+            children.push(button(
+                ButtonStyle::Secondary,
+                "Cancel move",
+                "reader:sticker:cancel-move",
+                "sticker-cancel-move",
+            ));
+        }
+        return sheet(services, screen, Some("Page sticker"), children, None);
+    }
     let t = &services.theme;
     let shown = if word.chars().count() > 40 {
         let cut: String = word.chars().take(39).collect();
@@ -397,8 +418,31 @@ pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
             .gap(t.space.sm),
         )
     };
-    let children = vec![
+    let mut children = vec![
         heading,
+        WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(Expanded::new(
+                    button(
+                        ButtonStyle::Secondary,
+                        "Sticker",
+                        "reader:sel:sticker",
+                        "sel-sticker",
+                    ),
+                    1,
+                )),
+                WidgetPod::new(Expanded::new(
+                    button(
+                        ButtonStyle::Secondary,
+                        "Share to Notes",
+                        "reader:sel:share",
+                        "sel-share",
+                    ),
+                    1,
+                )),
+            ])
+            .gap(t.space.sm),
+        ),
         row([
             ("Highlight", "reader:sel:highlight", "sel-highlight"),
             ("Note", "reader:sel:note", "sel-note"),
@@ -428,6 +472,14 @@ pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
             .gap(t.space.sm),
         ),
     ];
+    if moving {
+        children.push(button(
+            ButtonStyle::Secondary,
+            "Cancel move",
+            "reader:sticker:cancel-move",
+            "sticker-cancel-move",
+        ));
+    }
     sheet(services, screen, None, children, None)
 }
 
@@ -703,4 +755,139 @@ fn dictionary_plugins(services: &Services, children: Vec<WidgetPod>) -> Vec<Widg
     }
     let _ = services;
     children
+}
+
+/// Bundled image stickers and a margin note.
+pub fn sticker_picker(services: &Services, screen: Size) -> Window {
+    let t = &services.theme;
+    let choices = super::stickers::BUNDLED
+        .iter()
+        .map(|(name, label)| {
+            let mut children = Vec::new();
+            if let Some(path) = super::stickers::bundled_path(services, name) {
+                if let Some(image) = sticker_image(&path, t.scale.dp(70)) {
+                    children.push(image);
+                }
+            }
+            children.push(button(
+                ButtonStyle::Secondary,
+                label,
+                &format!("reader:sticker:add:{name}"),
+                &format!("sticker-pick-{name}"),
+            ));
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(Column::new(children).shrink().gap(t.space.sm)),
+                1,
+            ))
+        })
+        .collect();
+    sheet(
+        services,
+        screen,
+        Some("Choose a sticker"),
+        vec![
+            WidgetPod::new(Row::new(choices).gap(t.space.sm)),
+            button(
+                ButtonStyle::Secondary,
+                "Text note",
+                "reader:sticker:text",
+                "sticker-text",
+            ),
+        ],
+        None,
+    )
+}
+
+fn sticker_image(path: &std::path::Path, height: u32) -> Option<WidgetPod> {
+    let bytes = std::fs::read(path).ok()?;
+    let image = kaia_gfx::image::decode_rgb(&bytes, kaia_gfx::image::DecodeLimits::default()).ok()?;
+    Some(WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(kaia_ui::components::Image::new(
+            image,
+            kaia_gfx::image::FitMode::Contain,
+        ))))
+        .height(height),
+    ))
+}
+
+pub fn sticker_sheet(services: &Services, screen: Size, sticker: &kaia_storage::Sticker) -> Window {
+    let id = sticker.id.as_deref().unwrap_or("");
+    let mut children = vec![button(
+        ButtonStyle::Secondary,
+        "View",
+        &format!("reader:sticker:view:{id}"),
+        "sticker-view",
+    )];
+    if sticker.asset.is_none() {
+        children.push(button(
+            ButtonStyle::Secondary,
+            "Edit",
+            &format!("reader:sticker:edit:{id}"),
+            "sticker-edit",
+        ));
+    }
+    children.push(button(
+        ButtonStyle::Secondary,
+        "Move to another place",
+        &format!("reader:sticker:move:{id}"),
+        "sticker-move",
+    ));
+    children.push(button(
+        ButtonStyle::Secondary,
+        "Delete",
+        &format!("reader:sticker:delete:{id}"),
+        "sticker-delete",
+    ));
+    sheet(services, screen, Some("Sticker"), children, None)
+}
+
+pub fn sticker_view(
+    services: &Services,
+    screen: Size,
+    sticker: &kaia_storage::Sticker,
+    path: Option<&std::path::Path>,
+) -> Window {
+    let mut children = Vec::new();
+    if let Some(image) = path.and_then(|p| sticker_image(p, screen.h / 4)) {
+        children.push(image);
+    }
+    if let Some(text) = &sticker.text {
+        let lines = dictionary_lines(
+            services,
+            text,
+            screen.w.saturating_sub(2 * services.theme.space.lg),
+        );
+        let list = PagedList::new(lines, |line: &String, t| {
+            WidgetPod::new(Paragraph::new(line, t.font.body.clone(), Tone::Ink).max_lines(usize::MAX))
+        });
+        children.push(WidgetPod::new(Expanded::new(
+            WidgetPod::new(list).with_key("sticker-view-pages"),
+            1,
+        )));
+    }
+    sheet(services, screen, Some("Sticker"), children, Some(60))
+}
+
+pub fn sticker_note(services: &Services, screen: Size, text: &str) -> Window {
+    let mut field = TextField::new().placeholder("Text note");
+    field.set_text(text);
+    let children = vec![
+        WidgetPod::new(field)
+            .with_key("sticker-note-field")
+            .focusable(true),
+        button(
+            ButtonStyle::Primary,
+            "Save",
+            "reader:sticker:save",
+            "sticker-note-save",
+        ),
+        WidgetPod::new(OnScreenKeyboard::new(&ENGLISH)),
+    ];
+    sheet(
+        services,
+        screen,
+        Some("Text note"),
+        children,
+        Some(WRITING_PERCENT),
+    )
 }

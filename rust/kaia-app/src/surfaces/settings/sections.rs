@@ -240,24 +240,24 @@ fn network(services: &Services) -> Vec<Entry> {
         Entry::Text(
             "Turn on sync to send progress on close and sleep, and read progress from other devices.".into(),
         ),
-        Entry::Heading("OPDS catalogs".into()),
     ];
-    for catalog in kaia_opds::default_catalogs() {
-        out.push(Entry::Row {
-            primary: catalog.title,
-            secondary: Some(catalog.url),
-            value: None,
-            action: None,
-        });
-    }
-    for (title, url) in facts::user_catalogs(s) {
-        out.push(Entry::Row {
-            primary: title,
-            secondary: Some(url),
-            value: Some("yours".into()),
-            action: None,
-        });
-    }
+    out.splice(
+        0..0,
+        [
+            Entry::Row {
+                primary: "OPDS catalogs".into(),
+                secondary: Some("Browse catalogs and download books".into()),
+                value: None,
+                action: Some("settings:catalogs".into()),
+            },
+            Entry::Row {
+                primary: "Calibre wireless".into(),
+                secondary: Some("Receive books from Calibre".into()),
+                value: None,
+                action: Some("settings:calibre".into()),
+            },
+        ],
+    );
     out
 }
 
@@ -445,10 +445,6 @@ fn advanced() -> Vec<Entry> {
         (
             "Auto suspend",
             "Suspend after a set time with no input. The sleep timeout is in Device.",
-        ),
-        (
-            "Calibre wireless",
-            "Calibre over the network. Not built in Kaia yet.",
         ),
         ("Backup", "Copy the data folder to keep a backup."),
         (

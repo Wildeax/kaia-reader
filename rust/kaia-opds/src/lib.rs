@@ -17,6 +17,7 @@
 //! # Ok::<(), kaia_opds::Error>(())
 //! ```
 
+mod cancel;
 mod catalog;
 mod client;
 mod error;

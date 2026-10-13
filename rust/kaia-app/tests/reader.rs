@@ -882,3 +882,336 @@ fn remote_progress_uses_the_selected_strategy_and_waits_for_confirmation() {
         .settings
         .save("sync.enabled", Value::Bool(false));
 }
+
+fn stored_stickers(dir: &Path) -> Vec<kaia_storage::Sticker> {
+    kaia_storage::Store::open(&dir.join("data/kaia"))
+        .unwrap()
+        .list_all()
+        .unwrap()
+}
+
+fn page_stickers(app: &mut App<HeadlessBackend>) -> Vec<kaia_app::surfaces::reader::stickers::Drawing> {
+    wait_reader(app);
+    let mut stickers = Vec::new();
+    assert!(app.update_top::<PageView, _>("reader-page", |v, _| stickers = v.stickers.clone()));
+    stickers
+}
+
+#[test]
+fn sticker_picker_page_and_sheet_goldens_and_reopen() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-goldens");
+    let mut app = open_reader("juliet.epub", &dir);
+    app.command("reader:layout:margins", &[kaia_events::Value::Number(160.0)]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    turn_to_text(&mut app);
+    hold_at(&mut app, Point::new(240, 190));
+    tap_key(&mut app, "sel-sticker");
+    assert_matches_golden(app.frame(), &golden("reader-sticker-picker.png"), 14);
+    tap_key(&mut app, "sticker-pick-star");
+    let records = stored_stickers(&dir);
+    assert_eq!(
+        records.len(),
+        1,
+        "the picker saved a sticker: {:?}",
+        app.notices()
+    );
+    let sticker = records[0].clone();
+    let kaia_storage::Anchor::Reflowable { locator, quote, .. } = &sticker.anchor else {
+        panic!("EPUB anchor");
+    };
+    assert!(locator.starts_with('/'));
+    assert!(!quote.exact.is_empty());
+    assert!(!quote.prefix.is_empty() || !quote.suffix.is_empty());
+    assert_eq!(sticker.state, kaia_storage::StickerState::Attached);
+    let drawings = page_stickers(&mut app);
+    assert_eq!(drawings.len(), 1);
+    assert!(!drawings[0].faded, "a wide margin holds the image");
+    assert_matches_golden(app.frame(), &golden("reader-margin-stickers.png"), 14);
+    let rect = drawings[0].rect;
+    app.tap(Point::new(rect.x + rect.w as i32 / 2, rect.y + rect.h as i32 / 2))
+        .unwrap();
+    wait_reader(&mut app);
+    assert!(app.find_rect("sticker-view").is_some());
+    assert_matches_golden(app.frame(), &golden("reader-sticker-sheet.png"), 14);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    open_from_library(&mut app, "juliet.epub");
+    assert_eq!(page_stickers(&mut app)[0].id, sticker.id.clone().unwrap());
+    let before = page_stickers(&mut app)[0].anchor_line;
+    app.command("reader:layout:size", &[kaia_events::Value::Number(60.0)]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    app.command("reader:location", &[kaia_events::Value::from(locator.clone())]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    let after = page_stickers(&mut app);
+    assert_eq!(after.len(), 1, "reflow keeps the sticker with its text");
+    assert_ne!(before, after[0].anchor_line);
+    assert_eq!(
+        stored_stickers(&dir)[0],
+        sticker,
+        "layout changes do not change stored anchors or timestamps"
+    );
+}
+
+#[test]
+fn sticker_needs_repair_and_notes_can_place_it_again() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-repair");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-sticker");
+    tap_key(&mut app, "sticker-pick-heart");
+    let mut sticker = stored_stickers(&dir).remove(0);
+    let id = sticker.id.clone().unwrap();
+    if let kaia_storage::Anchor::Reflowable { locator, quote, .. } = &mut sticker.anchor {
+        *locator = "/body/removed/p.0".into();
+        quote.prefix = quote.prefix.trim().to_string();
+        quote.suffix = quote.suffix.trim().to_string();
+    }
+    let mut store = kaia_storage::Store::open(&dir.join("data/kaia")).unwrap();
+    store.put_sticker(&sticker).unwrap();
+    app.command("reader:slider:release", &[]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(
+        page_stickers(&mut app).len(),
+        1,
+        "quote lookup repairs a stale Lua locator for drawing"
+    );
+    assert_eq!(store.get_sticker(&id).unwrap().anchor, sticker.anchor);
+    if let kaia_storage::Anchor::Reflowable { quote, .. } = &mut sticker.anchor {
+        quote.exact = "This quote was removed from the book entirely 987654321".into();
+    }
+    let mut store = kaia_storage::Store::open(&dir.join("data/kaia")).unwrap();
+    store.put_sticker(&sticker).unwrap();
+    app.command("reader:slider:release", &[]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    assert!(page_stickers(&mut app).is_empty());
+    assert_eq!(
+        store.get_sticker(&id).unwrap().state,
+        kaia_storage::StickerState::NeedsReview
+    );
+    app.command("nav:notes", &[]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    let books = kaia_app::surfaces::notes::load_books(app.services());
+    assert!(books[0].notes[0].orphaned);
+    assert_matches_golden(app.frame(), &golden("notes-sticker-repair.png"), 14);
+    assert_eq!(books[0].notes[0].sticker.as_deref(), Some(id.as_str()));
+    tap_key(&mut app, "notes-entry-1");
+    assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-sticker");
+    let repaired = store.get_sticker(&id).unwrap();
+    assert_eq!(repaired.state, kaia_storage::StickerState::Attached);
+    assert_ne!(repaired.anchor, sticker.anchor);
+    assert_eq!(page_stickers(&mut app)[0].id, id);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(app.top_route(), Some(&Route::Notes));
+    assert!(
+        app.find_rect("notes-entry-1").is_none(),
+        "the repair group refreshes after leaving the reader"
+    );
+}
+
+#[test]
+fn sticker_text_note_and_shared_selection_are_saved_and_editable() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-note-share");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    let quote = text_of(&mut app, "sel-word");
+    tap_key(&mut app, "sel-share");
+    let books = kaia_app::surfaces::notes::load_books(app.services());
+    assert_eq!(books[0].notes[0].note.as_deref(), Some("Shared to Notes"));
+    assert_eq!(books[0].notes[0].text.as_deref(), Some(quote.as_str()));
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-sticker");
+    tap_key(&mut app, "sticker-text");
+    app.update_top::<TextField, _>("sticker-note-field", |f, _| f.set_text("Read this again"));
+    tap_key(&mut app, "sticker-note-save");
+    let sticker = stored_stickers(&dir).remove(0);
+    assert_eq!(sticker.text.as_deref(), Some("Read this again"));
+    assert!(
+        page_stickers(&mut app)[0].marker,
+        "a narrow margin uses a note marker"
+    );
+    app.command(
+        &format!("reader:sticker:open:{}", sticker.id.as_deref().unwrap()),
+        &[],
+    );
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "sticker-edit");
+    app.update_top::<TextField, _>("sticker-note-field", |f, _| f.set_text("Read chapter two"));
+    tap_key(&mut app, "sticker-note-save");
+    assert_eq!(stored_stickers(&dir)[0].text.as_deref(), Some("Read chapter two"));
+    app.command(
+        &format!("reader:sticker:open:{}", sticker.id.as_deref().unwrap()),
+        &[],
+    );
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "sticker-move");
+    app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-sticker");
+    let moved = stored_stickers(&dir).remove(0);
+    assert_eq!(moved.id, sticker.id);
+    assert_ne!(moved.anchor, sticker.anchor);
+    assert_eq!(moved.text.as_deref(), Some("Read chapter two"));
+
+    app.command(
+        &format!("reader:sticker:open:{}", sticker.id.as_deref().unwrap()),
+        &[],
+    );
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "sticker-delete");
+    assert!(stored_stickers(&dir).is_empty());
+    assert!(page_stickers(&mut app).is_empty());
+}
+
+#[test]
+fn pdf_sticker_uses_page_fractions_and_shared_store_images() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-pdf");
+    let mut app = open_reader("2col.pdf", &dir);
+    let row = app
+        .services()
+        .library
+        .book(book_id(&app, "2col.pdf"))
+        .unwrap()
+        .unwrap();
+    let mut store = kaia_storage::Store::open(&dir.join("data/kaia")).unwrap();
+    let asset = store
+        .add_asset_file(&repo_root().join("resources/kaia/stickers/check.png"), "")
+        .unwrap();
+    // This is the same record shape the Lua FFI passes to the store.
+    let sticker = store
+        .put_sticker(&kaia_storage::Sticker {
+            id: None,
+            doc: kaia_storage::DocumentId {
+                partial_md5: row.partial_md5.clone(),
+                file_size: fs::metadata(&row.path).unwrap().len(),
+                title: row.title,
+            },
+            anchor: kaia_storage::Anchor::Fixed {
+                page: 1,
+                x: 0.25,
+                y: 0.4,
+            },
+            asset: Some(asset.sha256),
+            text: None,
+            size: kaia_storage::StickerSize { w: 0.07, h: 0.05 },
+            rotation: 0,
+            state: kaia_storage::StickerState::Attached,
+            created_at: 0,
+            updated_at: 0,
+        })
+        .unwrap();
+    app.command("reader:slider:release", &[]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    let before = page_stickers(&mut app);
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].id, sticker.id.unwrap());
+    app.command("reader:layout:zoom", &[kaia_events::Value::Number(1.0)]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(page_stickers(&mut app).len(), 1);
+    app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
+    assert!(
+        page_stickers(&mut app).is_empty(),
+        "a sticker belongs only to its page"
+    );
+}
+
+#[test]
+fn pdf_selection_creates_a_sticker_and_reopens_it() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-pdf-selection");
+    let mut app = open_reader("2col.pdf", &dir);
+    let path = dir.join("books/2col.pdf");
+    let doc = kaia_doc::open(&path).unwrap();
+    let size = doc.page_size(0).unwrap();
+    let screen = app.screen();
+    let scale = (screen.w as f32 / size.width).min(screen.h as f32 / size.height);
+    // This scanned PDF has no text layer. A hold can still place a page sticker.
+    assert!(doc.page_text(0).unwrap().chars.is_empty());
+    let point = Point::new(350, 500);
+    let x_expected = (point.x as f32 - (screen.w as f32 - size.width * scale) / 2.0) / scale / size.width;
+    let y_expected = (point.y as f32 - (screen.h as f32 - size.height * scale) / 2.0) / scale / size.height;
+    hold_at(&mut app, point);
+    tap_key(&mut app, "sel-sticker");
+    tap_key(&mut app, "sticker-pick-question");
+    let sticker = stored_stickers(&dir).remove(0);
+    let kaia_storage::Anchor::Fixed { page, x, y } = sticker.anchor else {
+        panic!("PDF anchor");
+    };
+    assert_eq!(page, 1);
+    assert!((x - x_expected).abs() < 0.01);
+    assert!((y - y_expected).abs() < 0.01);
+    assert_eq!(page_stickers(&mut app).len(), 1);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    open_from_library(&mut app, "2col.pdf");
+    assert_eq!(page_stickers(&mut app)[0].id, sticker.id.unwrap());
+}
+
+#[test]
+fn sticker_fades_over_the_line_end_when_the_margin_is_narrow() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("sticker-faded");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-sticker");
+    tap_key(&mut app, "sticker-pick-star");
+    let sticker = stored_stickers(&dir).remove(0);
+    let kaia_storage::Anchor::Reflowable { locator, .. } = &sticker.anchor else {
+        panic!("EPUB");
+    };
+    app.command("reader:layout:styles", &[kaia_events::Value::Bool(false)]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    app.command("reader:layout:margins", &[kaia_events::Value::Number(0.0)]);
+    app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
+    let mut faded = None;
+    for size in [32.0, 40.0, 48.0, 56.0, 64.0] {
+        app.command("reader:layout:size", &[kaia_events::Value::Number(size)]);
+        app.process(Vec::new()).unwrap();
+        wait_reader(&mut app);
+        app.command("reader:location", &[kaia_events::Value::from(locator.clone())]);
+        app.process(Vec::new()).unwrap();
+        wait_reader(&mut app);
+        if let Some(drawing) = page_stickers(&mut app).into_iter().find(|d| d.faded) {
+            faded = Some(drawing);
+            break;
+        }
+    }
+    let drawing = faded.expect("a full text column uses the faded fallback");
+    assert!(drawing.rect.x >= drawing.anchor_line.x);
+    assert!(
+        drawing.rect.x + drawing.rect.w as i32 <= drawing.anchor_line.x + drawing.anchor_line.w as i32 + 1
+    );
+    assert!(drawing
+        .image
+        .as_ref()
+        .unwrap()
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|pixel| pixel[3] <= 102));
+    assert_eq!(stored_stickers(&dir)[0], sticker);
+}

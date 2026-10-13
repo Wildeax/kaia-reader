@@ -23,6 +23,8 @@ use kaia_library::Book;
 pub struct Note {
     /// The annotation id within its book (`kaia_id`). 0 when the file has none.
     pub id: u64,
+    /// UUID in the shared sticker store, when this entry is a sticker.
+    pub sticker: Option<String>,
     /// The highlighted text. None for a bookmark or a note with no quote.
     pub text: Option<String>,
     /// The user's note text.
@@ -72,11 +74,18 @@ pub enum Filter {
     Highlights,
     Notes,
     Bookmarks,
+    Stickers,
 }
 
 impl Filter {
     /// Filters in the order the chips show them.
-    pub const ALL: [Filter; 4] = [Filter::All, Filter::Highlights, Filter::Notes, Filter::Bookmarks];
+    pub const ALL: [Filter; 5] = [
+        Filter::All,
+        Filter::Highlights,
+        Filter::Notes,
+        Filter::Bookmarks,
+        Filter::Stickers,
+    ];
 
     /// The name used in action ids: `notes:filter:<name>`.
     pub fn name(self) -> &'static str {
@@ -85,6 +94,7 @@ impl Filter {
             Filter::Highlights => "highlights",
             Filter::Notes => "notes",
             Filter::Bookmarks => "bookmarks",
+            Filter::Stickers => "stickers",
         }
     }
 
@@ -99,6 +109,7 @@ impl Filter {
             Filter::Highlights => "Highlights",
             Filter::Notes => "Notes",
             Filter::Bookmarks => "Bookmarks",
+            Filter::Stickers => "Stickers",
         }
     }
 
@@ -106,8 +117,11 @@ impl Filter {
         match self {
             Filter::All => true,
             Filter::Highlights => note.highlight,
-            Filter::Notes => note.note.as_deref().is_some_and(|n| !n.trim().is_empty()),
+            Filter::Notes => {
+                note.sticker.is_none() && note.note.as_deref().is_some_and(|n| !n.trim().is_empty())
+            }
             Filter::Bookmarks => note.bookmark,
+            Filter::Stickers => note.sticker.is_some(),
         }
     }
 }
@@ -116,11 +130,19 @@ impl Note {
     /// The entry in the list: the quote for a highlight, the note for a note,
     /// and the chapter or page for a bookmark.
     pub fn primary(&self) -> String {
+        if self.sticker.is_some() {
+            if let Some(text) = self.note.as_deref().filter(|t| !t.trim().is_empty()) {
+                return text.into();
+            }
+        }
         if let Some(text) = self.text.as_deref().filter(|t| !t.trim().is_empty()) {
             return text.to_string();
         }
         if let Some(note) = self.note.as_deref().filter(|n| !n.trim().is_empty()) {
             return note.to_string();
+        }
+        if self.sticker.is_some() {
+            return "Sticker".into();
         }
         match &self.chapter {
             Some(chapter) if !chapter.is_empty() => format!("Bookmark in {chapter}"),
@@ -130,10 +152,16 @@ impl Note {
 
     /// The line under the entry: the kind, the page and the note text.
     pub fn secondary(&self) -> String {
-        let kind = match (self.highlight, self.bookmark) {
-            (true, _) => "Highlight",
-            (false, true) => "Bookmark",
-            (false, false) => "Note",
+        let kind = if self.sticker.is_some() {
+            "Sticker"
+        } else if self.note.as_deref() == Some("Shared to Notes") {
+            "Shared to Notes"
+        } else {
+            match (self.highlight, self.bookmark) {
+                (true, _) => "Highlight",
+                (false, true) => "Bookmark",
+                (false, false) => "Note",
+            }
         };
         let mut parts = vec![kind.to_string()];
         if let Some(page) = self.pageno {
@@ -163,16 +191,71 @@ pub fn books_dir(data_dir: &Path) -> PathBuf {
 /// annotations. `library` maps a partial MD5 to the library row of that book.
 /// Books come newest first. Each book's notes are in reading order.
 pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> {
-    let Ok(entries) = fs::read_dir(books_dir(data_dir)) else {
-        return Vec::new();
-    };
-    let mut books: Vec<BookNotes> = entries
+    let mut books: Vec<BookNotes> = fs::read_dir(books_dir(data_dir))
+        .into_iter()
+        .flatten()
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
         .filter_map(|path| read_book(&path, library))
         .filter(|book| !book.notes.is_empty())
         .collect();
+    if data_dir.join("kaia/kaia.sqlite3").exists() {
+        if let Ok(store) = kaia_storage::Store::open(&data_dir.join("kaia")) {
+            if let Ok(stickers) = store.list_all() {
+                for sticker in stickers {
+                    let md5 = &sticker.doc.partial_md5;
+                    let index = books.iter().position(|b| &b.md5 == md5).unwrap_or_else(|| {
+                        let row = library.get(md5);
+                        books.push(BookNotes {
+                            md5: md5.clone(),
+                            title: row
+                                .and_then(|b| b.title.clone())
+                                .or(sticker.doc.title.clone())
+                                .unwrap_or_else(|| md5.clone()),
+                            library_id: row.map(|b| b.id),
+                            latest: String::new(),
+                            notes: Vec::new(),
+                        });
+                        books.len() - 1
+                    });
+                    let (location, text, pageno) = match &sticker.anchor {
+                        kaia_storage::Anchor::Reflowable { locator, quote, .. } => (
+                            Location::Xpointer(locator.clone()),
+                            Some(quote.exact.clone()),
+                            None,
+                        ),
+                        kaia_storage::Anchor::Fixed { page, .. } => {
+                            (Location::Page(page.saturating_sub(1)), None, Some(*page))
+                        }
+                        kaia_storage::Anchor::Book {} => (Location::Page(0), None, None),
+                    };
+                    let datetime = super::export::timestamp(sticker.created_at);
+                    let book = &mut books[index];
+                    book.latest = book
+                        .latest
+                        .clone()
+                        .max(super::export::timestamp(sticker.updated_at));
+                    book.notes.push(Note {
+                        id: 0,
+                        sticker: sticker.id,
+                        text,
+                        note: sticker.text,
+                        chapter: None,
+                        pageno,
+                        location,
+                        datetime,
+                        orphaned: sticker.state != kaia_storage::StickerState::Attached,
+                        highlight: false,
+                        bookmark: false,
+                    });
+                }
+            }
+        }
+    }
+    for book in &mut books {
+        book.notes.sort_by(reading_order);
+    }
     books.sort_by(|a, b| b.latest.cmp(&a.latest).then_with(|| a.title.cmp(&b.title)));
     books
 }
@@ -221,6 +304,7 @@ fn parse_note(v: &Value) -> Option<Note> {
     let text_of = |key: &str| v.get(key).as_str().filter(|s| !s.is_empty()).map(str::to_string);
     let drawer = text_of("drawer");
     Some(Note {
+        sticker: None,
         id: v
             .get("kaia_id")
             .as_i64()
@@ -311,6 +395,7 @@ mod tests {
     #[test]
     fn filters_match_their_kind() {
         let highlight = Note {
+            sticker: None,
             id: 1,
             text: Some("quote".into()),
             note: None,

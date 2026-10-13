@@ -11,6 +11,8 @@ pub(super) struct Frame {
     pub hits: Vec<Rect>,
     pub selection: Option<Selection>,
     pub error: Option<String>,
+    pub stickers: Vec<super::stickers::Drawing>,
+    pub sticker_anchor: Option<kaia_storage::Anchor>,
 }
 pub(super) type Reply = mpsc::Receiver<Result<Frame, String>>;
 pub(super) fn spawn(
@@ -18,10 +20,10 @@ pub(super) fn spawn(
     task: impl FnOnce() -> Result<(BookSession, Option<Selection>, Option<String>), String> + Send + 'static,
 ) -> Reply {
     let (send, reply) = mpsc::sync_channel(1);
-    std::thread::spawn(move || {
+    submit(Box::new(move || {
         let result = task().map(|(mut session, selection, operation_error)| {
             let rendered = session.render_current(viewport);
-            let error = rendered
+            let mut error = rendered
                 .as_ref()
                 .err()
                 .map(|e| format!("Cannot draw this page. {e}"))
@@ -50,7 +52,17 @@ pub(super) fn spawn(
             // A suspend may arrive before the app receives this frame.
             // Keep any save error on the session for the normal retry path.
             let _ = session.save();
+            let (stickers, sticker_anchor) =
+                match super::stickers::frame(&mut session, selection.as_ref(), viewport) {
+                    Ok(frame) => frame,
+                    Err(e) => {
+                        error = Some(format!("Cannot load stickers. {e}"));
+                        (Vec::new(), None)
+                    }
+                };
             Frame {
+                stickers,
+                sticker_anchor,
                 session,
                 page: rendered.ok(),
                 marks,
@@ -60,8 +72,23 @@ pub(super) fn spawn(
             }
         });
         let _ = send.send(result);
-    });
+    }));
     reply
+}
+
+// The read-only sticker document stays on this thread between page draws.
+fn submit(task: Box<dyn FnOnce() + Send>) {
+    static WORKER: std::sync::OnceLock<mpsc::Sender<Box<dyn FnOnce() + Send>>> = std::sync::OnceLock::new();
+    let worker = WORKER.get_or_init(|| {
+        let (send, receive) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+        std::thread::spawn(move || {
+            while let Ok(task) = receive.recv() {
+                task();
+            }
+        });
+        send
+    });
+    let _ = worker.send(task);
 }
 
 #[cfg(test)]

@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Books to discover</title>
+  <link rel="next" href="/page2" type="application/atom+xml"/>
+  <link rel="search" href="/search?q={searchTerms}" type="application/atom+xml"/>
+  <entry>
+    <title>Romeo and Juliet</title>
+    <author><name>William Shakespeare</name></author>
+    <summary>Two young people fall in love in Verona while their families remain enemies.</summary>
+    <link rel="http://opds-spec.org/image" href="/cover" type="image/png"/>
+    <link rel="http://opds-spec.org/acquisition" href="/book.epub" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition" href="/book.pdf" type="application/pdf"/>
+  </entry>
+  <entry><title>More classics</title><link rel="subsection" href="/page2" type="application/atom+xml"/></entry>
+</feed>

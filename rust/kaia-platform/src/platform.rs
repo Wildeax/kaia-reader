@@ -169,4 +169,10 @@ impl Platform {
     pub fn run_plan(&mut self, plan: &Plan) -> Outcome {
         execute(plan, &mut self.io, &mut |d| std::thread::sleep(d))
     }
+
+    /// A copy of the device I/O for a worker thread. It writes under the same root
+    /// as this platform, so a worker on a fake device tree never touches the host.
+    pub fn io_handle(&self) -> SystemIo {
+        self.io.clone()
+    }
 }

@@ -10,6 +10,7 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -53,6 +54,7 @@ pub struct Client {
     file_agent: ureq::Agent,
     auth: Option<Auth>,
     max_download: u64,
+    cancel: Option<Arc<AtomicBool>>,
 }
 
 struct Auth {
@@ -112,6 +114,23 @@ impl Client {
             file_agent: agent(None, FILE_BLOCK_TIMEOUT, Some(FILE_BODY_TIMEOUT)),
             auth,
             max_download: DEFAULT_MAX_DOWNLOAD,
+            cancel: None,
+        }
+    }
+
+    /// Checks this flag before requests and between body reads.
+    pub fn with_cancellation(mut self, cancel: Arc<AtomicBool>) -> Self {
+        self.feed_agent = crate::cancel::agent(self.feed_agent.config().clone(), cancel.clone());
+        self.file_agent = crate::cancel::agent(self.file_agent.config().clone(), cancel.clone());
+        self.cancel = Some(cancel);
+        self
+    }
+
+    fn check_cancel(&self) -> Result<()> {
+        if self.cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+            Err(Error::Cancelled)
+        } else {
+            Ok(())
         }
     }
 
@@ -176,6 +195,10 @@ impl Client {
         mut progress: impl FnMut(u64, Option<u64>),
         cancel: &AtomicBool,
     ) -> Result<PathBuf> {
+        self.check_cancel()?;
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
+        }
         if acquisition.indirect {
             return Err(Error::Indirect);
         }
@@ -270,7 +293,24 @@ impl Client {
     fn get_at(&self, url: &Url, accept: &str, limit: u64) -> Result<(Url, Vec<u8>)> {
         let exchange = self.send(&self.feed_agent, "GET", url.clone(), accept, &[], String::new())?;
         check_status(exchange.status)?;
-        let body = read_limited(exchange.body, limit)?;
+        self.check_cancel()?;
+        let mut reader = exchange.body.into_with_config().reader();
+        let mut body = Vec::new();
+        let mut buffer = [0; CHUNK];
+        loop {
+            self.check_cancel()?;
+            let count = reader
+                .read(&mut buffer)
+                .map_err(|e| self.check_cancel().err().unwrap_or_else(|| body_error(&e)))?;
+            self.check_cancel()?;
+            if count == 0 {
+                break;
+            }
+            if body.len() as u64 + count as u64 > limit {
+                return Err(Error::TooLarge { limit });
+            }
+            body.extend_from_slice(&buffer[..count]);
+        }
         Ok((exchange.url, body))
     }
 
@@ -288,6 +328,7 @@ impl Client {
     ) -> Result<Exchange> {
         let mut url = start;
         for _ in 0..=MAX_REDIRECTS {
+            self.check_cancel()?;
             if url.scheme() == "https" && !cfg!(feature = "tls") {
                 return Err(Error::TlsUnavailable);
             }
@@ -310,7 +351,9 @@ impl Client {
             let request = builder
                 .body(payload.clone())
                 .map_err(|e| Error::Network(e.to_string()))?;
-            let response = agent.run(request).map_err(transport_error)?;
+            let response = agent
+                .run(request)
+                .map_err(|e| self.check_cancel().err().unwrap_or_else(|| transport_error(e)))?;
             let status = response.status().as_u16();
             if REDIRECT_CODES.contains(&status) {
                 if let Some(location) = response.headers().get("location").and_then(|v| v.to_str().ok()) {
@@ -355,8 +398,13 @@ impl Client {
                 Ok(0) => break,
                 Ok(count) => count,
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-                Err(err) => return Err(body_error(&err)),
+                Err(_) if cancel.load(Ordering::Relaxed) => return Err(Error::Cancelled),
+                Err(err) => return Err(self.check_cancel().err().unwrap_or_else(|| body_error(&err))),
             };
+            self.check_cancel()?;
+            if cancel.load(Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
             written += count as u64;
             if written > self.max_download {
                 return Err(Error::TooLarge {
@@ -365,6 +413,10 @@ impl Client {
             }
             file.write_all(&buffer[..count]).map_err(io_error)?;
             progress(written, total);
+        }
+        self.check_cancel()?;
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
         }
         file.sync_all().map_err(io_error)
     }

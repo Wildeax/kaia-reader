@@ -70,6 +70,10 @@ pub struct Core {
     pub refresh_every: u32,
     pub selecting: bool,
     pub selection: Option<Selection>,
+    pub sticker_anchor: Option<kaia_storage::Anchor>,
+    pub moving_sticker: Option<String>,
+    pub editing_sticker: Option<String>,
+    pub stickers: Vec<super::stickers::Drawing>,
     pub search_text: String,
     search_painted: Option<(u64, usize, bool)>,
     search_paint_at: std::time::Duration,
@@ -106,6 +110,10 @@ impl Core {
             refresh_every: REFRESH_EVERY,
             selecting: false,
             selection: None,
+            sticker_anchor: None,
+            moving_sticker: None,
+            editing_sticker: None,
+            stickers: Vec::new(),
             search_text: String::new(),
             search_painted: None,
             search_paint_at: std::time::Duration::ZERO,
@@ -150,6 +158,7 @@ impl Core {
     /// Clears the selection and repaints the page.
     pub fn clear_selection(&mut self, ctx: &mut Ctx) {
         self.selection = None;
+        self.sticker_anchor = None;
         self.selecting = false;
         self.repaint_page(ctx, PaintHint::Partial);
     }
@@ -204,6 +213,8 @@ impl Core {
         let info = frame.session.current();
         self.session = Some(frame.session);
         self.selection = frame.selection;
+        self.sticker_anchor = frame.sticker_anchor;
+        self.stickers = frame.stickers.clone();
         self.error = frame.error;
         let Some(window) = self.page_window.clone() else {
             return;
@@ -221,6 +232,7 @@ impl Core {
             }
             view.message = error;
             view.marks = frame.marks;
+            view.stickers = frame.stickers;
             view.hits = frame.hits;
             view.selection = selection;
             view.position = Some((info.page, info.page_count));
@@ -318,6 +330,7 @@ impl Core {
             };
         self.last_page_turn = crate::sync::now_unix();
         self.selection = None;
+        self.sticker_anchor = None;
         self.selecting = false;
         self.job = Some(super::work::spawn(self.viewport, move || {
             let error = session
@@ -345,6 +358,7 @@ impl Core {
         self.pending_hint = PaintHint::Full;
         self.pages_since_full = 0;
         self.selection = None;
+        self.sticker_anchor = None;
         self.selecting = false;
         self.job = Some(super::work::spawn(self.viewport, move || {
             let error = session
@@ -366,14 +380,32 @@ impl Core {
         self.pending_hint = PaintHint::Partial;
         let viewport = self.viewport;
         self.job = Some(super::work::spawn(viewport, move || {
-            let selection = session.select_word_at(point, viewport).ok().flatten();
+            let point = page_point(&mut session, point, viewport);
+            let mut selection = session.select_word_at(point, viewport).ok().flatten();
+            if selection.is_none() && !session.is_reflowable() {
+                let t = session.page_transform(viewport).map_err(|e| e.to_string())?;
+                let p = t.to_page(point);
+                let pos = kaia_book::Pos::Point {
+                    page: session.current().page,
+                    x: p.x,
+                    y: p.y,
+                };
+                selection = Some(Selection {
+                    page: session.current().page,
+                    text: String::new(),
+                    pos0: pos.clone(),
+                    pos1: pos,
+                    page_rects: vec![kaia_book::RectF::new(p.x, p.y, p.x + 1.0, p.y + 1.0)],
+                    screen_rects: Vec::new(),
+                });
+            }
             Ok((session, selection, None))
         }));
         let _ = ctx;
     }
 
     pub fn drag(&mut self, ctx: &mut Ctx, point: Point) {
-        if !self.selecting {
+        if !self.selecting || self.selection.as_ref().is_some_and(|s| s.text.is_empty()) {
             return;
         }
         let Some(mut session) = self.session.take() else {
@@ -382,6 +414,7 @@ impl Core {
         let viewport = self.viewport;
         self.pending_hint = PaintHint::Partial;
         self.job = Some(super::work::spawn(viewport, move || {
+            let point = page_point(&mut session, point, viewport);
             let selection = session.extend_selection(point, viewport).ok().flatten();
             Ok((session, selection, None))
         }));
@@ -574,6 +607,18 @@ fn search_paint_due(
     deadline: std::time::Duration,
 ) -> bool {
     next != previous && (previous.map(|p| p.0) != next.map(|p| p.0) || now >= deadline)
+}
+
+fn page_point(session: &mut BookSession, point: Point, viewport: Size) -> Point {
+    if !session.is_reflowable() {
+        if let Ok(t) = session.page_transform(viewport) {
+            return Point::new(
+                point.x - (viewport.w as i32 - t.image.w as i32) / 2,
+                point.y - (viewport.h as i32 - t.image.h as i32) / 2,
+            );
+        }
+    }
+    point
 }
 
 #[cfg(test)]

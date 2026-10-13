@@ -1,5 +1,6 @@
 mod common;
 use common::*;
+use kaia_app::{App, HeadlessBackend};
 use std::{
     fs,
     time::{Duration, Instant},
@@ -70,10 +71,49 @@ fn large_book_open_keeps_power_responsive() {
     let start = Instant::now();
     app.key(kaia_input::Key::Left).unwrap();
     eprintln!("Input dispatch during book open: {:?}", start.elapsed());
+    // Power usually comes before the sleep picture is ready. The screen then starts as the label on a blank page.
     let start = Instant::now();
     app.key(kaia_input::Key::Power).unwrap();
-    eprintln!("Power dispatch during book open: {:?}", start.elapsed());
+    let power = start.elapsed();
+    eprintln!("Power dispatch during book open: {power:?}");
+    assert!(power < Duration::from_millis(100), "{power:?}");
+    assert!(app.sleeping());
+    let blank = painted_share(&app);
+    // The worker finishes the picture, and the sleep screen then shows the cover.
+    wait_for(&mut app, "sleep picture", |a| a.sleep_picture_ready());
+    app.process(vec![]).unwrap();
+    let covered = painted_share(&app);
+    eprintln!("Sleep screen painted share: blank {blank:.3}, with cover {covered:.3}");
+    assert!(
+        covered > 0.2,
+        "the cover is not on the sleep screen: {covered:.3}"
+    );
+    app.key(kaia_input::Key::Power).unwrap();
+    assert!(!app.sleeping());
+    // With the picture ready, Power draws it from the cache.
+    let start = Instant::now();
+    app.key(kaia_input::Key::Power).unwrap();
+    let cached = start.elapsed();
+    eprintln!("Power dispatch with the cached sleep picture: {cached:?}");
+    assert!(cached < Duration::from_millis(100), "{cached:?}");
     assert!(app.sleeping());
     app.key(kaia_input::Key::Power).unwrap();
     wait_reader(&mut app);
+}
+
+/// The share of sampled pixels in the frame that differ from the surface colour.
+fn painted_share(app: &App<HeadlessBackend>) -> f64 {
+    let surface = app.services().theme.color(kaia_ui::Tone::Surface);
+    let frame = app.frame();
+    let mut total = 0usize;
+    let mut painted = 0usize;
+    for y in (0..frame.height() as i32).step_by(8) {
+        for x in (0..frame.width() as i32).step_by(8) {
+            total += 1;
+            if frame.get(x, y) != Some(surface) {
+                painted += 1;
+            }
+        }
+    }
+    painted as f64 / total as f64
 }

@@ -50,6 +50,16 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if self.name == "network" {
+            let surface = match cmd {
+                "settings:catalogs" => Some(crate::surfaces::catalogs::CatalogSurface::default()),
+                "settings:calibre" => Some(crate::surfaces::catalogs::CatalogSurface::calibre()),
+                _ => None,
+            };
+            if let Some(surface) = surface {
+                return Outcome::Navigate(Nav::Push(Box::new(surface)));
+            }
+        }
         match commands::parse(cmd) {
             Some(Command::FieldsOpen | Command::FieldsClose) => {
                 let typing = commands::parse(cmd) == Some(Command::FieldsOpen);

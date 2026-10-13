@@ -68,6 +68,47 @@ pub fn try_discover(timeout: Duration) -> io::Result<Vec<Server>> {
     discover_with_socket(&socket, timeout, &BROADCAST_PORTS, Ipv4Addr::BROADCAST)
 }
 
+/// Discovers servers until the deadline or a cancellation request.
+pub fn try_discover_cancelled(timeout: Duration, cancel: &AtomicBool) -> io::Result<Vec<Server>> {
+    if cancel.load(Ordering::Relaxed) {
+        return Ok(Vec::new());
+    }
+    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 8134))?;
+    socket.set_broadcast(true)?;
+    for port in BROADCAST_PORTS {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(Vec::new());
+        }
+        socket.send_to(b"hello", (Ipv4Addr::BROADCAST, port))?;
+    }
+    let deadline = Instant::now() + timeout;
+    let mut servers = Vec::new();
+    let mut buffer = [0; 1024];
+    while !cancel.load(Ordering::Relaxed) {
+        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+            break;
+        };
+        socket.set_read_timeout(Some(left.min(Duration::from_millis(100))))?;
+        match socket.recv_from(&mut buffer) {
+            Ok((len, sender)) => {
+                if let Some((name, opds_port, port)) = parse_discovery(&buffer[..len]) {
+                    let address = SocketAddr::new(sender.ip(), port);
+                    if !servers.iter().any(|s: &Server| s.address == address) {
+                        servers.push(Server {
+                            address,
+                            name,
+                            opds_port,
+                        });
+                    }
+                }
+            }
+            Err(e) if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(servers)
+}
+
 fn discover_with_socket(
     socket: &UdpSocket,
     timeout: Duration,
@@ -172,6 +213,7 @@ impl<S: Storage> Connection<S> {
     ) -> io::Result<Self> {
         let stream = TcpStream::connect_timeout(&server.address, Duration::from_secs(5))?;
         stream.set_read_timeout(Some(Duration::from_millis(250)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let writer = stream.try_clone()?;
         let root = library_root.into();
         fs::create_dir_all(&root)?;
@@ -189,6 +231,12 @@ impl<S: Storage> Connection<S> {
             cancelled: Arc::new(AtomicBool::new(false)),
             events: VecDeque::new(),
         })
+    }
+
+    /// Uses the worker's cancellation flag, including while a book is received.
+    pub fn with_cancellation(mut self, cancel: Arc<AtomicBool>) -> Self {
+        self.cancelled = cancel;
+        self
     }
 
     pub fn cancellation_handle(&self) -> Arc<AtomicBool> {

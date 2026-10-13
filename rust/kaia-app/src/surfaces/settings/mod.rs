@@ -128,6 +128,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("network", "Password"),
     ("network", "Test connection"),
     ("network", "OPDS catalogs"),
+    ("network", "Calibre wireless"),
     ("statistics", "Today"),
     ("statistics", "This week"),
     ("statistics", "Books"),
@@ -142,7 +143,6 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Gesture zones"),
     ("advanced", "Hardware keys"),
     ("advanced", "Auto suspend"),
-    ("advanced", "Calibre wireless"),
     ("advanced", "Backup and safe mode"),
     ("advanced", "Date and time"),
 ];
