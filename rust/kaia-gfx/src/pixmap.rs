@@ -167,7 +167,7 @@ impl Pixmap {
             match self.format {
                 PixelFormat::Gray8 => self.data[start..end].fill(c.luma()),
                 PixelFormat::Rgb24 => {
-                    for px in self.data[start..end].chunks_exact_mut(3) {
+                    for px in self.data[start..end].as_chunks_mut::<3>().0 {
                         px[0] = c.r;
                         px[1] = c.g;
                         px[2] = c.b;

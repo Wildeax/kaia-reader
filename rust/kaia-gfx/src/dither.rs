@@ -28,7 +28,7 @@ pub fn to_gray8(src: &Pixmap) -> Pixmap {
         return src.clone();
     }
     let mut out = Pixmap::new(src.width(), src.height(), PixelFormat::Gray8);
-    for (dst, px) in out.data_mut().iter_mut().zip(src.data().chunks_exact(3)) {
+    for (dst, px) in out.data_mut().iter_mut().zip(src.data().as_chunks::<3>().0) {
         *dst = Color::rgb(px[0], px[1], px[2]).luma();
     }
     out

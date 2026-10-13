@@ -133,13 +133,17 @@ pub fn decode_rgb(bytes: &[u8], limits: DecodeLimits) -> Result<Pixmap, ImageErr
     let (w, h) = (img.width(), img.height());
     let data = if img.color().has_alpha() {
         let mut data = img.to_rgba8().into_raw();
-        for p in data.chunks_exact_mut(4) {
+        for p in data.as_chunks_mut::<4>().0 {
             let a = p[3] as u32;
             for c in &mut p[..3] {
                 *c = mix(255, *c, a);
             }
         }
-        data.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect()
+        data.as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect()
     } else {
         img.to_rgb8().into_raw()
     };
@@ -191,7 +195,9 @@ pub fn scale_rgba(src: &AlphaPixmap, size: Size) -> AlphaPixmap {
     }
     let premultiplied: Vec<u8> = src
         .data()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| {
             let a = p[3] as u32;
             [mix(0, p[0], a), mix(0, p[1], a), mix(0, p[2], a), p[3]]
@@ -201,7 +207,7 @@ pub fn scale_rgba(src: &AlphaPixmap, size: Size) -> AlphaPixmap {
         .expect("RGBA buffer matches its size");
     let mut out =
         ::image::imageops::resize(&img, size.w, size.h, ::image::imageops::FilterType::Lanczos3).into_raw();
-    for p in out.chunks_exact_mut(4) {
+    for p in out.as_chunks_mut::<4>().0 {
         let a = p[3];
         for c in &mut p[..3] {
             *c = unpremultiply(*c, a);
@@ -319,7 +325,7 @@ pub fn render_svg(svg: &[u8], size: Size) -> Result<AlphaPixmap, SvgError> {
 
     // tiny-skia stores premultiplied alpha. Convert to straight alpha.
     let mut data = canvas.data().to_vec();
-    for p in data.chunks_exact_mut(4) {
+    for p in data.as_chunks_mut::<4>().0 {
         let a = p[3];
         for c in &mut p[..3] {
             *c = unpremultiply(*c, a);
