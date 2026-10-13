@@ -56,7 +56,13 @@ const DEPS: &[&str] = &[
 
 fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    let repo = manifest.join("../..");
+    // Canonical path, so the default data and font paths baked into the binary
+    // have no `..` parts. A binary run outside the build tree (for example the
+    // emulated Kobo test) cannot resolve `..` through directories it lacks.
+    let repo = manifest
+        .join("../..")
+        .canonicalize()
+        .unwrap_or_else(|_| manifest.join("../.."));
     for var in VARS {
         println!("cargo:rerun-if-env-changed={var}");
     }

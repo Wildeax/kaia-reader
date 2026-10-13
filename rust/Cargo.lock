@@ -972,8 +972,8 @@ name = "kaia-ffi"
 version = "0.1.0"
 dependencies = [
  "kaia-core",
+ "kaia-glibc-compat",
  "kaia-storage",
- "libc",
  "proptest",
  "regex",
  "serde",
@@ -989,6 +989,13 @@ dependencies = [
  "image",
  "resvg",
  "unicode-script",
+]
+
+[[package]]
+name = "kaia-glibc-compat"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

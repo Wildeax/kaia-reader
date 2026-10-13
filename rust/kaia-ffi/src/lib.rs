@@ -10,8 +10,9 @@
 mod args;
 mod buf;
 mod error;
-#[cfg(all(feature = "glibc215", target_os = "linux"))]
-mod glibc215;
+// Kobo build: links kaia-glibc-compat, which defines getauxval for glibc 2.15.
+#[cfg(feature = "glibc215")]
+extern crate kaia_glibc_compat;
 mod registry;
 
 use std::ffi::c_char;

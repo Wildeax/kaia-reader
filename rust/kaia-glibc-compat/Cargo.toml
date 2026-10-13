@@ -1,0 +1,20 @@
+[package]
+name = "kaia-glibc-compat"
+description = "Symbols that Rust std needs and glibc 2.15 lacks, for the Kobo firmware 4.x sysroot."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+# The Kobo build script passes the rlib (an ar archive of ELF objects) to the
+# link step, so the linker pulls in only the symbols a binary still needs
+# (tools/kaia/build-rust-kobo.sh).
+crate-type = ["rlib"]
+
+[features]
+# Provides the fallbacks. Without the feature the crate is empty.
+glibc215 = ["dep:libc"]
+
+[dependencies]
+libc = { version = "0.2", optional = true }

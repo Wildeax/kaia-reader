@@ -27,6 +27,7 @@ members = [
     "kaia-i18n",
     "kaia-calibre",
     "kaia-djvu-sys",
+    "kaia-glibc-compat",
 ]
 
 [workspace.package]

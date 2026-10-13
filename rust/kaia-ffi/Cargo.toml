@@ -14,14 +14,14 @@ crate-type = ["cdylib", "rlib"]
 # Enables kaia_debug_panic, a test-only export that panics on purpose.
 test-panic = []
 # Kobo build: provides symbols that Rust std needs but glibc 2.15 lacks.
-glibc215 = ["dep:libc"]
+glibc215 = ["dep:kaia-glibc-compat"]
 
 [dependencies]
 kaia-core = { path = "../kaia-core" }
 kaia-storage = { path = "../kaia-storage" }
 serde = "1"
 serde_json = "1"
-libc = { version = "0.2", optional = true }
+kaia-glibc-compat = { path = "../kaia-glibc-compat", optional = true, features = ["glibc215"] }
 
 [dev-dependencies]
 proptest = "1"
