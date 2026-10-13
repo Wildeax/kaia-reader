@@ -1,0 +1,13 @@
+[package]
+name = "kaia-dict"
+description = "Offline StarDict dictionary lookup."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+flate2 = "1.1"
+
+[dev-dependencies]
+serde_json = "1"

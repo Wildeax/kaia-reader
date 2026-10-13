@@ -613,6 +613,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-dict"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "serde_json",
+]
+
+[[package]]
 name = "kaia-display"
 version = "0.1.0"
 dependencies = [
