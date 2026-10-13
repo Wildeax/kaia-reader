@@ -3,6 +3,8 @@ local footer = { settings = { item_prefix = "text" }, content = {} }
 function footer:maybeUpdateFooter() require("ui/uimanager"):setDirty(nil, "ui") end
 function footer:addAdditionalFooterContent(callback)
     for _, existing in ipairs(self.content) do if existing == callback then return end end
+    self.owners = self.owners or {}
+    self.owners[callback] = KAIA_PLUGIN.owner
     table.insert(self.content, callback)
     KAIA_PLUGIN.view_modules.kaia_footer = self
 end
@@ -14,7 +16,12 @@ end
 function footer:paintTo(bb, x, y)
     local parts = {}
     for _, callback in ipairs(self.content) do
-        local text = callback()
+        local text
+        local owner = self.owners and self.owners[callback]
+        if owner then
+            local ok, result = KAIA_PLUGIN.guarded(owner, callback)
+            if ok then text = result end
+        else text = callback() end
         if text then parts[#parts + 1] = text end
     end
     if #parts == 0 then return end

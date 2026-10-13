@@ -14,11 +14,13 @@ name = "kaia"
 path = "src/main.rs"
 
 [features]
-default = ["desktop"]
+default = ["desktop", "lua"]
+lua = ["dep:kaia-lua"]
 desktop = ["kaia-display/desktop"]
 kobo = ["kaia-display/kobo"]
 
 [dependencies]
+kaia-lua = { path = "../kaia-lua", optional = true }
 kaia-book = { path = "../kaia-book" }
 kaia-dict = { path = "../kaia-dict" }
 kaia-stats = { path = "../kaia-stats" }

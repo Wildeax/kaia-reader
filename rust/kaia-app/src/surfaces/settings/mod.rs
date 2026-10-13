@@ -133,6 +133,8 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("statistics", "Books"),
     ("device", "Sleep after"),
     ("device", "Sleep screen"),
+    ("extensions", "KOReader plugins"),
+    ("extensions", "Safe mode"),
     ("data", "Import from KOReader"),
     ("data", "Export notes"),
     ("about", "License"),

@@ -14,6 +14,8 @@
 //! their windows and applies the [`Outcome`]s they return.
 
 mod network;
+#[cfg(feature = "lua")]
+mod plugins;
 mod power;
 
 use std::io;
@@ -119,7 +121,16 @@ pub struct App<B: Backend> {
 
 impl<B: Backend> App<B> {
     /// Builds the app on `backend`. Call [`App::start`] to show Home.
-    pub fn new(backend: B, services: Services, clock: Box<dyn Clock>, options: AppOptions) -> Self {
+    pub fn new(backend: B, services: Services, clock: Box<dyn Clock>, mut options: AppOptions) -> Self {
+        for root in &mut options.library_roots {
+            if let Ok(absolute) = std::path::absolute(&*root) {
+                *root = absolute;
+            }
+        }
+        #[cfg(feature = "lua")]
+        if let Some(root) = options.library_roots.first() {
+            services.plugins.library.borrow_mut().folder = root.clone();
+        }
         let screen = backend.size();
         let format = services.theme.pixel_format();
         let mut frame = Pixmap::new(screen.w, screen.h, format);
@@ -250,6 +261,8 @@ impl<B: Backend> App<B> {
         }
         self.broadcast_app(Event::new("SaveState"));
         self.hide_all();
+        #[cfg(feature = "lua")]
+        self.pump_plugins();
         if let Err(error) = self
             .services
             .sync
@@ -399,6 +412,13 @@ impl<B: Backend> App<B> {
         // later event sees the screen that the earlier one produced.
         for event in input {
             self.note_activity();
+            #[cfg(feature = "lua")]
+            if !self.reader_busy() {
+                if let Some(ui) = self.services.plugins.ui.clone() {
+                    ui.borrow_mut()
+                        .in_app(&mut self.stack, &mut self.ctx, |lua| lua.input_hook());
+                }
+            }
             match event {
                 InputEvent::Touch(t) => self.touch(t),
                 InputEvent::TouchFrame(frame) => self.touch_frame(frame),
@@ -481,14 +501,28 @@ impl<B: Backend> App<B> {
         let edge = self.services.theme.scale.dp(40) as i32;
         let quick = matches!(&gesture, Gesture::Swipe { pos, direction: Some(Direction::South), .. } if pos.y < edge)
             || matches!(&gesture, Gesture::Tap { pos, .. } if pos.y < edge && self.router.top_route().is_some_and(Route::is_top_level));
+        #[cfg(feature = "lua")]
+        let quick = quick && self.services.plugins.foreign_window_count() == 0;
         if quick {
             self.quick_settings();
             return;
         }
-        let Some(top) = self.input_window() else {
-            return;
-        };
-        let handled = top.dispatch(UiEvent::Gesture(gesture.clone()), &mut self.ctx) == Handled::Yes;
+        #[cfg(feature = "lua")]
+        if matches!(self.top_route(), Some(Route::Reader { .. })) && !self.reader_busy() {
+            if let Some(ui) = self.services.plugins.ui.clone() {
+                let used = ui.borrow_mut().in_app(&mut self.stack, &mut self.ctx, |lua| {
+                    if lua.foreign_window_count() == 0 {
+                        lua.reader_input(&gesture)
+                    } else {
+                        false
+                    }
+                });
+                if used {
+                    return;
+                }
+            }
+        }
+        let handled = self.dispatch_input(UiEvent::Gesture(gesture.clone()));
         if handled {
             return;
         }
@@ -533,9 +567,7 @@ impl<B: Backend> App<B> {
             _ if self.sleeping() => return,
             _ => {}
         }
-        let handled = self
-            .input_window()
-            .is_some_and(|top| top.dispatch(UiEvent::Key(ev), &mut self.ctx) == Handled::Yes);
+        let handled = self.dispatch_input(UiEvent::Key(ev));
         if !handled {
             match ev.key {
                 Key::LPgFwd | Key::RPgFwd => {
@@ -550,12 +582,43 @@ impl<B: Backend> App<B> {
         }
     }
 
+    fn dispatch_input(&mut self, event: UiEvent) -> bool {
+        let mut top_seen = false;
+        for id in self.stack.ids_top_down() {
+            let Some(opts) = self.stack.options(id) else {
+                continue;
+            };
+            if top_seen && !opts.always_active {
+                continue;
+            }
+            let used = self
+                .app_window(id)
+                .is_some_and(|w| w.dispatch(event.clone(), &mut self.ctx) == Handled::Yes);
+            if opts.toast && !top_seen {
+                continue;
+            }
+            top_seen = true;
+            if used {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn app_window(&self, id: kaia_events::WindowId) -> Option<Window> {
+        #[cfg(feature = "lua")]
+        if let Some(window) = self.plugin_window(id) {
+            return Some(window);
+        }
+        self.router.window(id)
+    }
+
     fn input_window(&self) -> Option<Window> {
         self.stack
             .ids_top_down()
             .into_iter()
             .find(|id| self.stack.options(*id).is_some_and(|o| !o.toast))
-            .and_then(|id| self.router.window(id))
+            .and_then(|id| self.app_window(id))
     }
 
     fn reconcile_windows(&mut self) {
@@ -575,7 +638,7 @@ impl<B: Backend> App<B> {
     pub fn send(&mut self, ev: Event) -> bool {
         if matches!(ev.name.as_str(), "PageForward" | "PageBack") {
             for id in self.stack.ids_top_down() {
-                if let Some(window) = self.router.window(id) {
+                if let Some(window) = self.app_window(id) {
                     if window.dispatch(UiEvent::Named(ev.clone()), &mut self.ctx) == Handled::Yes {
                         return true;
                     }
@@ -597,6 +660,17 @@ impl<B: Backend> App<B> {
     /// Delivers an app event to the windows and to every surface, bottom up. The
     /// outcomes are applied after all surfaces have seen the event.
     pub fn broadcast_app(&mut self, ev: Event) {
+        #[cfg(feature = "lua")]
+        if matches!(ev.name.as_str(), "Suspend" | "Resume" | "SaveState") {
+            self.services.plugins.event(
+                if ev.name == "SaveState" {
+                    "FlushSettings"
+                } else {
+                    &ev.name
+                },
+                ev.args.clone(),
+            );
+        }
         self.broadcast(ev.clone());
         let mut outcomes = Vec::new();
         for index in 0..self.router.depth() {
@@ -648,6 +722,17 @@ impl<B: Backend> App<B> {
 
     /// Routes an action id through surfaces from top to bottom, then global commands. An id nobody knows is recorded.
     pub fn command(&mut self, id: &str, args: &[Value]) {
+        #[cfg(not(feature = "lua"))]
+        if id == "reader:plugins" {
+            self.push(Box::new(
+                surfaces::settings::section::SettingsSectionSurface::new("plugin-menus".into()),
+            ));
+            return;
+        }
+        #[cfg(feature = "lua")]
+        if self.plugin_command(id, args) {
+            return;
+        }
         if self.reader_busy()
             && matches!(
                 Command::parse(id),
@@ -920,7 +1005,7 @@ impl<B: Backend> App<B> {
             Rect::from_size(self.screen),
             self.services.theme.color(Tone::Surface),
         );
-        let windows = Window::visible_stack(&self.stack, |id| self.router.window(id));
+        let windows = Window::visible_stack(&self.stack, |id| self.app_window(id));
         for window in &windows {
             window.invalidate();
         }
@@ -966,6 +1051,14 @@ impl<B: Backend> App<B> {
     /// Runs `on_show` on the top screen. A screen that went stale while it was
     /// covered is rebuilt now.
     fn reveal_top(&mut self) {
+        #[cfg(feature = "lua")]
+        {
+            self.services.plugins.active_book =
+                self.router.routes().iter().rev().find_map(|route| match route {
+                    Route::Reader { book } => Some(*book),
+                    _ => None,
+                });
+        }
         let Some(top) = self.router.depth().checked_sub(1) else {
             return;
         };
@@ -1039,6 +1132,8 @@ impl<B: Backend> App<B> {
     /// Paints the dirty windows bottom up into the frame and presents each refresh.
     /// Returns the number of refreshes presented.
     fn repaint(&mut self) -> Result<usize, DisplayError> {
+        #[cfg(feature = "lua")]
+        self.pump_plugins();
         let night = self.services.settings.is_true("display.night_mode");
         if self.presented_night != Some(night) {
             self.backend.set_night_mode(night);
@@ -1061,9 +1156,20 @@ impl<B: Backend> App<B> {
         let painted = if plan.is_empty() {
             false
         } else {
-            let windows = Window::visible_stack(&self.stack, |id| self.router.window(id));
+            let windows = Window::visible_stack(&self.stack, |id| self.app_window(id));
+            #[cfg(feature = "lua")]
+            if self.services.plugins.running() {
+                for window in &windows {
+                    window.invalidate();
+                }
+            }
             Window::paint_stack(&windows, &mut self.frame, &mut self.ctx.dirty)
         };
+        #[cfg(feature = "lua")]
+        if let Some(ui) = self.services.plugins.ui.clone() {
+            ui.borrow_mut()
+                .in_app(&mut self.stack, &mut self.ctx, |lua| lua.after_app_paint());
+        }
         let refreshes = self.ctx.dirty.take_frame(painted);
         let mut sent = 0;
         for refresh in refreshes {

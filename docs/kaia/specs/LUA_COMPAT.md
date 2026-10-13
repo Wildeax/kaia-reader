@@ -1,6 +1,6 @@
 # Lua plugin compatibility layer (R7)
 
-Status: proposed, version 1. Goal: KOReader plugins run in the Rust app. First target: the applicable bundled plugins and a named, tested list of community plugins (`docs/kaia/inventory/plugins.md`).
+Status: app integration implemented, version 1. L5 workflows remain partial. Goal: KOReader plugins run in the Rust app. First target: the applicable bundled plugins and a named, tested list of community plugins (`docs/kaia/inventory/plugins.md`).
 
 ## Approach
 
@@ -63,7 +63,7 @@ Plugins reach `self.ui` (a ReaderUI or FileManager). The proxies implement the f
 L4 status: implemented in `rust/kaia-lua`. The `tests/plugins.rs` checks load
 KOReader's PluginLoader, open exporter and statistics menus against a real EPUB
 and PDF, deliver reader events, and check safe mode and plugin failure status.
-The Rust app still needs to connect its reader and library objects to the traits.
+The Rust app now connects its reader session and library index to these traits.
 
 
 L5 part 1 status: partial. The bundled tests exercise file exports, annotation
@@ -74,8 +74,44 @@ and settings flush; LibraryHost accepts copy, move and folder navigation.
 Registered view modules and additional footer text can paint through
 `LuaUi::paint_reader_overlays`.
 
-The app still needs to connect these methods, overlays and lifecycle events.
-Power services, dictionary integration, coverbrowser's Rust library adapter and
-terminal process ownership are unresolved. Server and hardware operations are
+The app connects these methods, overlays and lifecycle events. Device callbacks
+use kaia-platform for battery, charging, frontlight, warmth and suspend requests.
+The app idle policy honors pause_auto_suspend and standby holds. Dictionary
+lookups and plugin buttons use the native dictionary panel. Selection context,
+coverbrowser's native library adapter and terminal process ownership remain
+incomplete. Server and hardware operations are
 excluded from desktop tests. See [the per-plugin status table](../inventory/PLUGIN_STATUS.md)
 for test names, untested baseline steps and changes needed outside kaia-lua.
+
+## App runtime
+
+The default `lua` Cargo feature enables plugin support. A no-Lua build uses
+`--no-default-features --features desktop` or `--features kobo`. The Kobo build
+script adds `lua` to its normal `kobo` app build and links the pinned target
+LuaJIT from the KOReader staging tree. Packages include its shared library and
+SONAME, the frontend, bundled plugins and the shims under `lua/`.
+
+Settings, Extensions enables the runtime lazily. One LuaUi stays on the app
+thread for the session. Bundled plugins load from the install tree; user plugins
+load from `<data>/plugins`. The per-plugin switches persist in settings.json.
+Bundled entries marked works or works with limits default to on. Other entries
+default to off. The global enable switch defaults to off.
+
+`--safe-mode` and the safe-mode setting both skip user plugins. A caught plugin
+error removes its menus and callbacks for the session and appears in Extensions.
+Callbacks from an older plugin load do not run after reload. Foreign dialogs
+share the native window stack and receive its ordered input. View modules and
+footer content paint between the reader page and dialogs.
+
+Reader events include ReaderReady, PageUpdate, CloseDocument, Suspend, Resume,
+FlushSettings, DocumentRerendered and annotation count changes. Charging changes
+reach plugins in reader and library contexts. Calls that need the session wait
+until the reader worker returns it. DocSettingsLoad currently runs after the
+session opens, so applying directory defaults before first layout remains open.
+Arbitrary per-book plugin values live in `<data>/plugin-books/<partial-md5>.json`.
+
+The app tests in `rust/kaia-app/tests/plugins.rs` exercise hello, exporter,
+statistics, perceptionexpander, systemstat, batterystat, vocabulary builder,
+readingstreak and Anki, plus failure and device fixtures. Those tests make no
+server requests. They do not establish physical Kobo behavior or full community
+plugin compatibility.

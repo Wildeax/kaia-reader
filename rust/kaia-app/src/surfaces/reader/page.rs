@@ -38,6 +38,8 @@ pub struct Mark {
 /// The reader's page. The reader sets the image, the marks and the message;
 /// the widget only paints them and reports input.
 pub struct PageView {
+    #[cfg(feature = "lua")]
+    pub plugins: Option<std::rc::Weak<std::cell::RefCell<kaia_lua::LuaUi>>>,
     /// The rendered page, or None when the page cannot be drawn.
     pub page: Option<Arc<Pixmap>>,
     /// Highlights on the page.
@@ -56,6 +58,8 @@ impl PageView {
     pub fn new() -> Self {
         Self {
             page: None,
+            #[cfg(feature = "lua")]
+            plugins: None,
             marks: Vec::new(),
             selection: Vec::new(),
             hits: Vec::new(),
@@ -149,6 +153,14 @@ impl Widget for PageView {
         for rect in &self.selection {
             cx.dim(*rect, 80);
             cx.border(*rect, 0, 2, ink);
+        }
+        #[cfg(feature = "lua")]
+        if let Some(ui) = self.plugins.as_ref().and_then(|ui| ui.upgrade()) {
+            cx.draw_region(bounds, |page, _| {
+                if let Err(e) = ui.borrow().paint_reader_overlays(page) {
+                    eprintln!("kaia: plugin overlay: {e}");
+                }
+            });
         }
     }
 

@@ -75,7 +75,12 @@ fn read_table(t: &mlua::Table, depth: usize, ancestors: &mut Vec<*const c_void>)
 fn read_key(key: &mlua::Value) -> Result<Key, Error> {
     match key {
         mlua::Value::Boolean(b) => Ok(Key::Bool(*b)),
-        mlua::Value::Integer(i) => Ok(Key::Int(*i)),
+        mlua::Value::Integer(i) => {
+            // LuaJIT uses 32-bit integers on the Kobo and 64-bit integers on desktop.
+            #[allow(clippy::useless_conversion)]
+            let integer = i64::from(*i);
+            Ok(Key::Int(integer))
+        }
         mlua::Value::Number(n) => {
             Key::num(*n).ok_or_else(|| Error::Convert("NaN is not a table key".to_owned()))
         }

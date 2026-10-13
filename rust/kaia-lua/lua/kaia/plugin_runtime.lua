@@ -2,6 +2,7 @@ local M = { menus = {}, menu_owners = {}, actions = {}, instances = {}, status =
 KAIA_PLUGIN = M
 
 local function failed(name, message)
+    name = name or "unknown"
     M.status[name] = { loaded = false, error = tostring(message) }
     require("logger").err("Plugin failed", name, tostring(message))
     M.instances[name] = nil
@@ -14,12 +15,19 @@ local function failed(name, message)
     end
 end
 
+M.failed = failed
+
 local function guarded(name, fn, ...)
-    if M.status[name] and not M.status[name].loaded then return false end
-    local ok, result = pcall(fn, ...)
-    if not ok then failed(name, result) end
-    return ok, result
+    if M.loading_name ~= name and (not M.status[name] or not M.status[name].loaded) then return false end
+    local previous = M.owner
+    M.owner = name
+    local results = table.pack(pcall(fn, ...))
+    M.owner = previous
+    if not results[1] then failed(name, results[2]) end
+    return unpack(results, 1, results.n)
 end
+
+M.guarded = guarded
 
 function M.wrap_menu(name, item)
     for _, field in ipairs({ "callback", "hold_callback", "enabled_func", "checked_func", "text_func" }) do
@@ -58,11 +66,14 @@ function M.wrap_menu(name, item)
 end
 
 function M.load(paths, names, safe_mode, force_hello, reader_mode)
+    M.generation = (M.generation or 0) + 1
     for name, instance in pairs(M.instances) do
         if instance.onCloseWidget then guarded(name, instance.onCloseWidget, instance) end
         if M.ui then M.ui[name] = nil end
     end
     M.touch_zones = {}
+    require("pluginshare").pause_auto_suspend = false
+    require("ui/uimanager")._standby_holds = 0
     local footer = package.loaded["kaia/reader_footer"]
     if footer then footer.content = {} end
     local dispatcher = package.loaded.dispatcher
@@ -72,7 +83,7 @@ function M.load(paths, names, safe_mode, force_hello, reader_mode)
     local Loader = require("pluginloader")
     local original_discover = Loader._discover
     local original_dofile = dofile
-    local wanted = {}
+    local wanted, discovered = {}, {}
     for _, name in ipairs(names) do wanted[name] = true end
     Loader._discover = function()
         local found = {}
@@ -81,7 +92,8 @@ function M.load(paths, names, safe_mode, force_hello, reader_mode)
             if path_index == 1 or not safe_mode then
                 for entry in lfs.dir(root) do
                     local name = entry:match("^(.*)%.koplugin$")
-                    if name and (#names == 0 or wanted[name]) then
+                    if name and not discovered[name] and (#names == 0 or wanted[name]) then
+                        discovered[name] = true
                         local path = root .. "/" .. entry
                         if lfs.attributes(path, "mode") == "directory" then
                             found[#found + 1] = {
@@ -115,7 +127,13 @@ function M.load(paths, names, safe_mode, force_hello, reader_mode)
     dofile = original_dofile
     Loader._discover = original_discover
     if not ok then error(modules, 0) end
+    for _, module in ipairs(Loader.disabled_plugins or {}) do
+        if module.name then M.status[module.name] = { loaded = false } end
+    end
     for name, message in pairs(Loader.load_errors or {}) do failed(name, message) end
+    for name in pairs(discovered) do
+        if not M.status[name] then M.status[name] = { loaded = false } end
+    end
     local ui = require(reader_mode and "apps/reader/readerui" or "apps/filemanager/filemanager")
     M.ui = ui
     M.reader_mode = reader_mode
@@ -130,8 +148,10 @@ function M.load(paths, names, safe_mode, force_hello, reader_mode)
                 attr.view = ui.view
             end
             M.loading_name = name
+            M.owner = name
             local instance_ok, instance = Loader:createPluginInstance(module, attr)
             M.loading_name = nil
+            M.owner = nil
             if instance_ok and instance then
                 M.instances[name] = instance
                 ui[name] = instance
@@ -139,6 +159,8 @@ function M.load(paths, names, safe_mode, force_hello, reader_mode)
             else
                 failed(name, instance or "plugin did not create an instance")
             end
+        else
+            M.status[module.name] = { loaded = false }
         end
     end
     for _, entry in ipairs(M.post_init) do guarded(entry.name, entry.callback) end
@@ -157,7 +179,9 @@ function M.dispatch(name, ...)
         local handler = instance[method]
         if handler then
             if type(handler) == "table" and handler.f then handler = handler.f end
-            if name == "ReaderReady" and select("#", ...) == 0 then
+            if name == "DocSettingsLoad" and select("#", ...) == 0 then
+                guarded(plugin_name, handler, instance, instance.ui.doc_settings, instance.ui.document)
+            elseif name == "ReaderReady" and select("#", ...) == 0 then
                 guarded(plugin_name, handler, instance, instance.ui.doc_settings)
             else
                 guarded(plugin_name, handler, instance, ...)

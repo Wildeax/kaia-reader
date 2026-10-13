@@ -31,8 +31,10 @@ fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let host = env::var("HOST").unwrap_or_default();
     let target = env::var("TARGET").unwrap_or_default();
-    if host != target {
-        panic!("kaia-lua links the LuaJIT of the build host only ({host}, target {target}).");
+    if host != target
+        && (env::var_os("KAIA_LUAJIT_LIB").is_none() || env::var_os("KAIA_LUAJIT_INCLUDE").is_none())
+    {
+        panic!("Cross builds need the target KOReader KAIA_LUAJIT_LIB and KAIA_LUAJIT_INCLUDE");
     }
 
     let lib_dir = locate_lib_dir(&manifest, &host);
@@ -49,8 +51,11 @@ fn main() {
     check_mlua_env(&lib_dir);
 
     // Test binaries load the dynamic library from the KOReader build.
-    if host.contains("apple-darwin") || host.contains("linux") {
+    if host == target {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
+    }
+    if target.contains("linux") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/libs");
     }
     println!("cargo:rustc-env=KAIA_LUAJIT_VERSION={version}");
 }

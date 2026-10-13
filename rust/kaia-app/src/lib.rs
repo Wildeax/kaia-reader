@@ -40,3 +40,6 @@ mod durable;
 mod sync_queue;
 
 mod book_index;
+
+#[cfg(feature = "lua")]
+pub mod plugins;

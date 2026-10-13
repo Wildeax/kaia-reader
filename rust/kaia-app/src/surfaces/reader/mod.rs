@@ -19,6 +19,8 @@ mod overlay;
 pub mod page;
 pub mod panels;
 mod persistence;
+#[cfg(feature = "lua")]
+mod plugins;
 mod state;
 mod work;
 
@@ -85,6 +87,14 @@ pub struct ReaderSurface {
     book: i64,
     location: Option<Value>,
     reported: bool,
+    #[cfg(feature = "lua")]
+    plugin_page: Option<u32>,
+    #[cfg(feature = "lua")]
+    plugin_attached: bool,
+    #[cfg(feature = "lua")]
+    plugin_layout: Option<TextLayout>,
+    #[cfg(feature = "lua")]
+    plugin_annotations: Option<(i64, i64)>,
     persistence: persistence::Persistence,
     remote: Option<kaia_book::Location>,
     core: Rc<RefCell<Core>>,
@@ -100,11 +110,99 @@ impl ReaderSurface {
             book,
             location,
             reported: false,
+            #[cfg(feature = "lua")]
+            plugin_page: None,
+            #[cfg(feature = "lua")]
+            plugin_attached: false,
+            #[cfg(feature = "lua")]
+            plugin_layout: None,
+            #[cfg(feature = "lua")]
+            plugin_annotations: None,
             persistence: persistence::Persistence::default(),
             remote: None,
             core: Rc::new(RefCell::new(Core::new(book))),
         }
     }
+    #[cfg(feature = "lua")]
+    fn plugin_tick(&mut self, env: &mut SurfaceEnv<'_>) {
+        if !env.services.settings.is_true(crate::plugins::ENABLED)
+            || env.services.plugins.active_book != Some(self.book)
+        {
+            return;
+        }
+        {
+            let core = self.core.borrow();
+            if core.session.is_none() || core.layout_pending || core.job.is_some() {
+                return;
+            }
+        }
+        if !self.plugin_attached || env.services.plugins.reader_book != Some(self.book) {
+            match plugins::Host::new(self.core.clone(), &env.services.paths.data_dir) {
+                Ok(host) => {
+                    env.services
+                        .plugins
+                        .requests
+                        .push(crate::plugins::Request::Reader(Rc::new(RefCell::new(host))));
+                    self.plugin_attached = true;
+                    env.services.plugins.reader_book = Some(self.book);
+                }
+                Err(e) => {
+                    env.notice(format!("Cannot connect reader plugins: {e}"));
+                    return;
+                }
+            }
+        }
+        let page = self.core.borrow().session.as_ref().map(|s| s.current().page + 1);
+        if page != self.plugin_page {
+            self.plugin_page = page;
+            env.services
+                .plugins
+                .event("PageUpdate", vec![Value::from(page.unwrap_or(1) as i64)]);
+        }
+        let mut core = self.core.borrow_mut();
+        let session = core.session.as_mut().unwrap();
+        let layout = session.layout().clone();
+        if self.plugin_layout.as_ref().is_some_and(|old| old != &layout) {
+            env.services.plugins.event("DocumentRerendered", vec![]);
+        }
+        self.plugin_layout = Some(layout);
+        if let Ok(items) = session.annotations() {
+            let counts = (
+                items.iter().filter(|a| a.drawer.is_some()).count() as i64,
+                items.iter().filter(|a| a.note.is_some()).count() as i64,
+            );
+            if let Some(old) = self.plugin_annotations.filter(|old| *old != counts) {
+                env.services.plugins.event(
+                    "AnnotationsModified",
+                    vec![Value::Table(
+                        [
+                            (
+                                kaia_events::Key::from("nb_highlights_added"),
+                                Value::from(counts.0 - old.0),
+                            ),
+                            (
+                                kaia_events::Key::from("nb_notes_added"),
+                                Value::from(counts.1 - old.1),
+                            ),
+                        ]
+                        .into(),
+                    )],
+                );
+            }
+            self.plugin_annotations = Some(counts);
+        }
+        drop(core);
+        if let (Some(ui), Some(window)) = (&env.services.plugins.ui, &self.core.borrow().page_window) {
+            let ui = Rc::downgrade(ui);
+            window.update::<PageView, _>(env.ctx, PAGE_KEY, move |view, cx| {
+                if view.plugins.is_none() {
+                    cx.request_paint();
+                }
+                view.plugins = Some(ui);
+            });
+        }
+    }
+
     fn receive_sync(&mut self, args: &[Value], env: &mut SurfaceEnv<'_>) {
         use kaia_sync::{Decision, LocalState, Policy, Progress, Strategy};
         if !env.services.settings.is_true("sync.enabled") || args.len() < 6 {
@@ -303,6 +401,8 @@ impl Surface for ReaderSurface {
             let _ = env.services.library.record_open(self.book, percent);
         }
         self.report_state(env);
+        #[cfg(feature = "lua")]
+        self.plugin_tick(env);
         if let Some(session) = self.core.borrow().session.as_ref() {
             env.services.sync.pull(
                 &env.services.settings,
@@ -319,6 +419,8 @@ impl Surface for ReaderSurface {
             if self.core.borrow().session.is_some() && !self.core.borrow().opened {
                 self.on_show(env);
             }
+            #[cfg(feature = "lua")]
+            self.plugin_tick(env);
             self.persistence.tick(&mut self.core.borrow_mut(), env);
             if self.core.borrow().job.is_none() {
                 let event = self.core.borrow_mut().events.pop_front();
@@ -401,6 +503,19 @@ impl Surface for ReaderSurface {
                 .push_back((cmd.to_string(), args.to_vec()));
             return Outcome::Handled;
         }
+        if cmd == "reader:dictionary-word" {
+            if let Some(word) = args.first().and_then(Value::as_str) {
+                let text = dict::lookup(word, env.services);
+                #[cfg(feature = "lua")]
+                env.services
+                    .plugins
+                    .requests
+                    .push(crate::plugins::Request::Dictionary(word.into(), text.clone()));
+                let window = panels::dictionary(env.services, env.screen, word, &text);
+                return show_panel(&self.core, &mut self.core.borrow_mut(), env.ctx, window, true);
+            }
+            return Outcome::Handled;
+        }
         if cmd == "reader:sync:accept" {
             if let Some(location) = self.remote.take() {
                 self.core.borrow_mut().go_to(env.ctx, location);
@@ -433,6 +548,20 @@ impl Surface for ReaderSurface {
     }
 
     fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
+        #[cfg(feature = "lua")]
+        if self.plugin_attached {
+            env.services.plugins.event("CloseDocument", vec![]);
+            env.services.plugins.event("FlushSettings", vec![]);
+            env.services
+                .plugins
+                .requests
+                .push(crate::plugins::Request::Library({
+                    let core = self.core.clone();
+                    Box::new(move || {
+                        core.borrow_mut().session = None;
+                    })
+                }));
+        }
         self.persistence.event("Close", env);
         let mut c = self.core.borrow_mut();
         if let Some(session) = c.session.as_ref() {
@@ -446,7 +575,15 @@ impl Surface for ReaderSurface {
         c.closed = true;
         c.overlay = None;
         c.panel = None;
-        c.session = None;
+        #[cfg(feature = "lua")]
+        if !self.plugin_attached {
+            c.session = None;
+        }
+        // The plugin host keeps the session until CloseDocument has returned.
+        #[cfg(not(feature = "lua"))]
+        {
+            c.session = None;
+        }
     }
 
     /// A picture is dithered on a full refresh only (see `kaia_display`).
@@ -462,7 +599,7 @@ pub(super) fn command(
     args: &[Value],
     env: &mut SurfaceEnv<'_>,
 ) -> Outcome {
-    if cmd == "reader:slider:release" {
+    if cmd == "reader:slider:release" || (cfg!(feature = "lua") && cmd == "reader:plugin-refresh") {
         rc.borrow_mut().repaint_page(env.ctx, PaintHint::Ui);
         schedule_if_pending(rc, env.ctx);
         return Outcome::Handled;
@@ -720,6 +857,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 };
                 let word = kaia_dict::clean_selection(&selection.text);
                 let text = dict::lookup(&word, env.services);
+                #[cfg(feature = "lua")]
+                env.services
+                    .plugins
+                    .requests
+                    .push(crate::plugins::Request::Dictionary(word.clone(), text.clone()));
                 c.clear_selection(env.ctx);
                 let window = panels::dictionary(env.services, env.screen, &word, &text);
                 show_panel(rc, &mut c, env.ctx, window, true)

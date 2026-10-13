@@ -71,7 +71,12 @@ fn bundled_inventory_load_outcomes() {
         ]
         .contains(&name)
         {
-            assert!(status.is_empty(), "{name}: {status:?}");
+            assert_eq!(status.len(), 1, "{name}: {status:?}");
+            assert_eq!(status[0].name, name);
+            assert!(
+                !status[0].loaded && status[0].error.is_none(),
+                "{name}: {status:?}"
+            );
         } else if ["batterystat", "systemstat", "coverbrowser"].contains(&name) {
             assert_eq!(status.len(), 1);
             assert!(!status[0].loaded, "{name}");

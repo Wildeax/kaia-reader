@@ -26,6 +26,26 @@ local UIManager = {
     _input_gestures_disabled = false,
 }
 
+-- Hook owners keep errors and old instances out of the next plugin load.
+local hook = UIManager.event_hook
+local register, unregister = hook.register, hook.unregister
+local owned_hooks = setmetatable({}, { __mode = "k" })
+function hook:register(name, callback)
+    local owner = KAIA_PLUGIN and (KAIA_PLUGIN.owner or KAIA_PLUGIN.loading_name)
+    if not owner then return register(self, name, callback) end
+    local generation = KAIA_PLUGIN.generation
+    local wrapper = function(...)
+        if generation == KAIA_PLUGIN.generation then
+            return KAIA_PLUGIN.guarded(owner, callback, ...)
+        end
+    end
+    owned_hooks[callback] = wrapper
+    return register(self, name, wrapper)
+end
+function hook:unregister(name, callback)
+    return unregister(self, name, owned_hooks[callback] or callback)
+end
+
 -- Scheduled calls with arguments are wrapped so the task can run with them.
 -- Each action keeps its wrappers, so unschedule can find them.
 local wrappers = setmetatable({}, { __mode = "k" })
@@ -39,6 +59,13 @@ local function refresh_spec(refreshtype, region, dither)
         return nil
     end
     if type(refreshtype) == "function" then
+        local owner = KAIA_PLUGIN and KAIA_PLUGIN.owner
+        if owner then
+            return { deferred = function(...)
+                local ok, mode, region, dither = KAIA_PLUGIN.guarded(owner, refreshtype, ...)
+                if ok then return mode, region, dither end
+            end }
+        end
         return { deferred = refreshtype }
     end
     local spec = { mode = refreshtype, dither = dither and true or false }
@@ -87,6 +114,23 @@ function UIManager:show(widget, refreshtype, refreshregion, x, y, refreshdither)
         logger.dbg("widget show disabled:", widget.id or widget.name or tostring(widget))
         return
     end
+    local owner = KAIA_PLUGIN and KAIA_PLUGIN.owner
+    if owner and not rawget(widget, "_kaia_guarded") then
+        widget._kaia_guarded = true
+        for _, method in ipairs({"handleEvent", "paintTo"}) do
+            local fn = widget[method]
+            if fn then
+                widget[method] = function(...)
+                    local ok, result = KAIA_PLUGIN.guarded(owner, fn, ...)
+                    if not ok and not rawget(widget, "_kaia_closing_failed") then
+                        widget._kaia_closing_failed = true
+                        UIManager:close(widget)
+                    end
+                    return ok and result or false
+                end
+            end
+        end
+    end
     KAIA_UI.show(widget, x or 0, y or 0, window_flags(widget),
         refresh_spec(refreshtype, refreshregion, refreshdither))
 end
@@ -115,13 +159,26 @@ function UIManager:scheduleIn(seconds, action, ...)
         logger.dbg("scheduleIn without an action")
         return
     end
-    if select("#", ...) == 0 then
+    local owner = KAIA_PLUGIN and KAIA_PLUGIN.owner
+    if not owner and select("#", ...) == 0 then
         KAIA_UI.schedule(seconds, action)
         return
     end
+    local generation = KAIA_PLUGIN and KAIA_PLUGIN.generation
     local args = table.pack(...)
-    local wrapper = function()
-        return action(unpack(args, 1, args.n))
+    local wrapper
+    wrapper = function()
+        if generation and generation ~= KAIA_PLUGIN.generation then return end
+        if KAIA_DEVICE and KAIA_DEVICE("reader_busy") then
+            KAIA_UI.schedule(0.02, wrapper)
+            return
+        end
+        if owner then
+            local ok, result = KAIA_PLUGIN.guarded(owner, action, unpack(args, 1, args.n))
+            if ok then return result end
+        else
+            return action(unpack(args, 1, args.n))
+        end
     end
     wrappers[action] = wrappers[action] or {}
     table.insert(wrappers[action], wrapper)
@@ -230,6 +287,10 @@ end
 
 -- The Kaia app owns the main loop, so a plugin cannot quit it. The call is
 -- logged and returns the exit code it was given.
+function UIManager:suspend()
+    if KAIA_DEVICE then KAIA_DEVICE("suspend", true) end
+end
+
 function UIManager:quit(exit_code)
     logger.info("UIManager:quit ignored by the Kaia Lua host", exit_code)
     return exit_code

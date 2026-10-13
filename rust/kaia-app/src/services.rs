@@ -23,6 +23,8 @@ pub const RESOURCES_ENV: &str = "KAIA_RESOURCES";
 pub struct Services {
     _lease: fs::File,
     pub startup_notices: Vec<String>,
+    #[cfg(feature = "lua")]
+    pub plugins: crate::plugins::Plugins,
     pub platform: Platform,
     pub sync: crate::sync::ProgressSync,
     pub clipboard: Option<String>,
@@ -73,6 +75,11 @@ impl Services {
             path: data_dir.clone(),
             source,
         })?;
+        let data_dir = std::path::absolute(&data_dir).map_err(|source| ServicesError::Io {
+            path: data_dir.clone(),
+            source,
+        })?;
+        platform.paths.data_dir = data_dir.clone();
 
         let lease_path = data_dir.join("kaia.lock");
         let lease = crate::durable::lock(&lease_path, false).map_err(|source| ServicesError::Io {
@@ -134,6 +141,8 @@ impl Services {
         let paths = platform.paths.clone();
         let mut services = Services {
             _lease: lease,
+            #[cfg(feature = "lua")]
+            plugins: crate::plugins::Plugins::new(&paths),
             startup_notices,
             platform,
             clipboard: None,

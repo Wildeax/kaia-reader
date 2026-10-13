@@ -17,6 +17,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 #[derive(Default)]
 struct Options {
     headless: bool,
+    safe_mode: bool,
     screenshot: Option<PathBuf>,
     data: Option<PathBuf>,
     books: Vec<PathBuf>,
@@ -36,6 +37,7 @@ fn start() -> Result<()> {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--safe-mode" => options.safe_mode = true,
             "--headless" => options.headless = true,
             "--screenshot" | "--data-dir" | "--books" | "--open" | "--script" => {
                 let value = PathBuf::from(args.next().ok_or_else(|| format!("{arg} needs a path"))?);
@@ -48,7 +50,7 @@ fn start() -> Result<()> {
                 }
             }
             "--help" | "-h" => {
-                println!("Usage: kaia [--headless] [--screenshot PNG] [--data-dir DIR] [--books DIR] [--open BOOK] [--script FILE]");
+                println!("Usage: kaia [--headless] [--safe-mode] [--screenshot PNG] [--data-dir DIR] [--books DIR] [--open BOOK] [--script FILE]");
                 return Ok(());
             }
             _ => return Err(format!("unknown option: {arg}").into()),
@@ -92,6 +94,12 @@ fn prepare<B: Backend>(backend: B, platform: Platform, options: &Options) -> Res
         format: backend.format(),
     };
     let services = Services::open(platform, panel, options.data.clone())?;
+    #[cfg(feature = "lua")]
+    let services = {
+        let mut services = services;
+        services.plugins.startup_safe_mode = options.safe_mode;
+        services
+    };
     let mut roots = options.books.clone();
     if roots.is_empty() && !options.headless {
         roots.push(services.paths.books_dir.clone());

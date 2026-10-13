@@ -13,7 +13,8 @@
 # Kaia has no update channel yet, so the package has no OTA index and no
 # update marker. The zip is deterministic: entries are sorted and every file
 # gets the commit time as its mtime. The git hash in the name is HEAD. The
-# Lua files come from the upstream zip. Rust resources come from this checkout.
+# Engine libraries come from the upstream zip. Frontend, plugins and shims
+# come from this checkout.
 set -euo pipefail
 
 usage() {
@@ -129,6 +130,11 @@ chmod 644 "${WORK}/stage/.adds/nm/kaia"
 # RuntimeOptions finds CREngine data/ and fonts/ beside kaia. Keep the upstream
 # copies unchanged. UI assets have their own resources/ folder.
 cp "${RUST_BIN}" "${APP}/kaia"
+cp -R "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
+cp -R "${ROOT}/frontend/." "${APP}/frontend/"
+cp -R "${ROOT}/plugins/." "${APP}/plugins/"
+cp "${ROOT}/dist/rust/${TARGET}/libluajit.so" "${APP}/libs/"
+cp "${ROOT}/dist/rust/${TARGET}/libluajit-5.1.so.2" "${APP}/libs/"
 cp "${ROOT}/platform/kobo/kaia/kaia-rust.sh" "${APP}/kaia-rust.sh"
 chmod 755 "${APP}/kaia" "${APP}/kaia-rust.sh"
 cat "${ROOT}/platform/kobo/kaia/nickelmenu-kaia-rust" >>"${WORK}/stage/.adds/nm/kaia"

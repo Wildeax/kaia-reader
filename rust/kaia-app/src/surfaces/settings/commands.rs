@@ -21,13 +21,14 @@ use kaia_events::Value;
 use super::keys;
 
 /// The sections, in the order the root lists them.
-pub const SECTIONS: [&str; 9] = [
+pub const SECTIONS: [&str; 10] = [
     "reading",
     "display",
     "library",
     "network",
     "statistics",
     "device",
+    "extensions",
     "data",
     "about",
     "advanced",

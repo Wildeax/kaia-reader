@@ -357,6 +357,12 @@ pub fn more(services: &Services, screen: Size) -> Window {
                 "reader:finish",
                 "more-finish",
             ),
+            button(
+                ButtonStyle::Secondary,
+                "Plugins",
+                "reader:plugins",
+                "more-plugins",
+            ),
         ])
         .gap(services.theme.space.sm)
         .cross_align(CrossAlign::Stretch),
@@ -444,13 +450,17 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
             services,
             screen,
             Some("Dictionary"),
-            vec![
-                heading,
-                WidgetPod::new(
-                    Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
-                )
-                .with_key("dict-body"),
-            ],
+            dictionary_plugins(
+                services,
+                vec![
+                    heading,
+                    WidgetPod::new(
+                        Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink)
+                            .max_lines(usize::MAX),
+                    )
+                    .with_key("dict-body"),
+                ],
+            ),
             None,
         );
     }
@@ -464,10 +474,13 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
         services,
         screen,
         Some("Dictionary"),
-        vec![
-            heading,
-            WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("dict-pages"), 1)),
-        ],
+        dictionary_plugins(
+            services,
+            vec![
+                heading,
+                WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("dict-pages"), 1)),
+            ],
+        ),
         Some(TALL_PERCENT),
     )
 }
@@ -674,4 +687,20 @@ pub fn search_rows(results: &[kaia_book::SearchResult]) -> Vec<SearchRow> {
 /// Opens a panel as a surface, with the serial the reader uses to find it.
 pub fn panel_surface(window: Window, serial: u64, core: Rc<RefCell<Core>>) -> Box<dyn Surface> {
     Box::new(Panel::new(window, serial, core))
+}
+
+fn dictionary_plugins(services: &Services, children: Vec<WidgetPod>) -> Vec<WidgetPod> {
+    #[cfg(feature = "lua")]
+    if services.plugins.running() {
+        let mut children = children;
+        children.push(button(
+            ButtonStyle::Secondary,
+            "Plugin actions",
+            "plugins:dictionary",
+            "dictionary-plugins",
+        ));
+        return children;
+    }
+    let _ = services;
+    children
 }

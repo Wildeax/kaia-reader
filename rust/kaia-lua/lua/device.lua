@@ -301,4 +301,6 @@ require("fontlist").fontdir = KAIA_PATHS.koreader .. "/fonts"
 -- screen through it.
 require("document/canvascontext"):init(Device)
 
+require("kaia/device_services")(Device)
+
 return Device

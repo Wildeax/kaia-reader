@@ -21,9 +21,12 @@ pub fn title(name: &str) -> &'static str {
         "network" => "Network and sync",
         "statistics" => "Statistics",
         "device" => "Device",
+        "extensions" => "Extensions",
+        "plugin-menus" => "Plugins",
         "data" => "Data",
         "about" => "About",
         "advanced" => "Advanced",
+        _ if name.starts_with("plugin:") => "Plugin",
         _ => "Settings",
     }
 }
@@ -42,9 +45,12 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "network" => network(services),
         "statistics" => statistics(services, now),
         "device" => device(services),
+        "extensions" => extensions(services),
+        "plugin-menus" => reader_menus(services),
         "data" => data(services),
         "about" => about(),
         "advanced" => advanced(),
+        _ if name.starts_with("plugin:") => plugin_entries(&name[7..], services),
         _ => Vec::new(),
     }
 }
@@ -443,10 +449,7 @@ fn advanced() -> Vec<Entry> {
             "Calibre wireless",
             "Calibre over the network. Not built in Kaia yet.",
         ),
-        (
-            "Backup and safe mode",
-            "Copy the data folder and start without extensions. Not built in Kaia yet.",
-        ),
+        ("Backup", "Copy the data folder to keep a backup."),
         (
             "Date and time",
             "Kaia uses the clock of the device. Set it in the device settings.",
@@ -471,6 +474,119 @@ fn labels(key: &str) -> Vec<String> {
     options_for(key)
         .map(|opts| opts.iter().map(|(_, label)| (*label).to_string()).collect())
         .unwrap_or_default()
+}
+
+fn extensions(services: &Services) -> Vec<Entry> {
+    #[cfg(not(feature = "lua"))]
+    {
+        let _ = services;
+        vec![
+            Entry::Row {
+                primary: "Native statistics".into(),
+                secondary: None,
+                value: None,
+                action: Some("settings:statistics".into()),
+            },
+            Entry::Text("This build has no Lua plugin support.".into()),
+        ]
+    }
+    #[cfg(feature = "lua")]
+    {
+        let p = &services.plugins;
+        let mut entries = vec![
+            Entry::Row {
+                primary: "Native statistics".into(),
+                secondary: None,
+                value: None,
+                action: Some("settings:statistics".into()),
+            },
+            Entry::Toggle {
+                key: crate::plugins::ENABLED,
+                label: "Enable KOReader plugins".into(),
+                on: services.settings.is_true(crate::plugins::ENABLED),
+            },
+            Entry::Toggle {
+                key: crate::plugins::SAFE_MODE,
+                label: "Safe mode, bundled plugins only".into(),
+                on: p.startup_safe_mode || services.settings.is_true(crate::plugins::SAFE_MODE),
+            },
+        ];
+        if let Some(error) = p.error() {
+            entries.push(Entry::Text(format!("Plugin runtime failed: {error}")));
+        }
+        for plugin in &p.entries {
+            entries.push(Entry::Row {
+                primary: plugin.name.clone(),
+                secondary: Some(plugin.state.clone()),
+                value: None,
+                action: Some(format!("plugins:detail:{}", plugin.name)),
+            });
+        }
+        entries
+    }
+}
+
+fn plugin_entries(name: &str, services: &Services) -> Vec<Entry> {
+    #[cfg(not(feature = "lua"))]
+    {
+        let _ = (name, services);
+        vec![]
+    }
+    #[cfg(feature = "lua")]
+    {
+        let p = &services.plugins;
+        let Some(plugin) = p.entries.iter().find(|p| p.name == name) else {
+            return vec![];
+        };
+        let mut entries = vec![
+            Entry::PluginToggle {
+                key: format!("plugins.on.{name}"),
+                label: name.into(),
+                on: plugin.enabled,
+            },
+            Entry::Text(plugin.state.clone()),
+        ];
+        for menu in p
+            .menus
+            .iter()
+            .filter(|m| p.owners.get(&m.id).is_some_and(|o| o == name))
+        {
+            entries.push(Entry::Row {
+                primary: menu.text.clone(),
+                secondary: None,
+                value: None,
+                action: Some(format!("plugins:menu:{}", menu.id)),
+            });
+        }
+        entries
+    }
+}
+
+fn reader_menus(services: &Services) -> Vec<Entry> {
+    #[cfg(not(feature = "lua"))]
+    {
+        let _ = services;
+        vec![Entry::Text("This build has no Lua plugin support.".into())]
+    }
+    #[cfg(feature = "lua")]
+    {
+        if !services.plugins.running() {
+            return vec![Entry::Text(
+                "Enable KOReader plugins in Settings, Extensions.".into(),
+            )];
+        }
+        services
+            .plugins
+            .menus
+            .iter()
+            .map(|m| Entry::Row {
+                primary: m.text.clone(),
+                secondary: None,
+                value: None,
+                action: Some(format!("plugins:menu:{}", m.id)),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

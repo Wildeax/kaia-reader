@@ -131,6 +131,61 @@ impl LuaUi {
         })
     }
 
+    /// Runs a main-loop operation with the app's stack and scheduler.
+    /// The app keeps both between calls. No Lua callback may reenter this method.
+    pub fn in_app<T>(&mut self, stack: &mut WindowStack, ctx: &mut Ctx, f: impl FnOnce(&mut Self) -> T) -> T {
+        std::mem::swap(&mut self.stack, stack);
+        std::mem::swap(&mut self.ctx, ctx);
+        let result = f(self);
+        self.drain();
+        if self.plugin_runtime_loaded {
+            if let Err(error) = plugins::collect(self) {
+                self.bridge.record_error(error.to_string());
+            }
+        }
+        if self.bridge.take_repaint() {
+            self.stack.set_dirty_all(None, &mut self.ctx);
+        }
+        std::mem::swap(&mut self.ctx, ctx);
+        std::mem::swap(&mut self.stack, stack);
+        result
+    }
+
+    /// A foreign window on the app's shared stack.
+    pub fn window(&self, id: WindowId) -> Option<Window> {
+        self.shown.iter().find(|s| s.id == id).map(|s| s.window.clone())
+    }
+
+    /// Completes refresh callbacks after the app paints its windows.
+    pub fn after_app_paint(&mut self) {
+        self.drain();
+        self.run_after_paint();
+    }
+
+    /// Saves plugin preferences and arbitrary per-book values in host storage.
+    pub fn flush_plugin_settings(&mut self) -> Result<(), Error> {
+        self.exec("plugin-flush", "local u = KAIA_PLUGIN and KAIA_PLUGIN.ui; if u and KAIA_READER then u.doc_settings:flush() end; require('ui/uimanager'):flushSettings()")
+    }
+
+    /// Stops the current reader without creating another runtime.
+    pub fn clear_reader_host(&mut self) -> Result<(), Error> {
+        self.reader_connected = false;
+        self.exec("detach-reader", "package.loaded['apps/reader/readerui'] = nil")?;
+        self.lua
+            .globals()
+            .set("KAIA_READER", LuaValue::Nil)
+            .map_err(lua_error)
+    }
+
+    /// Closes plugin windows before switching reader or library instances.
+    pub fn close_plugin_windows(&mut self) {
+        for id in self.shown.iter().map(|s| s.id).collect::<Vec<_>>() {
+            self.stack.close(id, None, &mut self.ctx);
+        }
+        self.shown.clear();
+        self.drain();
+    }
+
     /// The Lua host. Tests run Lua snippets through it.
     pub fn host(&self) -> &LuaHost {
         &self.host
@@ -144,6 +199,10 @@ impl LuaUi {
     /// The frame that [`LuaUi::frame`] paints.
     pub fn screen(&self) -> &Pixmap {
         &self.screen
+    }
+
+    pub fn foreign_window_count(&self) -> usize {
+        self.shown.len()
     }
 
     /// The number of windows on the stack.
@@ -226,6 +285,42 @@ impl LuaUi {
         &self.menu_registry
     }
 
+    pub fn menu_owner(&self, id: &str) -> Option<String> {
+        self.lua
+            .globals()
+            .get::<Table>("KAIA_PLUGIN")
+            .ok()?
+            .get::<Table>("menu_owners")
+            .ok()?
+            .get(id)
+            .ok()
+    }
+
+    pub fn reader_input(&mut self, gesture: &Gesture) -> bool {
+        let used = input::gesture_event(&self.lua, gesture)
+            .and_then(|event| plugins::call(&self.lua, "input", event))
+            .is_ok_and(|v| v == LuaValue::Boolean(true));
+        self.drain();
+        used
+    }
+
+    /// Flat plugin entries, with the ids used by open_plugin_menu.
+    pub fn menu_entries(&self) -> Vec<kaia_events::MenuItem> {
+        let Ok(runtime) = self.lua.globals().get::<Table>("KAIA_PLUGIN") else {
+            return vec![];
+        };
+        let Ok(menus) = runtime.get::<Table>("menus") else {
+            return vec![];
+        };
+        let mut entries: Vec<_> = menus
+            .pairs::<String, Table>()
+            .flatten()
+            .filter_map(|(id, _)| self.menu_registry.get(&id).cloned())
+            .collect();
+        entries.sort_by(|a, b| a.id.cmp(&b.id));
+        entries
+    }
+
     /// Dispatcher actions registered by Lua plugins.
     pub fn action_registry(&self) -> &ActionRegistry {
         &self.action_registry
@@ -236,6 +331,26 @@ impl LuaUi {
         plugins::call(&self.lua, "open_menu", id.to_owned()).map_err(lua_error)?;
         self.drain();
         plugins::collect(self)
+    }
+
+    /// Supplies a native dictionary result to plugin popup hooks.
+    pub fn dictionary_lookup(&mut self, word: &str, text: &str) -> Result<(), Error> {
+        let function: Function = self.lua.load("return function(word, text) local u = KAIA_PLUGIN and KAIA_PLUGIN.ui; if u and u.dictionary then u.dictionary:setLookup(word, text) end end").eval().map_err(lua_error)?;
+        function.call::<()>((word, text)).map_err(lua_error)?;
+        self.drain();
+        Ok(())
+    }
+
+    pub fn dictionary_actions(&mut self) -> Result<(), Error> {
+        self.exec("dictionary-actions", "local u = KAIA_PLUGIN and KAIA_PLUGIN.ui; if u and u.dictionary then u.dictionary:showActions() end")
+    }
+
+    /// Reads one plugin field for diagnostics without exposing a Lua handle.
+    pub fn plugin_value(&self, plugin: &str, key: &str) -> Result<Value, Error> {
+        let runtime: Table = self.lua.globals().get("KAIA_PLUGIN").map_err(lua_error)?;
+        let instances: Table = runtime.get("instances").map_err(lua_error)?;
+        let instance: Table = instances.get(plugin).map_err(lua_error)?;
+        crate::convert::from_lua(&instance.get::<LuaValue>(key).map_err(lua_error)?)
     }
 
     /// Delivers an event to reader plugins and the current window stack.
@@ -348,9 +463,10 @@ impl LuaUi {
             .load(
                 r#"
             return { paintTo = function(_, bb, x, y)
-                if not KAIA_PLUGIN then return end
+                if not KAIA_PLUGIN or (KAIA_DEVICE and KAIA_DEVICE("reader_busy")) then return end
                 for _, module in pairs(KAIA_PLUGIN.view_modules) do
-                    module:paintTo(bb, x, y)
+                    if module.name then KAIA_PLUGIN.guarded(module.name, module.paintTo, module, bb, x, y)
+                    else module:paintTo(bb, x, y) end
                 end
             end }
         "#,
@@ -362,7 +478,7 @@ impl LuaUi {
         Ok(())
     }
 
-    fn input_hook(&mut self) {
+    pub fn input_hook(&mut self) {
         if let Err(error) = self.exec(
             "input-hook",
             "require('ui/uimanager').event_hook:execute('InputEvent')",
@@ -516,7 +632,11 @@ impl LuaUi {
             Some(ptr) if !invisible => self.shown.iter().find(|s| s.ptr == ptr).map(|s| s.id),
             _ => None,
         };
-        self.stack.set_dirty(window, refresh, &mut self.ctx);
+        if window.is_none() && self.reader_connected {
+            self.stack.set_dirty_all(refresh, &mut self.ctx);
+        } else {
+            self.stack.set_dirty(window, refresh, &mut self.ctx);
+        }
     }
 
     /// `UIManager:scheduleIn`. The action runs once when it is due, and its

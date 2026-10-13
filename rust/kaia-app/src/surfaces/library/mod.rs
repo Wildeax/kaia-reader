@@ -429,6 +429,10 @@ impl LibrarySurface {
             .filter(|f| f.starts_with(&root))
             .unwrap_or_else(|| root.clone());
         let entries = folders::entries(&all, &current);
+        #[cfg(feature = "lua")]
+        {
+            env.services.plugins.library.borrow_mut().folder = current.clone();
+        }
         let mut lines = Vec::new();
         if current != root {
             lines.push(Line {
@@ -627,6 +631,14 @@ impl Surface for LibrarySurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        #[cfg(feature = "lua")]
+        if cmd == "library:plugin-folder" {
+            if let Some(path) = args.first().and_then(Value::as_str) {
+                self.folder = Some(PathBuf::from(path));
+                self.prefs.view = View::Folders;
+                return Outcome::Rebuild;
+            }
+        }
         match parse(cmd, args) {
             Some(command) => self.handle(command, env),
             None => Outcome::NotMine,

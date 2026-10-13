@@ -57,6 +57,14 @@ OUT="${ROOT}/dist/rust/${TARGET}"
 
 # Check the profile before starting Docker. The script builds release only.
 ARGS=("$@")
+# The normal app package includes plugins. --features kobo,lua is explicit.
+for ((i = 0; i < ${#ARGS[@]}; i++)); do
+    if [ "${ARGS[i]}" = --features ] && [ "${ARGS[i + 1]:-}" = kobo ]; then
+        ARGS[i + 1]=kobo,lua
+    elif [ "${ARGS[i]}" = --features=kobo ]; then
+        ARGS[i]=--features=kobo,lua
+    fi
+done
 has_profile=0
 for ((i = 0; i < ${#ARGS[@]}; i++)); do
     case "${ARGS[i]}" in
@@ -144,6 +152,12 @@ export KAIA_CRE_SETUP="${CRE_BUILD}"
 export KAIA_CRE_DEP_LIBS="${ST}/lib"
 export KAIA_CRE_DEP_INCLUDE="${ST}/include"
 
+# The pinned target LuaJIT and its native modules share one dynamic image.
+export KAIA_LUAJIT_LIB="${ST}/lib"
+export KAIA_LUAJIT_INCLUDE="${ST}/include/luajit-2.1"
+export LUA_LIB="${KAIA_LUAJIT_LIB}" LUA_LIB_NAME=luajit LUA_LINK=dynamic
+export PKG_CONFIG_ALLOW_CROSS=1
+
 cd /src/rust
 
 # The firmware 4.x sysroot is glibc 2.15. Rust std needs a few newer symbols
@@ -187,7 +201,9 @@ for f in "${TD}"/* "${TD}"/examples/*; do
     fi
     count=$((count + 1))
 done
-echo "copied ${count} artifact(s) for ${TARGET}"
+"${TC}-strip" -o /out/libluajit.so "${ST}/lib/libluajit.so"
+cp /out/libluajit.so /out/libluajit-5.1.so.2
+echo "copied ${count} artifact(s) and LuaJIT for ${TARGET}"
 ' kaia-build "${ARGS[@]}"
 
 ls -la "${OUT}"

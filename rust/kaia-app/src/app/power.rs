@@ -187,6 +187,10 @@ impl<B: Backend> App<B> {
     pub(super) fn power_wait(&self) -> Duration {
         let now = self.ctx.scheduler.now();
         let battery = self.power.battery_due.saturating_sub(now);
+        #[cfg(feature = "lua")]
+        if self.services.plugins.idle_paused() {
+            return battery;
+        }
         let minutes = self
             .services
             .settings
@@ -231,7 +235,12 @@ impl<B: Backend> App<B> {
             .read("device.sleep_minutes")
             .as_f64()
             .unwrap_or(15.0);
-        if !self.sleeping()
+        #[cfg(not(feature = "lua"))]
+        let paused = false;
+        #[cfg(feature = "lua")]
+        let paused = self.services.plugins.idle_paused();
+        if !paused
+            && !self.sleeping()
             && minutes.is_finite()
             && minutes > 0.0
             && now.saturating_sub(self.power.last_activity).as_secs_f64() >= minutes * 60.0

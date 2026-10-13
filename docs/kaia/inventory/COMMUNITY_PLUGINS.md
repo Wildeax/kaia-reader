@@ -43,7 +43,7 @@ redistribution criteria. No GPL-2.0-only or unlicensed plugin is vendored.
 
 ## Baselines and results
 
-Tests live in `rust/kaia-lua/tests/community.rs`. They copy unchanged fixtures
+Layer tests live in `rust/kaia-lua/tests/community.rs`. They copy unchanged fixtures
 into a scratch data folder and pass that folder through `PluginOptions.extra_paths`.
 This also preserves the data/plugins layout that Anki and Bookends assume.
 Reader tests use the existing BookSession host for `test/juliet.epub` or
@@ -53,12 +53,12 @@ Socket and HTTP entry points reject network access. No remote success is simulat
 | Plugin | Baseline workflow | State | Test name | What works and what is missing |
 |---|---|---|---|---|
 | pencil.koplugin | Open an EPUB, enable Pencil, draw a stroke, erase it and reopen the book. | blocked | `pencil_requires_stylus_event_delivery` | Load stops at ReaderUI.active_widgets. Upstream also requires replacing frontend/device/input.lua. Needs app-owned stylus and eraser events, stroke storage, coordinate transforms and bookmark integration. The input replacement is not applied. |
-| pagenotes.koplugin | Open a PDF, use Add note or sticker, type a text note, place it, finish editing and paint the page. | works with limits | `pagenotes_adds_and_paints_a_pdf_note` | Test adds text through the real dialog, checks stored host settings and changed page pixels, then turns a real PDF page and checks that the note disappears. Persistent arbitrary per-book settings need the app host. EPUB word anchors, sticker placement, dragging, rotation and colour output remain untested. |
+| pagenotes.koplugin | Open a PDF, use Add note or sticker, type a text note, place it, finish editing and paint the page. | works with limits | `pagenotes_adds_and_paints_a_pdf_note` | Test adds text through the real dialog, checks stored host settings and changed page pixels, then turns a real PDF page and checks that the note disappears. The app host now persists arbitrary per-book settings; a full app restart test for pagenotes is still missing. EPUB word anchors, sticker placement, dragging, rotation and colour output remain untested. |
 | footcream.koplugin | Open an EPUB, scan its measurements and show one metric conversion at the matching text. | blocked | `footcream_requires_document_text_search` | Loads, then ReaderReady stops at document.findAllText. Needs document-wide search with xpointers, text geometry and reader paint/tap hooks. Its cache uses sidecars, and its in-text modes rewrite EPUB files. Those storage paths need an app-owned design before use. |
-| anki.koplugin | Open an EPUB, look up a word, choose Add to Anki and save one card to the offline queue. | blocked | `anki_requires_dictionary_buttons` | Load stops at dictionary:addToDictButtons because no dictionary host exists. Needs dictionary popup registration, lookup results, selection context and document metadata. Online AnkiConnect, translation and audio calls are excluded. Profiles are present under the scratch data/plugins/anki.koplugin path, so the test reaches the dictionary failure. |
+| anki.koplugin | Open an EPUB, look up a word, choose Add to Anki and save one card to the offline queue. | blocked | `anki_requires_dictionary_buttons`; `anki_dictionary_button_opens_its_profile_prompt` | The isolated layer test still has no dictionary host. In the app, the plugin loads on an EPUB, receives document metadata and registers its native dictionary action. A tap reaches its profile prompt. The offline card workflow and selection context remain untested. Online AnkiConnect, translation and audio calls are excluded. Profiles are present under the scratch data/plugins/anki.koplugin path, so the test reaches the dictionary failure. |
 | highlightsync.koplugin | Open an EPUB with a host annotation, open Sync Cloud, then invoke Sync Highlights. | blocked | `highlightsync_opens_settings_then_rejects_sidecar_sync` | The cloud settings widget opens. The main action stops at doc_settings.getSidecarDir before network access. The plugin writes JSON beside KOReader sidecars and replaces annotation.annotations without host writes. Needs a host-owned sync/storage adapter and stable annotation updates. Remote sync is excluded by the no-network product rule. |
-| readingstreak.koplugin | Open an EPUB, turn a page, view the streak and calendar, then reopen the plugin. | works with limits | `readingstreak_tracks_real_page_turns` | Checks one page increment, paints the streak and calendar widgets, and checks the saved streak after reopening. Time thresholds, day rollover, history import, and persistence of page totals after completing a daily goal remain untested. |
-| bookends.koplugin | Open a PDF, enable Bookends through its menu, paint the default overlay, flush settings and reopen. | works with limits | `bookends_paints_an_overlay` | Checks changed pixels and the plugin's own paint error counter before and after reopening. Tests the default preset on a grayscale frame. Advanced tokens, colour output, font packs, skimming, update downloads and preset sharing remain untested. The app must paint registered overlays. |
+| readingstreak.koplugin | Open an EPUB, turn a page, view the streak and calendar, then reopen the plugin. | works with limits | `readingstreak_tracks_real_page_turns`; `community_readingstreak_records_app_page_turns_and_reopens` | Checks one page increment, paints the streak and calendar widgets, and checks the saved streak after reopening. The app test turns the native PDF page and reopens the book, preserving the page total below the daily goal. Time thresholds, day rollover, history import, and persistence of page totals after completing a daily goal remain untested. |
+| bookends.koplugin | Open a PDF, enable Bookends through its menu, paint the default overlay, flush settings and reopen. | works with limits | `bookends_paints_an_overlay` | Checks changed pixels and the plugin's own paint error counter before and after reopening. Tests the default preset on a grayscale frame. Advanced tokens, colour output, font packs, skimming, update downloads and preset sharing remain untested. The app now paints registered overlays. A Bookends-specific app workflow test is still missing. |
 | readeck.koplugin | Open a book, configure Readeck and its download folder, then sync and open one article. | blocked | `readeck_opens_settings_and_requires_a_server` | Settings open. The sync action runs its scheduled callback and reports the missing server and download folder, with sync_in_progress cleared. Article download, authentication and export require server access, excluded by the no-network product rule. Successful transfer is not claimed. |
 | foldermemory.koplugin | In a library containing an EPUB, save a folder's sort/display settings, leave it and return. | blocked | `foldermemory_requires_library_display_hooks` | Library-mode load stops at FileManager.file_chooser. Reader-mode investigation also reached FileManager.onRefresh. The plugin patches Lua FileChooser and CoverBrowser. Needs app library adapters for sort, filters, display mode, grid size and folder entry/refresh. Lua class patches cannot change the Rust library view. |
 
@@ -88,17 +88,17 @@ UIManager:setDirty. Optional typeset and vocabulary modules can be absent. The
 view reports no page-flipping widget. These are layer changes, not plugin patches.
 The test window closer now closes invisible windows and has a bounded loop.
 
-The app must implement ReaderHost and LibraryHost, deliver reader lifecycle and
-page events, expose plugin menus, and paint registered overlays after the page.
-Per-book plugin values such as pagenotes need persistent host storage. The current
-BookReader test host keeps arbitrary settings in memory and flushes BookSession
-state, so this test does not claim note persistence across an app restart.
+The app now implements ReaderHost and LibraryHost, delivers reader lifecycle and
+page events, exposes plugin menus and paints registered overlays. Arbitrary
+per-book values persist under data/plugin-books. The app tests listed above
+exercise readingstreak and Anki through native navigation and dictionary panels.
+`safe_mode_skips_user_community_plugin` checks the app startup safe-mode path
+with readingstreak. User plugins default to off.
 
-Additional services are listed in each blocked row. In particular, dictionary
-and stylus input need real host adapters. Library display hooks need app support.
-Search and coordinate methods need document-engine support. Sidecar writes and
-network sync need a project decision and host-owned implementation. No change
-outside the assigned paths was made for these services.
+Dictionary hooks no longer block Anki's registration and profile prompt. Its
+full offline card workflow remains blocked pending context and result coverage.
+Stylus input, library display hooks, document-wide search and sidecar adapters
+remain open. No community state has been promoted on load success alone.
 
 ## Inventory maintenance
 

@@ -14,6 +14,7 @@ if props.has_pages == nil then props.has_pages = is_pdf end
 local document = strict("document", {
     file = reader.file(),
     is_pdf = is_pdf,
+    is_new = false,
     is_pic = false,
     info = props,
     configurable = setmetatable({}, { __index = function(_, key)
@@ -68,6 +69,11 @@ local settings = strict("doc_settings", {
     makeTrue = function(self, key) self:saveSetting(key, true) end,
     makeFalse = function(self, key) self:saveSetting(key, false) end,
 })
+
+if KAIA_DEVICE then
+    settings.data.doc_path = reader.file()
+    settings.data.doc_props = props
+end
 
 local pages = strict("paging", {
     gotoPage = function(_, page) reader.go_to_page(page) end,
@@ -171,6 +177,8 @@ local ui = {
         end,
     }),
 }
+
+if KAIA_DEVICE then ui.dictionary = require("kaia/dictionary")(ui) end
 
 require("kaia/reader_modules")(ui, reader, strict)
 

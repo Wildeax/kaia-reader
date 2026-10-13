@@ -25,6 +25,8 @@ pub enum Entry {
         label: String,
         on: bool,
     },
+    /// A plugin switch with a discovered name.
+    PluginToggle { key: String, label: String, on: bool },
     /// A stepper. Its action writes `settings:set:<key>` with the new value.
     Stepper {
         key: &'static str,
@@ -101,6 +103,12 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             Tone::InkSecondary,
         )),
         Entry::Toggle { key, label, on } => WidgetPod::new(
+            ListRow::new(label.clone())
+                .toggle(*on)
+                .on_action(format!("settings:set:{key}")),
+        )
+        .with_key(format!("set-{key}")),
+        Entry::PluginToggle { key, label, on } => WidgetPod::new(
             ListRow::new(label.clone())
                 .toggle(*on)
                 .on_action(format!("settings:set:{key}")),
@@ -213,7 +221,7 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             if let Some(action) = action {
                 row = row.chevron().on_action(action.clone());
             }
-            WidgetPod::new(row)
+            WidgetPod::new(row).with_key(action.clone().unwrap_or_else(|| primary.clone()))
         }
         Entry::Bar {
             label,
