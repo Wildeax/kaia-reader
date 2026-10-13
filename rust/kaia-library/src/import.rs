@@ -23,8 +23,11 @@ impl Library {
     /// last-opened time forward. Entries whose file is missing or unsupported
     /// are counted and skipped.
     pub fn import_koreader_history(&mut self, history_lua: &Path) -> Result<ImportReport> {
-        let table = read_table(history_lua)?;
-        let mut report = ImportReport::default();
+        let (table, lossy_values) = read_table(history_lua)?;
+        let mut report = ImportReport {
+            lossy_values,
+            ..Default::default()
+        };
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -68,8 +71,11 @@ impl Library {
     /// name. Its numbered entries are `{ file = <path>, order = <n> }`, and
     /// `order` becomes the manual position. The `settings` table is ignored.
     pub fn import_koreader_collections(&mut self, collection_lua: &Path) -> Result<ImportReport> {
-        let table = read_table(collection_lua)?;
-        let mut report = ImportReport::default();
+        let (table, lossy_values) = read_table(collection_lua)?;
+        let mut report = ImportReport {
+            lossy_values,
+            ..Default::default()
+        };
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -126,17 +132,84 @@ impl Library {
     }
 }
 
-fn read_table(path: &Path) -> Result<Table> {
+fn read_table(path: &Path) -> Result<(Table, usize)> {
     let fail = |message: String| LibraryError::KoreaderData {
         path: path.to_path_buf(),
         message,
     };
-    let src = fs::read_to_string(path).map_err(|e| fail(e.to_string()))?;
+    let bytes = fs::read(path).map_err(|e| fail(e.to_string()))?;
+    let decoded = String::from_utf8_lossy(&bytes);
+    let lossy = matches!(decoded, std::borrow::Cow::Owned(_));
+    let mut marker = "\u{e000}".to_string();
+    if lossy {
+        while decoded.contains(&marker) {
+            marker.push('\u{e000}');
+        }
+    }
+    let src = if lossy {
+        decode_with_marker(&bytes, &marker)
+    } else {
+        decoded.into_owned()
+    };
     match kaia_luadata::parse(&src) {
-        Ok(Value::Table(t)) => Ok(t),
+        Ok(Value::Table(t)) => {
+            if lossy {
+                Ok(restore_lossy_values(t, &marker))
+            } else {
+                Ok((t, 0))
+            }
+        }
         Ok(_) => Err(fail("expected a Lua table".into())),
         Err(e) => Err(fail(e.to_string())),
     }
+}
+
+fn decode_with_marker(mut bytes: &[u8], marker: &str) -> String {
+    let mut decoded = String::new();
+    while !bytes.is_empty() {
+        match std::str::from_utf8(bytes) {
+            Ok(valid) => {
+                decoded.push_str(valid);
+                break;
+            }
+            Err(error) => {
+                let valid_len = error.valid_up_to();
+                decoded.push_str(std::str::from_utf8(&bytes[..valid_len]).expect("valid prefix"));
+                decoded.push_str(marker);
+                let invalid_len = error.error_len().unwrap_or(bytes.len() - valid_len);
+                bytes = &bytes[valid_len + invalid_len..];
+            }
+        }
+    }
+    decoded
+}
+
+fn restore_lossy_values(table: Table, marker: &str) -> (Table, usize) {
+    let mut restored = Table::new();
+    let mut affected = 0;
+    for (key, value) in table {
+        let key = match key {
+            Key::Str(s) if s.contains(marker) => {
+                affected += 1;
+                Key::Str(s.replace(marker, "\u{fffd}"))
+            }
+            other => other,
+        };
+        let value = match value {
+            Value::Str(s) if s.contains(marker) => {
+                affected += 1;
+                Value::Str(s.replace(marker, "\u{fffd}"))
+            }
+            Value::Table(nested) => {
+                let (nested, count) = restore_lossy_values(nested, marker);
+                affected += count;
+                Value::Table(nested)
+            }
+            other => other,
+        };
+        restored.insert(key, value);
+    }
+    (restored, affected)
 }
 
 fn str_field<'a>(t: &'a Table, key: &str) -> Option<&'a str> {

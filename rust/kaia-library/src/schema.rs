@@ -105,7 +105,17 @@ const SCHEMA_V2: &str = "
 ALTER TABLE covers ADD COLUMN mime TEXT NOT NULL DEFAULT 'image/png';
 ";
 
-pub(crate) const MIGRATIONS: [Migration; 2] = [
+/// Missing books keep their related rows until a populated root has been
+/// scanned for more than 30 days. Covers lost in version 2 need extraction.
+const SCHEMA_V3: &str = "
+ALTER TABLE books ADD COLUMN missing_since INTEGER;
+CREATE INDEX books_missing_since ON books(missing_since);
+UPDATE books SET extracted = 0, attempts = 0, failure = NULL
+WHERE id IN (SELECT book_id FROM covers
+             WHERE (small IS NULL OR large IS NULL) AND (source_w > 0 OR source_h > 0));
+";
+
+pub(crate) const MIGRATIONS: [Migration; 3] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -115,6 +125,11 @@ pub(crate) const MIGRATIONS: [Migration; 2] = [
         version: 2,
         sql: SCHEMA_V2,
         step: Some(reencode_covers),
+    },
+    Migration {
+        version: 3,
+        sql: SCHEMA_V3,
+        step: None,
     },
 ];
 
@@ -236,7 +251,7 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
         let fts: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name = 'book_fts'",
@@ -261,7 +276,7 @@ mod tests {
             err,
             LibraryError::SchemaTooNew {
                 found: 99,
-                supported: 2
+                supported: 3
             }
         ));
         assert_eq!(fs::read(&path).unwrap(), before, "file is unchanged");
@@ -329,7 +344,7 @@ mod tests {
     }
 
     /// A version 1 database with PNG covers, opened by this build, comes out at
-    /// version 2 with JPEG covers of the same pixel size.
+    /// version 3 with JPEG covers of the same pixel size.
     #[test]
     fn version_one_png_covers_are_reencoded_to_jpeg() {
         let dir = tempfile::tempdir().unwrap();
@@ -351,8 +366,8 @@ mod tests {
             .unwrap();
             // A cover that does not decode is dropped by the migration.
             conn.execute(
-                "INSERT INTO books (id, path, size, mtime, partial_md5, format, added_at)
-                 VALUES (2, '/books/b.epub', 10, 1, 'bcdef0', 'epub', 1)",
+                "INSERT INTO books (id, path, size, mtime, partial_md5, format, added_at, extracted)
+                 VALUES (2, '/books/b.epub', 10, 1, 'bcdef0', 'epub', 1, 1)",
                 [],
             )
             .unwrap();
@@ -368,7 +383,7 @@ mod tests {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
         assert_eq!(
             fs::read_dir(dir.path().join("backups")).unwrap().count(),
             1,
@@ -391,6 +406,10 @@ mod tests {
         assert!(
             lib.cover(2, CoverSize::Large).unwrap().is_none(),
             "undecodable cover dropped"
+        );
+        assert!(
+            !lib.book(2).unwrap().unwrap().extracted,
+            "book is queued for extraction"
         );
     }
 }

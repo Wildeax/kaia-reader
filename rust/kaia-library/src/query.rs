@@ -73,7 +73,10 @@ pub(crate) fn book_from_row(r: &Row<'_>) -> rusqlite::Result<Book> {
 impl Library {
     /// The book with this id.
     pub fn book(&self, id: i64) -> Result<Option<Book>> {
-        let sql = format!("SELECT {} FROM books WHERE id = ?1", cols(""));
+        let sql = format!(
+            "SELECT {} FROM books WHERE id = ?1 AND missing_since IS NULL",
+            cols("")
+        );
         Ok(self.conn.query_row(&sql, [id], book_from_row).optional()?)
     }
 
@@ -83,13 +86,16 @@ impl Library {
         let Some(p) = real.to_str() else {
             return Ok(None);
         };
-        let sql = format!("SELECT {} FROM books WHERE path = ?1", cols(""));
+        let sql = format!(
+            "SELECT {} FROM books WHERE path = ?1 AND missing_since IS NULL",
+            cols("")
+        );
         Ok(self.conn.query_row(&sql, [p], book_from_row).optional()?)
     }
 
     /// Books in the order `sort` gives, after `filter`, from `offset`, at most `limit`.
     pub fn books(&self, sort: Sort, filter: &Filter, offset: usize, limit: usize) -> Result<Vec<Book>> {
-        let mut sql = format!("SELECT {} FROM books WHERE 1 = 1", cols(""));
+        let mut sql = format!("SELECT {} FROM books WHERE missing_since IS NULL", cols(""));
         let mut args: Vec<Value> = Vec::new();
 
         if let Some(status) = filter.status {
@@ -142,7 +148,7 @@ impl Library {
     /// The most recently opened books, newest first.
     pub fn recent(&self, limit: usize) -> Result<Vec<Book>> {
         let sql = format!(
-            "SELECT {} FROM books WHERE last_opened_at IS NOT NULL
+            "SELECT {} FROM books WHERE last_opened_at IS NOT NULL AND missing_since IS NULL
              ORDER BY last_opened_at DESC, {LAST_OPEN_SEQ} DESC, id DESC LIMIT ?1",
             cols("")
         );
@@ -158,7 +164,7 @@ impl Library {
         };
         let sql = format!(
             "SELECT {} FROM book_fts JOIN books ON books.id = book_fts.rowid
-             WHERE book_fts MATCH ?1 ORDER BY book_fts.rank LIMIT ?2",
+             WHERE book_fts MATCH ?1 AND books.missing_since IS NULL ORDER BY book_fts.rank LIMIT ?2",
             cols("books.")
         );
         self.query_books(&sql, params![expr, limit as i64])
@@ -167,8 +173,9 @@ impl Library {
     /// All collections by name, with the number of books in each.
     pub fn collections(&self) -> Result<Vec<Collection>> {
         let mut stmt = self.conn.prepare(
-            "SELECT c.id, c.name, COUNT(cb.book_id)
+            "SELECT c.id, c.name, COUNT(b.id)
              FROM collections c LEFT JOIN collection_books cb ON cb.collection_id = c.id
+             LEFT JOIN books b ON b.id = cb.book_id AND b.missing_since IS NULL
              GROUP BY c.id ORDER BY c.name COLLATE NOCASE",
         )?;
         let rows = stmt.query_map([], |r| {

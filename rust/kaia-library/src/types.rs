@@ -166,7 +166,7 @@ pub struct ScanReport {
     pub extracted: usize,
     /// Books whose extraction failed in this scan.
     pub failed: usize,
-    /// Rows deleted because their file vanished from a fully scanned root.
+    /// Rows purged after more than 30 days missing from populated scans.
     pub removed: usize,
     /// True when the cancel flag stopped the scan. Nothing is removed then.
     pub cancelled: bool,
@@ -186,4 +186,6 @@ pub struct ImportReport {
     pub skipped_unsupported: usize,
     /// Entries without the expected fields.
     pub skipped_invalid: usize,
+    /// String values that contained bytes replaced during UTF-8 decoding.
+    pub lossy_values: usize,
 }

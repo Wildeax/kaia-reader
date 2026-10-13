@@ -1,6 +1,6 @@
 //! Library scan. It walks the roots, sorts each book file into unchanged, moved,
-//! changed or new, extracts metadata only where needed, and removes rows whose
-//! files are gone from roots that were scanned completely.
+//! changed or new, extracts metadata only where needed, and marks files missing
+//! under roots that were scanned completely.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -24,6 +24,7 @@ pub(crate) const MAX_ATTEMPTS: u32 = 3;
 
 /// Deepest folder the walk enters.
 const MAX_DEPTH: usize = 32;
+const MISSING_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
 
 #[derive(Debug)]
 struct Found {
@@ -44,6 +45,7 @@ struct Stored {
     extracted: bool,
     failure: Option<String>,
     attempts: u32,
+    missing_since: Option<i64>,
 }
 
 impl Stored {
@@ -61,8 +63,8 @@ impl Library {
     /// before each book. Setting `cancel` stops the scan after the current
     /// book. A cancelled scan removes nothing.
     ///
-    /// A root that is missing or cannot be read completely is not used for
-    /// removal, so its books stay in the index.
+    /// A root that is missing, empty, or cannot be read completely is not used
+    /// to mark books missing. An empty mount can mean the volume is unavailable.
     pub fn scan<F>(&mut self, roots: &[PathBuf], mut progress: F, cancel: &AtomicBool) -> Result<ScanReport>
     where
         F: FnMut(Progress<'_>),
@@ -78,7 +80,8 @@ impl Library {
             if !dir.is_dir() {
                 continue;
             }
-            if walk_dir(&dir, 0, &mut found, cancel) {
+            let before = found.len();
+            if walk_dir(&dir, 0, &mut found, cancel) && found.len() > before {
                 complete_roots.push(dir);
             }
         }
@@ -112,7 +115,17 @@ impl Library {
     fn index_one(&mut self, f: &Found, seen: &mut HashSet<i64>, report: &mut ScanReport) -> Result<()> {
         let stored = self.stored_by_path(&f.path)?;
         if let Some(s) = &stored {
-            if s.size == f.size && s.mtime == f.mtime && s.settled() {
+            // FAT stores local timestamps at two-second resolution. A time
+            // zone or DST shift can change them by whole hours, up to 14.
+            // Accept only the same size and a difference of at most two
+            // seconds or an exact whole-hour difference within that range.
+            if s.size == f.size && mtime_equivalent(s.mtime, f.mtime) && s.settled() {
+                if s.mtime != f.mtime || s.missing_since.is_some() {
+                    self.conn.execute(
+                        "UPDATE books SET mtime = ?1, missing_since = NULL WHERE id = ?2",
+                        params![f.mtime, s.id],
+                    )?;
+                }
                 seen.insert(s.id);
                 report.unchanged += 1;
                 return Ok(());
@@ -132,23 +145,23 @@ impl Library {
 
         let (id, prev_attempts) = match stored {
             Some(s) => {
-                let same = s.size == f.size && s.mtime == f.mtime && s.md5 == md5;
+                let same = s.size == f.size && mtime_equivalent(s.mtime, f.mtime) && s.md5 == md5;
                 if !same {
                     report.changed += 1;
                 }
                 self.conn.execute(
-                    "UPDATE books SET size = ?1, mtime = ?2, partial_md5 = ?3, format = ?4 WHERE id = ?5",
+                    "UPDATE books SET size = ?1, mtime = ?2, partial_md5 = ?3, format = ?4, missing_since = NULL WHERE id = ?5",
                     params![f.size as i64, f.mtime, md5, f.format, s.id],
                 )?;
                 // A changed file starts over. An unchanged file that never
                 // settled keeps its attempt count.
                 (s.id, if same { s.attempts } else { 0 })
             }
-            None => match self.find_moved(&md5, f.size)? {
+            None => match self.find_moved(&f.path, &md5, f.size)? {
                 Some(m) => {
                     let path = f.path.to_str().unwrap_or_default();
                     self.conn.execute(
-                        "UPDATE books SET path = ?1, size = ?2, mtime = ?3 WHERE id = ?4",
+                        "UPDATE books SET path = ?1, size = ?2, mtime = ?3, missing_since = NULL WHERE id = ?4",
                         params![path, f.size as i64, f.mtime, m.id],
                     )?;
                     report.moved += 1;
@@ -223,7 +236,7 @@ impl Library {
         Ok(())
     }
 
-    /// Deletes rows under a fully scanned root whose files were not seen.
+    /// Marks unseen rows missing. A later populated scan purges old missing rows.
     fn remove_vanished(
         &mut self,
         complete_roots: &[PathBuf],
@@ -233,22 +246,34 @@ impl Library {
         if complete_roots.is_empty() {
             return Ok(());
         }
-        let rows: Vec<(i64, String)> = {
-            let mut stmt = self.conn.prepare("SELECT id, path FROM books")?;
-            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        let rows: Vec<(i64, String, Option<i64>)> = {
+            let mut stmt = self.conn.prepare("SELECT id, path, missing_since FROM books")?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<rusqlite::Result<_>>()?
         };
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        for (id, path) in rows {
+        let now = now_unix();
+        for (id, path, missing_since) in rows {
             if seen.contains(&id) {
                 continue;
             }
             let p = Path::new(&path);
             if complete_roots.iter().any(|root| p.starts_with(root)) {
-                tx.execute("DELETE FROM books WHERE id = ?1", [id])?;
-                report.removed += 1;
+                match missing_since {
+                    Some(since) if since < now - MISSING_RETENTION_SECS => {
+                        tx.execute("DELETE FROM books WHERE id = ?1", [id])?;
+                        report.removed += 1;
+                    }
+                    None => {
+                        tx.execute(
+                            "UPDATE books SET missing_since = ?1 WHERE id = ?2",
+                            params![now, id],
+                        )?;
+                    }
+                    _ => {}
+                }
             }
         }
         tx.commit()?;
@@ -262,7 +287,7 @@ impl Library {
         Ok(self
             .conn
             .query_row(
-                "SELECT id, path, size, mtime, partial_md5, extracted, failure, attempts
+                "SELECT id, path, size, mtime, partial_md5, extracted, failure, attempts, missing_since
                  FROM books WHERE path = ?1",
                 [p],
                 stored_from_row,
@@ -272,15 +297,21 @@ impl Library {
 
     /// A row with the same content and size whose file is no longer at its
     /// stored path.
-    fn find_moved(&self, md5: &str, size: u64) -> Result<Option<Stored>> {
+    fn find_moved(&self, path: &Path, md5: &str, size: u64) -> Result<Option<Stored>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, path, size, mtime, partial_md5, extracted, failure, attempts
+            "SELECT id, path, size, mtime, partial_md5, extracted, failure, attempts, missing_since
              FROM books WHERE partial_md5 = ?1 AND size = ?2 ORDER BY id",
         )?;
         let rows = stmt.query_map(params![md5, size as i64], stored_from_row)?;
         for row in rows {
             let s = row?;
-            if !Path::new(&s.path).exists() {
+            let old = Path::new(&s.path);
+            if !old.exists()
+                || old
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&path.to_string_lossy())
+                || same_file(old, path)
+            {
                 return Ok(Some(s));
             }
         }
@@ -298,7 +329,30 @@ fn stored_from_row(r: &Row<'_>) -> rusqlite::Result<Stored> {
         extracted: r.get::<_, i64>(5)? != 0,
         failure: r.get(6)?,
         attempts: r.get::<_, i64>(7)? as u32,
+        missing_since: r.get(8)?,
     })
+}
+
+fn mtime_equivalent(stored: i64, found: i64) -> bool {
+    let delta = stored.abs_diff(found);
+    delta <= 2 || (delta <= 14 * 3600 && delta.is_multiple_of(3600))
+}
+
+#[cfg(unix)]
+fn same_file(old: &Path, new: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (fs::metadata(old), fs::metadata(new)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(old: &Path, new: &Path) -> bool {
+    match (fs::canonicalize(old), fs::canonicalize(new)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 /// Writes the metadata and cover of a successful extraction. Engine fields that
@@ -412,4 +466,19 @@ fn file_stem(path: &Path) -> String {
         .and_then(|s| s.to_str())
         .map(str::to_string)
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mtime_equivalent;
+
+    #[test]
+    fn fat_mtime_tolerance_has_two_second_and_fourteen_hour_limits() {
+        assert!(mtime_equivalent(100_000, 100_002));
+        assert!(mtime_equivalent(100_000, 100_000 + 14 * 3600));
+        assert!(mtime_equivalent(100_000, 100_000 - 3600));
+        assert!(!mtime_equivalent(100_000, 100_003));
+        assert!(!mtime_equivalent(100_000, 100_000 + 15 * 3600));
+        assert!(!mtime_equivalent(100_000, 100_000 + 3599));
+    }
 }

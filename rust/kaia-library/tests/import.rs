@@ -93,6 +93,7 @@ fn history_import_adds_entries_and_skips_bad_ones() {
             skipped_missing: 1,
             skipped_unsupported: 1,
             skipped_invalid: 1,
+            lossy_values: 0,
         }
     );
 
@@ -219,4 +220,42 @@ fn history_import_reads_a_file_written_by_kaia_luadata() {
     assert_eq!(report.added, 1);
     let book = lib.book_by_path(&leaves).unwrap().unwrap();
     assert_eq!(book.last_opened_at, Some(1_700_001_000));
+}
+
+#[test]
+fn collection_import_accepts_invalid_utf8_and_counts_affected_values() {
+    let (tmp, root) = setup();
+    let file = copy_fixture("leaves.epub", &root, "leaves.epub");
+    let lua = tmp.path().join("collection.lua");
+    let mut bytes = b"return { [\"fav".to_vec();
+    bytes.push(0xff);
+    bytes.extend_from_slice(
+        format!("rites\"] = {{ [1] = {{ file = \"{}\" }} }} }}", file.display()).as_bytes(),
+    );
+    fs::write(&lua, bytes).unwrap();
+    let mut lib = open_library(tmp.path());
+    let report = lib.import_koreader_collections(&lua).unwrap();
+    assert_eq!(report.added, 1);
+    assert_eq!(report.lossy_values, 1);
+}
+
+#[test]
+fn invalid_utf8_in_comment_does_not_count_an_existing_replacement_character() {
+    let (tmp, root) = setup();
+    let file = copy_fixture("leaves.epub", &root, "leaves.epub");
+    let lua = tmp.path().join("collection.lua");
+    let mut bytes = b"-- invalid byte: ".to_vec();
+    bytes.push(0xff);
+    bytes.extend_from_slice(
+        format!(
+            "\nreturn {{ [\"fav\u{fffd}\"] = {{ [1] = {{ file = \"{}\" }} }} }}",
+            file.display()
+        )
+        .as_bytes(),
+    );
+    fs::write(&lua, bytes).unwrap();
+    let mut lib = open_library(tmp.path());
+    let report = lib.import_koreader_collections(&lua).unwrap();
+    assert_eq!(report.added, 1);
+    assert_eq!(report.lossy_values, 0);
 }

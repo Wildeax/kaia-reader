@@ -133,7 +133,171 @@ fn moved_file_keeps_progress_collections_and_history() {
 }
 
 #[test]
-fn deleted_file_is_removed_after_a_full_scan() {
+fn case_only_alias_keeps_book_data_when_old_path_still_exists() {
+    let (tmp, root) = setup();
+    let old = copy_fixture("leaves.epub", &root, "Book.epub");
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&old).unwrap().unwrap().id;
+    lib.record_open(id, 0.4).unwrap();
+    lib.add_to_collection(id, "Favorites").unwrap();
+    let new = root.join("book.epub");
+    if fs::hard_link(&old, &new).is_err() {
+        fs::rename(&old, &new).unwrap();
+    }
+    let report = scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(report.added, 0);
+    assert_eq!(lib.book_by_path(&new).unwrap().unwrap().id, id);
+    assert_eq!(lib.collections().unwrap()[0].books, 1);
+    assert_eq!(lib.recent(10).unwrap()[0].id, id);
+}
+
+#[test]
+fn empty_root_keeps_existing_books_and_relations() {
+    let (tmp, root) = setup();
+    let file = copy_fixture("leaves.epub", &root, "leaves.epub");
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&file).unwrap().unwrap().id;
+    lib.record_open(id, 0.5).unwrap();
+    lib.add_to_collection(id, "Favorites").unwrap();
+    fs::remove_file(&file).unwrap();
+    let report = scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(report.removed, 0);
+    assert_eq!(lib.book(id).unwrap().unwrap().percent, 0.5);
+    assert_eq!(lib.collections().unwrap()[0].books, 1);
+    assert_eq!(lib.recent(10).unwrap().len(), 1);
+}
+
+#[test]
+fn vanished_book_is_hidden_then_returns_with_its_data() {
+    let (tmp, root) = setup();
+    let files = fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&files[1]).unwrap().unwrap().id;
+    lib.record_open(id, 0.5).unwrap();
+    lib.add_to_collection(id, "Favorites").unwrap();
+    fs::remove_file(&files[1]).unwrap();
+    scan(&mut lib, std::slice::from_ref(&root));
+    assert!(lib.book(id).unwrap().is_none());
+    assert_eq!(lib.collections().unwrap()[0].books, 0);
+    assert!(lib.recent(10).unwrap().is_empty());
+    let raw = raw_connection(tmp.path());
+    let missing: Option<i64> = raw
+        .query_row("SELECT missing_since FROM books WHERE id = ?1", [id], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert!(missing.is_some());
+    fs::copy(repo_test_file("tall.pdf"), &files[1]).unwrap();
+    scan(&mut lib, std::slice::from_ref(&root));
+    let book = lib.book(id).unwrap().unwrap();
+    assert_eq!(book.percent, 0.5);
+    assert_eq!(lib.collections().unwrap()[0].books, 1);
+    assert_eq!(lib.recent(10).unwrap()[0].id, id);
+}
+
+#[test]
+fn missing_book_returns_at_new_path_by_content() {
+    let (tmp, root) = setup();
+    let old = copy_fixture("leaves.epub", &root, "old.epub");
+    let _other = copy_fixture("juliet.epub", &root, "other.epub");
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&old).unwrap().unwrap().id;
+    lib.record_open(id, 0.3).unwrap();
+    fs::remove_file(&old).unwrap();
+    scan(&mut lib, std::slice::from_ref(&root));
+    let new = copy_fixture("leaves.epub", &root, "new.epub");
+    let report = scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(report.moved, 1);
+    assert_eq!(lib.book_by_path(&new).unwrap().unwrap().id, id);
+    assert_eq!(lib.book(id).unwrap().unwrap().percent, 0.3);
+}
+
+#[test]
+fn old_missing_row_is_purged_only_after_a_populated_scan() {
+    let (tmp, root) = setup();
+    let files = fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&files[0]).unwrap().unwrap().id;
+    lib.record_open(id, 0.2).unwrap();
+    fs::remove_file(&files[0]).unwrap();
+    scan(&mut lib, std::slice::from_ref(&root));
+    let raw = raw_connection(tmp.path());
+    raw.execute(
+        "UPDATE books SET missing_since = ?1 WHERE id = ?2",
+        rusqlite::params![kaia_library_time() - 31 * 24 * 3600, id],
+    )
+    .unwrap();
+    let empty = tmp.path().join("empty");
+    fs::create_dir(&empty).unwrap();
+    assert_eq!(scan(&mut lib, std::slice::from_ref(&empty)).removed, 0);
+    let row_count: i64 = raw
+        .query_row("SELECT COUNT(*) FROM books WHERE id = ?1", [id], |r| r.get(0))
+        .unwrap();
+    assert_eq!(row_count, 1);
+    assert_eq!(scan(&mut lib, std::slice::from_ref(&root)).removed, 1);
+    let row_count: i64 = raw
+        .query_row("SELECT COUNT(*) FROM books WHERE id = ?1", [id], |r| r.get(0))
+        .unwrap();
+    assert_eq!(row_count, 0);
+}
+
+fn kaia_library_time() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+#[test]
+fn dropped_cover_is_extracted_after_version_three_migration() {
+    let (tmp, root) = setup();
+    let file = copy_fixture("2col.pdf", &root, "book.pdf");
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let id = lib.book_by_path(&file).unwrap().unwrap().id;
+    drop(lib);
+    let raw = raw_connection(tmp.path());
+    raw.execute(
+        "UPDATE covers SET small = NULL, large = NULL WHERE book_id = ?1",
+        [id],
+    )
+    .unwrap();
+    raw.execute_batch("DROP INDEX books_missing_since; ALTER TABLE books DROP COLUMN missing_since;")
+        .unwrap();
+    raw.pragma_update(None, "user_version", 2).unwrap();
+    drop(raw);
+    let mut lib = open_library(tmp.path());
+    assert!(!lib.book(id).unwrap().unwrap().extracted);
+    let report = scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(report.extracted, 1);
+    assert!(lib.cover(id, CoverSize::Small).unwrap().is_some());
+}
+
+#[test]
+fn fat_timestamp_shift_updates_mtime_without_extraction() {
+    let (tmp, root) = setup();
+    let file = copy_fixture("leaves.epub", &root, "leaves.epub");
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    let book = lib.book_by_path(&file).unwrap().unwrap();
+    raw_connection(tmp.path())
+        .execute(
+            "UPDATE books SET mtime = ?1 WHERE id = ?2",
+            rusqlite::params![book.mtime - 3600, book.id],
+        )
+        .unwrap();
+    let report = scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(report.extracted, 0);
+    assert_eq!(lib.book(book.id).unwrap().unwrap().mtime, book.mtime);
+}
+
+#[test]
+fn deleted_file_is_hidden_after_a_populated_scan() {
     let (tmp, root) = setup();
     let files = fixture_set(&root);
     let mut lib = open_library(tmp.path());
@@ -144,7 +308,7 @@ fn deleted_file_is_removed_after_a_full_scan() {
 
     fs::remove_file(&files[1]).unwrap();
     let report = scan(&mut lib, std::slice::from_ref(&root));
-    assert_eq!(report.removed, 1);
+    assert_eq!(report.removed, 0);
     assert!(lib.book(gone).unwrap().is_none());
     assert_eq!(
         lib.books(Sort::new(SortKey::Title, false), &Filter::default(), 0, 100)
@@ -155,11 +319,11 @@ fn deleted_file_is_removed_after_a_full_scan() {
     assert_eq!(
         lib.collections().unwrap()[0].books,
         0,
-        "collection membership removed too"
+        "missing book is hidden from collection counts"
     );
     assert!(
         lib.recent(10).unwrap().is_empty(),
-        "history removed with the book"
+        "missing book is hidden from recent books"
     );
 }
 
@@ -181,16 +345,19 @@ fn missing_root_removes_nothing() {
         4
     );
 
-    // The root comes back empty and complete: now its books are removed.
+    // An empty root may be an unavailable mount, so its books stay.
     fs::create_dir_all(&unplugged).unwrap();
     let report = scan(&mut lib, &[root.clone(), unplugged.clone()]);
     assert_eq!(report.removed, 0, "root with the books is still there");
     fs::remove_dir_all(&root).unwrap();
     fs::create_dir_all(&root).unwrap();
     let report = scan(&mut lib, &[root.clone(), unplugged.clone()]);
+    assert_eq!(report.removed, 0);
     assert_eq!(
-        report.removed, 4,
-        "both roots are complete and the files are gone"
+        lib.books(Sort::new(SortKey::Title, false), &Filter::default(), 0, 100)
+            .unwrap()
+            .len(),
+        4
     );
 }
 
