@@ -4,11 +4,17 @@ Embedded LuaJIT and the KOReader compatibility layer (R7 of `docs/kaia/REWRITE_P
 spec in `docs/kaia/specs/LUA_COMPAT.md`).
 
 - Stage L1: `LuaHost` runs KOReader's own pure Lua modules in KOReader's LuaJIT.
-- Stage L2 and L3 (this file's subject): KOReader widgets run in Kaia windows.
+- Stage L2 and L3: KOReader widgets run in Kaia windows.
   `LuaUi` owns the host, the window stack and the scheduler.
+- Stage L4: reader and library traits supply facts to Lua proxies. KOReader's
+  PluginLoader loads plugins, and Kaia records their menus, actions and errors.
 
 Run `. rust/kaia-lua/env.sh` (or `source tools/kaia/env.sh`) before cargo. The tests need the
 KOReader emulator tree (`./kodev build`), its fonts and its `libs/`.
+`kaia-book` and `kaia-doc` are test dependencies. The real-book tests use
+`BookSession` for document state and `kaia-doc` for page text, which
+`BookSession` does not expose as a public method. The library code depends on
+neither crate, so the Rust app can implement the host traits without a cycle.
 
 ## Files
 
@@ -23,6 +29,13 @@ KOReader emulator tree (`./kodev build`), its fonts and its `libs/`.
 | `lua/kaia/events.lua` | Builds `Event`, `Geom`, `time` and `Key` objects from plain tables |
 | `lua/kaia/paint.lua` | Paints a widget into a buffer that Rust owns |
 | `lua/datastorage.lua` | Shim for `datastorage`: the data folder and its subfolders |
+| `src/reader.rs` | `ReaderHost` and `LibraryHost` traits for document and library facts |
+| `src/ui/plugins.rs` | Lua callbacks, plugin status, menu and action registries |
+| `lua/apps/reader/readerui.lua` | ReaderUI, document and reader module proxies |
+| `lua/apps/filemanager/filemanager.lua` | FileManager proxy over `LibraryHost` |
+| `lua/dispatcher.lua` | Dispatcher registration into the Lua action table |
+| `lua/kaia/plugin_runtime.lua` | KOReader PluginLoader setup, plugin instances and event calls |
+| `tests/plugins.rs` | Bundled plugin loading, real EPUB and PDF menus, events, safe mode and failures |
 | `tests/ui_widgets.rs` | InfoMessage, ConfirmBox, ButtonDialog, Menu, InputDialog, with goldens |
 | `tests/ui_bridge.rs` | Event order, identity, scheduling, errors, input fields, refreshes, scale |
 | `tests/golden/*.png` | Rendered frames. Regenerate with `KAIA_UPDATE_GOLDEN=1` |
@@ -124,7 +137,20 @@ These differ from KOReader. Plugins that depend on them need an adaptation.
     `ui/foreign.rs` is the workaround. A native RGB32 format in kaia-gfx would remove it.
 14. **Fallback widgets.** A widget that errors in `paintTo` or `handleEvent` leaves its
     last pixels on the frame. The error is recorded in `LuaUi::take_errors` and the UI
-    keeps running. Plugin disabling (LUA_COMPAT.md, rule for errors) is not implemented yet.
+    keeps running. A failure in a plugin menu callback or reader event handler disables
+    that plugin for the session and appears in `LuaUi::plugin_status()`.
+15. **View modules.** `registerViewModule` records the module. The Rust reader does
+    not paint it over a book page yet.
+16. **Menu placement.** `MenuRegistry` stores each plugin's top-level entry and
+    sorting hint. `open_plugin_menu` opens the plugin's KOReader submenu as a
+    foreign window. The Rust app must place those entries in its menu.
+17. **File manager fields.** The proxy supplies the current folder, file list,
+    open-book call and main menu registration. Other file manager methods raise
+    a Lua error naming the missing method.
+18. **Reader modules.** The tested exporter and statistics paths use the proxy.
+    Methods outside the implemented fields raise a Lua error naming the method.
+    `folder_shortcuts` keeps shortcuts in the Lua session without persistence.
+    `bookinfo:expandString` returns its input until the Rust app supplies that service.
 
 ## Errors
 

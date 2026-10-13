@@ -14,10 +14,15 @@
 mod bridge;
 mod foreign;
 mod input;
+mod plugins;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use kaia_events::{Clock, Ctx, DirtyQueue, Refresh, ShowOpts, Task, Value, WindowId, WindowStack};
+use kaia_events::{
+    ActionRegistry, Clock, Ctx, DirtyQueue, MenuRegistry, Refresh, ShowOpts, Task, Value, WindowId,
+    WindowStack,
+};
 use kaia_gfx::{Pixmap, Size};
 use kaia_input::{Gesture, Key};
 use kaia_ui::assets::SharedAssets;
@@ -27,9 +32,10 @@ use kaia_ui::Window;
 use mlua::{Function, Lua, Table, Value as LuaValue};
 
 use crate::error::lua_error;
-use crate::{Error, LuaHost};
+use crate::{Error, LibraryHost, LuaHost, ReaderHost};
 use bridge::{Bridge, Flags, Mirror, Request, TaskRecord};
 use foreign::{Foreign, Renderer};
+pub use plugins::{PluginOptions, PluginStatus};
 
 /// The screen that the Lua widgets see: the size, the DPI and the panel type.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,6 +68,11 @@ pub struct LuaUi {
     theme: Theme,
     assets: SharedAssets,
     screen: Pixmap,
+    menu_registry: MenuRegistry,
+    action_registry: ActionRegistry,
+    plugin_runtime_loaded: bool,
+    reader_connected: bool,
+    library_connected: bool,
     lua: Lua,
     host: LuaHost,
 }
@@ -110,6 +121,11 @@ impl LuaUi {
             theme,
             assets,
             screen,
+            menu_registry: MenuRegistry::new(),
+            action_registry: ActionRegistry::new(),
+            plugin_runtime_loaded: false,
+            reader_connected: false,
+            library_connected: false,
             lua,
             host,
         })
@@ -139,6 +155,115 @@ impl LuaUi {
     /// paint is recorded and the UI keeps running.
     pub fn take_errors(&self) -> Vec<String> {
         self.bridge.take_errors()
+    }
+
+    /// Connects an open document to the Lua reader proxy.
+    pub fn set_reader_host(&mut self, host: Rc<RefCell<dyn ReaderHost>>) -> Result<(), Error> {
+        plugins::install_reader(&self.lua, host).map_err(lua_error)?;
+        let package: Table = self.lua.globals().get("package").map_err(lua_error)?;
+        let loaded: Table = package.get("loaded").map_err(lua_error)?;
+        loaded
+            .set("apps/reader/readerui", LuaValue::Nil)
+            .map_err(lua_error)?;
+        self.reader_connected = true;
+        Ok(())
+    }
+
+    /// Connects the current library folder to the Lua file manager proxy.
+    pub fn set_library_host(&mut self, host: Rc<RefCell<dyn LibraryHost>>) -> Result<(), Error> {
+        plugins::install_library(&self.lua, host).map_err(lua_error)?;
+        let package: Table = self.lua.globals().get("package").map_err(lua_error)?;
+        let loaded: Table = package.get("loaded").map_err(lua_error)?;
+        loaded
+            .set("apps/filemanager/filemanager", LuaValue::Nil)
+            .map_err(lua_error)?;
+        self.library_connected = true;
+        Ok(())
+    }
+
+    /// Loads plugins through KOReader's `frontend/pluginloader.lua`.
+    pub fn load_plugins(&mut self, options: PluginOptions) -> Result<(), Error> {
+        if !self.reader_connected && !self.library_connected {
+            return Err(Error::Init(
+                "plugin loading needs a ReaderHost or LibraryHost".into(),
+            ));
+        }
+        let runtime: Table = self
+            .lua
+            .load("return require('kaia/plugin_runtime')")
+            .eval()
+            .map_err(lua_error)?;
+        let load: Function = runtime.get("load").map_err(lua_error)?;
+        let mut paths = vec![self.host.paths().plugins_dir().to_string_lossy().to_string()];
+        paths.extend(
+            options
+                .extra_paths
+                .iter()
+                .map(|p| p.to_string_lossy().to_string()),
+        );
+        let outcome = load
+            .call::<()>((
+                paths,
+                options.names,
+                options.safe_mode,
+                options.force_hello,
+                self.reader_connected,
+            ))
+            .map_err(lua_error);
+        self.drain();
+        outcome?;
+        self.plugin_runtime_loaded = true;
+        plugins::collect(self)
+    }
+
+    /// Plugin load and handler failures. A failed plugin stops receiving events.
+    pub fn plugin_status(&self) -> Vec<PluginStatus> {
+        plugins::statuses(&self.lua)
+    }
+
+    /// Main menu entries registered by Lua plugins.
+    pub fn menu_registry(&self) -> &MenuRegistry {
+        &self.menu_registry
+    }
+
+    /// Dispatcher actions registered by Lua plugins.
+    pub fn action_registry(&self) -> &ActionRegistry {
+        &self.action_registry
+    }
+
+    /// Runs a registered main menu entry or opens its KOReader submenu.
+    pub fn open_plugin_menu(&mut self, id: &str) -> Result<(), Error> {
+        plugins::call(&self.lua, "open_menu", id.to_owned()).map_err(lua_error)?;
+        self.drain();
+        plugins::collect(self)
+    }
+
+    /// Delivers an event to reader plugins and the current window stack.
+    pub fn send_reader_event(&mut self, name: &str, args: &[Value]) -> bool {
+        if self.plugin_runtime_loaded {
+            let values = args
+                .iter()
+                .map(|value| crate::convert::to_lua(&self.lua, value))
+                .collect::<Result<Vec<_>, _>>();
+            match values {
+                Ok(values) => {
+                    let mut all = vec![LuaValue::String(
+                        self.lua.create_string(name).expect("event name"),
+                    )];
+                    all.extend(values);
+                    if let Err(error) = plugins::call(&self.lua, "dispatch", mlua::MultiValue::from_vec(all))
+                    {
+                        self.bridge
+                            .record_error(format!("reader event {name} failed: {error}"));
+                    }
+                    self.drain();
+                }
+                Err(error) => self
+                    .bridge
+                    .record_error(format!("reader event {name} failed: {error}")),
+            }
+        }
+        self.send_named(name, args)
     }
 
     /// Delivers a gesture the way `UIManager:sendEvent` delivers

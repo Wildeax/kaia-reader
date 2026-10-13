@@ -979,6 +979,8 @@ dependencies = [
 name = "kaia-lua"
 version = "0.1.0"
 dependencies = [
+ "kaia-book",
+ "kaia-doc",
  "kaia-events",
  "kaia-gfx",
  "kaia-input",

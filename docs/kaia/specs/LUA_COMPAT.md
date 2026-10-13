@@ -59,3 +59,8 @@ Plugins reach `self.ui` (a ReaderUI or FileManager). The proxies implement the f
 | L3 | Foreign widgets and input mapping | KOReader `Menu`, `ButtonDialog`, `InputDialog` with the Kaia keyboard work |
 | L4 | ReaderUI and FileManager proxies, document API, plugin loader, menus, dispatcher | `hello.koplugin` (forced on), `exporter`, `statistics` open their menus and dialogs |
 | L5 | Bundled plugin workflows from the inventory, then the community list | Each workflow in `plugins.md` passes on the desktop |
+
+L4 status: implemented in `rust/kaia-lua`. The `tests/plugins.rs` checks load
+KOReader's PluginLoader, open exporter and statistics menus against a real EPUB
+and PDF, deliver reader events, and check safe mode and plugin failure status.
+The Rust app still needs to connect its reader and library objects to the traits.

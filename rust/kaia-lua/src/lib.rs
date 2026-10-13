@@ -15,13 +15,15 @@ mod convert;
 mod error;
 mod host;
 mod paths;
+mod reader;
 mod ui;
 
 pub use convert::MAX_DEPTH;
 pub use error::Error;
 pub use host::LuaHost;
 pub use paths::LuaPaths;
-pub use ui::{LuaUi, UiConfig};
+pub use reader::{LibraryHost, ReaderHost};
+pub use ui::{LuaUi, PluginOptions, PluginStatus, UiConfig};
 
 /// The LuaJIT version that `build.rs` read from KOReader's `luajit.h`, for
 /// example "LuaJIT 2.1.1783773675". A test compares it with `jit.version`.
