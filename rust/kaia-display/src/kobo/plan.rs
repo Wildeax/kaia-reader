@@ -45,8 +45,9 @@ pub struct RefreshPlan {
 ///
 /// `dither` is [`Refresh::dither`]. Two mappings change with it:
 ///
-/// - `Gc16` (KOReader's `full`) becomes `GCC16`, as KOReader's `refresh_mtk` promotes it
-///   when the dither flag is set on a color panel.
+/// - `Gc16` (KOReader's `full`) becomes `GCC16`, as KOReader's `mxc_update` promotes it
+///   when the dither flag is set on a color panel ("Handle promotion to Kaleido
+///   waveform modes").
 /// - `Glr16` (KOReader's `partial`, REAGL on MTK) becomes `GLRC16`, the color
 ///   counterpart that KOReader uses for the same case.
 ///
@@ -106,8 +107,12 @@ pub fn plan_refresh(refresh: &Refresh, screen: Size) -> RefreshPlan {
     let full = covers(refresh.region, screen);
 
     // The waits use the requested mode, before the color promotion, as KOReader does.
-    let wait_before = matches!(refresh.waveform, Waveform::Gc16 | Waveform::Glr16)
-        || (refresh.flash && refresh.waveform == Waveform::Auto && full);
+    // `Gcc16` is a request for GC16 with the dither flag (the native backend sends it
+    // that way), so it waits like GC16 does.
+    let wait_before = matches!(
+        refresh.waveform,
+        Waveform::Gc16 | Waveform::Gcc16 | Waveform::Glr16
+    ) || (refresh.flash && refresh.waveform == Waveform::Auto && full);
 
     RefreshPlan {
         waveform,
@@ -197,6 +202,14 @@ mod tests {
         assert!(!p.flashing);
         assert!(!p.wait_before && !p.wait_after);
         assert!(p.wait_submission_after);
+    }
+
+    #[test]
+    fn explicit_gcc16_waits_before_like_gc16() {
+        let r = refresh(Rect::new(0, 0, 300, 300), Waveform::Gcc16, false);
+        let p = plan_refresh(&r, SCREEN);
+        assert_eq!(p.waveform, fb::WFM_GCC16);
+        assert!(p.wait_before);
     }
 
     #[test]

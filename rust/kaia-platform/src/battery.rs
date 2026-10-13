@@ -12,6 +12,7 @@ pub trait Battery {
     /// Charge in percent, 0 to 100.
     fn capacity(&self) -> Option<u8>;
     /// Whether the charger is connected. The status file reads `Discharging` when it is not.
+    /// `None` only on a platform without a battery.
     fn is_charging(&self) -> Option<bool>;
     /// Whether the battery is full on a charger.
     fn is_charged(&self) -> Option<bool>;
@@ -50,11 +51,13 @@ impl Battery for KoboBattery {
         u8::try_from(value).ok().filter(|c| *c <= 100)
     }
 
-    /// `status` other than `Discharging` means the charger is connected.
-    /// `powerd.lua:299-301` also treats a missing file as charging. Kaia
-    /// returns `None` instead.
+    /// `status` other than `Discharging` means the charger is connected. A
+    /// status file that cannot be read counts as charging too, as
+    /// `KoboPowerD:isChargingHW` does (`powerd.lua:299-301`, where the nil
+    /// from `read_str_file` is not equal to `Discharging`). That is the safe
+    /// side on MTK, where suspending while plugged in hangs the kernel.
     fn is_charging(&self) -> Option<bool> {
-        Some(self.status()?.as_str() != "Discharging")
+        Some(self.status().as_deref() != Some("Discharging"))
     }
 
     /// `Full` means charged. `Not charging` at 100 percent also means charged

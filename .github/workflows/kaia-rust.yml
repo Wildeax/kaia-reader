@@ -56,8 +56,9 @@ jobs:
       # Crates that link KOReader's native build (kaia-mupdf-sys,
       # kaia-cre-sys, kaia-doc, kaia-library) are tested in the kaia-lua
       # emulator job, which builds those libraries. kaia-display is checked
-      # without its desktop window (minifb needs X11) and without the Kobo
-      # backend (needs FBInk).
+      # without its desktop window (minifb needs X11). Its Kobo feature is
+      # tested but not linted here: the tests link without FBInk because
+      # they never call it.
       - name: Clippy
         working-directory: rust
         run: |
@@ -71,6 +72,7 @@ jobs:
           cargo test --locked ${PURE_CRATES}
           cargo test --locked -p kaia-ffi --features test-panic
           cargo test --locked -p kaia-display --no-default-features
+          cargo test --locked -p kaia-display --no-default-features --features kobo
 
   deny:
     name: cargo deny

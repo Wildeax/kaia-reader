@@ -20,7 +20,7 @@ use super::abi::{
 use super::fb::{self, FbGeometry};
 use super::geometry::{bounded_rect, Orientation, ALIGNMENT_CONSTRAINT};
 use super::pixels::{encode_patch, store_patch, Patch};
-use super::update::{request_for, Sequencer, Step};
+use super::update::{request_for, Sequencer, Step, NIGHT_MODE_OFF_CMD, NIGHT_MODE_ON_CMD};
 use crate::display::{check_present, Display, DisplayError, PanelSpec};
 use crate::rotation::Rotation;
 use crate::waveform::Refresh;
@@ -132,6 +132,18 @@ impl NativeKoboDisplay {
         self.sequencer.night_mode()
     }
 
+    /// Sets the color rendering setting, KOReader's `isColorEnabled`. The Kaleido
+    /// promotion of dithered updates needs it on. It starts on. The app calls this at
+    /// startup and when the user changes the setting.
+    pub fn set_color_enabled(&mut self, on: bool) {
+        self.sequencer.set_color_enabled(on);
+    }
+
+    /// Whether the color rendering setting is on.
+    pub fn color_enabled(&self) -> bool {
+        self.sequencer.color_enabled()
+    }
+
     /// Copies a patch into the mapped framebuffer.
     fn store(&mut self, patch: &Patch) -> Result<(), DisplayError> {
         // SAFETY: `self.map` is valid for `self.map_len` bytes until drop. `&mut self`
@@ -178,6 +190,10 @@ impl NativeKoboDisplay {
 
 impl Drop for NativeKoboDisplay {
     fn drop(&mut self) {
+        // Leave the panel with the hardware night mode off, as `Device:exit` does
+        // (`generic/device.lua`, line 667). Otherwise the next program, Nickel
+        // included, would start on an inverted panel.
+        write_procfs(HWTCON_CMD, self.sequencer.reset_night_mode_on_exit());
         // SAFETY: `self.map` and `self.map_len` come from the successful `mmap` in
         // `open`, and this is the only place that unmaps them. After this the fields
         // are not used, and the descriptor closes when `fd` is dropped.
@@ -240,7 +256,10 @@ impl Display for NativeKoboDisplay {
     /// that updates use.
     fn set_night_mode(&mut self, on: bool) {
         self.sequencer.set_night_mode(on);
-        write_procfs(HWTCON_CMD, if on { "night_mode 4" } else { "night_mode 0" });
+        write_procfs(
+            HWTCON_CMD,
+            if on { NIGHT_MODE_ON_CMD } else { NIGHT_MODE_OFF_CMD },
+        );
     }
 }
 

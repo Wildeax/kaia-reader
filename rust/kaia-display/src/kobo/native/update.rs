@@ -52,8 +52,14 @@ pub enum Step {
     Send(HwtconUpdateData),
 }
 
+/// The `/proc/hwtcon/cmd` text that turns the hardware night mode on
+/// (`device.lua`, `setHWNightmode`, line 720).
+pub const NIGHT_MODE_ON_CMD: &str = "night_mode 4";
+/// The `/proc/hwtcon/cmd` text that turns the hardware night mode off.
+pub const NIGHT_MODE_OFF_CMD: &str = "night_mode 0";
+
 /// The state that KOReader keeps on the framebuffer object between updates.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sequencer {
     /// `fb.marker`: the last marker handed out. 0 before the first update (line 57).
     marker: u32,
@@ -67,6 +73,23 @@ pub struct Sequencer {
     /// `fb:getHWNightmode()`: the state last written to the night mode knob on MTK
     /// (`device.lua`, `setHWNightmode` for MTK, line 713 onward).
     hw_night_mode: bool,
+    /// `fb:isColorEnabled()`: the color rendering setting (line 370). The Kaleido
+    /// promotion needs it on. The app sets it from its settings.
+    color_enabled: bool,
+}
+
+impl Default for Sequencer {
+    /// Color rendering on, which is KOReader's default on a color panel.
+    fn default() -> Self {
+        Sequencer {
+            marker: 0,
+            dont_wait_for_marker: None,
+            flags: 0,
+            night_mode: false,
+            hw_night_mode: false,
+            color_enabled: true,
+        }
+    }
 }
 
 impl Sequencer {
@@ -78,6 +101,28 @@ impl Sequencer {
     /// The night mode that the sequencer applies to updates.
     pub fn night_mode(&self) -> bool {
         self.night_mode
+    }
+
+    /// Whether the color rendering setting is on.
+    pub fn color_enabled(&self) -> bool {
+        self.color_enabled
+    }
+
+    /// Sets the color rendering setting (`isColorEnabled`, line 370). With it off, the
+    /// dither flag still turns on hardware dithering, but REAGL and GC16 are not
+    /// promoted to the Kaleido modes and the CFA flag stays clear.
+    pub fn set_color_enabled(&mut self, on: bool) {
+        self.color_enabled = on;
+    }
+
+    /// Resets the night mode for shutdown, as `Device:exit` does with
+    /// `setHWNightmode(orig_hw_nightmode)` (`generic/device.lua`, line 667). The
+    /// original state is always off on MTK, because Nickel inverts in software. Returns
+    /// the text to write to `/proc/hwtcon/cmd`. KOReader writes it whatever the state.
+    pub fn reset_night_mode_on_exit(&mut self) -> &'static str {
+        self.night_mode = false;
+        self.hw_night_mode = false;
+        NIGHT_MODE_OFF_CMD
     }
 
     /// Sets the night mode, as `toggleNightMode` does on MTK: the frame state and the
@@ -149,10 +194,11 @@ impl Sequencer {
             UPDATE_MODE_PARTIAL
         };
 
-        // Kaleido promotion (line 370): REAGL becomes GLRC16, GC16 becomes GCC16. Color
-        // screens with color rendering on do this only for dithered content. The CFA
-        // bit is set for either Kaleido mode. The Libra Colour has both switches on.
-        if request.dither {
+        // Kaleido promotion (line 370): REAGL becomes GLRC16, GC16 becomes GCC16. It needs
+        // the dither flag, a Kaleido-capable panel (the Libra Colour is) and the color
+        // rendering setting (`isColorEnabled`, `set_color_enabled`). The CFA bit is set
+        // for either Kaleido mode.
+        if request.dither && self.color_enabled {
             if waveform == HWTCON_WAVEFORM_MODE_GLR16 {
                 waveform = HWTCON_WAVEFORM_MODE_GLRC16;
             } else if waveform == HWTCON_WAVEFORM_MODE_GC16 {
@@ -477,6 +523,74 @@ mod tests {
                 Step::WaitComplete(3),
             ]
         );
+    }
+
+    /// The `HWTCON_SEND_UPDATE` struct of the single send in `steps`.
+    fn sent(steps: &[Step]) -> HwtconUpdateData {
+        steps
+            .iter()
+            .find_map(|s| match s {
+                Step::Send(d) => Some(*d),
+                _ => None,
+            })
+            .expect("one send step")
+    }
+
+    #[test]
+    fn color_rendering_off_blocks_the_kaleido_promotion() {
+        // Line 370 needs isColorEnabled(). With it off, dithered GC16 stays GC16 and the
+        // CFA bit stays clear. The hardware dithering flag still applies (line 710).
+        let mut s = Sequencer::default();
+        assert!(s.color_enabled(), "color rendering starts on");
+        s.set_color_enabled(false);
+        let d = sent(&run(&mut s, FULL, req(HWTCON_WAVEFORM_MODE_GC16, true, true)).unwrap());
+        assert_eq!(d.waveform_mode, HWTCON_WAVEFORM_MODE_GC16);
+        assert_eq!(d.flags, HWTCON_FLAG_USE_DITHERING);
+        assert_eq!(d.flags & HWTCON_FLAG_CFA_EINK_G2, 0);
+
+        // Dithered REAGL stays REAGL, and REAGL is FULL either way (line 417).
+        let d = sent(
+            &run(
+                &mut s,
+                Rect::new(0, 0, 400, 400),
+                req(HWTCON_WAVEFORM_MODE_GLR16, false, true),
+            )
+            .unwrap(),
+        );
+        assert_eq!(d.waveform_mode, HWTCON_WAVEFORM_MODE_GLR16);
+        assert_eq!(d.update_mode, UPDATE_MODE_FULL);
+        assert_eq!(d.flags & HWTCON_FLAG_CFA_EINK_G2, 0);
+    }
+
+    #[test]
+    fn color_rendering_back_on_restores_the_promotion() {
+        let mut s = Sequencer::default();
+        s.set_color_enabled(false);
+        s.set_color_enabled(true);
+        let d = sent(&run(&mut s, FULL, req(HWTCON_WAVEFORM_MODE_GC16, true, true)).unwrap());
+        assert_eq!(d.waveform_mode, HWTCON_WAVEFORM_MODE_GCC16);
+        assert_ne!(d.flags & HWTCON_FLAG_CFA_EINK_G2, 0);
+    }
+
+    #[test]
+    fn exit_resets_the_night_mode() {
+        let mut s = Sequencer::default();
+        s.set_night_mode(true);
+        assert!(s.night_mode());
+        assert_eq!(s.reset_night_mode_on_exit(), NIGHT_MODE_OFF_CMD);
+        assert!(!s.night_mode());
+        // The next update carries no inversion flag and no night waveform.
+        let d = sent(&run(&mut s, FULL, req(HWTCON_WAVEFORM_MODE_GC16, true, false)).unwrap());
+        assert_eq!(d.waveform_mode, HWTCON_WAVEFORM_MODE_GC16);
+        assert_eq!(d.flags & EPDC_FLAG_ENABLE_INVERSION, 0);
+        // KOReader writes the knob even when the mode was already off.
+        assert_eq!(s.reset_night_mode_on_exit(), "night_mode 0");
+    }
+
+    #[test]
+    fn night_mode_knob_texts_match_device_lua() {
+        assert_eq!(NIGHT_MODE_ON_CMD, "night_mode 4");
+        assert_eq!(NIGHT_MODE_OFF_CMD, "night_mode 0");
     }
 
     #[test]

@@ -9,25 +9,32 @@
 //! Layout:
 //! - [`sysfs`]: device file access and command execution, injectable through
 //!   [`sysfs::Root`], [`sysfs::SysfsWriter`] and [`sysfs::Runner`].
+//! - [`ioctl`]: the RTC and `ntx_io` ioctls, the only `unsafe` code.
 //! - [`plan`]: step lists for sequences (suspend, standby, Wi-Fi, USB handover).
 //! - [`battery`], [`frontlight`], [`network`], [`power`], [`usb`], [`events`]:
 //!   the device services.
 //! - [`device`], [`paths`]: identity and locations.
 //! - [`platform`]: the bundle and [`platform::Platform::detect`].
 //!
-//! The crate has no `unsafe` code. Ioctl-based KOReader paths are replaced
-//! by sysfs writes, and each replacement is noted where it happens.
+//! `unsafe` code is confined to [`ioctl`]: the RTC alarm and clock calls and the
+//! `ntx_io` brightness call, ported from KOReader's FFI modules. Each has a
+//! sysfs fallback where KOReader has one, and the callers use it when the
+//! ioctl fails.
+
+#![deny(unsafe_code)]
 
 pub mod battery;
 pub mod device;
 pub mod error;
 pub mod events;
 pub mod frontlight;
+pub mod ioctl;
 pub mod network;
 pub mod paths;
 pub mod plan;
 pub mod platform;
 pub mod power;
+pub mod suspend;
 pub mod sysfs;
 pub mod usb;
 pub mod wpa;

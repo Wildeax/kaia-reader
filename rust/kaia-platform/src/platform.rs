@@ -37,6 +37,11 @@ pub struct Env {
     pub wifi_module: Option<String>,
     /// `PLATFORM`, passed to the Wi-Fi scripts (`koreader.sh:266-282`).
     pub platform: Option<String>,
+    /// The saved warmth, 0 to 100, from the app's settings. A Kobo writes it to the
+    /// mixer at startup. KOReader does the same and does not read the mixer back
+    /// (`powerd.lua:186-191`). `None` leaves the mixer alone and reports warmth 0
+    /// until the app calls `set_warmth`. Not read from the process environment.
+    pub saved_warmth: Option<u8>,
     /// `HOME`, for desktop paths.
     pub home: Option<PathBuf>,
     /// `XDG_DATA_HOME`, for desktop paths.
@@ -55,6 +60,7 @@ impl Env {
             interface: var("INTERFACE"),
             wifi_module: var("WIFI_MODULE"),
             platform: var("PLATFORM"),
+            saved_warmth: None,
             home: var("HOME").map(PathBuf::from),
             xdg_data_home: var("XDG_DATA_HOME").map(PathBuf::from),
         }
@@ -121,7 +127,8 @@ impl Platform {
             script_env.push(("PLATFORM".to_string(), platform.clone()));
         }
 
-        let frontlight = SysfsFrontlight::open(FrontlightConfig::monza(), io.clone(), &root);
+        let frontlight =
+            SysfsFrontlight::open(FrontlightConfig::monza(), io.clone(), &root, env.saved_warmth);
         let power = PowerManager::kobo(&root, paths.install_dir.clone(), script_env.clone(), true);
         let network = KoboNetwork::new(
             root.clone(),

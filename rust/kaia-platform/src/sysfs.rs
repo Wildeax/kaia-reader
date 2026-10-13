@@ -14,6 +14,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::ioctl;
+
 /// A base directory that device-absolute paths are resolved against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Root {
@@ -62,9 +64,53 @@ impl Root {
 }
 
 /// Writes a value to a device file. Tests implement this to record writes.
+///
+/// The ioctl methods are the faster or more capable paths that KOReader prefers
+/// over sysfs (RTC alarm, system clock, `ntx_io` frontlight). They are default
+/// methods that report [`io::ErrorKind::Unsupported`], so a writer that only
+/// handles files still works and callers fall back to sysfs. [`SystemIo`]
+/// implements them with the calls in [`crate::ioctl`]. Tests implement them to
+/// record the calls.
 pub trait SysfsWriter {
     /// Writes `value` to the device path. Errors mean the kernel refused the write.
     fn write(&mut self, device_path: &str, value: &str) -> io::Result<()>;
+
+    /// Sets the RTC alarm to `epoch` (UTC) and enables it, with `RTC_WKALM_SET`
+    /// on the RTC device node `device_path`. Overwrites an alarm that is set.
+    fn rtc_set_alarm(&mut self, device_path: &str, epoch: u64) -> io::Result<()> {
+        let _ = (device_path, epoch);
+        Err(unsupported())
+    }
+
+    /// Turns the RTC alarm interrupt off (`RTC_AIE_OFF`).
+    fn rtc_disable_alarm(&mut self, device_path: &str) -> io::Result<()> {
+        let _ = device_path;
+        Err(unsupported())
+    }
+
+    /// Copies the RTC time to the system clock (`RTC:HCToSys`).
+    fn rtc_to_system_clock(&mut self, device_path: &str) -> io::Result<()> {
+        let _ = device_path;
+        Err(unsupported())
+    }
+
+    /// Whether the `ntx_io` node at `device_path` opens, which means the
+    /// brightness ioctl can be used.
+    fn ntx_available(&mut self, device_path: &str) -> bool {
+        let _ = device_path;
+        false
+    }
+
+    /// Sets the frontlight brightness (0 to 100) with ioctl 241 on the `ntx_io`
+    /// node at `device_path`.
+    fn ntx_set_brightness(&mut self, device_path: &str, value: u8) -> io::Result<()> {
+        let _ = (device_path, value);
+        Err(unsupported())
+    }
+}
+
+fn unsupported() -> io::Error {
+    io::Error::new(io::ErrorKind::Unsupported, "no ioctl access in this writer")
 }
 
 /// Runs external programs. Tests implement this to record commands.
@@ -107,6 +153,26 @@ impl SysfsWriter for SystemIo {
             .truncate(true)
             .open(self.root.path(device_path))?;
         file.write_all(value.as_bytes())
+    }
+
+    fn rtc_set_alarm(&mut self, device_path: &str, epoch: u64) -> io::Result<()> {
+        ioctl::rtc_set_alarm(&self.root.path(device_path), epoch)
+    }
+
+    fn rtc_disable_alarm(&mut self, device_path: &str) -> io::Result<()> {
+        ioctl::rtc_disable_alarm(&self.root.path(device_path))
+    }
+
+    fn rtc_to_system_clock(&mut self, device_path: &str) -> io::Result<()> {
+        ioctl::set_system_clock_from_rtc(&self.root.path(device_path))
+    }
+
+    fn ntx_available(&mut self, device_path: &str) -> bool {
+        ioctl::ntx_available(&self.root.path(device_path))
+    }
+
+    fn ntx_set_brightness(&mut self, device_path: &str, value: u8) -> io::Result<()> {
+        ioctl::ntx_set_brightness(&self.root.path(device_path), value)
     }
 }
 

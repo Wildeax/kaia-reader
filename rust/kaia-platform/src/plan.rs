@@ -12,6 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::power::{RTC_DEVICE, RTC_WAKEALARM};
 use crate::sysfs::{Runner, SysfsWriter};
 
 /// One effect in a plan.
@@ -21,6 +22,17 @@ pub enum Action {
     Write { path: String, value: String },
     /// Sleep for the given time.
     Sleep(Duration),
+    /// Set the RTC wakeup alarm to this epoch (UTC seconds). [`execute`] uses the
+    /// `RTC_WKALM_SET` ioctl first, as `base/ffi/rtc.lua` does. When the ioctl
+    /// fails, it writes `0` to the sysfs `wakealarm` file to clear an old alarm
+    /// (a write while one is set fails with EBUSY) and then writes the epoch.
+    SetWakeAlarm { epoch: u64 },
+    /// Clear the RTC wakeup alarm. [`execute`] uses `RTC_AIE_OFF`, as
+    /// `RTC:unsetWakeupAlarm` does, and falls back to writing `0` to the sysfs
+    /// `wakealarm` file.
+    ClearWakeAlarm,
+    /// Copy the RTC time to the system clock (`RTC:HCToSys`). Unverified on hardware.
+    RtcToSystemClock,
     /// Run a program and wait for it.
     Run {
         /// Program path or name (looked up on `PATH` when it has no slash).
@@ -73,6 +85,33 @@ impl Step {
     pub fn sleep(duration: Duration, source: &'static str) -> Self {
         Step {
             action: Action::Sleep(duration),
+            on_error: OnError::Ignore,
+            source,
+        }
+    }
+
+    /// Sets the RTC wakeup alarm. Ignores failures.
+    pub fn set_wake_alarm(epoch: u64, source: &'static str) -> Self {
+        Step {
+            action: Action::SetWakeAlarm { epoch },
+            on_error: OnError::Ignore,
+            source,
+        }
+    }
+
+    /// Clears the RTC wakeup alarm. Ignores failures.
+    pub fn clear_wake_alarm(source: &'static str) -> Self {
+        Step {
+            action: Action::ClearWakeAlarm,
+            on_error: OnError::Ignore,
+            source,
+        }
+    }
+
+    /// Copies the RTC time to the system clock. Ignores failures.
+    pub fn rtc_to_system_clock(source: &'static str) -> Self {
+        Step {
+            action: Action::RtcToSystemClock,
             on_error: OnError::Ignore,
             source,
         }
@@ -221,6 +260,18 @@ where
             sleep(*duration);
             true
         }
+        Action::SetWakeAlarm { epoch } => {
+            io.rtc_set_alarm(RTC_DEVICE, *epoch).is_ok() || {
+                // sysfs refuses a new alarm while one is set, so clear first. The
+                // clear can fail when no alarm is set, which is fine.
+                let _ = io.write(RTC_WAKEALARM, "0");
+                io.write(RTC_WAKEALARM, &epoch.to_string()).is_ok()
+            }
+        }
+        Action::ClearWakeAlarm => {
+            io.rtc_disable_alarm(RTC_DEVICE).is_ok() || io.write(RTC_WAKEALARM, "0").is_ok()
+        }
+        Action::RtcToSystemClock => io.rtc_to_system_clock(RTC_DEVICE).is_ok(),
         Action::Run {
             program,
             args,

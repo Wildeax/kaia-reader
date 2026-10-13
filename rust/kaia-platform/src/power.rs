@@ -10,15 +10,36 @@
 //! - standby state: `standby` by default (156), `mem` on MTK (955-957).
 //! - `checkStandby` at 35-50.
 //! - wakeup alarm: `WakeupMgr:addTask` in `frontend/device/wakeupmgr.lua:69-111`,
-//!   which calls `base/ffi/rtc.lua` (`setWakeupAlarm`). KOReader sets the
-//!   alarm with the `RTC_WKALM_SET` ioctl on `/dev/rtc0`. Kaia writes
-//!   `/sys/class/rtc/rtc0/wakealarm`. Unverified on hardware.
+//!   which calls `base/ffi/rtc.lua` (`setWakeupAlarm`, `unsetWakeupAlarm`).
+//!   The alarm is set with the `RTC_WKALM_SET` ioctl on `/dev/rtc0`, which
+//!   replaces an alarm that is set. If the ioctl fails, the plan writes `0`
+//!   and then the epoch to `/sys/class/rtc/rtc0/wakealarm`; a sysfs write
+//!   alone fails with EBUSY while an alarm is set. See [`crate::plan::Action::SetWakeAlarm`].
+//! - clock resync after resume: `RTC:HCToSys` in `powerd.lua:515`.
+//!
+//! # Timing belongs to the caller
+//!
+//! No plan here sleeps for longer than a few milliseconds. KOReader waits
+//! between steps with `UIManager:scheduleIn`, so input keeps flowing. The
+//! delays that need that are returned as constants for the caller to schedule,
+//! and [`crate::suspend::SuspendFlow`] is the state machine that orders them.
+//! The suspend sequence is two plans with a wait between them:
+//!
+//! 1. [`PowerManager::prepare_suspend`]: Wi-Fi off and `state-extended` to 1.
+//! 2. Wait [`PRE_SUSPEND_DELAY`] (2 s) on the event scheduler.
+//! 3. [`PowerManager::finish_suspend`]: `sync`, then the write of `mem`.
+//!
+//! The app must cancel step 2 when a Power press (or any Resume) arrives
+//! during the wait, as `Kobo:resume` does (`device.lua:1484`, issue #12325).
+//! Without the cancel, the device suspends right after the user pressed the
+//! button to keep it awake. [`crate::suspend::SuspendFlow::resume`] does the
+//! cancel and returns the timer to drop.
 //!
 //! Power key and sleep cover handling is in [`crate::events`].
 //!
 //! Not ported here:
 //! - the frontlight ramp before suspend (`powerd.lua:473-490`). The caller
-//!   turns the light off with `Frontlight::toggle` first.
+//!   turns the light off with `Frontlight::begin_toggle` first.
 //! - the `pmic_rtc` alarm chain (`wakeupmgr.lua:79-94`). That RTC is on i.MX5
 //!   boards, not the Libra Colour.
 //! - KOReader's `enableCPUCores` and `wakeup_count` handling.
@@ -34,8 +55,13 @@ use crate::sysfs::Root;
 pub const STATE_EXTENDED: &str = "/sys/power/state-extended";
 /// `/sys/power/state`. The kernel enters suspend or standby here (`device.lua:1322`, `1442`).
 pub const POWER_STATE: &str = "/sys/power/state";
-/// RTC wakeup alarm in sysfs form. KOReader uses the `/dev/rtc0` ioctl.
+/// RTC wakeup alarm in sysfs form. The fallback when the ioctl fails.
 pub const RTC_WAKEALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
+/// The RTC device node for the alarm and clock ioctls (`base/ffi/rtc.lua:26`, `dev_rtc`).
+pub const RTC_DEVICE: &str = "/dev/rtc0";
+/// The wait between `state-extended` and the suspend write (`device.lua:1409`,
+/// `UIManager:scheduleIn(2, self._doSuspend, self)`). The caller schedules it.
+pub const PRE_SUSPEND_DELAY: Duration = Duration::from_secs(2);
 /// Neonode IR grid knobs, written `a` on resume (`device.lua:967-975`, `1509`).
 const IR_GRID_KNOBS: [&str; 2] = [
     "/sys/devices/virtual/input/input1/neocmd",
@@ -62,6 +88,10 @@ pub struct PowerContext {
 pub struct ResumeContext {
     /// Charging LED state to set after resume. `None` leaves the LED alone (`device.lua:1513`).
     pub charging_led: Option<bool>,
+    /// Copy the RTC time to the system clock after resume (`RTC:HCToSys`,
+    /// `powerd.lua:515`). Off by default. Unverified on hardware: the call needs
+    /// root and a working RTC driver.
+    pub sync_system_clock: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,11 +173,21 @@ impl PowerManager {
         self.kobo.as_ref().is_some_and(|k| k.can_standby)
     }
 
-    /// The first half of suspend: Wi-Fi off, `state-extended` set to 1, then wait 2 seconds.
+    /// The first half of suspend: Wi-Fi off, then `state-extended` set to 1.
+    ///
+    /// The plan does not wait. KOReader waits 2 seconds before the second half
+    /// (`device.lua:1409`) on its event loop, so a Power press in that window
+    /// is still handled (#12325). The caller schedules [`PRE_SUSPEND_DELAY`],
+    /// then runs [`PowerManager::finish_suspend`], and cancels the wait when a
+    /// Power press or Resume arrives first. [`crate::suspend::SuspendFlow`]
+    /// holds that order.
     ///
     /// KOReader source: `Kobo:suspend` (`device.lua:1361-1409`). The frontlight
     /// and the Suspend event come first (`powerd.lua:473-490`,
-    /// `generic/device.lua:412-478`). Unverified on hardware.
+    /// `generic/device.lua:412-478`). If the `state-extended` write fails, the
+    /// plan stops with a failed outcome, and the caller must not run the second
+    /// half (KOReader retries through the unexpected wakeup guard,
+    /// `device.lua:1397-1403`). Unverified on hardware.
     pub fn prepare_suspend(&self, ctx: PowerContext) -> Plan {
         let Some(k) = &self.kobo else {
             return Plan::skipped(NO_POWER_MANAGEMENT);
@@ -162,18 +202,18 @@ impl PowerManager {
         steps.push(
             Step::write(STATE_EXTENDED, "1", "frontend/device/kobo/device.lua:1395").on_error(OnError::Abort),
         );
-        steps.push(Step::sleep(
-            Duration::from_secs(2),
-            "frontend/device/kobo/device.lua:1409 (scheduleIn 2 before _doSuspend)",
-        ));
         Plan::new(steps)
     }
 
     /// The second half of suspend: `sync`, then write `mem` to `/sys/power/state`.
+    /// Run it [`PRE_SUSPEND_DELAY`] after [`PowerManager::prepare_suspend`], unless
+    /// a Power press or Resume cancelled the wait.
     ///
     /// If the write fails, `state-extended` goes back to 0 (`device.lua:1442-1464`).
-    /// The write returns when the kernel resumes. Unverified on hardware.
-    pub fn suspend(&self) -> Plan {
+    /// The write returns when the kernel resumes. Whatever the outcome, the
+    /// caller then arms the unexpected wakeup guard (`device.lua:1471`).
+    /// Unverified on hardware.
+    pub fn finish_suspend(&self) -> Plan {
         if self.kobo.is_none() {
             return Plan::skipped(NO_POWER_MANAGEMENT);
         }
@@ -190,8 +230,12 @@ impl PowerManager {
     }
 
     /// Resume: `state-extended` back to 0, wait 100 ms, then the IR grid knob and the charging LED.
+    /// With [`ResumeContext::sync_system_clock`], the RTC time is copied to the system clock last.
     ///
-    /// KOReader source: `Kobo:resume` (`device.lua:1476-1514`). Unverified on hardware.
+    /// KOReader source: `Kobo:resume` (`device.lua:1476-1514`) and
+    /// `KoboPowerD:afterResume` (`powerd.lua:515`, `RTC:HCToSys()`). Cancelling a
+    /// pending suspend (`device.lua:1484`) is the caller's job, see the module
+    /// documentation. Unverified on hardware.
     pub fn resume(&self, ctx: ResumeContext) -> Plan {
         let Some(k) = &self.kobo else {
             return Plan::skipped(NO_POWER_MANAGEMENT);
@@ -213,22 +257,42 @@ impl PowerManager {
                 "frontend/device/kobo/device.lua:1582-1587 (_LinuxChargingLEDToggle, toggleChargingLED)",
             ));
         }
+        if ctx.sync_system_clock {
+            steps.push(Step::rtc_to_system_clock(
+                "frontend/device/kobo/powerd.lua:515 (afterResume, RTC:HCToSys); base/ffi/rtc.lua:352",
+            ));
+        }
         Plan::new(steps)
     }
 
     /// Sets the RTC alarm `seconds` after `now_epoch` (UTC seconds).
     ///
-    /// KOReader source: `WakeupMgr:addTask` (`frontend/device/wakeupmgr.lua:69-111`).
-    /// Kaia writes the absolute epoch to the sysfs `wakealarm` file. Unverified
-    /// on hardware.
+    /// KOReader source: `WakeupMgr:addTask` (`frontend/device/wakeupmgr.lua:69-111`)
+    /// and `RTC:setWakeupAlarm` (`base/ffi/rtc.lua:102`). The plan uses the
+    /// `RTC_WKALM_SET` ioctl, which replaces an alarm that is set, and falls back
+    /// to sysfs (write `0`, then the epoch) when the ioctl fails. Unverified on hardware.
     pub fn schedule_wakeup(&self, seconds: u64, now_epoch: u64) -> Plan {
         if self.kobo.is_none() {
             return Plan::skipped(NO_POWER_MANAGEMENT);
         }
-        Plan::new(vec![Step::write(
-            RTC_WAKEALARM,
-            &(now_epoch + seconds).to_string(),
+        Plan::new(vec![Step::set_wake_alarm(
+            now_epoch.saturating_add(seconds),
             "frontend/device/wakeupmgr.lua:69-111 (addTask); base/ffi/rtc.lua:102 (setWakeupAlarm)",
+        )])
+    }
+
+    /// Clears the RTC alarm. Run it on power off, as `Kobo:powerOff` does, and
+    /// when a scheduled wakeup is cancelled.
+    ///
+    /// KOReader source: `RTC:unsetWakeupAlarm` (`base/ffi/rtc.lua:154`) through
+    /// `Kobo:powerOff` (`device.lua:1531`). The plan uses `RTC_AIE_OFF` and falls
+    /// back to writing `0` to the sysfs `wakealarm` file. Unverified on hardware.
+    pub fn clear_wakeup(&self) -> Plan {
+        if self.kobo.is_none() {
+            return Plan::skipped(NO_POWER_MANAGEMENT);
+        }
+        Plan::new(vec![Step::clear_wake_alarm(
+            "frontend/device/kobo/device.lua:1531 (powerOff); base/ffi/rtc.lua:154 (unsetWakeupAlarm)",
         )])
     }
 
@@ -298,7 +362,8 @@ mod tests {
     fn desktop_plans_are_skipped() {
         let pm = PowerManager::none();
         assert!(pm.prepare_suspend(PowerContext::default()).is_skipped());
-        assert!(pm.suspend().is_skipped());
+        assert!(pm.finish_suspend().is_skipped());
+        assert!(pm.clear_wakeup().is_skipped());
         assert!(pm.resume(ResumeContext::default()).is_skipped());
         assert!(pm.standby(PowerContext::default(), None, 0).is_skipped());
         assert!(pm.schedule_wakeup(10, 0).is_skipped());
@@ -330,7 +395,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pm = kobo_manager(&Root::new(dir.path()), vec![]);
         let first = pm.prepare_suspend(PowerContext::default());
-        assert_eq!(first.steps.len(), 2);
+        // The 2 s wait is not a step: the caller schedules PRE_SUSPEND_DELAY.
+        assert_eq!(first.steps.len(), 1);
         assert_eq!(
             first.steps[0].action,
             Action::Write {
@@ -339,9 +405,10 @@ mod tests {
             }
         );
         assert_eq!(first.steps[0].on_error, OnError::Abort);
-        assert_eq!(first.steps[1].action, Action::Sleep(Duration::from_secs(2)));
+        assert!(first.steps.iter().all(|s| !matches!(s.action, Action::Sleep(_))));
+        assert_eq!(PRE_SUSPEND_DELAY, Duration::from_secs(2));
 
-        let second = pm.suspend();
+        let second = pm.finish_suspend();
         assert_eq!(second.steps.len(), 2);
         assert_eq!(
             second.steps[0].action,
@@ -383,7 +450,7 @@ mod tests {
             wifi_on: true,
             charging: false,
         });
-        assert_eq!(plan.steps.len(), 4);
+        assert_eq!(plan.steps.len(), 3);
         match &plan.steps[0].action {
             Action::Run {
                 program, cwd, env: e, ..
@@ -419,6 +486,7 @@ mod tests {
         let pm = kobo_manager(&Root::new(dir.path()), vec![]);
         let plan = pm.resume(ResumeContext {
             charging_led: Some(true),
+            sync_system_clock: false,
         });
         let actions: Vec<Action> = plan.steps.iter().map(|s| s.action.clone()).collect();
         assert_eq!(
@@ -461,10 +529,7 @@ mod tests {
                     path: knob.clone(),
                     value: "performance".to_string()
                 },
-                Action::Write {
-                    path: RTC_WAKEALARM.to_string(),
-                    value: "1300".to_string()
-                },
+                Action::SetWakeAlarm { epoch: 1300 },
                 Action::Sleep(Duration::from_millis(90)),
                 Action::Write {
                     path: POWER_STATE.to_string(),
@@ -476,5 +541,31 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn resume_can_resync_the_system_clock_last() {
+        let dir = tempfile::tempdir().unwrap();
+        let pm = kobo_manager(&Root::new(dir.path()), vec![]);
+        let plain = pm.resume(ResumeContext::default());
+        assert!(plain.steps.iter().all(|s| s.action != Action::RtcToSystemClock));
+        let plan = pm.resume(ResumeContext {
+            charging_led: None,
+            sync_system_clock: true,
+        });
+        assert_eq!(plan.steps.last().unwrap().action, Action::RtcToSystemClock);
+        assert_eq!(plan.steps.last().unwrap().on_error, OnError::Ignore);
+    }
+
+    #[test]
+    fn wakeup_and_clear_are_single_alarm_steps() {
+        let dir = tempfile::tempdir().unwrap();
+        let pm = kobo_manager(&Root::new(dir.path()), vec![]);
+        let set = pm.schedule_wakeup(600, 2_000);
+        assert_eq!(set.steps.len(), 1);
+        assert_eq!(set.steps[0].action, Action::SetWakeAlarm { epoch: 2_600 });
+        let clear = pm.clear_wakeup();
+        assert_eq!(clear.steps.len(), 1);
+        assert_eq!(clear.steps[0].action, Action::ClearWakeAlarm);
     }
 }

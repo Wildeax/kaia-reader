@@ -26,7 +26,11 @@
 //! - Channel width: 32 bpp channels must be 8 bits wide at offsets 0, 8 and 16.
 //! - Dithering: `Refresh::dither` turns on the Kaleido promotion and the hardware
 //!   dithering together, as KOReader does for image content. The app must set it on
-//!   color content. Gray UI leaves it off.
+//!   color content. Gray UI leaves it off. The promotion also needs the color rendering
+//!   setting, as KOReader's `isColorEnabled()` does. It starts on, and the app sets it
+//!   with `NativeKoboDisplay::set_color_enabled`.
+//! - Exit: dropping the display writes `night_mode 0` to `/proc/hwtcon/cmd`, as
+//!   `Device:exit` restores the hardware night mode.
 //! - Rotation: `Rotation::Deg90` is KOReader's mode 1, as `rotation.rs` documents. Check
 //!   on the device that the logical bottom edge is on the panel's right side.
 //! - Waits: the complete wait passes an 8-byte struct, where KOReader passes 4 bytes.
