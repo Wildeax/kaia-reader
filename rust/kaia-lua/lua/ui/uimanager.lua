@@ -18,6 +18,7 @@ local logger = require("logger")
 local _ = require("gettext")
 
 local UIManager = {
+    event_hook = require("ui/hook_container"):new(),
     FULL_REFRESH_COUNT = 6,
     refresh_count = 0,
     currently_scrolling = false,
@@ -153,6 +154,16 @@ function UIManager:unschedule(action)
     return true
 end
 
+function UIManager:preventStandby()
+    self._standby_holds = (self._standby_holds or 0) + 1
+end
+function UIManager:allowStandby()
+    self._standby_holds = math.max(0, (self._standby_holds or 0) - 1)
+end
+function UIManager:getElapsedTimeSinceBoot()
+    return require("ui/time").boottime_or_realtime_coarse()
+end
+
 function UIManager:getTime()
     return require("ui/time").now()
 end
@@ -166,7 +177,7 @@ function UIManager:broadcastEvent(event)
 end
 
 function UIManager:getTopmostVisibleWidget()
-    return KAIA_UI.topmost_visible()
+    return KAIA_UI.topmost_visible() or (KAIA_PLUGIN and KAIA_PLUGIN.ui)
 end
 
 function UIManager:isWidgetShown(widget)
@@ -234,6 +245,8 @@ function UIManager:askForRestart(message_text)
 end
 
 function UIManager:flushSettings()
+    if KAIA_READER then KAIA_READER.flush_settings() end
+    if KAIA_PLUGIN then KAIA_PLUGIN.dispatch("FlushSettings") end
     if G_reader_settings then
         G_reader_settings:flush()
     end

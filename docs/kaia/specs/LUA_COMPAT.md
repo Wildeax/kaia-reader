@@ -64,3 +64,18 @@ L4 status: implemented in `rust/kaia-lua`. The `tests/plugins.rs` checks load
 KOReader's PluginLoader, open exporter and statistics menus against a real EPUB
 and PDF, deliver reader events, and check safe mode and plugin failure status.
 The Rust app still needs to connect its reader and library objects to the traits.
+
+
+L5 part 1 status: partial. The bundled tests exercise file exports, annotation
+writes, statistics views, vocabulary review, settings dialogs, gesture dispatch,
+profiles, timers, archive operations and text editing. All 37 inventory entries
+have explicit load-outcome assertions. ReaderHost now accepts annotation writes
+and settings flush; LibraryHost accepts copy, move and folder navigation.
+Registered view modules and additional footer text can paint through
+`LuaUi::paint_reader_overlays`.
+
+The app still needs to connect these methods, overlays and lifecycle events.
+Power services, dictionary integration, coverbrowser's Rust library adapter and
+terminal process ownership are unresolved. Server and hardware operations are
+excluded from desktop tests. See [the per-plugin status table](../inventory/PLUGIN_STATUS.md)
+for test names, untested baseline steps and changes needed outside kaia-lua.

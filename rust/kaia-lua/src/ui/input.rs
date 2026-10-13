@@ -253,7 +253,8 @@ pub(crate) fn gesture_event(lua: &Lua, g: &Gesture) -> mlua::Result<LuaValue> {
 /// `Event:new("KeyPress", key)` or `KeyRelease`.
 pub(crate) fn key_event(lua: &Lua, key: Key, pressed: bool) -> mlua::Result<LuaValue> {
     let make = events_function(lua, "key")?;
-    make.call((key.name(), pressed))
+    let shift = matches!(key, Key::Char(ch) if ch.is_ascii_uppercase());
+    make.call((key.name(), pressed, shift))
 }
 
 /// `Event:new(name, ...)` with the Kaia values as arguments.

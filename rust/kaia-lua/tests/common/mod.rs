@@ -129,3 +129,6 @@ pub fn golden_path(name: &str) -> PathBuf {
         .join("tests/golden")
         .join(name)
 }
+
+pub mod book;
+pub mod workflow;

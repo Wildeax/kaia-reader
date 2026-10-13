@@ -1,9 +1,19 @@
 local library = KAIA_LIBRARY
-if not library then error("FileManager needs a LibraryHost", 2) end
+local function connected()
+    if not library then error("FileManager needs a LibraryHost", 2) end
+    return library
+end
 local ui = {
-    path = library.current_folder(),
-    files = library.files(),
-    openFile = function(_, path) return library.open_book(path) end,
+    path = library and library.current_folder() or nil,
+    files = library and library.files() or {},
+    openFile = function(_, path) return connected().open_book(path) end,
+    copyFileFromTo = function(_, source, folder) return connected().copy_book(source, folder) end,
+    moveFile = function(_, source, folder) return connected().move_book(source, folder) end,
+    showFiles = function(_, path) return connected().show_folder(path) end,
+    folder_shortcuts = {
+        registerShortcut = function(shortcut) KAIA_PLUGIN.shortcuts[shortcut.name] = shortcut end,
+        expandPath = function(_, path) return path end,
+    },
     menu = {
         registerToMainMenu = function(_, plugin)
             local items = {}
@@ -17,5 +27,6 @@ local ui = {
     },
 }
 return setmetatable(ui, { __index = function(_, key)
+    if key == "instance" or key == "document" or key == "view" or key == "dictionary" then return nil end
     error("FileManager." .. tostring(key) .. " is unavailable", 2)
 end })

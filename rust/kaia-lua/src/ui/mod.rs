@@ -240,35 +240,19 @@ impl LuaUi {
 
     /// Delivers an event to reader plugins and the current window stack.
     pub fn send_reader_event(&mut self, name: &str, args: &[Value]) -> bool {
+        let used = self.send_named(name, args);
         if self.plugin_runtime_loaded {
-            let values = args
-                .iter()
-                .map(|value| crate::convert::to_lua(&self.lua, value))
-                .collect::<Result<Vec<_>, _>>();
-            match values {
-                Ok(values) => {
-                    let mut all = vec![LuaValue::String(
-                        self.lua.create_string(name).expect("event name"),
-                    )];
-                    all.extend(values);
-                    if let Err(error) = plugins::call(&self.lua, "dispatch", mlua::MultiValue::from_vec(all))
-                    {
-                        self.bridge
-                            .record_error(format!("reader event {name} failed: {error}"));
-                    }
-                    self.drain();
-                }
-                Err(error) => self
-                    .bridge
-                    .record_error(format!("reader event {name} failed: {error}")),
+            if let Err(error) = plugins::collect(self) {
+                self.bridge.record_error(error.to_string());
             }
         }
-        self.send_named(name, args)
+        used
     }
 
     /// Delivers a gesture the way `UIManager:sendEvent` delivers
     /// `Event:new("Gesture", ges)`. Returns true when a widget used it.
     pub fn gesture(&mut self, g: &Gesture) -> bool {
+        self.input_hook();
         match input::gesture_event(&self.lua, g) {
             Ok(event) => self.send_lua(event, false),
             Err(e) => {
@@ -281,6 +265,7 @@ impl LuaUi {
 
     /// Delivers a key press or release as `KeyPress` or `KeyRelease`. Returns true when a widget used it.
     pub fn key(&mut self, key: Key, pressed: bool) -> bool {
+        self.input_hook();
         match input::key_event(&self.lua, key, pressed) {
             Ok(event) => self.send_lua(event, false),
             Err(e) => {
@@ -353,6 +338,37 @@ impl LuaUi {
         self.drain();
         self.run_after_paint();
         self.ctx.dirty.take_frame(painted)
+    }
+
+    /// Paints registered Lua view modules over a page supplied by the reader.
+    /// Call this after the page paint and before painting dialogs.
+    pub fn paint_reader_overlays(&self, page: &mut Pixmap) -> Result<(), Error> {
+        let widget: Table = self
+            .lua
+            .load(
+                r#"
+            return { paintTo = function(_, bb, x, y)
+                if not KAIA_PLUGIN then return end
+                for _, module in pairs(KAIA_PLUGIN.view_modules) do
+                    module:paintTo(bb, x, y)
+                end
+            end }
+        "#,
+            )
+            .eval()
+            .map_err(lua_error)?;
+        let key = Rc::new(self.lua.create_registry_value(widget).map_err(lua_error)?);
+        foreign::Foreign::new(self.lua.clone(), Rc::clone(&self.bridge), key, 0, 0).paint(page);
+        Ok(())
+    }
+
+    fn input_hook(&mut self) {
+        if let Err(error) = self.exec(
+            "input-hook",
+            "require('ui/uimanager').event_hook:execute('InputEvent')",
+        ) {
+            self.bridge.record_error(error.to_string());
+        }
     }
 
     /// Runs the refresh functions that `setDirty` got, after the paint. Each
@@ -537,6 +553,12 @@ impl LuaUi {
     /// windows below it that are always active. Returns true when a handler used it.
     /// With `broadcast`, every window gets the event (`broadcastEvent`).
     fn send_lua(&mut self, event: LuaValue, broadcast: bool) -> bool {
+        if self.plugin_runtime_loaded {
+            if let Err(error) = plugins::call(&self.lua, "event", event.clone()) {
+                self.bridge.record_error(error.to_string());
+            }
+            self.drain();
+        }
         let ids = self.stack.ids_top_down();
         if broadcast {
             let mut handled = false;
@@ -560,6 +582,17 @@ impl LuaUi {
             }
         }
         let Some(top) = top else {
+            if self.plugin_runtime_loaded {
+                let used = match plugins::call(&self.lua, "input", event) {
+                    Ok(value) => value == LuaValue::Boolean(true),
+                    Err(error) => {
+                        self.bridge.record_error(error.to_string());
+                        false
+                    }
+                };
+                self.drain();
+                return used;
+            }
             return false;
         };
         if self.deliver_to(ids[top], &event) {

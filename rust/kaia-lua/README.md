@@ -8,6 +8,8 @@ spec in `docs/kaia/specs/LUA_COMPAT.md`).
   `LuaUi` owns the host, the window stack and the scheduler.
 - Stage L4: reader and library traits supply facts to Lua proxies. KOReader's
   PluginLoader loads plugins, and Kaia records their menus, actions and errors.
+- Stage L5 part 1: desktop bundled-plugin workflows and explicit blockers are in
+  `tests/bundled.rs` and `docs/kaia/inventory/PLUGIN_STATUS.md`. L5 is incomplete.
 
 Run `. rust/kaia-lua/env.sh` (or `source tools/kaia/env.sh`) before cargo. The tests need the
 KOReader emulator tree (`./kodev build`), its fonts and its `libs/`.
@@ -35,6 +37,12 @@ neither crate, so the Rust app can implement the host traits without a cycle.
 | `lua/apps/filemanager/filemanager.lua` | FileManager proxy over `LibraryHost` |
 | `lua/dispatcher.lua` | Dispatcher registration into the Lua action table |
 | `lua/kaia/plugin_runtime.lua` | KOReader PluginLoader setup, plugin instances and event calls |
+| `tests/bundled.rs` | Bundled workflow tests and all 37 load outcomes |
+| `tests/common/book.rs` | Real EPUB and PDF test hosts, annotation writes and layout changes |
+| `lua/kaia/plugin_menu.lua` | Plugin menu callback and dialog adapter |
+| `lua/kaia/plugin_compat.lua` | Adapter for the directory-defaults editor's reload call |
+| `lua/kaia/reader_modules.lua` | Annotation, bookmark, TOC and book-info methods |
+| `lua/kaia/reader_footer.lua` | Additional footer content in the foreign overlay |
 | `tests/plugins.rs` | Bundled plugin loading, real EPUB and PDF menus, events, safe mode and failures |
 | `tests/ui_widgets.rs` | InfoMessage, ConfirmBox, ButtonDialog, Menu, InputDialog, with goldens |
 | `tests/ui_bridge.rs` | Event order, identity, scheduling, errors, input fields, refreshes, scale |
@@ -129,8 +137,8 @@ These differ from KOReader. Plugins that depend on them need an adaptation.
    upper-case key name, as KOReader's keyboard map gives them.
 10. **Argument copies.** Named events sent from Rust copy their arguments (`Value`).
     Lua events sent from Lua pass the same tables to each handler, as KOReader does.
-11. **`UIManager.event_hook`.** The shim does not define it. Plugins that hook KOReader
-    events through it do not work yet.
+11. **Input hooks.** KOReader's HookContainer receives InputEvent for each Kaia key
+    or gesture. Standby holds are counted, but no device power policy consumes them.
 12. **Refresh dithering.** The `dither` flag reaches the queue. `DirtyQueue` drops it
     unless the panel supports hardware dithering.
 13. **Colour panel format.** kaia-gfx has no 32-bit pixel format. The copy in
@@ -139,18 +147,25 @@ These differ from KOReader. Plugins that depend on them need an adaptation.
     last pixels on the frame. The error is recorded in `LuaUi::take_errors` and the UI
     keeps running. A failure in a plugin menu callback or reader event handler disables
     that plugin for the session and appears in `LuaUi::plugin_status()`.
-15. **View modules.** `registerViewModule` records the module. The Rust reader does
-    not paint it over a book page yet.
+15. **View modules.** `paint_reader_overlays` paints registered modules over a page
+    through the foreign renderer. The app must call it before painting dialogs.
 16. **Menu placement.** `MenuRegistry` stores each plugin's top-level entry and
     sorting hint. `open_plugin_menu` opens the plugin's KOReader submenu as a
     foreign window. The Rust app must place those entries in its menu.
-17. **File manager fields.** The proxy supplies the current folder, file list,
-    open-book call and main menu registration. Other file manager methods raise
-    a Lua error naming the missing method.
-18. **Reader modules.** The tested exporter and statistics paths use the proxy.
-    Methods outside the implemented fields raise a Lua error naming the method.
-    `folder_shortcuts` keeps shortcuts in the Lua session without persistence.
-    `bookinfo:expandString` returns its input until the Rust app supplies that service.
+17. **File manager fields.** The proxy supplies the folder, file list, open-book,
+    copy, move, folder navigation and menu registration calls. The app supplies
+    those operations through LibraryHost. Other methods raise a named Lua error.
+18. **Reader modules.** Annotation writes use stable host ids. Statistics points to
+    the loaded plugin instance. Book-info expansion handles title, author, series,
+    page, chapter, path and date/time tokens. Unsupported tokens produce `N/A`.
+    Folder shortcuts keep their registration in the Lua session.
+19. **Actions.** Dispatcher executes through ActionRegistry. Plugin actions and
+    font actions are registered. Unknown actions raise an error. The settings
+    picker currently offers actions without arguments. Default reader actions,
+    gesture override ordering and multiswipe recording need more work.
+20. **Document defaults.** Plugins can replace `doc_settings.data`; flush writes
+    its entries through ReaderHost. The app must deliver DocSettingsLoad before
+    the first layout. Tests invoke that lifecycle step explicitly.
 
 ## Errors
 

@@ -5,7 +5,7 @@ local function strict(label, object)
 end
 
 local reader = KAIA_READER
-if not reader then error("ReaderUI needs a ReaderHost", 2) end
+if not reader then return {} end
 
 local props = reader.properties()
 local is_pdf = reader.file():lower():match("%.pdf$") ~= nil
@@ -16,6 +16,10 @@ local document = strict("document", {
     is_pdf = is_pdf,
     is_pic = false,
     info = props,
+    configurable = setmetatable({}, { __index = function(_, key)
+        local config = reader.get_setting("configurable") or {}
+        return config[key]
+    end }),
     getPageCount = function() return reader.page_count() end,
     getCurrentPage = function() return reader.current_page() end,
     getPageText = function(_, page) return reader.page_text(page) end,
@@ -27,12 +31,16 @@ local document = strict("document", {
     getPageFromXPointer = function(_, xp) return reader.page_for_xpointer(xp) end,
     getPageMargins = function(_, page) return reader.page_margins(page) end,
     getNativePageDimensions = function(_, page) return reader.native_page_dimensions(page) end,
+    hasHiddenFlows = function() return false end,
+    getTotalPagesLeft = function(_, page) return reader.page_count() - page end,
     getProps = function() return reader.properties() end,
 })
 
 local settings = strict("doc_settings", {
-    readSetting = function(_, key, default)
-        local value = reader.get_setting(key)
+    data = { summary = reader.get_setting("summary") or {} },
+    readSetting = function(self, key, default)
+        local value = self.data[key]
+        if value == nil then value = reader.get_setting(key) end
         if value == nil then
             if key == "summary" then return default or {} end
             if key == "annotations" then return reader.annotations() end
@@ -44,15 +52,20 @@ local settings = strict("doc_settings", {
         end
         return value
     end,
-    saveSetting = function(_, key, value) reader.set_setting(key, value) end,
-    delSetting = function(_, key) reader.set_setting(key, nil) end,
-    has = function(_, key) return reader.get_setting(key) ~= nil end,
-    isTrue = function(_, key) return reader.get_setting(key) == true end,
-    isFalse = function(_, key) return reader.get_setting(key) == false end,
-    nilOrFalse = function(_, key) return reader.get_setting(key) ~= true end,
-    nilOrTrue = function(_, key) return reader.get_setting(key) ~= false end,
-    makeTrue = function(_, key) reader.set_setting(key, true) end,
-    makeFalse = function(_, key) reader.set_setting(key, false) end,
+    saveSetting = function(self, key, value) self.data[key] = value; reader.set_setting(key, value) end,
+    delSetting = function(self, key) self.data[key] = nil; reader.set_setting(key, nil) end,
+    flush = function(self)
+        for key, value in pairs(self.data) do reader.set_setting(key, value) end
+        return reader.flush_settings()
+    end,
+    hasNot = function(self, key) return self:readSetting(key) == nil end,
+    has = function(self, key) return self:readSetting(key) ~= nil end,
+    isTrue = function(self, key) return self:readSetting(key) == true end,
+    isFalse = function(self, key) return self:readSetting(key) == false end,
+    nilOrFalse = function(self, key) return self:readSetting(key) ~= true end,
+    nilOrTrue = function(self, key) return self:readSetting(key) ~= false end,
+    makeTrue = function(self, key) self:saveSetting(key, true) end,
+    makeFalse = function(self, key) self:saveSetting(key, false) end,
 })
 
 local pages = strict("paging", {
@@ -84,11 +97,10 @@ local annotation = strict("annotation", {
 })
 
 local view = strict("view", {
-    registerViewModule = function(_, module)
-        -- The foreign overlay is recorded until the reader paints it.
-        KAIA_PLUGIN.view_modules[#KAIA_PLUGIN.view_modules + 1] = module
+    registerViewModule = function(_, name, module)
+        KAIA_PLUGIN.view_modules[name] = module
     end,
-    footer = strict("view.footer", { maybeUpdateFooter = function() end }),
+    footer = require("kaia/reader_footer"),
 })
 
 local menu = strict("menu", {
@@ -104,11 +116,28 @@ local menu = strict("menu", {
 })
 
 local ui = {
+    name = "ReaderUI",
+    reloading = false,
+    tearing_down = false,
+    switchDocument = function(_, file)
+        return require("apps/filemanager/filemanager"):openFile(file)
+    end,
     document = document,
     doc_settings = settings,
     doc_props = props,
-    paging = pages,
-    rolling = pages,
+    paging = is_pdf and pages or nil,
+    rolling = not is_pdf and pages or nil,
+    getCurrentPage = function() return reader.current_page() end,
+    registerTouchZones = function(_, zones)
+        KAIA_PLUGIN.touch_zones = KAIA_PLUGIN.touch_zones or {}
+        for _, zone in ipairs(zones) do table.insert(KAIA_PLUGIN.touch_zones, zone) end
+    end,
+    registerPostInitCallback = function(_, callback)
+        table.insert(KAIA_PLUGIN.post_init, {name=KAIA_PLUGIN.loading_name, callback=callback})
+    end,
+    handleEvent = function(_, event)
+        return KAIA_PLUGIN.dispatch(event.handler:sub(3), unpack(event.args or {}))
+    end,
     view = view,
     highlight = strict("highlight", {
         addToHighlightDialog = function(_, id, callback)
@@ -119,7 +148,12 @@ local ui = {
     bookmark = strict("bookmark", {}),
     toc = strict("toc", { toc = reader.toc() }),
     menu = menu,
+    font = setmetatable({}, { __index = function(_, key)
+        if key == "font_face" then return reader.get_setting("font_face") end
+        error("font." .. tostring(key) .. " is unavailable", 2)
+    end }),
     folder_shortcuts = strict("folder_shortcuts", {
+        expandPath = function(_, path) return path end,
         registerShortcut = function(shortcut)
             KAIA_PLUGIN.shortcuts[shortcut.name] = shortcut
         end,
@@ -131,12 +165,11 @@ local ui = {
     }),
 }
 
-ui.bookinfo = strict("bookinfo", {
-    expandString = function(_, text) return text end,
-    extendProps = function(_, props) return props end,
-})
+require("kaia/reader_modules")(ui, reader, strict)
 
 return setmetatable(ui, { __index = function(_, key)
-    if key == "cloudstorage" or key == "pagemap" then return nil end
+    if key == "cloudstorage" or key == "pagemap" or key == "profiles"
+        or key == "dictionary" or key == "paging" or key == "rolling"
+        or key == "statistics" or key == "disable_double_tap" or key == "link" or key == "file_chooser" then return nil end
     error("ReaderUI." .. tostring(key) .. " is unavailable", 2)
 end })

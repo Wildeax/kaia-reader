@@ -75,6 +75,40 @@ pub(super) fn install_reader(lua: &Lua, host: Rc<RefCell<dyn ReaderHost>>) -> ml
     )?;
     let h = Rc::clone(&host);
     api.set(
+        "add_annotation",
+        lua.create_function(move |_, item: LuaValue| {
+            let item = convert::from_lua(&item).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            h.borrow_mut()
+                .add_annotation(item)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "update_annotation",
+        lua.create_function(move |_, (id, item): (u64, LuaValue)| {
+            let item = convert::from_lua(&item).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            h.borrow_mut()
+                .update_annotation(id, item)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "delete_annotation",
+        lua.create_function(move |_, id: u64| {
+            h.borrow_mut()
+                .delete_annotation(id)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "flush_settings",
+        lua.create_function(move |_, ()| h.borrow_mut().flush_settings().map_err(mlua::Error::RuntimeError))?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
         "toc",
         lua.create_function(move |lua, ()| {
             convert::to_lua(lua, &Value::array(h.borrow().toc()))
@@ -160,6 +194,7 @@ pub(super) fn install_reader(lua: &Lua, host: Rc<RefCell<dyn ReaderHost>>) -> ml
             convert::to_lua(lua, &value).map_err(|e| mlua::Error::RuntimeError(e.to_string()))
         })?,
     )?;
+    install_dispatcher(lua)?;
     lua.globals().set("KAIA_READER", api)
 }
 
@@ -172,6 +207,33 @@ pub(super) fn install_library(lua: &Lua, host: Rc<RefCell<dyn LibraryHost>>) -> 
     )?;
     let h = Rc::clone(&host);
     api.set("files", lua.create_function(move |_, ()| Ok(h.borrow().files()))?)?;
+    let h = Rc::clone(&host);
+    api.set(
+        "copy_book",
+        lua.create_function(move |_, (source, folder): (String, String)| {
+            h.borrow_mut()
+                .copy_book(&source, &folder)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "move_book",
+        lua.create_function(move |_, (source, folder): (String, String)| {
+            h.borrow_mut()
+                .move_book(&source, &folder)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "show_folder",
+        lua.create_function(move |_, path: String| {
+            h.borrow_mut()
+                .show_folder(&path)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
     api.set(
         "open_book",
         lua.create_function(move |_, path: String| {
@@ -180,6 +242,7 @@ pub(super) fn install_library(lua: &Lua, host: Rc<RefCell<dyn LibraryHost>>) -> 
                 .map_err(mlua::Error::RuntimeError)
         })?,
     )?;
+    install_dispatcher(lua)?;
     lua.globals().set("KAIA_LIBRARY", api)
 }
 
@@ -194,6 +257,11 @@ pub(super) fn collect(ui: &mut LuaUi) -> Result<(), Error> {
     }
     ui.menu_registry = registry;
     let actions: Table = runtime.get("actions").map_err(crate::error::lua_error)?;
+    ui.action_registry = collect_actions(actions)?;
+    Ok(())
+}
+
+fn collect_actions(actions: Table) -> Result<ActionRegistry, Error> {
     let mut action_registry = ActionRegistry::new();
     for pair in actions.pairs::<String, Table>() {
         let (id, item) = pair.map_err(crate::error::lua_error)?;
@@ -244,10 +312,14 @@ pub(super) fn collect(ui: &mut LuaUi) -> Result<(), Error> {
         action.max = item.get("max").ok();
         action.default = item.get("default").ok();
         action.separator = item.get("separator").unwrap_or(false);
+        action.enabled = item
+            .get::<Option<bool>>("condition")
+            .ok()
+            .flatten()
+            .unwrap_or(true);
         action_registry.register(action);
     }
-    ui.action_registry = action_registry;
-    Ok(())
+    Ok(action_registry)
 }
 
 fn register_item(registry: &mut MenuRegistry, id: &str, item: &Table) -> mlua::Result<()> {
@@ -286,4 +358,59 @@ pub(super) fn call(lua: &Lua, method: &str, args: impl mlua::IntoLuaMulti) -> ml
     let runtime: Table = lua.globals().get("KAIA_PLUGIN")?;
     let function: Function = runtime.get(method)?;
     function.call(args)
+}
+
+fn install_dispatcher(lua: &Lua) -> mlua::Result<()> {
+    lua.globals().set(
+        "KAIA_DISPATCH",
+        lua.create_function(move |lua, (settings, props): (LuaValue, LuaValue)| {
+            let runtime: Table = lua.globals().get("KAIA_PLUGIN")?;
+            let registry = collect_actions(runtime.get("actions")?)
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            let settings =
+                convert::from_lua(&settings).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            let props = convert::from_lua(&props).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            let context = if !runtime.get::<bool>("reader_mode")? {
+                kaia_events::ActionContext::FileManager
+            } else if runtime
+                .get::<Table>("ui")?
+                .get::<Table>("document")?
+                .get::<bool>("is_pdf")?
+            {
+                kaia_events::ActionContext::Paging
+            } else {
+                kaia_events::ActionContext::Rolling
+            };
+            let mut settings = settings
+                .as_table()
+                .ok_or_else(|| mlua::Error::RuntimeError("action settings need a table".into()))?
+                .clone();
+            let events = registry.execute(
+                &mut settings,
+                context,
+                (!props.get("gesture").is_nil()).then(|| props.get("gesture").clone()),
+                Some(props),
+            );
+            let values = events.into_iter().map(|event| {
+                Value::Table(
+                    [
+                        ("name".into(), Value::from(event.event.name)),
+                        ("n".into(), Value::from(event.event.args.len() as i64)),
+                        ("args".into(), Value::array(event.event.args)),
+                        ("broadcast".into(), Value::Bool(event.broadcast)),
+                    ]
+                    .into(),
+                )
+            });
+            let events = convert::to_lua(lua, &Value::array(values))
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            let meta = settings
+                .get(&kaia_events::Key::from("settings"))
+                .cloned()
+                .unwrap_or_default();
+            let meta = convert::to_lua(lua, &meta).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            Ok((events, meta))
+        })?,
+    )?;
+    Ok(())
 }

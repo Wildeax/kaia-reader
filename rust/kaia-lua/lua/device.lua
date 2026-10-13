@@ -225,6 +225,11 @@ local input = {
     fake_event_args = {},
 }
 
+local clipboard = ""
+input.getClipboardText = function() return clipboard end
+input.setClipboardText = function(text) clipboard = text end
+input.hasClipboardText = function() return clipboard ~= "" end
+
 local Device = GenericDevice:extend{
     model = "Kaia",
     display_dpi = display.dpi,
@@ -232,7 +237,7 @@ local Device = GenericDevice:extend{
     input = input,
     -- Capabilities. The Libra Colour has touch, page-turn keys and an E Ink panel.
     isTouchDevice = display.touch and yes or no,
-    hasMultitouch = false,
+    hasMultitouch = yes,
     hasKeys = yes,
     hasKeyboard = no,
     hasDPad = no,

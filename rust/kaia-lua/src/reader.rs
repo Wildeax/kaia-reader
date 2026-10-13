@@ -6,7 +6,7 @@ use kaia_events::Value;
 ///
 /// Page numbers at this boundary are one based, as in KOReader Lua. Values in
 /// `annotations` use KOReader's `pos0`, `pos1`, `page`, `text`, `note`,
-/// `chapter` and `datetime` fields.
+/// `chapter` and `datetime` fields. Every saved item includes a stable `kaia_id`.
 pub trait ReaderHost {
     fn file(&self) -> String;
     fn page_count(&self) -> u32;
@@ -41,6 +41,24 @@ pub trait ReaderHost {
         Err("ReaderHost.native_page_dimensions is unavailable".into())
     }
 
+    /// Adds a KOReader annotation and returns its stable host id.
+    fn add_annotation(&mut self, _item: Value) -> Result<u64, String> {
+        Err("ReaderHost.add_annotation is unavailable".into())
+    }
+
+    /// Replaces the editable fields of an annotation identified by `kaia_id`.
+    fn update_annotation(&mut self, _id: u64, _item: Value) -> Result<(), String> {
+        Err("ReaderHost.update_annotation is unavailable".into())
+    }
+
+    fn delete_annotation(&mut self, _id: u64) -> Result<(), String> {
+        Err("ReaderHost.delete_annotation is unavailable".into())
+    }
+
+    fn flush_settings(&mut self) -> Result<(), String> {
+        Err("ReaderHost.flush_settings is unavailable".into())
+    }
+
     fn get_setting(&self, key: &str) -> Value;
     fn set_setting(&mut self, key: &str, value: Value) -> Result<(), String>;
 }
@@ -50,4 +68,13 @@ pub trait LibraryHost {
     fn current_folder(&self) -> String;
     fn files(&self) -> Vec<String>;
     fn open_book(&mut self, path: &str) -> Result<(), String>;
+    fn copy_book(&mut self, _source: &str, _folder: &str) -> Result<(), String> {
+        Err("LibraryHost.copy_book is unavailable".into())
+    }
+    fn move_book(&mut self, _source: &str, _folder: &str) -> Result<(), String> {
+        Err("LibraryHost.move_book is unavailable".into())
+    }
+    fn show_folder(&mut self, _path: &str) -> Result<(), String> {
+        Err("LibraryHost.show_folder is unavailable".into())
+    }
 }

@@ -36,8 +36,8 @@ function M.gesture(t)
 end
 
 -- `KeyPress` or `KeyRelease` with a device key object, as `frontend/device/input.lua` sends them.
-function M.key(name, pressed)
-    return Event:new(pressed and "KeyPress" or "KeyRelease", Key:new(name, {}))
+function M.key(name, pressed, shift)
+    return Event:new(pressed and "KeyPress" or "KeyRelease", Key:new(name, shift and {Shift=true} or {}))
 end
 
 -- An event with the given name and arguments.
