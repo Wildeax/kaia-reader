@@ -5,6 +5,8 @@
 //! and nothing that starts a UI. The stage plan is in
 //! `docs/kaia/specs/LUA_COMPAT.md`.
 //!
+//! [`LuaUi`] runs KOReader widgets in Kaia windows, on top of the host.
+//!
 //! Linking: the host uses KOReader's `libs/libluajit.dylib` (or `.so`), the
 //! library KOReader's native modules bind to. See `build.rs`, and run
 //! `. rust/kaia-lua/env.sh` before cargo.
@@ -13,11 +15,13 @@ mod convert;
 mod error;
 mod host;
 mod paths;
+mod ui;
 
 pub use convert::MAX_DEPTH;
 pub use error::Error;
 pub use host::LuaHost;
 pub use paths::LuaPaths;
+pub use ui::{LuaUi, UiConfig};
 
 /// The LuaJIT version that `build.rs` read from KOReader's `luajit.h`, for
 /// example "LuaJIT 2.1.1783773675". A test compares it with `jit.version`.

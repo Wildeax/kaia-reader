@@ -73,6 +73,11 @@ impl LuaHost {
         &self.paths
     }
 
+    /// The LuaJIT state, for the UI bridge in `ui`. The state stays on this thread.
+    pub(crate) fn lua(&self) -> &mlua::Lua {
+        &self.lua
+    }
+
     fn bootstrap(&self) -> Result<(), Error> {
         let shim = path_text(&self.paths.shim_dir)?;
         let koreader = path_text(&self.paths.koreader_dir)?;

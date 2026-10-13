@@ -8,5 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 kaia-events = { path = "../kaia-events" }
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-input = { path = "../kaia-input" }
+kaia-ui = { path = "../kaia-ui" }
 # No "vendored" feature: the LuaJIT that KOReader builds is linked (see build.rs and env.sh).
 mlua = { version = "0.10", default-features = false, features = ["luajit"] }

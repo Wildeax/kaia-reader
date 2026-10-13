@@ -98,3 +98,34 @@ pub fn paths(data_dir: &Path) -> LuaPaths {
 pub fn host(data: &TempDir) -> LuaHost {
     LuaHost::new(paths(data.path())).expect("LuaHost::new")
 }
+
+/// The bundled Noto fonts and mdlight icons that the UI tests need.
+pub fn ui_assets() -> kaia_ui::assets::SharedAssets {
+    let root = repo_root().join("resources");
+    kaia_ui::assets::Assets::load(&root.join("fonts/noto"), &root.join("icons/mdlight"))
+        .unwrap_or_else(|e| panic!("cannot load the bundled fonts and icons: {e}"))
+        .shared()
+}
+
+/// The Libra Colour screen in pixels, with its 300 DPI override.
+pub const UI_SCREEN: kaia_gfx::Size = kaia_gfx::Size::new(1264, 1680);
+
+/// A Lua UI on a manual clock. The clock handle moves time for scheduled tasks.
+pub fn lua_ui(data: &TempDir, color: bool) -> (kaia_lua::LuaUi, kaia_events::ManualClock) {
+    let clock = kaia_events::ManualClock::new();
+    let config = kaia_lua::UiConfig {
+        size: UI_SCREEN,
+        dpi: Some(300),
+        color,
+    };
+    let ui =
+        kaia_lua::LuaUi::new(host(data), config, ui_assets(), Box::new(clock.clone())).expect("LuaUi::new");
+    (ui, clock)
+}
+
+/// Path of a golden PNG in `tests/golden`.
+pub fn golden_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden")
+        .join(name)
+}
