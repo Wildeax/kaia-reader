@@ -23,7 +23,7 @@ jobs:
     name: fmt, clippy and test
     runs-on: ubuntu-24.04
     env:
-      PURE_CRATES: -p kaia-core -p kaia-storage -p kaia-ffi -p kaia-gfx -p kaia-events -p kaia-input -p kaia-luadata -p kaia-ui -p kaia-platform -p kaia-dict -p kaia-id -p kaia-sync -p kaia-fbink-sys -p kaia-stats -p kaia-opds -p kaia-calibre -p kaia-i18n
+      PURE_CRATES: -p kaia-core -p kaia-storage -p kaia-ffi -p kaia-gfx -p kaia-events -p kaia-input -p kaia-luadata -p kaia-ui -p kaia-platform -p kaia-dict -p kaia-id -p kaia-sync -p kaia-fbink-sys -p kaia-stats -p kaia-opds -p kaia-calibre -p kaia-i18n -p kaia-glibc-compat
     timeout-minutes: 30
     steps:
 
@@ -31,6 +31,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # kaia-i18n reads the gettext catalogs in l10n. kaia-gfx and kaia-ui read
+      # the Noto fonts in resources/fonts, and their tests fail without them.
+      # Fetch these two submodules only, shallow, at the commits the
+      # superproject pins. The other submodules belong to the native build in
+      # kaia-lua.yml.
+      - name: Fetch l10n and font submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 -- l10n resources/fonts
+          git submodule status -- l10n resources/fonts
 
       # The channel comes from rust/rust-toolchain.toml, so the toolchain
       # version is set in one place.
@@ -53,12 +64,12 @@ jobs:
         working-directory: rust
         run: cargo fmt --all -- --check
 
-      # Crates that link KOReader's native build (kaia-mupdf-sys,
-      # kaia-cre-sys, kaia-doc, kaia-library) are tested in the kaia-lua
-      # emulator job, which builds those libraries. kaia-display is checked
-      # without its desktop window (minifb needs X11). Its Kobo feature is
-      # tested but not linted here: the tests link without FBInk because
-      # they never call it.
+      # Crates that link KOReader's native build (kaia-mupdf-sys, kaia-cre-sys,
+      # kaia-djvu-sys, kaia-doc, kaia-library, kaia-book, kaia-lua, kaia-app)
+      # are tested in the kaia-lua emulator job, which builds those libraries.
+      # kaia-display is checked without its desktop window, which minifb opens
+      # through X11 or Wayland at run time. Its Kobo feature is tested but not
+      # linted here, because the tests link without FBInk and never call it.
       - name: Clippy
         working-directory: rust
         run: |

@@ -2,9 +2,9 @@ name: kaia-lua
 
 # Gates the Kaia Lua code: luacheck, then the desktop emulator build with the
 # Kaia specs and the full front-end suite, plus the Rust crates that link
-# KOReader's native build (MuPDF, CREngine). The build job runs in the same
-# image that upstream CircleCI uses (koreader/kobase). Pull requests from forks
-# get a read-only token and no secrets.
+# KOReader's native build (MuPDF, CREngine, DjVu, LuaJIT, kaia-app). The build
+# job runs in the same image that upstream CircleCI uses (koreader/kobase).
+# Pull requests from forks get a read-only token and no secrets.
 
 on:
   push:
@@ -22,6 +22,9 @@ on:
       - 'rust/kaia-doc/**'
       - 'rust/kaia-library/**'
       - 'rust/kaia-book/**'
+      - 'rust/kaia-djvu-sys/**'
+      - 'rust/kaia-lua/**'
+      - 'rust/kaia-app/**'
   pull_request:
     paths:
       - 'frontend/kaia/**'
@@ -36,6 +39,9 @@ on:
       - 'rust/kaia-doc/**'
       - 'rust/kaia-library/**'
       - 'rust/kaia-book/**'
+      - 'rust/kaia-djvu-sys/**'
+      - 'rust/kaia-lua/**'
+      - 'rust/kaia-app/**'
 
 permissions:
   contents: read
@@ -146,11 +152,39 @@ jobs:
           printf 'Kaia specs: %s\n' "${names[*]}"
           ./kodev test front "${names[@]}"
 
+      # These crates read the emulator tree built above from base/build. The
+      # kaia-app tests also read the fonts in resources/fonts, which the
+      # Fetch submodules step provides. The emulator build leaves LuaJIT in
+      # staging/lib on Linux, not in libs, so kaia-lua gets that directory
+      # from KAIA_LUAJIT_LIB, the same way rust/kaia-lua/env.sh does on macOS.
       - name: Rust crates that link KOReader's native build
         working-directory: rust
         run: |
+          set -euo pipefail
           export PATH="${HOME}/.cargo/bin:${PATH}"
-          cargo test --locked -p kaia-mupdf-sys -p kaia-doc -p kaia-library -p kaia-book
+          shopt -s nullglob
+          builds=()
+          for dir in ../base/build/*linux*/; do
+            case "${dir}" in
+            *kobo*) continue ;;
+            esac
+            builds+=("${dir%/}")
+          done
+          test "${#builds[@]}" -eq 1
+          luajit_lib="$(cd "${builds[0]}/staging/lib" && pwd)"
+          luajit_include="$(cd "${builds[0]}/staging/include/luajit-2.1" && pwd)"
+          export KAIA_LUAJIT_LIB="${luajit_lib}"
+          export KAIA_LUAJIT_INCLUDE="${luajit_include}"
+          . ./kaia-lua/env.sh
+          # The test binaries load KOReader's native modules from the emulator
+          # tree. Their libraries (libssl.so.60 and others) sit in libs, so the
+          # loader needs that directory and the LuaJIT directory on its path.
+          emulator_libs=(../koreader-emulator-*/koreader/libs)
+          test "${#emulator_libs[@]}" -eq 1
+          build_libs="$(cd "${builds[0]}/libs" && pwd)"
+          emulator_libs_dir="$(cd "${emulator_libs[0]}" && pwd)"
+          export LD_LIBRARY_PATH="${build_libs}:${emulator_libs_dir}:${KAIA_LUAJIT_LIB}"
+          cargo test --locked -p kaia-mupdf-sys -p kaia-cre-sys -p kaia-djvu-sys -p kaia-doc -p kaia-library -p kaia-book -p kaia-lua -p kaia-app
 
       - name: Front suite
         run: ./kodev test front

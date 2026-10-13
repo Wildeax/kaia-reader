@@ -9,9 +9,14 @@ version = 2
 confidence-threshold = 0.93
 # Only permissive licenses and the AGPL of our own crates. Add a license here
 # only after reading it and recording the crate in docs/kaia/inventory/LICENSES.md.
+# Each comment names the crates that need the license and the path that brings them in.
 allow = [
     "AGPL-3.0-or-later",
     "Apache-2.0",
+    "BSD-2-Clause", # arrayref 0.3.9 via tiny-skia and resvg, used by kaia-gfx
+    "BSD-3-Clause", # subtle 2.6.1 via rustls and ureq, tiny-skia and tiny-skia-path 0.11.4 via resvg
+    "CDLA-Permissive-2.0", # webpki-roots 1.0.9 via ureq, used by kaia-opds and kaia-sync
+    "ISC", # ring 0.17.14 with Apache-2.0, rustls-webpki 0.103.15, untrusted 0.9.0, libloading 0.8.9 via dlib and minifb on Linux
     "MIT",
     "Unicode-3.0",
     "Zlib",

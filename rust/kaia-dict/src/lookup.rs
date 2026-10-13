@@ -674,7 +674,7 @@ mod tests {
             ("d'abord", "abord"),
             ("qu'ami", "ami"),
             ("heˌllo", "hello"),
-            ("hi—there", "hithere"),
+            ("hi\u{2014}there", "hithere"),
             ("(word)", "word"),
             ("’word’", "word"),
         ] {
