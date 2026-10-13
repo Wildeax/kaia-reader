@@ -17,6 +17,7 @@ members = [
     "kaia-library",
     "kaia-fbink-sys",
     "kaia-dict",
+    "kaia-book",
 ]
 
 [workspace.package]

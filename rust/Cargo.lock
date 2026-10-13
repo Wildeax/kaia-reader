@@ -597,6 +597,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-book"
+version = "0.1.0"
+dependencies = [
+ "kaia-doc",
+ "kaia-events",
+ "kaia-gfx",
+ "kaia-library",
+ "kaia-luadata",
+ "kaia-mupdf-sys",
+ "md-5",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "kaia-core"
 version = "0.1.0"
 dependencies = [

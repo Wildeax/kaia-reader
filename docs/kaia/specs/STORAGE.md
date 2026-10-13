@@ -11,6 +11,20 @@ Status: proposed, version 1. This contract covers data that Kaia owns. Existing 
 | Highlights, notes, bookmarks | KOReader `DocSettings` (`annotations` table) | Not stored |
 | Reading position and document settings | KOReader `DocSettings` | Not stored |
 
+## Ownership in the Rust app (ADR-008)
+
+The table above describes the Lua app, where KOReader code owns reading
+state. In the Rust app, Kaia owns all reading state:
+
+| Data | Owner in the Rust app | Location |
+|---|---|---|
+| Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
+| Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
+| Stickers and assets | `kaia-storage` | as below |
+| App settings | `kaia-app` | `<data dir>/settings.json` |
+
+KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
+
 ## Location
 
 The store lives in `<DataStorage:getDataDir()>/kaia/`:

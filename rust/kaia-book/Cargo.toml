@@ -1,0 +1,31 @@
+[package]
+name = "kaia-book"
+description = "Reading sessions: document, positions, page cache, selection, highlights, bookmarks, search."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# CREngine backend for reflowable formats. It needs a KOReader desktop build
+# (see kaia-cre-sys). Build with --no-default-features for targets without it.
+default = ["cre"]
+cre = ["kaia-doc/cre"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+kaia-doc = { path = "../kaia-doc", default-features = false }
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-events = { path = "../kaia-events" }
+kaia-luadata = { path = "../kaia-luadata" }
+# Build script only: test binaries need MuPDF's library directories (see build.rs).
+kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
+md-5 = "0.11"
+thiserror = "2"
+
+[dev-dependencies]
+# Checks that the local partial MD5 matches the library crate's digest.
+kaia-library = { path = "../kaia-library" }
+tempfile = "3"
