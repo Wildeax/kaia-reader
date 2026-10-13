@@ -23,7 +23,7 @@ jobs:
     name: fmt, clippy and test
     runs-on: ubuntu-24.04
     env:
-      PURE_CRATES: -p kaia-core -p kaia-storage -p kaia-ffi -p kaia-gfx -p kaia-events -p kaia-input -p kaia-luadata -p kaia-ui -p kaia-platform -p kaia-dict -p kaia-id -p kaia-sync -p kaia-fbink-sys -p kaia-stats
+      PURE_CRATES: -p kaia-core -p kaia-storage -p kaia-ffi -p kaia-gfx -p kaia-events -p kaia-input -p kaia-luadata -p kaia-ui -p kaia-platform -p kaia-dict -p kaia-id -p kaia-sync -p kaia-fbink-sys -p kaia-stats -p kaia-opds
     timeout-minutes: 30
     steps:
 
