@@ -27,6 +27,7 @@ pub enum Route {
     },
     /// The reader's overlay: a transparent layer with a Back button.
     Overlay,
+    ReaderPanel,
     BookDetails {
         book: i64,
     },
@@ -49,7 +50,7 @@ impl Route {
 /// overlay with the title and page it has, and pushes it.
 pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
     let surface: Box<dyn Surface> = match route {
-        Route::Home => Box::new(home::HomeSurface),
+        Route::Home => Box::new(home::HomeSurface::default()),
         Route::Library { page } => Box::new(library::LibrarySurface::new(*page)),
         Route::Notes => Box::new(notes::NotesSurface),
         Route::Settings => Box::new(settings::SettingsSurface),
@@ -58,7 +59,7 @@ pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
         Route::SettingsSection { name } => {
             Box::new(settings::section::SettingsSectionSurface::new(name.clone()))
         }
-        Route::Overlay => return None,
+        Route::Overlay | Route::ReaderPanel => return None,
     };
     Some(surface)
 }

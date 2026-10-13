@@ -84,6 +84,10 @@ pub enum Outcome {
 
 /// A change to the stack.
 pub enum Nav {
+    OpenBook {
+        book: i64,
+        location: Option<Value>,
+    },
     /// Show `surface` above the top screen.
     Push(Box<dyn Surface>),
     /// Close the top screen. Does nothing on the root.
@@ -186,13 +190,20 @@ impl<'a> SurfaceEnv<'a> {
 
     /// Shows a short message that closes itself after `seconds`.
     pub fn toast(&mut self, message: impl Into<String>, seconds: f64) -> WindowId {
-        let toast = Toast::new(&self.services.theme, message);
-        toast.show(
-            &mut *self.ctx,
-            &self.services.theme,
-            &self.services.assets,
+        let window = Window::new(
+            Toast::new(&self.services.theme, message),
+            self.services.theme.clone(),
+            self.services.assets.clone(),
             self.screen,
-            seconds,
-        )
+        );
+        let id = self.show(
+            window,
+            ShowOpts {
+                toast: true,
+                ..ShowOpts::default()
+            },
+        );
+        self.schedule_in(seconds, move |ctx| ctx.close(id, None));
+        id
     }
 }

@@ -35,7 +35,7 @@ pub enum UiEvent {
 ```
 
 - Gestures with a position go to the deepest widget whose bounds contain the position, then bubble up through parents until one returns `Handled::Yes`. Swipes use their start position.
-- Keys go to the focused widget and bubble up. Page-turn keys move focus between focusable widgets when no widget handles them (keyboard and button navigation).
+- Keys go to the focused widget and bubble up. The app dispatches page-turn keys to the top input window first. When no widget handles them, the toolkit moves focus if a focusable widget exists. Otherwise it returns unhandled and the app sends `PageForward` or `PageBack`. These named events can reach the reader below its overlay; a modal dialog stops them.
 - Named events are delivered by the window stack (`send` and `broadcast` semantics in `kaia-events`), then to every widget in the window in paint order, until one handles it.
 
 ## Painting and refresh
@@ -43,6 +43,10 @@ pub enum UiEvent {
 - A widget calls `cx.request_paint()` for itself or `cx.request_paint_rect(rect, hint)` for part of itself. Hints: `Ui` (default), `Partial`, `Fast`, `Full`, `Flash`. The app collects requests into `kaia_events::dirty::DirtyQueue`, repaints the affected windows bottom-up into the frame pixmap with clipping, and sends `kaia_display::Refresh` values using the mode to waveform table in `kaia-display`.
 - No widget animates or repaints on a timer unless the user started an action that needs it (for example a progress spinner during a long load, limited to two frames per second).
 - Painting is clipped to the widget bounds and to the dirty region.
+- Layout repaints only widgets whose bounds changed. An update that changes text or another drawn value must call `cx.request_paint()`, even when it also requests layout. `PagedList` and `Grid` builders read the item and theme only. Put changing values in the item and use `set_items`; a builder that reads other state must call `rebuild_cells` when that state changes.
+- Opaque app roots paint their whole bounds, including margins. A closed scrim must uncover painted pixels everywhere it covered.
+- The reader owns the periodic full-refresh count. The app disables `DirtyQueue` partial-refresh promotion. The reader reads `reading.full_refresh_pages`, defaults to six, and resets its count after any full page repaint. UI updates and selection changes do not count as page turns. Chapter starts also request a full refresh. KOReader keeps the page policy in its reader and the refresh counter in UIManager; Kaia keeps one counter in the reader to exclude incidental partial UI paints.
+- Home paints scan progress at most once a second with a non-dithered `ui` refresh of its reserved line. A fallback screen rebuild compares the old and new frame and refreshes the bounds of changed pixels with `ui`. It still rebuilds the tree; it does not send a full-screen refresh just because the tree changed.
 
 ## Theme
 
@@ -69,5 +73,9 @@ Foreign: `ForeignWidget` hands its rect and events to a `trait ForeignRenderer {
 ## App loop contract
 
 Each loop iteration runs in this order: read input, dispatch it to the window stack, paint dirty windows and send refreshes, then run the scheduler's due tasks, then paint again if a task made something dirty. Press feedback depends on this order: a tapped button paints its pressed state in the first paint and releases in a `next_tick` task, so the pressed frame reaches the panel before the release.
+
+When `paint_plan` is not empty, the app gets all visible windows with `Window::visible_stack` and calls `Window::paint_stack` once. It passes the full visible stack, including unchanged overlays, rather than painting each dirty window alone. This preserves upper windows when a lower widget repaints and restores the area of a closed window.
+
+The router retains windows from `SurfaceEnv::show`, toasts, sheets and dialogs. Gestures and keys use the actual top input window. Toasts paint but do not take input. After a widget closes its window, the app drains its actions, removes it from the router, and runs the relevant surface hide hook. Commands visit every surface from top to bottom until handled. Quick settings commands belong to the shell and run first. The app accepts the toolkit's `nav.home` action names.
 
 Controls clear their own bounds to the background tone they inherit from the nearest `Frame` (through `Widget::child_background`), or to a tone set with `.background(...)`; the default is the theme surface.

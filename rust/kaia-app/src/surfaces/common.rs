@@ -5,7 +5,7 @@
 use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::{Pixmap, Size};
 use kaia_library::{Book, CoverSize, Library};
-use kaia_ui::components::{Column, Expanded, Label, Padding, Paragraph, Row, Spacer};
+use kaia_ui::components::{Column, Label, Padding, Paragraph, Spacer};
 use kaia_ui::controls::{Button, ButtonStyle};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, Widget, WidgetPod, Window};
@@ -18,6 +18,15 @@ const ROW_TITLE_CHARS: usize = 60;
 /// A window of `screen` pixels that shows `root`.
 pub(crate) fn window(services: &Services, screen: Size, root: impl Widget + 'static) -> Window {
     Window::new(root, services.theme.clone(), services.assets.clone(), screen)
+}
+
+/// An opaque window for a screen that covers the display, including its margins.
+pub(crate) fn root_window(services: &Services, screen: Size, root: impl Widget + 'static) -> Window {
+    window(
+        services,
+        screen,
+        kaia_ui::components::Frame::new(WidgetPod::new(root)).fill(Tone::Surface),
+    )
 }
 
 /// A page: the children in a column with the standard margin.
@@ -41,26 +50,9 @@ pub(crate) fn body(services: &Services, text: impl Into<String>) -> WidgetPod {
 /// A button that sends `action` when tapped. `key` names it for
 /// [`crate::App::find_rect`] and for tests.
 pub(crate) fn button(style: ButtonStyle, label: &str, action: &str, key: &str) -> WidgetPod {
-    WidgetPod::new(Button::new(style).text(label).on_action(action)).with_key(key)
-}
-
-/// The temporary navigation row: Home, Library, Notes and Settings.
-pub(crate) fn nav_bar() -> WidgetPod {
-    let items = [
-        ("Home", "nav:home"),
-        ("Library", "nav:library"),
-        ("Notes", "nav:notes"),
-        ("Settings", "nav:settings"),
-    ]
-    .into_iter()
-    .map(|(label, action)| {
-        let button = Button::new(ButtonStyle::Text).text(label).on_action(action);
-        // The key names the button for tests: `nav:settings` is `nav-settings`.
-        let key = action.replace(':', "-");
-        WidgetPod::new(Expanded::new(WidgetPod::new(button).with_key(key), 1))
-    })
-    .collect();
-    WidgetPod::new(Row::new(items))
+    WidgetPod::new(Button::new(style).text(label).on_action(action))
+        .focusable(true)
+        .with_key(key)
 }
 
 /// Space that pushes what follows it to the bottom of the page.
@@ -95,4 +87,12 @@ pub(crate) fn short(text: &str) -> String {
 pub(crate) fn cover(library: &Library, book_id: i64) -> Option<Pixmap> {
     let image = library.cover(book_id, CoverSize::Large).ok()??;
     decode_rgb(&image.bytes, DecodeLimits::default()).ok()
+}
+
+/// Header taps outside its buttons open quick settings.
+pub(crate) fn status_header(header: kaia_ui::composite::Header) -> WidgetPod {
+    WidgetPod::new(
+        super::library::press::Pressable::new(WidgetPod::new(header)).tap("settings:quick:open", Vec::new()),
+    )
+    .with_key("status-line")
 }

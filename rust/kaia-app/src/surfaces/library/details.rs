@@ -1,17 +1,19 @@
-//! Details of one book: its path, format, size and progress, with Open and Back.
+//! The book details route. The Library shows the same details inline when the
+//! user holds a book, so this surface only serves the route: a full page with
+//! Back. Its actions go to the Library below, which owns the book commands.
 
-use kaia_gfx::Size;
-use kaia_library::Book;
-use kaia_ui::controls::ButtonStyle;
-use kaia_ui::{Tone, WidgetPod, Window};
+use kaia_library::CoverSize;
+use kaia_ui::components::{Column, Padding};
+use kaia_ui::geometry::Insets;
+use kaia_ui::{WidgetPod, Window};
 
-use crate::services::Services;
 use crate::surface::{Surface, SurfaceEnv};
-use crate::surfaces::common::{body, button, display_title, fill, page, window};
+use crate::surfaces::common::root_window as window;
+use crate::surfaces::library::{data, views};
 use crate::surfaces::Route;
 
-/// The details of the book with row id `book`. The row is read on build, so a
-/// book that is gone shows a notice and no screen.
+/// The details of the book with row id `book`. A book that is gone shows a
+/// notice and no screen.
 pub struct BookDetailsSurface {
     book: i64,
 }
@@ -28,46 +30,21 @@ impl Surface for BookDetailsSurface {
     }
 
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        let t = env.services.theme.clone();
         match env.services.library.book(self.book) {
-            Ok(Some(row)) => Some(book_details(env.services, env.screen, &row)),
+            Ok(Some(book)) => {
+                let cover = data::cover(&env.services.library, book.id, CoverSize::Large);
+                let details = views::details_panel(&t, &book, cover, "back");
+                let page = Padding::new(
+                    WidgetPod::new(Column::new(vec![details]).gap(t.space.md)),
+                    Insets::all(t.space.md),
+                );
+                Some(window(env.services, env.screen, page))
+            }
             _ => {
                 env.notice(format!("no book {}", self.book));
                 None
             }
         }
     }
-}
-
-/// Details of one book: its path, format, size and progress, with Open and Back.
-pub fn book_details(services: &Services, screen: Size, book: &Book) -> Window {
-    let t = &services.theme;
-    let mut lines = Vec::new();
-    if let Some(authors) = book.authors.as_deref().filter(|a| !a.trim().is_empty()) {
-        lines.push(authors.to_string());
-    }
-    lines.push(format!("Format: {}", book.format));
-    if let Some(pages) = book.pages {
-        lines.push(format!("Pages: {pages}"));
-    }
-    lines.push(format!(
-        "Progress: {} percent",
-        (book.percent * 100.0).round() as u32
-    ));
-    lines.push(format!("File: {}", book.path.display()));
-
-    let mut children = vec![WidgetPod::new(kaia_ui::components::Label::new(
-        display_title(book),
-        t.font.title.clone(),
-        Tone::Ink,
-    ))];
-    children.extend(lines.into_iter().map(|line| body(services, line)));
-    children.push(fill());
-    children.push(button(
-        ButtonStyle::Primary,
-        "Open",
-        &format!("open_book:{}", book.id),
-        "open-book",
-    ));
-    children.push(button(ButtonStyle::Secondary, "Back", "back", "back"));
-    window(services, screen, page(services, children))
 }

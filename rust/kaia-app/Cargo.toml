@@ -10,6 +10,12 @@ rust-version.workspace = true
 unsafe_code = "forbid"
 
 [dependencies]
+kaia-book = { path = "../kaia-book" }
+kaia-dict = { path = "../kaia-dict" }
+kaia-stats = { path = "../kaia-stats" }
+kaia-sync = { path = "../kaia-sync" }
+kaia-opds = { path = "../kaia-opds" }
+kaia-id = { path = "../kaia-id" }
 kaia-display = { path = "../kaia-display" }
 kaia-doc = { path = "../kaia-doc" }
 kaia-events = { path = "../kaia-events" }

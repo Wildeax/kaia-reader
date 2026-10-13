@@ -31,6 +31,7 @@ struct Screen {
 #[derive(Default)]
 pub struct Router {
     screens: Vec<Screen>,
+    transient: Vec<Window>,
 }
 
 impl Router {
@@ -62,11 +63,34 @@ impl Router {
 
     /// The window for a window id on the stack.
     pub fn window(&self, id: WindowId) -> Option<Window> {
-        self.screens.iter().find(|s| s.id == id).map(|s| s.window.clone())
+        self.screens
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.window.clone())
+            .or_else(|| self.transient.iter().find(|w| w.id() == Some(id)).cloned())
     }
 
     pub fn top_surface(&self) -> Option<&dyn Surface> {
         self.screens.last().map(|s| &*s.surface)
+    }
+
+    pub fn register(&mut self, windows: &mut Vec<Window>) {
+        self.transient.append(windows);
+    }
+
+    pub fn closed_screens(&self, stack: &WindowStack) -> Vec<usize> {
+        self.screens
+            .iter()
+            .enumerate()
+            .rev()
+            .filter_map(|(i, s)| (!stack.contains(s.id)).then_some(i))
+            .collect()
+    }
+
+    pub fn remove_closed(&mut self, stack: &WindowStack) {
+        self.screens.retain(|s| stack.contains(s.id));
+        self.transient
+            .retain(|w| w.id().is_some_and(|id| stack.contains(id)));
     }
 
     /// The surface at `index`, root at 0.
@@ -165,6 +189,7 @@ impl Router {
         self.screens
             .iter()
             .flat_map(|s| s.window.drain_outbox())
+            .chain(self.transient.iter().flat_map(Window::drain_outbox))
             .collect()
     }
 

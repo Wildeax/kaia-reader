@@ -5,13 +5,15 @@
 //! 2. Feed touches through the gesture recognizer and dispatch gestures and keys
 //!    to the top window. Unhandled input may close an overlay or go Back.
 //! 3. Run the actions and events the windows queued. Each action goes to the top
-//!    surface, then the root surface, then the global commands.
+//!    surface and each surface below it, then the global commands.
 //! 4. Paint the dirty windows into one frame, bottom up, and present each refresh.
 //! 5. Run the due tasks (button releases among them), apply the window requests
 //!    they made, and paint and present again.
 //!
 //! This file knows no surface. It asks the surfaces in [`crate::surfaces`] for
 //! their windows and applies the [`Outcome`]s they return.
+
+mod power;
 
 use std::io;
 use std::path::PathBuf;
@@ -83,11 +85,13 @@ pub struct AppOptions {
 /// The app. It owns the backend, the services, the window stack and the router.
 pub struct App<B: Backend> {
     backend: B,
+    power: power::State,
     services: Services,
     ctx: Ctx,
     stack: WindowStack,
     router: Router,
     frame: Pixmap,
+    presented_color: Option<bool>,
     screen: Size,
     gestures: GestureDetector,
     options: AppOptions,
@@ -97,8 +101,7 @@ pub struct App<B: Backend> {
     modes: Vec<RefreshMode>,
     unknown: Vec<String>,
     notices: Vec<String>,
-    /// Windows that surfaces showed outside the router (dialogs, sheets). Their
-    /// actions are collected with the router's.
+    /// Windows waiting for registration with the router.
     transient: Vec<Window>,
     last_input_us: u64,
     /// Input event time minus scheduler time at the latest touch. Evdev
@@ -120,17 +123,21 @@ impl<B: Backend> App<B> {
         frame.fill_rect(Rect::from_size(screen), services.theme.color(Tone::Surface));
         let mut ctx = Ctx::new(clock, EventRect::new(0, 0, screen.w as i32, screen.h as i32));
         ctx.dirty.configure_from(&services.settings);
+        // The reader counts page turns. UI paints and selection changes do not count.
+        ctx.dirty.full_refresh_count = 0;
         let gestures = GestureDetector::new(GestureConfig {
             dpi: backend.dpi(),
             ..GestureConfig::default()
         });
         App {
             backend,
+            power: power::State::default(),
             services,
             ctx,
             stack: WindowStack::new(),
             router: Router::new(),
             frame,
+            presented_color: None,
             screen,
             gestures,
             options,
@@ -171,16 +178,16 @@ impl<B: Backend> App<B> {
     /// Runs the loop until the backend quits, [`App::quit`] is called, or the exit
     /// time set by [`App::exit_after`] passes. Then it saves the settings.
     pub fn run(&mut self) -> Result<(), DisplayError> {
-        loop {
-            if self.iterate(None)? == Flow::Exit || self.quitting {
-                break;
+        let result = loop {
+            match self.iterate(None) {
+                Err(error) => break Err(error),
+                Ok(Flow::Exit) => break Ok(()),
+                Ok(Flow::Continue) if self.quitting || self.exit_due() => break Ok(()),
+                Ok(Flow::Continue) => {}
             }
-            if self.exit_due() {
-                break;
-            }
-        }
+        };
         self.shutdown();
-        Ok(())
+        result
     }
 
     /// Handles input that the caller supplies, in place of the backend's. Runs one
@@ -230,6 +237,11 @@ impl<B: Backend> App<B> {
 
     /// Saves the settings and stops the library scan. [`App::run`] calls it on exit.
     pub fn shutdown(&mut self) {
+        self.broadcast_app(Event::new("SaveState"));
+        self.hide_all();
+        self.services
+            .sync
+            .finish(&self.services.settings, self.ctx.scheduler.now());
         if let Some(scan) = self.scan.take() {
             scan.cancel();
         }
@@ -302,7 +314,7 @@ impl<B: Backend> App<B> {
 
     /// The absolute bounds of the widget with `key` on the top window, from its last layout.
     pub fn find_rect(&self, key: &str) -> Option<Rect> {
-        self.router.top_window()?.find_rect(key)
+        self.input_window()?.find_rect(key)
     }
 
     /// Runs `f` on the widget with `key` on the top window. Returns false when the
@@ -312,7 +324,7 @@ impl<B: Backend> App<B> {
         T: kaia_ui::Widget + 'static,
         F: FnOnce(&mut T, &mut kaia_ui::UpdateCx<'_>),
     {
-        match self.router.top_window() {
+        match self.input_window() {
             Some(window) => window.update::<T, F>(&mut self.ctx, key, f),
             None => false,
         }
@@ -322,6 +334,35 @@ impl<B: Backend> App<B> {
     /// paint, tasks and paint again.
     fn step(&mut self, input: Vec<InputEvent>) -> Result<Flow, DisplayError> {
         self.pump_scan();
+        for reply in self
+            .services
+            .sync
+            .tick(&self.services.settings, self.ctx.scheduler.now(), false)
+        {
+            match reply {
+                crate::sync::Reply::Remote(book, p) => self.broadcast_app(Event::with_args(
+                    "SyncProgress",
+                    vec![
+                        Value::Number(book as f64),
+                        Value::Str(p.progress),
+                        Value::Number(p.percentage),
+                        Value::Str(p.device),
+                        Value::Str(p.device_id),
+                        p.timestamp.map(|t| Value::Number(t as f64)).unwrap_or_default(),
+                    ],
+                )),
+                crate::sync::Reply::Pushed(document) => {
+                    self.broadcast_app(Event::with_args("SyncPushed", vec![Value::Str(document)]))
+                }
+                crate::sync::Reply::Status(message) => {
+                    env!(self).toast(message, 4.0);
+                }
+                crate::sync::Reply::Error(e) => {
+                    env!(self).toast(format!("Progress sync failed: {e}"), 5.0);
+                }
+                crate::sync::Reply::Done => {}
+            }
+        }
         // Each event is dispatched, painted and settled before the next one, so a
         // later event sees the screen that the earlier one produced.
         for event in input {
@@ -341,6 +382,7 @@ impl<B: Backend> App<B> {
         // in the same iteration.
         let now = self.ctx.scheduler.now();
         self.ctx.run_due(now);
+        self.power_due();
         self.stack.apply_requests(&mut self.ctx);
         self.settle();
         self.repaint()?;
@@ -389,7 +431,17 @@ impl<B: Backend> App<B> {
                 self.router.top_route()
             );
         }
-        let Some(top) = self.router.top_window() else {
+        if self.sleeping() {
+            return;
+        }
+        let edge = self.services.theme.scale.dp(40) as i32;
+        let quick = matches!(&gesture, Gesture::Swipe { pos, direction: Some(Direction::South), .. } if pos.y < edge)
+            || matches!(&gesture, Gesture::Tap { pos, .. } if pos.y < edge && self.router.top_route().is_some_and(Route::is_top_level));
+        if quick {
+            self.quick_settings();
+            return;
+        }
+        let Some(top) = self.input_window() else {
             return;
         };
         let handled = top.dispatch(UiEvent::Gesture(gesture.clone()), &mut self.ctx) == Handled::Yes;
@@ -418,27 +470,80 @@ impl<B: Backend> App<B> {
             return;
         }
         match ev.key {
-            Key::LPgFwd | Key::RPgFwd => {
-                self.send(Event::new("PageForward"));
-            }
-            Key::LPgBack | Key::RPgBack => {
-                self.send(Event::new("PageBack"));
-            }
-            key => {
-                let Some(top) = self.router.top_window() else {
-                    return;
-                };
-                let handled = top.dispatch(UiEvent::Key(ev), &mut self.ctx) == Handled::Yes;
-                if !handled && key == Key::Back {
-                    self.back();
+            Key::Power => {
+                if self.sleeping() {
+                    self.resume();
+                } else {
+                    self.sleep();
                 }
+                return;
+            }
+            Key::SleepCoverClosed => {
+                self.sleep();
+                return;
+            }
+            Key::SleepCoverOpened => {
+                self.resume();
+                return;
+            }
+            _ if self.sleeping() => return,
+            _ => {}
+        }
+        let handled = self
+            .input_window()
+            .is_some_and(|top| top.dispatch(UiEvent::Key(ev), &mut self.ctx) == Handled::Yes);
+        if !handled {
+            match ev.key {
+                Key::LPgFwd | Key::RPgFwd => {
+                    self.send(Event::new("PageForward"));
+                }
+                Key::LPgBack | Key::RPgBack => {
+                    self.send(Event::new("PageBack"));
+                }
+                Key::Back => self.back(),
+                _ => {}
             }
         }
     }
 
+    fn input_window(&self) -> Option<Window> {
+        self.stack
+            .ids_top_down()
+            .into_iter()
+            .find(|id| self.stack.options(*id).is_some_and(|o| !o.toast))
+            .and_then(|id| self.router.window(id))
+    }
+
+    fn reconcile_windows(&mut self) {
+        self.router.register(&mut self.transient);
+        self.stack.apply_requests(&mut self.ctx);
+        let closed = self.router.closed_screens(&self.stack);
+        for index in &closed {
+            self.hide(*index);
+        }
+        self.router.remove_closed(&self.stack);
+        if !closed.is_empty() {
+            self.reveal_top();
+        }
+    }
+
     /// Sends a named event through the window stack. Returns true when a window used it.
-    fn send(&mut self, ev: Event) -> bool {
-        self.stack.send(&ev, &mut self.ctx)
+    pub fn send(&mut self, ev: Event) -> bool {
+        if matches!(ev.name.as_str(), "PageForward" | "PageBack") {
+            for id in self.stack.ids_top_down() {
+                if let Some(window) = self.router.window(id) {
+                    if window.dispatch(UiEvent::Named(ev.clone()), &mut self.ctx) == Handled::Yes {
+                        return true;
+                    }
+                }
+                if self.stack.options(id).is_some_and(|o| o.modal) {
+                    break;
+                }
+            }
+            false
+        } else {
+            self.stack.send(&ev, &mut self.ctx)
+        }
     }
 
     fn broadcast(&mut self, ev: Event) {
@@ -447,7 +552,7 @@ impl<B: Backend> App<B> {
 
     /// Delivers an app event to the windows and to every surface, bottom up. The
     /// outcomes are applied after all surfaces have seen the event.
-    fn broadcast_app(&mut self, ev: Event) {
+    pub fn broadcast_app(&mut self, ev: Event) {
         self.broadcast(ev.clone());
         let mut outcomes = Vec::new();
         for index in 0..self.router.depth() {
@@ -490,31 +595,54 @@ impl<B: Backend> App<B> {
     /// Transient windows are dropped once they are closed. The check waits until
     /// no window request is pending, so a window that is about to show is kept.
     fn collect_outboxes(&mut self) -> Vec<Out> {
-        if self.ctx.pending_window_requests() == 0 {
-            let stack = &self.stack;
-            self.transient
-                .retain(|w| w.id().is_none_or(|id| stack.contains(id)));
-        }
-        let mut outs = self.router.drain_outboxes();
-        for window in &self.transient {
-            outs.extend(window.drain_outbox());
-        }
+        // Drain actions before removing windows that closed themselves in the same event.
+        self.router.register(&mut self.transient);
+        let outs = self.router.drain_outboxes();
+        self.reconcile_windows();
         outs
     }
 
-    /// Routes an action id: the top surface first, then the root, then the global
-    /// commands. An id nobody knows is recorded.
-    fn command(&mut self, id: &str, args: &[Value]) {
-        let depth = self.router.depth();
-        if let Some(top) = depth.checked_sub(1) {
-            if self.route_command(top, id, args) {
+    /// Routes an action id through surfaces from top to bottom, then global commands. An id nobody knows is recorded.
+    pub fn command(&mut self, id: &str, args: &[Value]) {
+        match id {
+            "resume" => {
+                self.resume();
+                return;
+            }
+            "settings:quick:open" => {
+                self.quick_settings();
+                return;
+            }
+            "settings:quick:toggle-light" => {
+                self.toggle_light();
+                return;
+            }
+            _ => {}
+        }
+        if id == "dialog:dismiss" {
+            self.back();
+            return;
+        }
+        if id == "reader:acknowledge-change"
+            || id == "reader:sync:accept"
+            || id.starts_with("library:collections:delete-confirm:")
+            || id == "library:history:clear-confirm"
+        {
+            self.back();
+        }
+        if id.starts_with("settings:quick:") {
+            let outcome = surfaces::settings::quick::command(id, args, &mut env!(self));
+            if self.apply(0, outcome) {
                 return;
             }
         }
-        if depth > 1 && self.route_command(0, id, args) {
-            return;
+        for index in (0..self.router.depth()).rev() {
+            if self.route_command(index, id, args) {
+                return;
+            }
         }
         match Command::parse(id) {
+            Some(Command::OpenBook(book)) => self.open_book(book, args.first().cloned()),
             Some(command) => self.global(command),
             None => self.unknown.push(id.to_string()),
         }
@@ -543,17 +671,37 @@ impl<B: Backend> App<B> {
         true
     }
 
+    fn start_scan(&mut self) {
+        if self.scan.is_some() {
+            return;
+        }
+        let roots = if self.options.library_roots.is_empty() {
+            vec![self.services.paths.books_dir.clone()]
+        } else {
+            self.options.library_roots.clone()
+        };
+        self.scan = Some(LibraryScan::spawn(self.services.library_path(), roots));
+    }
+
+    fn quick_settings(&mut self) {
+        let sheet = surfaces::settings::quick::quick_settings(&self.services);
+        env!(self).sheet(sheet);
+    }
+
     fn global(&mut self, command: Command) {
         match command {
             Command::Navigate(route) => self.switch_root_to(route, RefreshMode::Ui),
-            Command::OpenBook(book) => self.open_book(book),
+            Command::OpenBook(book) => self.open_book(book, None),
             Command::Back => self.back(),
             Command::Quit => self.quitting = true,
+            Command::Sleep => self.sleep(),
+            Command::Scan => self.start_scan(),
         }
     }
 
     fn navigate(&mut self, nav: Nav) {
         match nav {
+            Nav::OpenBook { book, location } => self.open_book(BookRef::Id(book), location),
             Nav::Push(surface) => self.push(surface),
             Nav::Pop => self.pop(RefreshMode::Ui),
             Nav::SwitchRoot(route) => self.switch_root_to(route, RefreshMode::Ui),
@@ -580,10 +728,10 @@ impl<B: Backend> App<B> {
     }
 
     fn switch_root(&mut self, mut surface: Box<dyn Surface>, mode: RefreshMode) {
+        self.hide_all();
         let Some(window) = self.build_surface(&mut *surface) else {
             return;
         };
-        self.hide_all();
         self.router
             .switch_root(surface, window, mode, &mut self.stack, &mut self.ctx);
         self.uncover_top();
@@ -610,15 +758,25 @@ impl<B: Backend> App<B> {
         let Some(top) = self.router.depth().checked_sub(1).filter(|&top| top > 0) else {
             return;
         };
+        let reader_closed = matches!(self.router.top_route(), Some(Route::Reader { .. }));
         self.hide(top);
         self.router.pop(mode, &mut self.stack, &mut self.ctx);
-        self.uncover_top();
+        if reader_closed {
+            self.broadcast_app(Event::new("LibraryUpdated"));
+        }
         self.reveal_top();
     }
 
     /// `back`: closes the top pushed screen (the reader saves its progress on the
     /// way out). From a root that is not Home, it goes to Home.
     fn back(&mut self) {
+        if let Some(id) = self.input_window().and_then(|w| w.id()) {
+            if self.router.top_window().and_then(|w| w.id()) != Some(id) {
+                self.stack.close(id, None, &mut self.ctx);
+                self.reconcile_windows();
+                return;
+            }
+        }
         match self.router.depth() {
             0 => {}
             1 => {
@@ -630,15 +788,35 @@ impl<B: Backend> App<B> {
         }
     }
 
-    fn open_book(&mut self, book: BookRef) {
+    fn open_book(&mut self, book: BookRef, location: Option<Value>) {
         let found = match &book {
             BookRef::Id(id) => self.services.library.book(*id),
             BookRef::Path(path) => self.services.library.book_by_path(path),
         };
         match found {
             Ok(Some(row)) => {
-                if let Some(surface) = surfaces::create(&Route::Reader { book: row.id }) {
-                    self.push(surface);
+                let existing = self.router.routes().iter().position(|route| match route {
+                    Route::Reader { book } => {
+                        *book == row.id
+                            || self
+                                .services
+                                .library
+                                .book(*book)
+                                .ok()
+                                .flatten()
+                                .is_some_and(|old| old.partial_md5 == row.partial_md5)
+                    }
+                    _ => false,
+                });
+                if let Some(index) = existing {
+                    while self.router.depth() > index + 1 {
+                        self.pop(RefreshMode::Ui);
+                    }
+                    if let Some(location) = location {
+                        self.route_command(index, "reader:location", &[location]);
+                    }
+                } else {
+                    self.push(Box::new(surfaces::reader::ReaderSurface::at(row.id, location)));
                 }
             }
             Ok(None) => self.notices.push(format!("no book for {book:?}")),
@@ -662,9 +840,23 @@ impl<B: Backend> App<B> {
         let Some(window) = window else {
             return;
         };
+        let pending = self.ctx.dirty.clone();
+        let before = self.frame.clone();
         self.router
             .swap_top_window(window, RefreshMode::Ui, &mut self.stack, &mut self.ctx);
-        self.uncover_top();
+        self.frame.fill_rect(
+            Rect::from_size(self.screen),
+            self.services.theme.color(Tone::Surface),
+        );
+        let windows = Window::visible_stack(&self.stack, |id| self.router.window(id));
+        for window in &windows {
+            window.invalidate();
+        }
+        Window::paint_stack(&windows, &mut self.frame, &mut self.ctx.dirty);
+        self.ctx.dirty = pending;
+        if let Some(region) = changed_region(&before, &self.frame) {
+            self.ctx.dirty.refresh(RefreshMode::Ui, Some(region), false);
+        }
     }
 
     /// Builds `surface` for the screen. None when it has nothing to show.
@@ -712,7 +904,7 @@ impl<B: Backend> App<B> {
     fn uncover_top(&mut self) {
         let surface = self.services.theme.color(Tone::Surface);
         self.frame.fill_rect(Rect::from_size(self.screen), surface);
-        if let Some(window) = self.router.top_window() {
+        if let Some(window) = self.input_window() {
             window.invalidate();
         }
     }
@@ -764,15 +956,26 @@ impl<B: Backend> App<B> {
     /// Paints the dirty windows bottom up into the frame and presents each refresh.
     /// Returns the number of refreshes presented.
     fn repaint(&mut self) -> Result<usize, DisplayError> {
-        let plan = self.stack.paint_plan(&mut self.ctx.dirty);
-        let mut painted = false;
-        for id in plan {
-            if let Some(window) = self.router.window(id) {
-                painted |= window.paint(&mut self.frame, &mut self.ctx.dirty);
-            }
+        let color = self.services.theme.color_panel
+            && self
+                .services
+                .settings
+                .read("display.color_rendering")
+                .as_bool()
+                .unwrap_or(true);
+        if self.presented_color.is_some_and(|previous| previous != color) {
+            self.ctx.dirty.refresh(RefreshMode::Full, None, false);
         }
+        self.router.register(&mut self.transient);
+        self.stack.apply_requests(&mut self.ctx);
+        let plan = self.stack.paint_plan(&mut self.ctx.dirty);
+        let painted = if plan.is_empty() {
+            false
+        } else {
+            let windows = Window::visible_stack(&self.stack, |id| self.router.window(id));
+            Window::paint_stack(&windows, &mut self.frame, &mut self.ctx.dirty)
+        };
         let refreshes = self.ctx.dirty.take_frame(painted);
-        let color = self.services.theme.color_panel;
         let mut sent = 0;
         for refresh in refreshes {
             // Surfaces say which refreshes dither their pictures (covers, pages). Plain UI is not dithered.
@@ -783,12 +986,24 @@ impl<B: Backend> App<B> {
             let Some(panel) = refresh::to_panel(&refresh, self.screen, color, content_dither) else {
                 continue;
             };
-            self.backend.present(&self.frame, &panel)?;
+            if color || self.frame.format() != kaia_gfx::PixelFormat::Rgb24 {
+                self.backend.present(&self.frame, &panel)?;
+            } else {
+                let mut gray = self.frame.clone();
+                for pixel in gray.data_mut().as_chunks_mut::<3>().0 {
+                    let luma =
+                        ((u32::from(pixel[0]) * 77 + u32::from(pixel[1]) * 150 + u32::from(pixel[2]) * 29)
+                            >> 8) as u8;
+                    pixel.fill(luma);
+                }
+                self.backend.present(&gray, &panel.with_dither(false))?;
+            }
             self.modes.push(refresh.mode);
             self.stats.refreshes += 1;
             sent += 1;
         }
         if sent > 0 {
+            self.presented_color = Some(color);
             self.stats.frames += 1;
         }
         Ok(sent)
@@ -821,7 +1036,7 @@ impl<B: Backend> App<B> {
         if let Some(exit) = self.exit_at {
             budget = min_opt(budget, exit.saturating_sub(now));
         }
-        if self.scan.is_some() {
+        if self.scan.is_some() || self.services.sync.busy() {
             budget = min_opt(budget, SCAN_POLL);
         }
         budget
@@ -839,4 +1054,39 @@ fn min_opt(a: Option<Duration>, b: Duration) -> Option<Duration> {
 /// Writes the frame as a PNG. Used by the binary for `--screenshot`.
 pub fn save_frame(frame: &Pixmap, path: &std::path::Path) -> io::Result<()> {
     kaia_gfx::png::write_pixmap(frame, path).map_err(|e| io::Error::other(e.to_string()))
+}
+
+/// Bounds of pixels changed by a rebuilt screen.
+fn changed_region(before: &Pixmap, after: &Pixmap) -> Option<EventRect> {
+    let mut left = after.width();
+    let mut top = after.height();
+    let mut right = 0;
+    let mut bottom = 0;
+    let bytes = after.stride() / after.width() as usize;
+    for (y, (a, b)) in before
+        .data()
+        .chunks(before.stride())
+        .zip(after.data().chunks(after.stride()))
+        .enumerate()
+    {
+        if a == b {
+            continue;
+        }
+        for (x, (a, b)) in a.chunks(bytes).zip(b.chunks(bytes)).enumerate() {
+            if a != b {
+                left = left.min(x as u32);
+                right = right.max(x as u32 + 1);
+                top = top.min(y as u32);
+                bottom = bottom.max(y as u32 + 1);
+            }
+        }
+    }
+    (left < right).then(|| {
+        EventRect::new(
+            left as i32,
+            top as i32,
+            (right - left) as i32,
+            (bottom - top) as i32,
+        )
+    })
 }

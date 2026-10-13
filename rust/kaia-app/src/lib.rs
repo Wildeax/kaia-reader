@@ -22,6 +22,7 @@ pub mod scan;
 pub mod services;
 pub mod surface;
 pub mod surfaces;
+pub mod sync;
 
 pub use app::{App, AppOptions, Flow, FrameStats};
 pub use backend::{Backend, HeadlessBackend, ScriptError, ScriptInput};

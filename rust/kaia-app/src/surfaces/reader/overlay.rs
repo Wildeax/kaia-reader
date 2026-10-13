@@ -1,36 +1,55 @@
-//! The reader overlay: a transparent layer with a Back button and the page
-//! number. The app closes it on a tap that the overlay does not use.
+//! The reader overlay: a top bar with Home, the title, search, the bookmark and
+//! More, and a bottom bar with the page slider, the chapter line and the Contents,
+//! Notes and Text and layout buttons. The page stays visible between the bars.
+//! A tap the bars do not use closes the overlay.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use kaia_events::{Refresh, RefreshMode, ShowOpts};
 use kaia_gfx::Size;
-use kaia_ui::components::{Expanded, Row};
-use kaia_ui::controls::ButtonStyle;
+use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Row, Spacer};
+use kaia_ui::controls::{ButtonStyle, IconButton, Slider};
+use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, WidgetPod, Window};
 
+use super::state::Core;
 use crate::services::Services;
 use crate::surface::{Surface, SurfaceEnv};
-use crate::surfaces::common::{button, fill, page, window};
+use crate::surfaces::common::{button, window};
 use crate::surfaces::Route;
 
-/// The overlay over the reader. It holds the title and the page it was opened at.
-pub struct ReaderOverlaySurface {
-    title: String,
-    page: u32,
-    count: u32,
+/// What the bars show. The reader fills it from the session.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverlayModel {
+    pub title: String,
+    /// The page shown, 0-based.
+    pub page: u32,
+    pub page_count: usize,
+    /// The chapter and the pages left in it, as one line. Empty when unknown.
+    pub chapter: String,
+    pub bookmarked: bool,
 }
 
-impl ReaderOverlaySurface {
-    pub fn new(title: String, page: u32, count: u32) -> Self {
-        Self { title, page, count }
+/// The overlay surface. The reader keeps a handle to its window, so it can update the bars.
+pub struct Overlay {
+    window: Window,
+    serial: u64,
+    core: Rc<RefCell<Core>>,
+}
+
+impl Overlay {
+    pub fn new(window: Window, serial: u64, core: Rc<RefCell<Core>>) -> Self {
+        Self { window, serial, core }
     }
 }
 
-impl Surface for ReaderOverlaySurface {
+impl Surface for Overlay {
     fn route(&self) -> Route {
         Route::Overlay
     }
 
-    /// The overlay is not full screen, so the reader stays visible under it.
+    /// The overlay is not full screen, so the page stays visible under the bars.
     fn show_opts(&self) -> ShowOpts {
         ShowOpts {
             covers_fullscreen: false,
@@ -39,30 +58,125 @@ impl Surface for ReaderOverlaySurface {
         }
     }
 
-    fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
-        Some(build(
-            env.services,
-            env.screen,
-            &self.title,
-            self.page,
-            self.count,
-        ))
+    fn build(&mut self, _env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        Some(self.window.clone())
     }
 
     fn closes_on_unused_tap(&self) -> bool {
         true
     }
+
+    fn on_hide(&mut self, _env: &mut SurfaceEnv<'_>) {
+        let mut core = self.core.borrow_mut();
+        if core.overlay.as_ref().is_some_and(|l| l.serial == self.serial) {
+            core.overlay = None;
+        }
+    }
 }
 
-/// The overlay window: a Back button, then the title and the page number.
-pub fn build(services: &Services, screen: Size, title: &str, page_index: u32, count: u32) -> Window {
+/// The window of the overlay for `model`.
+pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window {
     let t = &services.theme;
-    let back = button(ButtonStyle::Secondary, "Back", "back", "back");
-    let label = WidgetPod::new(kaia_ui::components::Label::new(
-        format!("{title}, page {} of {count}", page_index + 1),
-        t.font.body.clone(),
+    let sp = t.space.md;
+
+    let home = button(ButtonStyle::Secondary, "Home", "nav:home", "overlay-home");
+    let title = WidgetPod::new(Label::new(
+        model.title.clone(),
+        t.font.body_bold.clone(),
         Tone::Ink,
     ));
-    let bar = WidgetPod::new(Row::new(vec![back, WidgetPod::new(Expanded::new(label, 1))]).gap(t.space.md));
-    window(services, screen, page(services, vec![bar, fill()]))
+    let search = WidgetPod::new(IconButton::new("appbar.search").on_action("reader:search:open"))
+        .with_key("overlay-search");
+    let bookmark = button(
+        ButtonStyle::Secondary,
+        bookmark_label(model.bookmarked),
+        "reader:bookmark",
+        "overlay-bookmark",
+    );
+    let more = button(
+        ButtonStyle::Secondary,
+        "More",
+        "reader:panel:more",
+        "overlay-more",
+    );
+    let top = WidgetPod::new(
+        Row::new(vec![
+            home,
+            WidgetPod::new(Expanded::new(title, 1)),
+            search,
+            bookmark,
+            more,
+        ])
+        .gap(sp)
+        .cross_align(CrossAlign::Center),
+    );
+
+    let count = model.page_count.max(1);
+    let page = model.page;
+    let slider = WidgetPod::new(
+        Slider::new(f64::from(page + 1), 1.0, count as f64, 1.0)
+            .format(move |v| format!("page {} of {}", v as i64, count))
+            .on_action("reader:slider"),
+    )
+    .with_key("overlay-slider");
+    let chapter = WidgetPod::new(Label::new(
+        model.chapter.clone(),
+        t.font.caption.clone(),
+        Tone::InkSecondary,
+    ))
+    .with_key("overlay-chapter");
+    let contents = button(
+        ButtonStyle::Secondary,
+        "Contents",
+        "reader:panel:contents",
+        "overlay-contents",
+    );
+    let notes = button(ButtonStyle::Secondary, "Notes", "nav:notes", "overlay-notes");
+    let layout = button(
+        ButtonStyle::Secondary,
+        "Text and layout",
+        "reader:panel:layout",
+        "overlay-layout",
+    );
+    let bottom = WidgetPod::new(
+        Column::new(vec![
+            slider,
+            chapter,
+            WidgetPod::new(
+                Row::new(vec![
+                    WidgetPod::new(Expanded::new(contents, 1)),
+                    WidgetPod::new(Expanded::new(notes, 1)),
+                    WidgetPod::new(Expanded::new(layout, 1)),
+                ])
+                .gap(sp),
+            ),
+        ])
+        .gap(sp)
+        .shrink(),
+    );
+
+    let top_bar = WidgetPod::new(
+        Frame::new(top)
+            .fill(Tone::Surface)
+            .border(Tone::Divider, t.line.divider)
+            .padding(Insets::all(sp)),
+    );
+    let bottom_bar = WidgetPod::new(
+        Frame::new(bottom)
+            .fill(Tone::Surface)
+            .border(Tone::Divider, t.line.divider)
+            .padding(Insets::all(sp)),
+    );
+    let middle = WidgetPod::new(Expanded::new(WidgetPod::new(Spacer::new(1)), 1));
+    let root = Column::new(vec![top_bar, middle, bottom_bar]).cross_align(CrossAlign::Stretch);
+    window(services, screen, root)
+}
+
+/// The label of the bookmark button. It names the state of the current page.
+pub fn bookmark_label(bookmarked: bool) -> &'static str {
+    if bookmarked {
+        "Bookmarked"
+    } else {
+        "Bookmark"
+    }
 }

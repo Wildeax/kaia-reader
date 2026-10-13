@@ -79,3 +79,11 @@ A three-step welcome: language, where books are (default storage root), and impo
 - Opening sheets and dialogs: `ui` refresh of their area; closing: `ui` refresh of the uncovered area.
 - Sliders while dragging: `fast` refresh; on release: `ui` refresh.
 - Never refresh areas that did not change.
+
+## Integration decisions, 2026-10-13
+
+The reader owns the page-turn refresh count. The app disables the dirty queue's second counter. The setting is `reading.full_refresh_pages`, with six as the default. Chapter starts also request a full refresh. Image-triggered full refreshes still need an image-presence signal from the book API.
+
+Progress sync is off until the user enables "Sync reading progress". Self-signed certificates require a separate toggle. Newer remote progress defaults to "Ask first" and older progress defaults to "Never". Requests run on a worker thread. Close and suspend merge progress pushes over one second; ten page changes start a push after ten idle seconds. Failed pushes stay in the local queue.
+
+Quick settings uses the platform's frontlight interface. Desktop uses its in-memory implementation. Suspend saves reading state, paints the sleep screen, waits through the platform's scheduler effects, and cancels pending suspend timers on Power or resume. Warmth is restored from `display.warmth` at startup. Changing color rendering refreshes the whole display in the new mode.

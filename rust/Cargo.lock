@@ -871,14 +871,20 @@ dependencies = [
 name = "kaia-app"
 version = "0.1.0"
 dependencies = [
+ "kaia-book",
+ "kaia-dict",
  "kaia-display",
  "kaia-doc",
  "kaia-events",
  "kaia-gfx",
+ "kaia-id",
  "kaia-input",
  "kaia-library",
  "kaia-mupdf-sys",
+ "kaia-opds",
  "kaia-platform",
+ "kaia-stats",
+ "kaia-sync",
  "kaia-ui",
 ]
 

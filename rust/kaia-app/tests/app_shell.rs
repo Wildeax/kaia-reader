@@ -26,13 +26,13 @@ fn a_scripted_session_produces_the_expected_refreshes() {
     app.start().unwrap();
     app.run().unwrap();
 
-    // Start: Home is drawn in full. Tap: the pressed button (Fast), then the Library
+    // Start: Home is drawn in full. Tap: button press and focus ring (Ui), then the Library
     // root (Ui). Back: Home again (Ui). The loop then quits with the script.
     assert_eq!(
         app.refresh_modes(),
         &[
             RefreshMode::Full,
-            RefreshMode::Fast,
+            RefreshMode::Ui,
             RefreshMode::Ui,
             RefreshMode::Ui
         ]

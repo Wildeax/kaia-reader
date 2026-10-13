@@ -21,6 +21,8 @@ pub enum Command {
     Back,
     /// `quit`: stop the loop after this iteration.
     Quit,
+    Sleep,
+    Scan,
 }
 
 /// A book named by a command: a library row id, or a file path.
@@ -33,7 +35,10 @@ pub enum BookRef {
 impl Command {
     /// Parses a global action id. Returns None for every other id.
     pub fn parse(id: &str) -> Option<Command> {
-        let (head, arg) = match id.split_once(':') {
+        let (head, arg) = match id
+            .split_once(':')
+            .or_else(|| id.strip_prefix("nav.").map(|arg| ("nav", arg)))
+        {
             Some((head, arg)) => (head, Some(arg)),
             None => (id, None),
         };
@@ -50,6 +55,8 @@ impl Command {
             }
             ("back", None) => Some(Command::Back),
             ("quit", None) => Some(Command::Quit),
+            ("sleep", None) => Some(Command::Sleep),
+            ("scan", None) => Some(Command::Scan),
             _ => None,
         }
     }

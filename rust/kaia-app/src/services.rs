@@ -22,6 +22,9 @@ pub const RESOURCES_ENV: &str = "KAIA_RESOURCES";
 /// The app's services.
 pub struct Services {
     pub platform: Platform,
+    pub sync: crate::sync::ProgressSync,
+    pub clipboard: Option<String>,
+    pub dictionary: Option<kaia_dict::Library>,
     /// Kaia's settings, at `<data>/settings.json`.
     pub settings: Settings,
     /// The library index, at `<data>/library.sqlite3`. The scan thread has its own connection.
@@ -70,7 +73,28 @@ impl Services {
         })?;
 
         let settings_path = data_dir.join("settings.json");
-        let settings = Settings::open(&settings_path);
+        let mut settings = Settings::open(&settings_path);
+        if let Some(warmth) = settings.read("display.warmth").as_i64() {
+            let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
+        }
+        if settings.read("sync.device_id").as_str().is_none() {
+            let identity = format!(
+                "{}-{}-{}",
+                std::process::id(),
+                crate::sync::now_unix(),
+                data_dir.display()
+            );
+            settings.save(
+                "sync.device_id",
+                kaia_events::Value::from(kaia_sync::md5_hex(identity.as_bytes())),
+            );
+            settings
+                .flush(&settings_path)
+                .map_err(|source| ServicesError::Io {
+                    path: settings_path.clone(),
+                    source,
+                })?;
+        }
         let library = Library::open(&data_dir.join("library.sqlite3")).map_err(ServicesError::Library)?;
 
         let scale = Scale {
@@ -88,6 +112,9 @@ impl Services {
         let paths = platform.paths.clone();
         Ok(Services {
             platform,
+            clipboard: None,
+            sync: crate::sync::ProgressSync::default(),
+            dictionary: None,
             settings,
             library,
             paths,
