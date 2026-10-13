@@ -1,0 +1,26 @@
+[package]
+name = "kaia-ffi"
+description = "C ABI of libkaia, called from LuaJIT through ffi.load."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "kaia"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enables kaia_debug_panic, a test-only export that panics on purpose.
+test-panic = []
+
+[dependencies]
+kaia-core = { path = "../kaia-core" }
+kaia-storage = { path = "../kaia-storage" }
+serde = "1"
+serde_json = "1"
+
+[dev-dependencies]
+proptest = "1"
+regex = "1"
+tempfile = "3"

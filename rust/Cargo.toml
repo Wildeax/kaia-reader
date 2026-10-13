@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "kaia-core",
     "kaia-storage",
-    # "kaia-ffi",  # added by the FFI task
+    "kaia-ffi",
 ]
 
 [workspace.package]
