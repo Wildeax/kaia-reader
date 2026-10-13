@@ -80,7 +80,7 @@ fn exact_match_comes_before_case_insensitive_matches() {
     assert_eq!(dict.lookup("APPLE")[0].definition.text, "shout");
 
     let folded = dict.lookup("aPPle");
-    assert_eq!(headwords(&folded), ["APPLE", "Apple", "apple"]);
+    assert_eq!(headwords(&folded), ["apple"]);
     assert!(folded.iter().all(|e| e.matched == Match::CaseInsensitive));
 }
 
@@ -107,7 +107,15 @@ fn synonyms_resolve_to_their_target_headword() {
     assert_eq!(found[0].matched, Match::Synonym);
 
     assert_eq!(dict.lookup("kitty")[0].headword, "cat");
-    assert!(dict.lookup("dog").is_empty());
+    assert!(dict
+        .lookup_with(
+            "dog",
+            &LookupOptions {
+                fuzzy: false,
+                ..LookupOptions::default()
+            }
+        )
+        .is_empty());
 }
 
 #[test]
@@ -186,6 +194,7 @@ fn library_loads_nested_folders_and_reports_broken_dictionaries() {
 
     let only_beta = LookupOptions {
         dictionaries: Some(vec!["Beta".into()]),
+        exclusive: true,
         ..LookupOptions::default()
     };
     let beta = library.lookup_with("word", &only_beta);
@@ -196,6 +205,84 @@ fn library_loads_nested_folders_and_reports_broken_dictionaries() {
         Library::open_dir(root.join("missing")),
         Err(Error::Io { .. })
     ));
+}
+
+#[test]
+fn preferred_order_disabled_and_global_fuzzy_fallback() {
+    let root = scratch("order-and-fuzzy");
+    Gen::plain("Zulu", &[("apple", "fruit")]).write(&root.join("a"));
+    Gen::plain("Alpha", &[("ample", "enough")]).write(&root.join("b"));
+    Gen::plain("Beta", &[("apple", "another fruit")]).write(&root.join("c"));
+    let library = Library::open_dir(root).unwrap();
+    let options = LookupOptions {
+        dictionaries: Some(vec!["Zulu".into()]),
+        ..LookupOptions::default()
+    };
+    let names: Vec<_> = library
+        .lookup_with("apple", &options)
+        .iter()
+        .map(|e| e.dict_name.clone())
+        .collect();
+    assert_eq!(names, ["Zulu", "Beta"]);
+    let fuzzy = library.lookup_with("aple", &options);
+    assert!(fuzzy.iter().any(|e| e.dict_name == "Alpha"));
+    let exact = library.lookup_with("apple", &options);
+    assert!(exact.iter().all(|e| e.matched != Match::Fuzzy));
+    let options = LookupOptions {
+        disabled: ["Zulu".into()].into(),
+        ..options
+    };
+    assert_eq!(library.lookup_with("apple", &options)[0].dict_name, "Beta");
+}
+
+#[test]
+fn exact_mode_uses_global_exact_before_lowercase() {
+    let root = scratch("exact-global");
+    Gen::plain("One", &[("APPLE", "upper")]).write(&root.join("a"));
+    Gen::plain("Two", &[("apple", "lower")]).write(&root.join("b"));
+    let library = Library::open_dir(root).unwrap();
+    let options = LookupOptions {
+        fuzzy: false,
+        ..LookupOptions::default()
+    };
+    assert_eq!(library.lookup_with("APPLE", &options)[0].dict_name, "One");
+    assert_eq!(library.lookup_with("APPLE", &options).len(), 1);
+    assert!(library.lookup_with("Apple", &options).is_empty());
+}
+
+#[test]
+fn compressed_files_take_precedence_and_index_size_is_checked() {
+    let dir = scratch("preferred-files");
+    let mut gen = Gen::plain("Preferred", &[("word", "compressed")]);
+    gen.gzip_idx = true;
+    gen.dictzip_chunk = Some(32);
+    let ifo = gen.write(&dir);
+    fs::write(ifo.with_extension("idx"), b"broken index").unwrap();
+    fs::write(ifo.with_extension("dict"), b"wrong definition").unwrap();
+    assert_eq!(
+        Dictionary::open(&ifo).unwrap().lookup("word")[0].definition.text,
+        "compressed"
+    );
+    let original = fs::read_to_string(&ifo).unwrap();
+    let bad = original.replace("idxfilesize=13", "idxfilesize=99");
+    assert_ne!(original, bad);
+    fs::write(&ifo, bad).unwrap();
+    assert!(Dictionary::open(&ifo).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn scan_follows_links_and_skips_resource_folders() {
+    use std::os::unix::fs::symlink;
+    let root = scratch("links-and-resources");
+    let outside = scratch("linked-dictionary");
+    Gen::plain("Linked", &[("word", "found")]).write(&outside);
+    Gen::plain("Resource", &[("word", "hidden")]).write(&root.join("res"));
+    fs::create_dir_all(&root).unwrap();
+    symlink(&outside, root.join("linked")).unwrap();
+    let library = Library::open_dir(root).unwrap();
+    assert_eq!(library.dictionaries().len(), 1);
+    assert_eq!(library.dictionaries()[0].name(), "Linked");
 }
 
 #[test]
@@ -228,7 +315,7 @@ fn type_sequence_joins_text_fields_and_skips_binary_fields() {
     let found = dict.lookup("apple");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].definition.kind, DefinitionKind::Phonetic);
-    assert_eq!(found[0].definition.text, "ˈæpəl\n\nfruit");
+    assert_eq!(found[0].definition.text, "[ˈæpəl]\nfruit");
 }
 
 #[test]
@@ -257,7 +344,7 @@ fn html_and_other_types_keep_their_kind() {
 
     assert_eq!(dict.lookup("plain")[0].definition.kind, DefinitionKind::Plain);
     assert_eq!(dict.lookup("xml")[0].definition.kind, DefinitionKind::Xdxf);
-    assert_eq!(dict.lookup("xml")[0].definition.plain_text(), "xml");
+    assert_eq!(dict.lookup("xml")[0].definition.plain_text(), "[]");
     assert_eq!(dict.lookup("odd")[0].definition.kind, DefinitionKind::Other('k'));
     assert!(dict.lookup("resource").is_empty());
     assert!(dict.lookup("picture").is_empty());

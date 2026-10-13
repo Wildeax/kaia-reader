@@ -1,6 +1,6 @@
 //! Lookup stages, result types, and the folder-level `Library`.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +21,7 @@ pub enum Match {
     Synonym,
     /// The query is an English inflection of a headword, such as `dogs` for `dog`.
     Morphology,
-    /// The headword is a prefix of the query, or differs from it by one edit.
+    /// The headword comes from sdcv-style edit-distance fallback.
     Fuzzy,
 }
 
@@ -36,7 +36,7 @@ pub enum DefinitionKind {
     Xdxf,
     /// `g`: Pango markup.
     Pango,
-    /// `t` and `y`: phonetic transcription, shown as plain text.
+    /// `t` and `y`: phonetic transcription, wrapped in brackets for display.
     Phonetic,
     /// Any other lowercase type letter. Its text is kept as plain text.
     Other(char),
@@ -46,16 +46,23 @@ pub enum DefinitionKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Definition {
     pub kind: DefinitionKind,
-    /// Raw text in the dictionary's format.
+    /// Joined text fields. Phonetic fields have brackets and XDXF fields are text.
     pub text: String,
 }
 
 impl Definition {
-    /// The text without markup, ready for display. Markup kinds go through [`strip_html`].
+    /// The text without markup, ready for display.
     pub fn plain_text(&self) -> String {
-        match self.kind {
-            DefinitionKind::Html | DefinitionKind::Xdxf | DefinitionKind::Pango => strip_html(&self.text),
-            _ => self.text.clone(),
+        self.display_text()
+    }
+
+    /// KOReader's dictionary display text. HTML keeps paragraph and list layout;
+    /// other types keep source line breaks and turn `<br>` into a line break.
+    pub fn display_text(&self) -> String {
+        if self.kind == DefinitionKind::Html {
+            strip_html(&self.text)
+        } else {
+            crate::html::strip_inline(&self.text, self.kind == DefinitionKind::Xdxf)
         }
     }
 }
@@ -77,18 +84,24 @@ pub struct Entry {
 pub struct LookupOptions {
     /// Run the fuzzy stage when nothing matches exactly, by case, by synonym or by inflection.
     pub fuzzy: bool,
-    /// Most entries the fuzzy stage returns, across all dictionaries.
+    /// Most fuzzy headwords to try, across all dictionaries.
     pub max_fuzzy: usize,
-    /// Only search dictionaries with these names. `None` searches all of them.
+    /// Preferred dictionary names in order. Unlisted dictionaries follow by name.
     pub dictionaries: Option<Vec<String>>,
+    /// If true, search only the dictionaries listed above.
+    pub exclusive: bool,
+    /// Dictionary names excluded from lookup.
+    pub disabled: HashSet<String>,
 }
 
 impl Default for LookupOptions {
     fn default() -> Self {
         LookupOptions {
             fuzzy: true,
-            max_fuzzy: 20,
+            max_fuzzy: 10,
             dictionaries: None,
+            exclusive: false,
+            disabled: HashSet::new(),
         }
     }
 }
@@ -101,7 +114,8 @@ pub struct Library {
 }
 
 impl Library {
-    /// Opens every `.ifo` file under `dir`, recursively, in path order.
+    /// Opens every `.ifo` file under `dir`, recursively. Keep this instance open
+    /// while the app performs lookups so indexes and dictzip handles are reused.
     ///
     /// A dictionary that fails to open does not stop the others. It goes into
     /// [`Library::errors`]. The call fails only when `dir` itself cannot be read.
@@ -140,11 +154,22 @@ impl Library {
 
     /// Looks up `word` across all dictionaries.
     ///
-    /// Each dictionary reports the results of its first stage that matches (exact, case
-    /// insensitive, synonym, inflection, fuzzy), in dictionary order. Entries whose
-    /// definition cannot be read are skipped.
+    /// Each dictionary reports its first matching simple stage. If none matches,
+    /// fuzzy headwords are chosen across the library. Unreadable entries are skipped.
     pub fn lookup_with(&self, word: &str, opts: &LookupOptions) -> Vec<Entry> {
-        let refs: Vec<&Dictionary> = self.dicts.iter().collect();
+        let mut refs: Vec<&Dictionary> = self.dicts.iter().collect();
+        refs.sort_by(|a, b| {
+            let rank = |name: &str| {
+                opts.dictionaries
+                    .as_ref()
+                    .and_then(|v| v.iter().position(|n| n == name))
+            };
+            rank(a.name())
+                .unwrap_or(usize::MAX)
+                .cmp(&rank(b.name()).unwrap_or(usize::MAX))
+                .then_with(|| a.name().cmp(b.name()))
+                .then_with(|| a.path().cmp(b.path()))
+        });
         run(&refs, word, opts)
     }
 }
@@ -154,10 +179,10 @@ fn collect_ifos(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> std::io::Re
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        // `file_type` does not follow symbolic links, so a link cycle cannot recurse forever.
-        let file_type = entry.file_type()?;
+        // Follow symbolic links, with a depth limit to stop cycles.
+        let file_type = fs::metadata(&path)?.file_type();
         if file_type.is_dir() {
-            if depth < MAX_DEPTH {
+            if depth < MAX_DEPTH && entry.file_name() != "res" {
                 // An unreadable subfolder is skipped; the other folders still load.
                 let _ = collect_ifos(&path, depth + 1, out);
             }
@@ -178,44 +203,113 @@ pub(crate) fn run(dicts: &[&Dictionary], word: &str, opts: &LookupOptions) -> Ve
     if word.is_empty() {
         return Vec::new();
     }
-    let stages = [
-        Match::Exact,
-        Match::CaseInsensitive,
-        Match::Synonym,
-        Match::Morphology,
-        Match::Fuzzy,
-    ];
-    let mut out = Vec::new();
-    let mut fuzzy_returned = 0;
-    for dict in dicts {
-        if let Some(names) = &opts.dictionaries {
-            if !names.iter().any(|n| n == dict.name()) {
-                continue;
+    let forced_fuzzy = word.starts_with('/');
+    let word = word.strip_prefix('/').unwrap_or(word);
+    if !opts.fuzzy && !forced_fuzzy && !word.contains(['*', '?']) {
+        let eligible = |dict: &&Dictionary| {
+            !opts.disabled.contains(dict.name())
+                && (!opts.exclusive
+                    || opts
+                        .dictionaries
+                        .as_ref()
+                        .is_some_and(|names| names.iter().any(|n| n == dict.name())))
+        };
+        for candidate in [word] {
+            let mut result = Vec::new();
+            for dict in dicts.iter().filter(|dict| eligible(dict)) {
+                let index_hits: Vec<_> = dict.index.exact(candidate.as_bytes()).collect();
+                for rec in index_hits {
+                    if let Some(entry) = dict.entry(rec, Match::Exact) {
+                        result.push(entry);
+                    }
+                }
+                if let Some(syn) = &dict.syn {
+                    for rec in syn.exact(candidate.as_bytes()) {
+                        if let Some(entry) = dict.entry(syn.item(rec).value as usize, Match::Synonym) {
+                            result.push(entry);
+                        }
+                    }
+                }
+            }
+            if !result.is_empty() {
+                return result;
             }
         }
-        for stage in stages {
-            let limit = if stage == Match::Fuzzy {
-                if !opts.fuzzy || fuzzy_returned >= opts.max_fuzzy {
-                    break;
+        return Vec::new();
+    }
+    let wildcard = word.contains(['*', '?']);
+    let eligible = |dict: &&Dictionary| {
+        !opts.disabled.contains(dict.name())
+            && (!opts.exclusive
+                || opts
+                    .dictionaries
+                    .as_ref()
+                    .is_some_and(|names| names.iter().any(|n| n == dict.name())))
+    };
+    let dicts: Vec<_> = dicts.iter().copied().filter(eligible).collect();
+    if forced_fuzzy {
+        return fuzzy_results(&dicts, word, opts.max_fuzzy, opts.fuzzy);
+    }
+    if wildcard {
+        let mut words = Vec::new();
+        for dict in &dicts {
+            for rec in wildcard_hits(&dict.index, word, 100) {
+                let candidate = String::from_utf8_lossy(dict.index.word(rec)).into_owned();
+                if !words.contains(&candidate) {
+                    words.push(candidate);
                 }
-                opts.max_fuzzy - fuzzy_returned
-            } else {
-                usize::MAX
-            };
-            let entries: Vec<Entry> = stage_hits(dict, stage, word, limit)
+            }
+        }
+        words.sort_by_key(|candidate: &String| candidate.to_lowercase());
+        let mut out = Vec::new();
+        for candidate in words {
+            for dict in &dicts {
+                for stage in [Match::Exact, Match::CaseInsensitive, Match::Morphology] {
+                    if !opts.fuzzy && stage != Match::Exact {
+                        break;
+                    }
+                    let entries: Vec<_> = stage_hits(dict, stage, &candidate, usize::MAX)
+                        .into_iter()
+                        .filter_map(|rec| dict.entry(rec, stage))
+                        .collect();
+                    if !entries.is_empty() {
+                        out.extend(entries);
+                        break;
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    let stages = [Match::Exact, Match::CaseInsensitive, Match::Morphology];
+    let mut out = Vec::new();
+    for dict in &dicts {
+        for stage in stages {
+            let synonym_only = matches!(stage, Match::Exact | Match::CaseInsensitive)
+                && (if stage == Match::Exact {
+                    dict.index.exact(word.as_bytes()).next().is_none()
+                } else {
+                    dict.index.ascii_fold(word.as_bytes()).next().is_none()
+                        && case_variants(word)
+                            .iter()
+                            .all(|v| dict.index.exact(v.as_bytes()).next().is_none())
+                });
+            let actual_match = if synonym_only { Match::Synonym } else { stage };
+            let entries: Vec<_> = stage_hits(dict, stage, word, usize::MAX)
                 .into_iter()
-                .filter_map(|rec| dict.entry(rec, stage))
+                .filter_map(|rec| dict.entry(rec, actual_match))
                 .collect();
             if !entries.is_empty() {
-                if stage == Match::Fuzzy {
-                    fuzzy_returned += entries.len();
-                }
                 out.extend(entries);
                 break;
             }
         }
     }
-    out
+    if out.is_empty() && opts.fuzzy {
+        fuzzy_results(&dicts, word, opts.max_fuzzy, opts.fuzzy)
+    } else {
+        out
+    }
 }
 
 /// Record indexes (file order) that one stage finds in one dictionary.
@@ -226,8 +320,22 @@ fn stage_hits(dict: &Dictionary, stage: Match, word: &str, limit: usize) -> Vec<
             for i in dict.index.exact(word.as_bytes()) {
                 hits.add(i);
             }
+            if let Some(syn) = &dict.syn {
+                for i in syn.exact(word.as_bytes()) {
+                    hits.add(syn.item(i).value as usize);
+                }
+            }
         }
-        Match::CaseInsensitive => folded(&dict.index, word, &mut hits),
+        Match::CaseInsensitive => {
+            folded(&dict.index, word, &mut hits);
+            if let Some(syn) = &dict.syn {
+                let mut found = Hits::new(usize::MAX);
+                folded(syn, word, &mut found);
+                for i in found.out {
+                    hits.add(syn.item(i).value as usize);
+                }
+            }
+        }
         Match::Synonym => {
             if let Some(syn) = &dict.syn {
                 let mut found = Hits::new(usize::MAX);
@@ -239,24 +347,93 @@ fn stage_hits(dict: &Dictionary, stage: Match, word: &str, limit: usize) -> Vec<
         }
         Match::Morphology => {
             for lemma in lemmas(word) {
-                folded(&dict.index, &lemma, &mut hits);
+                let exact: Vec<_> = dict.index.exact(lemma.as_bytes()).collect();
+                if exact.is_empty() {
+                    folded(&dict.index, &lemma, &mut hits);
+                } else {
+                    for i in exact {
+                        hits.add(i);
+                    }
+                }
+                if !hits.out.is_empty() {
+                    break;
+                }
             }
         }
-        Match::Fuzzy => fuzzy(&dict.index, word, &mut hits),
+        Match::Fuzzy => {}
     }
     hits.out
 }
 
-/// Collects matches for `word` ignoring ASCII case, plus matches in the common Unicode
-/// case forms. The ASCII-folded search covers StarDict's own rule; the Unicode forms cover
-/// accented headwords such as `Épuisant`.
-fn folded<T>(table: &WordTable<T>, word: &str, hits: &mut Hits) {
-    for i in table.ascii_fold(word.as_bytes()) {
-        hits.add(i);
+fn wildcard_hits<T>(table: &WordTable<T>, pattern: &str, limit: usize) -> Vec<usize> {
+    (0..table.len())
+        .filter(|&i| wildcard_match(pattern.as_bytes(), table.word(i)))
+        .take(limit)
+        .collect()
+}
+
+fn wildcard_match(pattern: &[u8], word: &[u8]) -> bool {
+    let (mut p, mut w, mut star, mut retry) = (0, 0, None, 0);
+    while w < word.len() {
+        if p < pattern.len() && (pattern[p] == b'?' || pattern[p] == word[w]) {
+            p += 1;
+            w += 1;
+        } else if p < pattern.len() && pattern[p] == b'*' {
+            star = Some(p);
+            p += 1;
+            retry = w;
+        } else if let Some(s) = star {
+            retry += 1;
+            w = retry;
+            p = s + 1;
+        } else {
+            return false;
+        }
     }
+    while p < pattern.len() && pattern[p] == b'*' {
+        p += 1;
+    }
+    p == pattern.len()
+}
+
+/// Cleans a selected word or phrase using `ReaderDictionary:cleanSelection`.
+pub fn clean_selection(text: &str) -> String {
+    let text = text.replace('\u{a0}', " ");
+    let text = text.trim().replace('\u{2019}', "'");
+    let mut text: String = text
+        .chars()
+        .filter(|c| !('\u{2000}'..='\u{206f}').contains(c))
+        .collect();
+    text = text
+        .trim_start_matches(|c: char| c.is_ascii_punctuation())
+        .to_owned();
+    text = text
+        .trim_end_matches(|c: char| c.is_ascii_punctuation())
+        .to_owned();
+    for mark in ['·', '|', '↑', 'ˈ', 'ˌ'] {
+        text = text.replace(mark, "");
+    }
+    if let Some(stripped) = text.strip_suffix("'s") {
+        text = stripped.to_owned();
+    }
+    if text.len() >= 2 && text.as_bytes()[1] == b'\'' && b"LSDMNTlsdmnt".contains(&text.as_bytes()[0]) {
+        text.drain(..2);
+    }
+    if text.len() >= 3 && text[..2].eq_ignore_ascii_case("qu") && text.as_bytes()[2] == b'\'' {
+        text.drain(..3);
+    }
+    text.trim().to_owned()
+}
+
+/// Try the lowercase, uppercase, and title case forms in sdcv's order.
+fn folded<T>(table: &WordTable<T>, word: &str, hits: &mut Hits) {
     for variant in case_variants(word) {
-        for i in table.exact(variant.as_bytes()) {
-            hits.add(i);
+        let found: Vec<_> = table.exact(variant.as_bytes()).collect();
+        if !found.is_empty() {
+            for i in found {
+                hits.add(i);
+            }
+            break;
         }
     }
 }
@@ -280,59 +457,96 @@ fn case_variants(word: &str) -> Vec<String> {
     out
 }
 
-/// Words within one edit of the query's prefixes and of the query itself. Prefixes must keep
-/// at least three characters, and the edit search needs a query of at least four.
-fn fuzzy<T>(table: &WordTable<T>, word: &str, hits: &mut Hits) {
-    let chars: Vec<char> = word.chars().collect();
-    for drop in 1..=3 {
-        if chars.len() < drop + 3 {
+/// sdcv ranks at most ten fuzzy headwords across all dictionaries, then
+/// looks up each headword across every dictionary.
+fn fuzzy_results(dicts: &[&Dictionary], word: &str, limit: usize, similar: bool) -> Vec<Entry> {
+    let query: Vec<char> = word.to_lowercase().chars().collect();
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut candidates: Vec<(usize, Option<String>)> = vec![(3, None); limit];
+    let mut max_distance = 3;
+    for dict in dicts {
+        for i in 0..dict.index.len() {
+            let headword = String::from_utf8_lossy(dict.index.word(i)).into_owned();
+            let length = headword.chars().count();
+            if length.abs_diff(query.len()) >= max_distance {
+                continue;
+            }
+            let truncated: Vec<char> = headword.to_lowercase().chars().take(query.len()).collect();
+            let distance = edit_distance(&truncated, &query, max_distance);
+            if distance >= max_distance || distance >= query.len() {
+                continue;
+            }
+            if candidates
+                .iter()
+                .any(|(_, existing)| existing.as_deref() == Some(&headword))
+            {
+                continue;
+            }
+            let replace = candidates
+                .iter()
+                .rposition(|(distance, _)| *distance == max_distance)
+                .unwrap_or(0);
+            candidates[replace] = (distance, Some(headword));
+            max_distance = candidates
+                .iter()
+                .map(|(distance, _)| *distance)
+                .max()
+                .unwrap_or(3);
+        }
+    }
+    candidates.sort_by(|a, b| {
+        a.0.cmp(&b.0).then_with(|| {
+            a.1.as_ref()
+                .map(|s| s.to_lowercase())
+                .cmp(&b.1.as_ref().map(|s| s.to_lowercase()))
+        })
+    });
+    let mut out = Vec::new();
+    for (_, candidate) in candidates {
+        let Some(candidate) = candidate else {
             break;
+        };
+        for dict in dicts {
+            for stage in [Match::Exact, Match::CaseInsensitive, Match::Morphology] {
+                if !similar && stage != Match::Exact {
+                    break;
+                }
+                let entries: Vec<_> = stage_hits(dict, stage, &candidate, usize::MAX)
+                    .into_iter()
+                    .filter_map(|rec| dict.entry(rec, Match::Fuzzy))
+                    .collect();
+                if !entries.is_empty() {
+                    out.extend(entries);
+                    break;
+                }
+            }
         }
-        let prefix: String = chars[..chars.len() - drop].iter().collect();
-        folded(table, &prefix, hits);
     }
-    if chars.len() >= 4 {
-        for variant in edits_within_one(&word.to_lowercase()) {
-            folded(table, &variant, hits);
-        }
-    }
+    out
 }
 
-/// All strings one insertion, deletion, substitution or transposition away from `word`.
-fn edits_within_one(word: &str) -> Vec<String> {
-    let chars: Vec<char> = word.chars().collect();
-    let mut alphabet: Vec<char> = ('a'..='z').collect();
-    for &c in &chars {
-        if !c.is_ascii() && !alphabet.contains(&c) {
-            alphabet.push(c);
-        }
+fn edit_distance(a: &[char], b: &[char], limit: usize) -> usize {
+    if a.len().abs_diff(b.len()) > limit {
+        return limit + 1;
     }
-    let joined = |v: &[char]| v.iter().collect::<String>();
-    let mut out = BTreeSet::new();
-    for i in 0..chars.len() {
-        let mut deleted = chars.clone();
-        deleted.remove(i);
-        out.insert(joined(&deleted));
-        if i + 1 < chars.len() {
-            let mut swapped = chars.clone();
-            swapped.swap(i, i + 1);
-            out.insert(joined(&swapped));
+    let mut previous: Vec<usize> = (0..=b.len()).collect();
+    for (i, &left) in a.iter().enumerate() {
+        let mut current = vec![i + 1; b.len() + 1];
+        let mut row_min = current[0];
+        for (j, &right) in b.iter().enumerate() {
+            current[j + 1] = (previous[j + 1] + 1)
+                .min(current[j] + 1)
+                .min(previous[j] + usize::from(left != right));
+            row_min = row_min.min(current[j + 1]);
         }
-        for &c in &alphabet {
-            let mut replaced = chars.clone();
-            replaced[i] = c;
-            out.insert(joined(&replaced));
+        if row_min > limit {
+            return limit + 1;
         }
+        previous = current;
     }
-    for i in 0..=chars.len() {
-        for &c in &alphabet {
-            let mut inserted = chars.clone();
-            inserted.insert(i, c);
-            out.insert(joined(&inserted));
-        }
-    }
-    out.remove(word);
-    out.into_iter().filter(|s| !s.is_empty()).collect()
+    previous[b.len()]
 }
 
 /// Headword candidates for an English inflection: `dogs`, `boxes`, `liked`, `running`.
@@ -346,6 +560,18 @@ fn lemmas(word: &str) -> Vec<String> {
     let mut stems: Vec<String> = Vec::new();
     if lower.ends_with("ies") && len > 4 {
         stems.push(format!("{}y", cut(3)));
+    }
+    if lower.ends_with("ied") && len > 4 {
+        stems.push(format!("{}y", cut(3)));
+    }
+    if lower.ends_with("er") && len > 3 {
+        stems.push(cut(2));
+    }
+    if lower.ends_with("est") && len > 4 {
+        stems.push(cut(3));
+    }
+    if lower.ends_with("ly") && len > 3 {
+        stems.push(cut(2));
     }
     if lower.ends_with("es") && len > 3 {
         stems.push(cut(2));
@@ -410,13 +636,12 @@ mod tests {
     }
 
     #[test]
-    fn edits_include_one_insert_delete_substitute_and_swap() {
-        let edits = edits_within_one("helo");
-        assert!(edits.contains(&"hello".to_owned()));
-        assert!(edits.contains(&"help".to_owned()));
-        assert!(edits.contains(&"hlo".to_owned()));
-        assert!(edits.contains(&"hleo".to_owned()));
-        assert!(!edits.contains(&"helo".to_owned()));
+    fn edit_distance_covers_short_and_long_typos() {
+        assert_eq!(
+            edit_distance(&['h', 'e', 'l', 'o'], &['h', 'e', 'l', 'l', 'o'], 3),
+            1
+        );
+        assert_eq!(edit_distance(&['c', 'a', 'e', 't'], &['c', 'a', 'f', 'e'], 3), 2);
     }
 
     #[test]
@@ -428,5 +653,39 @@ mod tests {
         assert!(lemmas("running").contains(&"run".to_owned()));
         assert!(lemmas("glass").is_empty());
         assert!(lemmas("épuisantes").is_empty());
+        for (word, lemma) in [
+            ("cried", "cry"),
+            ("faster", "fast"),
+            ("fastest", "fast"),
+            ("quickly", "quick"),
+        ] {
+            assert!(lemmas(word).contains(&lemma.to_owned()), "{word}");
+        }
+    }
+
+    #[test]
+    fn selection_matches_luajit_clean_selection_examples() {
+        for (input, expected) in [
+            ("qu’autrefois,", "autrefois"),
+            ("l’amour", "amour"),
+            ("dog's", "dog"),
+            ("word one", "word one"),
+            (" ˈhel·lo|↑ ", "hello"),
+            ("d'abord", "abord"),
+            ("qu'ami", "ami"),
+            ("heˌllo", "hello"),
+            ("hi—there", "hithere"),
+            ("(word)", "word"),
+            ("’word’", "word"),
+        ] {
+            assert_eq!(clean_selection(input), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn wildcard_matches_star_and_question_mark() {
+        assert!(wildcard_match(b"a*e", b"apple"));
+        assert!(wildcard_match(b"a??le", b"apple"));
+        assert!(!wildcard_match(b"a??le", b"apples"));
     }
 }

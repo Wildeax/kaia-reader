@@ -31,4 +31,4 @@ pub use dict::Dictionary;
 pub use error::Error;
 pub use html::strip_html;
 pub use ifo::Info;
-pub use lookup::{Definition, DefinitionKind, Entry, Library, LookupOptions, Match};
+pub use lookup::{clean_selection, Definition, DefinitionKind, Entry, Library, LookupOptions, Match};

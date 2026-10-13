@@ -47,7 +47,11 @@ impl Dictionary {
         })?;
         let info = ifo::parse(&String::from_utf8_lossy(&ifo_bytes)).map_err(|e| e.at(ifo_path))?;
 
-        let index = parse_index(read_index(&base)?, info.idx_offset_bits)?;
+        let index_bytes = read_index(&base)?;
+        if info.idx_file_size != 0 && info.idx_file_size != index_bytes.len() as u64 {
+            return Err(Error::format("idxfilesize does not match the index").at(&base));
+        }
+        let index = parse_index(index_bytes, info.idx_offset_bits)?;
         let data = open_data(&base)?;
 
         for rec in index.values() {
@@ -137,8 +141,8 @@ impl Dictionary {
 /// letters mark NUL-terminated text. Uppercase letters mark binary data with a 4-byte
 /// big-endian length, which is skipped. Type `r` (resource list) is skipped too.
 ///
-/// The entry's kind is the kind of its first text field. Text fields are joined with a
-/// blank line.
+/// The entry's kind is the kind of its first text field. Text fields are joined
+/// with a line break, as in sdcv.
 fn parse_fields(data: &[u8], same_type: Option<&str>) -> Result<Option<Definition>, Error> {
     let mut parts: Vec<String> = Vec::new();
     let mut kind: Option<DefinitionKind> = None;
@@ -158,6 +162,10 @@ fn parse_fields(data: &[u8], same_type: Option<&str>) -> Result<Option<Definitio
         };
         field += 1;
         if letter.is_ascii_uppercase() {
+            if same_type.is_some_and(|seq| field == seq.len()) {
+                pos = data.len();
+                continue;
+            }
             let len_bytes = data
                 .get(pos..pos + 4)
                 .ok_or_else(|| Error::format("binary field length is truncated"))?;
@@ -174,7 +182,12 @@ fn parse_fields(data: &[u8], same_type: Option<&str>) -> Result<Option<Definitio
             pos += (end + 1).min(rest.len());
             if let Some(field_kind) = text_kind(letter) {
                 kind.get_or_insert(field_kind);
-                parts.push(String::from_utf8_lossy(text).into_owned());
+                let value = String::from_utf8_lossy(text);
+                parts.push(match letter {
+                    b't' | b'y' => format!("[{value}]"),
+                    b'x' => format!("[{}]", crate::html::strip_inline(&value, true)),
+                    _ => value.into_owned(),
+                });
             }
         } else {
             return Err(Error::format(format!("unknown field type {:?}", letter as char)));
@@ -182,7 +195,7 @@ fn parse_fields(data: &[u8], same_type: Option<&str>) -> Result<Option<Definitio
     }
     Ok(kind.map(|kind| Definition {
         kind,
-        text: parts.join("\n\n"),
+        text: parts.join("\n"),
     }))
 }
 
@@ -217,10 +230,10 @@ fn read_file(path: &Path) -> Result<Option<Vec<u8>>, Error> {
 /// Reads the index, from `.idx` if present, otherwise from `.idx.gz`.
 fn read_index(base: &Path) -> Result<Vec<u8>, Error> {
     let plain = with_suffix(base, ".idx");
-    if let Some(bytes) = read_file(&plain)? {
-        return Ok(bytes);
-    }
     let gz = with_suffix(base, ".idx.gz");
+    if !gz.is_file() {
+        return read_file(&plain)?.ok_or(Error::Missing { path: plain });
+    }
     let file = match File::open(&gz) {
         Ok(file) => file,
         Err(e) if e.kind() == ErrorKind::NotFound => return Err(Error::Missing { path: plain }),
@@ -236,12 +249,12 @@ fn read_index(base: &Path) -> Result<Vec<u8>, Error> {
 /// Opens the data file, from `.dict` if present, otherwise from `.dict.dz`.
 fn open_data(base: &Path) -> Result<DataFile, Error> {
     let plain = with_suffix(base, ".dict");
-    if plain.is_file() {
-        return DataFile::open_plain(&plain);
-    }
     let dz = with_suffix(base, ".dict.dz");
     if dz.is_file() {
         return Ok(DataFile::DictZip(DictZip::open(&dz)?));
+    }
+    if plain.is_file() {
+        return DataFile::open_plain(&plain);
     }
     Err(Error::Missing { path: plain })
 }

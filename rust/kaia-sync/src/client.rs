@@ -10,6 +10,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ureq::http::Request;
+#[cfg(feature = "tls")]
+use ureq::tls::TlsConfig;
 
 use crate::doc_id::round_percent;
 use crate::error::Error;
@@ -17,6 +19,18 @@ use crate::model::{Credentials, Metadata, Progress};
 
 /// The public server, as in `api.json`.
 pub const DEFAULT_SERVER: &str = "https://sync.koreader.rocks:443";
+
+/// Connection choices. Kaia verifies the server's TLS certificate by default.
+/// KOReader does not verify it, which lets anyone on the network read the sync
+/// password digest and progress; Kaia keeps that only as an explicit opt-in
+/// (`accept_invalid_certs`) for self-hosted servers with self-signed
+/// certificates, which the Settings screen offers per server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SyncOptions {
+    pub accept_invalid_certs: bool,
+    /// KOReader retries HTTP 202. Set true to accept the status listed in api.json.
+    pub accept_202: bool,
+}
 
 const ACCEPT: &str = "application/vnd.koreader.v1+json";
 /// Largest response body the client reads. Sync replies are a few hundred bytes.
@@ -69,6 +83,7 @@ pub struct SyncClient {
     device_id: String,
     progress_agent: ureq::Agent,
     auth_agent: ureq::Agent,
+    options: SyncOptions,
 }
 
 impl SyncClient {
@@ -84,13 +99,32 @@ impl SyncClient {
         device_id: &str,
         timeouts: Timeouts,
     ) -> Result<Self, Error> {
+        Self::new_with_options(
+            server,
+            credentials,
+            device_name,
+            device_id,
+            timeouts,
+            SyncOptions::default(),
+        )
+    }
+
+    pub fn new_with_options(
+        server: &str,
+        credentials: Credentials,
+        device_name: &str,
+        device_id: &str,
+        timeouts: Timeouts,
+        options: SyncOptions,
+    ) -> Result<Self, Error> {
         Ok(Self {
             server: normalize_server(server)?,
             credentials,
             device: device_name.to_owned(),
             device_id: device_id.to_owned(),
-            progress_agent: agent(timeouts.progress),
-            auth_agent: agent(timeouts.auth),
+            progress_agent: agent(timeouts.progress, options),
+            auth_agent: agent(timeouts.auth, options),
+            options,
         })
     }
 
@@ -145,7 +179,7 @@ impl SyncClient {
 
     /// Stores a reading position (`PUT /syncs/progress`). The percentage is
     /// rounded down to four decimals, as the plugin does. Succeeds on 200 or
-    /// 202 (both are in `api.json`). The plugin counts only 200.
+    /// 202 only if `accept_202` is set. KOReader retries 202 by default.
     pub fn push(&self, progress: &Progress) -> Result<(), Error> {
         let body = serde_json::to_string(&PushBody {
             document: &progress.document,
@@ -158,7 +192,8 @@ impl SyncClient {
         .map_err(|e| Error::Protocol(e.to_string()))?;
         let reply = self.exchange(&self.progress_agent, "PUT", "/syncs/progress", true, Some(body))?;
         match reply.status {
-            200 | 202 => Ok(()),
+            200 => Ok(()),
+            202 if self.options.accept_202 => Ok(()),
             _ => Err(status_error(&reply)),
         }
     }
@@ -257,10 +292,25 @@ struct PushBody<'a> {
 #[derive(Deserialize)]
 struct PullBody {
     progress: Option<Value>,
+    #[serde(default, deserialize_with = "optional_number")]
     percentage: Option<f64>,
     device: Option<String>,
     device_id: Option<String>,
+    #[serde(default, deserialize_with = "optional_timestamp")]
     timestamp: Option<i64>,
+}
+
+fn optional_number<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<f64>, D::Error> {
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|v| match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.parse().ok(),
+        _ => None,
+    }))
+}
+
+fn optional_timestamp<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<i64>, D::Error> {
+    Ok(optional_number(deserializer)?.map(|number| number as i64))
 }
 
 #[derive(Deserialize)]
@@ -347,7 +397,7 @@ fn normalize_server(server: &str) -> Result<String, Error> {
 /// One agent per timeout group. The plugin sends no redirects by default, so
 /// redirects are off here too. Credentials must not follow a redirect to
 /// another host, and a 3xx is reported as a server error.
-fn agent(timeout: Timeout) -> ureq::Agent {
+fn agent(timeout: Timeout, options: SyncOptions) -> ureq::Agent {
     let config = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .max_redirects(0)
@@ -357,8 +407,16 @@ fn agent(timeout: Timeout) -> ureq::Agent {
         .timeout_send_request(Some(timeout.block))
         .timeout_send_body(Some(timeout.block))
         .timeout_recv_response(Some(timeout.block))
-        .timeout_recv_body(Some(timeout.block))
-        .build();
+        .timeout_recv_body(Some(timeout.block));
+    #[cfg(feature = "tls")]
+    let config = config.tls_config(
+        TlsConfig::builder()
+            .disable_verification(options.accept_invalid_certs)
+            .build(),
+    );
+    #[cfg(not(feature = "tls"))]
+    let _ = options;
+    let config = config.build();
     ureq::Agent::new_with_config(config)
 }
 

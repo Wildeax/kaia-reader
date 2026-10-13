@@ -26,8 +26,7 @@ pub enum Strategy {
     Prompt,
     /// Move without asking (`SYNC_STRATEGY.SILENT`).
     Silent,
-    /// Never move to the remote position (`SYNC_STRATEGY.DISABLE`). The local
-    /// position is what the server keeps.
+    /// Never move to the remote position (`SYNC_STRATEGY.DISABLE`).
     Never,
 }
 
@@ -79,9 +78,8 @@ pub struct LocalState {
 /// when the server has no position. The plugin does nothing then, so the
 /// caller should do nothing too.
 ///
-/// `PushLocal` for the `Never` strategies follows from the plugin: it never
-/// moves the reader to an older or newer remote position, and its close
-/// handler then pushes the local position. The caller should push it.
+/// A `Never` strategy leaves the local position alone. Close, suspend, and
+/// periodic updates schedule pushes separately.
 pub fn decide(local: &LocalState, remote: &Progress, policy: &Policy) -> Decision {
     // The plugin only registers pull events when auto sync is on
     // (`registerEvents`).
@@ -139,7 +137,7 @@ fn strategy_decision(strategy: Strategy) -> Decision {
     match strategy {
         Strategy::Silent => Decision::PullRemote,
         Strategy::Prompt => Decision::AskUser,
-        Strategy::Never => Decision::PushLocal,
+        Strategy::Never => Decision::Keep,
     }
 }
 
@@ -277,7 +275,7 @@ mod tests {
         let p = policy(Strategy::Never, Strategy::Silent);
         assert_eq!(
             decide(&local(0.2, 100), &remote(0.8, Some(101)), &p),
-            Decision::PushLocal
+            Decision::Keep
         );
     }
 
@@ -308,7 +306,7 @@ mod tests {
         let p = policy(Strategy::Prompt, Strategy::Never);
         assert_eq!(
             decide(&local(0.8, 100), &remote(0.2, Some(50)), &p),
-            Decision::PushLocal
+            Decision::Keep
         );
     }
 
@@ -319,7 +317,7 @@ mod tests {
         let p = policy(Strategy::Silent, Strategy::Never);
         assert_eq!(
             decide(&local(0.2, 100), &remote(0.8, Some(100)), &p),
-            Decision::PushLocal
+            Decision::Keep
         );
     }
 
@@ -342,10 +340,7 @@ mod tests {
             Decision::PullRemote
         );
         let p = policy(Strategy::Never, Strategy::Never);
-        assert_eq!(
-            decide(&local(0.8, 100), &remote(0.2, None), &p),
-            Decision::PushLocal
-        );
+        assert_eq!(decide(&local(0.8, 100), &remote(0.2, None), &p), Decision::Keep);
     }
 
     // main.lua:889-895. A manual pull moves the reader without a prompt.

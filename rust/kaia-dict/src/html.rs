@@ -63,6 +63,50 @@ pub fn strip_html(input: &str) -> String {
     out.finish()
 }
 
+/// Removes inline markup while preserving the source's line breaks and spaces.
+pub(crate) fn strip_inline(input: &str, xdxf: bool) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+    while i < input.len() {
+        let rest = &input[i..];
+        if let Some(body) = rest.strip_prefix("<![CDATA[") {
+            let end = body.find("]]>").unwrap_or(body.len());
+            out.push_str(&body[..end]);
+            i += 9 + end + if end < body.len() { 3 } else { 0 };
+        } else if rest.starts_with('<') && starts_tag(rest) {
+            let Some(end) = rest.find('>') else {
+                break;
+            };
+            let tag = &rest[1..end];
+            let name = tag_name(tag);
+            if name == "br" {
+                out.push('\n');
+            }
+            if xdxf && name == "k" && !tag.starts_with('/') {
+                if let Some(close) = rest[end + 1..].find("</k>") {
+                    i += end + 1 + close + 4;
+                    continue;
+                }
+            }
+            i += end + 1;
+        } else if rest.starts_with('&') {
+            if let Some((decoded, used)) = decode_entity(rest) {
+                out.push_str(&decoded);
+                i += used;
+            } else {
+                out.push('&');
+                i += 1;
+            }
+        } else {
+            let first = rest.chars().next().map_or(1, char::len_utf8);
+            let next = rest[first..].find(['<', '&']).map_or(rest.len(), |p| p + first);
+            out.push_str(&rest[..next]);
+            i += next;
+        }
+    }
+    out.trim_start_matches(char::is_whitespace).to_owned()
+}
+
 /// A `<` starts a tag when a letter, `/`, `!` or `?` follows it.
 fn starts_tag(rest: &str) -> bool {
     rest[1..]

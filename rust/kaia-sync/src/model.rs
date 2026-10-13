@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::doc_id::md5_hex;
 use crate::error::{Error, InvalidField};
@@ -75,7 +75,7 @@ impl fmt::Debug for Credentials {
 
 /// Document details the plugin sends when "Send document metadata" is on.
 /// The official server ignores them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
@@ -86,7 +86,7 @@ pub struct Metadata {
 }
 
 /// A reading position for one document, as the server stores it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Progress {
     /// The document id: [`partial_md5`](crate::partial_md5) or
     /// [`filename_md5`](crate::filename_md5), depending on the checksum setting.

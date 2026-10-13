@@ -80,6 +80,51 @@ fn default_timeouts_match_the_plugin() {
 }
 
 #[test]
+fn options_verify_certificates_and_keep_koreader_status_handling() {
+    let options = SyncOptions::default();
+    assert!(!options.accept_invalid_certs);
+    assert!(!options.accept_202);
+}
+
+#[test]
+fn status_202_is_retryable_unless_enabled() {
+    let server = TestServer::start();
+    let client = client(&server.url, "reader", "secret");
+    server.state.lock().unwrap().next_reply = Some((202, "{}".into()));
+    assert!(matches!(
+        client.push(&sample(&client, "book", "1", 0.1)),
+        Err(Error::Server { status: 202, .. })
+    ));
+    let compatible = SyncClient::new_with_options(
+        &server.url,
+        creds("reader", "secret"),
+        DEVICE,
+        DEVICE_ID,
+        Timeouts::default(),
+        SyncOptions {
+            accept_202: true,
+            ..SyncOptions::default()
+        },
+    )
+    .unwrap();
+    server.state.lock().unwrap().next_reply = Some((202, "{}".into()));
+    assert!(compatible.push(&sample(&compatible, "book", "1", 0.1)).is_ok());
+}
+
+#[test]
+fn pull_accepts_string_percentage_and_float_timestamp() {
+    let server = TestServer::start();
+    let client = client(&server.url, "reader", "secret");
+    server.state.lock().unwrap().next_reply = Some((
+        200,
+        r#"{"progress":"12","percentage":"0.75","timestamp":1234.5,"device":"other"}"#.into(),
+    ));
+    let pulled = client.pull("book").unwrap().unwrap();
+    assert_eq!(pulled.percentage, 0.75);
+    assert_eq!(pulled.timestamp, Some(1234));
+}
+
+#[test]
 fn new_rejects_bad_addresses_without_connecting() {
     let make =
         |server: &str| SyncClient::new(server, creds("u", "p"), DEVICE, DEVICE_ID, Timeouts::default()).err();
