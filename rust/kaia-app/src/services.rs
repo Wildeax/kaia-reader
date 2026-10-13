@@ -21,6 +21,8 @@ pub const RESOURCES_ENV: &str = "KAIA_RESOURCES";
 
 /// The app's services.
 pub struct Services {
+    _lease: fs::File,
+    pub startup_notices: Vec<String>,
     pub platform: Platform,
     pub sync: crate::sync::ProgressSync,
     pub clipboard: Option<String>,
@@ -72,7 +74,27 @@ impl Services {
             source,
         })?;
 
+        let lease_path = data_dir.join("kaia.lock");
+        let lease = crate::durable::lock(&lease_path, false).map_err(|source| ServicesError::Io {
+            path: lease_path,
+            source: io::Error::other(format!(
+                "Kaia is already using this data folder, or its lock cannot be opened: {source}"
+            )),
+        })?;
         let settings_path = data_dir.join("settings.json");
+        let mut startup_notices = Vec::new();
+        for path in [settings_path.clone(), data_dir.join("settings.json.old")] {
+            if Settings::read_exact(&path).is_err() {
+                let backup = crate::durable::preserve(&path).map_err(|source| ServicesError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+                startup_notices.push(format!(
+                    "Settings were unreadable. Kept {} in the data folder.",
+                    backup.file_name().unwrap_or_default().to_string_lossy()
+                ));
+            }
+        }
         let mut settings = Settings::open(&settings_path);
         if let Some(warmth) = settings.read("display.warmth").as_i64() {
             let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
@@ -110,7 +132,9 @@ impl Services {
             .shared();
 
         let paths = platform.paths.clone();
-        Ok(Services {
+        let mut services = Services {
+            _lease: lease,
+            startup_notices,
             platform,
             clipboard: None,
             sync: crate::sync::ProgressSync::default(),
@@ -120,7 +144,13 @@ impl Services {
             paths,
             theme,
             assets,
-        })
+        };
+        if let Err(error) = crate::book_index::reconcile(&mut services) {
+            services
+                .startup_notices
+                .push(format!("Cannot update library progress: {error}"));
+        }
+        Ok(services)
     }
 
     /// Where the settings file lives.

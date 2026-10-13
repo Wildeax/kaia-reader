@@ -99,9 +99,17 @@ pub fn centre_of(app: &App<HeadlessBackend>, key: &str) -> Point {
     Point::new(r.x + r.w as i32 / 2, r.y + r.h as i32 / 2)
 }
 
+pub fn wait_reader(app: &mut App<HeadlessBackend>) {
+    wait_for(app, "reader worker", |a| !a.reader_busy());
+    app.process(Vec::new()).unwrap();
+}
+
 pub fn tap_key(app: &mut App<HeadlessBackend>, key: &str) {
+    wait_reader(app);
     let p = centre_of(app, key);
     app.tap(p).unwrap();
+    wait_reader(app);
+    wait_for(app, "visible covers", |_| !kaia_app::covers::busy());
 }
 
 /// The refresh modes sent since the loop started, after the first `skip`.

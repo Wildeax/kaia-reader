@@ -143,7 +143,9 @@ impl Library {
             }
         };
 
-        let (id, prev_attempts) = match stored {
+        // A refresh re-extracts a file that has not changed. Its stored data is
+        // the last good extraction, so a failed refresh keeps that data.
+        let (id, prev_attempts, refresh) = match stored {
             Some(s) => {
                 let same = s.size == f.size && mtime_equivalent(s.mtime, f.mtime) && s.md5 == md5;
                 if !same {
@@ -155,7 +157,7 @@ impl Library {
                 )?;
                 // A changed file starts over. An unchanged file that never
                 // settled keeps its attempt count.
-                (s.id, if same { s.attempts } else { 0 })
+                (s.id, if same { s.attempts } else { 0 }, same)
             }
             None => match self.find_moved(&f.path, &md5, f.size)? {
                 Some(m) => {
@@ -169,7 +171,8 @@ impl Library {
                         seen.insert(m.id);
                         return Ok(());
                     }
-                    (m.id, m.attempts)
+                    // The content is the same, only the path changed.
+                    (m.id, m.attempts, true)
                 }
                 None => {
                     self.conn.execute(
@@ -185,7 +188,7 @@ impl Library {
                         ],
                     )?;
                     report.added += 1;
-                    (self.conn.last_insert_rowid(), 0)
+                    (self.conn.last_insert_rowid(), 0, false)
                 }
             },
         };
@@ -204,11 +207,12 @@ impl Library {
             return Ok(());
         }
 
+        let attempts = prev_attempts + 1;
         // Crash guard: the attempt is committed before the engine runs. If the
         // process dies inside the engine, the count is already higher next time.
         self.conn.execute(
             "UPDATE books SET attempts = ?1, extracted = 0, failure = NULL WHERE id = ?2",
-            params![prev_attempts + 1, id],
+            params![attempts, id],
         )?;
         report.extracted += 1;
         let outcome = extract_guarded(&f.path, self.extract_budget);
@@ -218,11 +222,16 @@ impl Library {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         match outcome {
-            Ok(ex) => {
-                write_extracted(&tx, id, &stem, &ex)?;
+            Ok(ex) if refresh => write_refreshed(&tx, id, &stem, &ex)?,
+            Ok(ex) => write_extracted(&tx, id, &stem, &ex)?,
+            Err(message) if refresh => {
+                report.failed += 1;
+                keep_stored_after_failure(&tx, id, &stem, attempts, message)?;
             }
             Err(message) => {
                 report.failed += 1;
+                // The stored data describes the old content of a changed file,
+                // so it is dropped.
                 tx.execute(
                     "UPDATE books SET title = ?1, authors = NULL, series = NULL, series_index = NULL,
                        language = NULL, description = NULL, pages = NULL, failure = ?2, extracted = 0
@@ -371,6 +380,48 @@ fn write_extracted(tx: &rusqlite::Transaction<'_>, id: i64, stem: &str, ex: &Ext
         ],
     )?;
     write_cover(tx, id, ex.cover.as_ref())
+}
+
+/// Writes a successful re-extraction of an unchanged file. A field that the new
+/// extraction did not produce keeps its stored value. So does the stored cover
+/// when the new extraction gives none.
+fn write_refreshed(tx: &rusqlite::Transaction<'_>, id: i64, stem: &str, ex: &Extracted) -> Result<()> {
+    tx.execute(
+        "UPDATE books SET title = COALESCE(?1, title, ?2), authors = COALESCE(?3, authors),
+         series = COALESCE(?4, series), series_index = COALESCE(?5, series_index),
+         pages = ?6, extracted = 1, failure = NULL, attempts = 0 WHERE id = ?7",
+        params![
+            ex.title,
+            stem,
+            ex.authors,
+            ex.series,
+            ex.series_index,
+            ex.pages,
+            id
+        ],
+    )?;
+    if let Some(cover) = &ex.cover {
+        write_cover(tx, id, Some(cover))?;
+    }
+    Ok(())
+}
+
+/// Records a failed re-extraction of an unchanged file. The stored title,
+/// metadata and cover stay. The book stays unsettled, so a later scan tries it
+/// again. The failure is recorded once the attempts run out.
+fn keep_stored_after_failure(
+    tx: &rusqlite::Transaction<'_>,
+    id: i64,
+    stem: &str,
+    attempts: u32,
+    message: String,
+) -> Result<()> {
+    let failure = (attempts >= MAX_ATTEMPTS).then_some(message);
+    tx.execute(
+        "UPDATE books SET title = COALESCE(title, ?1), failure = ?2, extracted = 0 WHERE id = ?3",
+        params![stem, failure, id],
+    )?;
+    Ok(())
 }
 
 fn write_cover(tx: &rusqlite::Transaction<'_>, id: i64, cover: Option<&Cover>) -> Result<()> {

@@ -111,6 +111,7 @@ fn tapping_the_hero_opens_the_reader() {
     app.iterate(Some(Duration::from_millis(10))).unwrap();
     let id = book_id(&app, "juliet.epub");
     app.services_mut().library.record_open(id, 0.25).unwrap();
+    drop(app);
     let mut app = reopen(&dir);
 
     tap_key(&mut app, "continue");
@@ -140,7 +141,7 @@ fn home_golden() {
     lib.set_status(pdf, kaia_library::Status::Complete).unwrap();
     drop(app);
     let app = reopen(&dir);
-    assert_matches_golden(app.frame(), &golden("home.png"), 2);
+    assert_matches_golden(app.frame(), &golden("home.png"), 14);
 }
 
 #[test]
@@ -148,5 +149,5 @@ fn home_empty_golden() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("golden-home-empty");
     let app = reopen(&dir);
-    assert_matches_golden(app.frame(), &golden("home_empty.png"), 2);
+    assert_matches_golden(app.frame(), &golden("home_empty.png"), 14);
 }

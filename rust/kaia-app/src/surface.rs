@@ -26,6 +26,11 @@ pub trait Surface {
     /// library's page does.
     fn route(&self) -> Route;
 
+    /// True while a requested page or layout is still being prepared.
+    fn busy(&self) -> bool {
+        false
+    }
+
     /// Builds the widget tree from the current state. None when there is nothing
     /// to show, such as a book that is gone. The app then keeps the current screen.
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window>;
@@ -54,7 +59,12 @@ pub trait Surface {
     /// The screen became the top of the stack.
     fn on_show(&mut self, _env: &mut SurfaceEnv<'_>) {}
 
-    /// The screen is leaving the stack. The reader saves its position here.
+    /// Save before leaving. False keeps the screen and its unsaved state alive.
+    fn can_hide(&mut self, _env: &mut SurfaceEnv<'_>) -> bool {
+        true
+    }
+
+    /// The screen is leaving the stack after `can_hide` succeeds.
     fn on_hide(&mut self, _env: &mut SurfaceEnv<'_>) {}
 
     /// True when a tap the screen does not use closes it (the reader's overlay).
@@ -139,7 +149,9 @@ impl<'a> SurfaceEnv<'a> {
 
     /// Keeps a note about a request that could not be done. [`crate::App::notices`] lists them.
     pub fn notice(&mut self, text: impl Into<String>) {
-        self.notices.push(text.into());
+        let text = text.into();
+        self.notices.push(text.clone());
+        self.toast(text, 6.0);
     }
 
     /// Runs `task` after `seconds` on the app clock.

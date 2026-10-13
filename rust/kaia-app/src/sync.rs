@@ -11,7 +11,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kaia_book::{BookSession, Location};
 use kaia_events::Settings;
-use kaia_sync::{Credentials, Progress, SyncClient, SyncOptions, SyncQueue, Timeouts};
+use kaia_sync::{Credentials, Progress, SyncClient, SyncOptions, Timeouts};
+
+use crate::sync_queue::SyncQueue;
 
 pub enum Reply {
     Remote(i64, Progress),
@@ -108,31 +110,26 @@ impl ProgressSync {
                             Job::Push(config, progress, path) => {
                                 let document = progress.document.clone();
                                 let queue = SyncQueue::new(path);
-                                queue
-                                    .push(progress, now_unix())
-                                    .and_then(|()| config.client())
-                                    .and_then(|client| {
-                                        let mut failure = None;
-                                        let sent = queue.drain(|progress| {
-                                            if !enabled.load(Ordering::SeqCst) {
-                                                return Err(kaia_sync::Error::Protocol(
-                                                    "Sync turned off".into(),
-                                                ));
-                                            }
-                                            let result = client.push(progress);
-                                            if let Err(e) = &result {
-                                                failure = Some(e.to_string());
-                                            }
-                                            result
-                                        })?;
-                                        if let Some(error) = failure {
-                                            return Err(kaia_sync::Error::Protocol(error));
+                                config.client().and_then(|client| {
+                                    let mut failure = None;
+                                    let sent = queue.drain(|progress| {
+                                        if !enabled.load(Ordering::SeqCst) {
+                                            return Err(kaia_sync::Error::Protocol("Sync turned off".into()));
                                         }
-                                        if sent > 0 {
-                                            let _ = replies.send(Reply::Pushed(document));
+                                        let result = client.push(progress);
+                                        if let Err(e) = &result {
+                                            failure = Some(e.to_string());
                                         }
-                                        Ok(())
-                                    })
+                                        result
+                                    })?;
+                                    if let Some(error) = failure {
+                                        return Err(kaia_sync::Error::Protocol(error));
+                                    }
+                                    if sent > 0 {
+                                        let _ = replies.send(Reply::Pushed(document));
+                                    }
+                                    Ok(())
+                                })
                             }
                         };
                         if let Err(e) = result {
@@ -213,6 +210,7 @@ impl ProgressSync {
         if !enabled {
             self.pending.clear();
         }
+        let mut failures = Vec::new();
         let due: Vec<_> = self
             .pending
             .iter()
@@ -220,6 +218,15 @@ impl ProgressSync {
             .map(|(key, _)| key.clone())
             .collect();
         for key in due {
+            let (_, progress, path) = self.pending.get(&key).unwrap();
+            let queue = SyncQueue::new(path);
+            if let Err(error) = queue.push(progress.clone(), now_unix()) {
+                failures.push(Reply::Error(error.to_string()));
+                if let Some((due, _, _)) = self.pending.get_mut(&key) {
+                    *due = now + Duration::from_secs(5);
+                }
+                continue;
+            }
             let (_, progress, path) = self.pending.remove(&key).unwrap();
             self.submit(Job::Push(Config::read(settings), progress, path));
         }
@@ -229,17 +236,117 @@ impl ProgressSync {
                 self.in_flight = self.in_flight.saturating_sub(1);
             }
         }
-        replies
+        failures.extend(replies);
+        failures
+    }
+
+    pub(crate) fn defer_pending(&mut self, document: &str, now: Duration) {
+        if let Some((due, _, _)) = self.pending.get_mut(document) {
+            *due = now + Duration::from_secs(10);
+        }
+    }
+
+    /// Latest position waiting for its idle push deadline.
+    pub fn pending_progress(&self, document: &str) -> Option<&Progress> {
+        self.pending.get(document).map(|(_, progress, _)| progress)
     }
 
     pub fn busy(&self) -> bool {
         self.in_flight > 0 || !self.pending.is_empty()
     }
-    pub fn finish(&mut self, settings: &Settings, now: Duration) {
-        self.tick(settings, now, true);
-        self.sender.take();
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
+    pub fn finish(&mut self, settings: &Settings, _now: Duration) -> Result<(), String> {
+        self.enabled.store(false, Ordering::SeqCst);
+        if settings.is_true("sync.enabled") {
+            let keys: Vec<_> = self.pending.keys().cloned().collect();
+            for key in keys {
+                let (_, progress, path) = self.pending.get(&key).unwrap();
+                SyncQueue::new(path)
+                    .push(progress.clone(), now_unix())
+                    .map_err(|e| e.to_string())?;
+                self.pending.remove(&key);
+            }
+        } else {
+            self.pending.clear();
         }
+        self.sender.take();
+        // An in-flight request may finish. Queued requests stay on disk for the next run.
+        self.worker.take();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod review2_tests {
+    use super::*;
+    #[test]
+    fn shutdown_does_not_wait_for_network_worker() {
+        let mut sync = ProgressSync {
+            worker: Some(std::thread::spawn(|| {
+                std::thread::sleep(Duration::from_millis(400))
+            })),
+            ..ProgressSync::default()
+        };
+        let now = std::time::Instant::now();
+        sync.finish(&Settings::new(), Duration::ZERO).unwrap();
+        assert!(now.elapsed() < Duration::from_millis(100));
+    }
+    #[test]
+    fn queue_keeps_push_made_during_drain() {
+        let path = std::env::temp_dir().join(format!("r2-queue-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let queue = SyncQueue::new(&path);
+        let progress = |name: &str| Progress {
+            document: name.into(),
+            progress: "1".into(),
+            percentage: 0.1,
+            device: "test".into(),
+            device_id: "id".into(),
+            timestamp: None,
+            metadata: None,
+        };
+        queue.push(progress("a"), 1000).unwrap();
+        queue
+            .drain(|_| {
+                queue.push(progress("b"), 1001).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(queue.load().unwrap().len(), 1);
+        assert_eq!(queue.load().unwrap()[0].progress.document, "b");
+    }
+}
+
+#[cfg(test)]
+mod queue_recovery_tests {
+    use super::*;
+    #[test]
+    fn unreadable_queue_keeps_bytes_and_accepts_retry() {
+        let dir = std::env::temp_dir().join(format!("r2-queue-recovery-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("queue.json");
+        let bad = b"[{\"document\":\"recoverable\",";
+        std::fs::write(&path, bad).unwrap();
+        let queue = SyncQueue::new(&path);
+        let p = Progress {
+            document: "a".into(),
+            progress: "12".into(),
+            percentage: 0.1,
+            device: "test".into(),
+            device_id: "id".into(),
+            timestamp: None,
+            metadata: None,
+        };
+        assert!(queue
+            .push(p.clone(), 1000)
+            .unwrap_err()
+            .to_string()
+            .contains("Kept a copy"));
+        assert!(std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| std::fs::read(entry.path()).is_ok_and(|b| b == bad)));
+        queue.push(p, 1000).unwrap();
+        assert_eq!(queue.load().unwrap().len(), 1);
     }
 }

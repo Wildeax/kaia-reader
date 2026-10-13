@@ -20,6 +20,7 @@ pub struct Prefs {
     pub sort: SortChoice,
     pub chip: Option<Chip>,
     pub collection: Option<i64>,
+    pub show_finished: bool,
 }
 
 impl Default for Prefs {
@@ -29,6 +30,7 @@ impl Default for Prefs {
             sort: SortChoice::Title,
             chip: None,
             collection: None,
+            show_finished: true,
         }
     }
 }
@@ -61,6 +63,7 @@ impl Prefs {
             sort,
             chip,
             collection: settings.read("library.collection").as_i64(),
+            show_finished: !settings.is_false("library.show_finished"),
         }
     }
 
@@ -138,7 +141,7 @@ pub fn list(library: &Library, prefs: &Prefs) -> Vec<Book> {
         .books(sort_for(prefs.sort), &filter_for(prefs), 0, ALL)
         .unwrap_or_default()
         .into_iter()
-        .filter(|b| b.path.exists())
+        .filter(|b| b.path.exists() && (prefs.show_finished || b.status != Status::Complete))
         .collect()
 }
 
@@ -151,11 +154,17 @@ pub fn cover(library: &Library, book_id: i64, size: CoverSize) -> Option<Pixmap>
 
 /// A book as a grid tile or a list row: the small cover, the title and the progress.
 pub fn info(library: &Library, book: &Book) -> BookInfo {
+    let mut info = info_without_cover(book);
+    info.cover = cover(library, book.id, CoverSize::Small);
+    info
+}
+
+pub fn info_without_cover(book: &Book) -> BookInfo {
     BookInfo {
         id: book.id.to_string(),
         title: crate::surfaces::common::display_title(book),
         author: book.authors.clone().filter(|a| !a.trim().is_empty()),
-        cover: cover(library, book.id, CoverSize::Small),
+        cover: None,
         progress: book.percent as f32,
     }
 }

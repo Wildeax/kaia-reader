@@ -28,10 +28,7 @@ impl Display for KoboBackend {
         self.display.dpi()
     }
     fn present(&mut self, frame: &Pixmap, refresh: &Refresh) -> std::result::Result<(), DisplayError> {
-        self.display.present(frame, refresh)?;
-        // Suspend runs on the app thread. Finish the update before it can sleep.
-        self.display.wait_idle();
-        Ok(())
+        self.display.present(frame, refresh)
     }
     fn set_rotation(&mut self, rotation: Rotation) -> std::result::Result<(), DisplayError> {
         self.display.set_rotation(rotation)?;

@@ -67,12 +67,18 @@ fn reading(services: &Services) -> Vec<Entry> {
         },
         Entry::Stepper {
             key: keys::READING_FONT_SIZE,
-            label: "Font size".into(),
+            label: format!(
+                "Font size, {} px",
+                crate::surfaces::reader::koreader_px(
+                    kaia_gfx::Size::new(services.theme.scale.width, services.theme.scale.height),
+                    keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE)
+                )
+            ),
             value: keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
             min: 12.0,
             max: 40.0,
             step: 1.0,
-            unit: " px",
+            unit: " KOReader units",
         },
         Entry::Heading("Page turns".into()),
         Entry::Radio {
@@ -138,11 +144,9 @@ fn display(services: &Services) -> Vec<Entry> {
     out.push(Entry::Text(
         "Color rendering applies on the color panel only. Grayscale panels ignore it.".into(),
     ));
-    out.push(Entry::Toggle {
-        key: keys::DISPLAY_ROTATION_LOCK,
-        label: "Lock rotation".into(),
-        on: keys::bool_or(s, keys::DISPLAY_ROTATION_LOCK, false),
-    });
+    out.push(Entry::Text(
+        "Automatic rotation is not available yet. The screen keeps its current orientation.".into(),
+    ));
     out
 }
 

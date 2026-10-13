@@ -10,18 +10,18 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::slider::Slider;
 use kaia_book::{
-    BookError, BookEvent, BookSession, Drawer, OpenOptions, PageInfo, Point, Selection, Size, TextLayout,
-    ZoomMode,
+    BookEvent, BookSession, OpenOptions, PageInfo, Point, Selection, Size, TextLayout, ZoomMode,
 };
 use kaia_events::Ctx;
 use kaia_ui::components::Label;
-use kaia_ui::controls::{Slider, TextField, ToolButton};
+use kaia_ui::controls::{TextField, ToolButton};
 use kaia_ui::widget::PaintHint;
 use kaia_ui::Window;
 
 use super::overlay::{bookmark_label, OverlayModel};
-use super::page::{Mark, MarkStyle, PageView, PAGE_KEY};
+use super::page::{PageView, PAGE_KEY};
 use super::panels::{search_rows, SearchRow, FONT_CHOICES};
 use kaia_ui::composite::PagedList;
 
@@ -54,6 +54,11 @@ pub struct Core {
     pub periodic_sync: kaia_sync::PeriodicPush,
     pub title: String,
     pub session: Option<BookSession>,
+    pub(super) job: Option<super::work::Reply>,
+    pub(super) queued: std::collections::VecDeque<(String, Vec<kaia_events::Value>)>,
+    pub(super) opened: bool,
+    pub(super) events: std::collections::VecDeque<kaia_events::Event>,
+    pending_hint: PaintHint,
     pub viewport: Size,
     /// Why the book cannot be read, shown on the page.
     pub error: Option<String>,
@@ -66,6 +71,9 @@ pub struct Core {
     pub selecting: bool,
     pub selection: Option<Selection>,
     pub search_text: String,
+    search_painted: Option<(u64, usize, bool)>,
+    search_paint_at: std::time::Duration,
+    search_dirty: bool,
     pub contents_tab: usize,
     pub color_panel: bool,
     /// Seconds of reading per page, for the time-left line. Set when the book opens.
@@ -83,6 +91,11 @@ impl Core {
             periodic_sync: kaia_sync::PeriodicPush::default(),
             title: String::new(),
             session: None,
+            job: None,
+            queued: std::collections::VecDeque::new(),
+            opened: false,
+            events: std::collections::VecDeque::new(),
+            pending_hint: PaintHint::Full,
             viewport: Size { w: 1, h: 1 },
             error: None,
             page_window: None,
@@ -94,6 +107,9 @@ impl Core {
             selecting: false,
             selection: None,
             search_text: String::new(),
+            search_painted: None,
+            search_paint_at: std::time::Duration::ZERO,
+            search_dirty: false,
             contents_tab: 0,
             color_panel: false,
             pump_due: false,
@@ -105,10 +121,15 @@ impl Core {
 
     /// Opens the book at `path` for `viewport`. A failure becomes the page message.
     pub fn open(&mut self, path: &Path, opts: OpenOptions) {
-        match BookSession::open(path, opts) {
-            Ok(session) => self.session = Some(session),
-            Err(e) => self.error = Some(format!("Cannot open this book. {e}")),
+        if self.job.is_some() {
+            return;
         }
+        let path = path.to_owned();
+        self.job = Some(super::work::spawn(self.viewport, move || {
+            BookSession::open(path, opts)
+                .map(|s| (s, None, None))
+                .map_err(|e| format!("Cannot open this book. {e}"))
+        }));
     }
 
     /// The reading progress to store in the library, or None without a book.
@@ -118,7 +139,12 @@ impl Core {
 
     /// True while the engine has work: a layout change or a search.
     pub fn work_pending(&self) -> bool {
-        self.layout_pending || self.session.as_ref().is_some_and(|s| s.search_running())
+        self.job.is_some()
+            || !self.events.is_empty()
+            || !self.queued.is_empty()
+            || self.search_dirty
+            || self.layout_pending
+            || self.session.as_ref().is_some_and(|s| s.search_running())
     }
 
     /// Clears the selection and repaints the page.
@@ -130,62 +156,74 @@ impl Core {
 
     /// Renders the current page into the page widget. A layout change in progress
     /// keeps the old frame: the widget is not touched until the layout applies.
-    pub fn repaint_page(&mut self, ctx: &mut Ctx, hint: PaintHint) {
+    pub fn repaint_page(&mut self, _ctx: &mut Ctx, hint: PaintHint) {
         if hint == PaintHint::Full {
             self.pages_since_full = 0;
         }
+        self.pending_hint = hint;
+        if self.job.is_some() {
+            return;
+        }
+        let Some(session) = self.session.take() else {
+            return;
+        };
+        let selection = self.selection.clone();
+        self.job = Some(super::work::spawn(self.viewport, move || {
+            Ok((session, selection, None))
+        }));
+    }
+
+    pub(super) fn set_pending_hint(&mut self, hint: PaintHint) {
+        self.pending_hint = hint;
+    }
+
+    fn receive_frame(&mut self, ctx: &mut Ctx) {
+        let Some(reply) = self.job.as_ref() else {
+            return;
+        };
+        let result = match reply.try_recv() {
+            Ok(result) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(_) => Err("The book worker stopped.".to_string()),
+        };
+        self.job = None;
+        let frame = match result {
+            Ok(frame) => frame,
+            Err(error) => {
+                self.error = Some(error.clone());
+                self.queued.clear();
+                if let Some(window) = &self.page_window {
+                    window.update::<PageView, _>(ctx, PAGE_KEY, move |view, cx| {
+                        view.message = Some(error);
+                        cx.request_paint();
+                    });
+                }
+                return;
+            }
+        };
+        let info = frame.session.current();
+        self.session = Some(frame.session);
+        self.selection = frame.selection;
+        self.error = frame.error;
         let Some(window) = self.page_window.clone() else {
             return;
         };
-        let viewport = self.viewport;
-        let mut page = None;
-        let mut marks = Vec::new();
-        let mut hits = Vec::new();
-        let mut position = None;
-        if let Some(session) = self.session.as_mut() {
-            match session.render_current(viewport) {
-                Ok(pixmap) => page = Some(pixmap),
-                Err(BookError::LayoutPending) => return,
-                Err(e) => self.error = Some(format!("Cannot draw this page. {e}")),
-            }
-            let info = session.current();
-            position = Some((info.page, info.page_count));
-            if let Ok(list) = session.annotations_on_page(viewport) {
-                for item in list {
-                    if item.annotation.is_bookmark() {
-                        continue;
-                    }
-                    let style = match item.annotation.drawer.as_deref().and_then(Drawer::parse) {
-                        Some(Drawer::Underscore) => MarkStyle::Underline,
-                        Some(Drawer::Strikeout) => MarkStyle::Strike,
-                        _ => MarkStyle::Box,
-                    };
-                    marks.extend(item.rects.iter().map(|rect| Mark { rect: *rect, style }));
-                }
-            }
-            if let Ok(transform) = session.page_transform(viewport) {
-                for result in session.search_results() {
-                    if result.page == info.page {
-                        hits.extend(result.rects.iter().map(|r| transform.to_screen(*r)));
-                    }
-                }
-            }
-        }
         let selection = self
             .selection
             .as_ref()
             .map(|s| s.screen_rects.clone())
             .unwrap_or_default();
-        let message = if page.is_none() { self.error.clone() } else { None };
+        let hint = self.pending_hint;
+        let error = self.error.clone();
         window.update::<PageView, _>(ctx, PAGE_KEY, move |view, cx| {
-            if page.is_some() {
-                view.page = page;
+            if frame.page.is_some() {
+                view.page = frame.page;
             }
-            view.message = message;
-            view.marks = marks;
-            view.hits = hits;
+            view.message = error;
+            view.marks = frame.marks;
+            view.hits = frame.hits;
             view.selection = selection;
-            view.position = position;
+            view.position = Some((info.page, info.page_count));
             cx.request_paint_with(hint);
         });
         self.refresh_overlay(ctx);
@@ -213,20 +251,31 @@ impl Core {
         let Some(model) = self.overlay_model() else {
             return;
         };
+        let hint = if self.pending_hint == PaintHint::Fast {
+            PaintHint::Fast
+        } else {
+            PaintHint::Ui
+        };
         let value = f64::from(model.page + 1);
         layer
             .window
             .update::<Slider, _>(ctx, "overlay-slider", move |slider, cx| {
-                slider.set_value(value);
-                cx.request_paint();
+                if slider.value() != value {
+                    slider.set_value(value);
+                    cx.request_paint_with(hint);
+                }
             });
+        // Text layout waits for release so it cannot promote a Fast preview to Ui.
+        if hint == PaintHint::Fast {
+            return;
+        }
         let time_left = model.time_left.clone();
         layer
             .window
             .update::<Label, _>(ctx, "overlay-chapter", move |label, cx| {
                 label.set_text(time_left);
                 cx.request_layout();
-                cx.request_paint();
+                cx.request_paint_with(hint);
             });
         let label = bookmark_label(model.bookmarked);
         layer
@@ -234,112 +283,109 @@ impl Core {
             .update::<ToolButton, _>(ctx, "overlay-bookmark", move |button, cx| {
                 button.set_label(label);
                 cx.request_layout();
-                cx.request_paint();
+                cx.request_paint_with(hint);
             });
     }
 
     /// Turns one page. The refresh is partial, except on a chapter start and on
     /// every [`REFRESH_EVERY`]th turn, which are full.
     pub fn turn(&mut self, ctx: &mut Ctx, forward: bool) -> Turn {
-        let moved = match self.session.as_mut() {
-            Some(session) => {
-                let result = if forward {
-                    session.next_page()
-                } else {
-                    session.prev_page()
-                };
-                match result {
-                    Ok(true) => {
-                        let page = session.current().page;
-                        let chapter_start = session.toc().iter().any(|t| t.page == Some(page));
-                        Ok((true, chapter_start))
-                    }
-                    Ok(false) => Ok((false, false)),
-                    Err(e) => Err(e),
-                }
-            }
-            None => return Turn::Blocked,
+        let Some(mut session) = self.session.take() else {
+            return Turn::Blocked;
         };
-        match moved {
-            Ok((true, chapter_start)) => {
-                self.last_page_turn = crate::sync::now_unix();
-                let hint = if chapter_start
-                    || self.refresh_every > 0 && self.pages_since_full + 1 >= self.refresh_every
-                {
-                    self.pages_since_full = 0;
-                    PaintHint::Full
-                } else {
-                    self.pages_since_full += 1;
-                    PaintHint::Partial
-                };
-                self.selection = None;
-                self.selecting = false;
-                self.repaint_page(ctx, hint);
-                Turn::Moved
-            }
-            Ok((false, _)) => {
-                if forward {
-                    Turn::AtEnd
-                } else {
-                    Turn::Blocked
-                }
-            }
-            Err(BookError::LayoutPending) => Turn::Blocked,
-            Err(e) => {
-                self.error = Some(format!("Cannot turn the page. {e}"));
-                Turn::Blocked
-            }
+        let current = session.current();
+        if forward && current.page as usize + 1 >= current.page_count {
+            self.session = Some(session);
+            return Turn::AtEnd;
         }
+        if !forward && current.page == 0 {
+            self.session = Some(session);
+            return Turn::Blocked;
+        }
+        let page = if forward {
+            current.page + 1
+        } else {
+            current.page - 1
+        };
+        let chapter_start = session.toc().iter().any(|t| t.page == Some(page));
+        self.pending_hint =
+            if chapter_start || self.refresh_every > 0 && self.pages_since_full + 1 >= self.refresh_every {
+                self.pages_since_full = 0;
+                PaintHint::Full
+            } else {
+                self.pages_since_full += 1;
+                PaintHint::Partial
+            };
+        self.last_page_turn = crate::sync::now_unix();
+        self.selection = None;
+        self.selecting = false;
+        self.job = Some(super::work::spawn(self.viewport, move || {
+            let error = session
+                .go_to(kaia_book::Location::Page(page))
+                .err()
+                .map(|e| format!("Cannot turn the page. {e}"));
+            Ok((session, None, error))
+        }));
+        let _ = ctx;
+        Turn::Moved
     }
 
     /// Jumps to `location` (a search hit, a bookmark or a contents entry) and repaints fully.
     pub fn go_to(&mut self, ctx: &mut Ctx, location: kaia_book::Location) -> bool {
-        let result = match self.session.as_mut() {
-            Some(session) => session.go_to(location),
-            None => return false,
+        let Some(mut session) = self.session.take() else {
+            self.queued.push_back((
+                "reader:location".into(),
+                vec![match location {
+                    kaia_book::Location::Page(p) => kaia_events::Value::Number(f64::from(p)),
+                    kaia_book::Location::Engine(p) => kaia_events::Value::Str(p),
+                }],
+            ));
+            return false;
         };
-        match result {
-            Ok(()) => {
-                self.selection = None;
-                self.selecting = false;
-                self.repaint_page(ctx, PaintHint::Full);
-                true
-            }
-            Err(e) => {
-                self.error = Some(format!("Cannot go there. {e}"));
-                false
-            }
-        }
+        self.pending_hint = PaintHint::Full;
+        self.pages_since_full = 0;
+        self.selection = None;
+        self.selecting = false;
+        self.job = Some(super::work::spawn(self.viewport, move || {
+            let error = session
+                .go_to(location)
+                .err()
+                .map(|e| format!("Cannot go there. {e}"));
+            Ok((session, None, error))
+        }));
+        let _ = ctx;
+        true
     }
 
     /// Selects the word under a point. The point is in screen pixels.
     pub fn hold(&mut self, ctx: &mut Ctx, point: Point) {
-        let viewport = self.viewport;
-        let Some(session) = self.session.as_mut() else {
+        let Some(mut session) = self.session.take() else {
             return;
         };
         self.selecting = true;
-        match session.select_word_at(point, viewport) {
-            Ok(selection) => self.selection = selection,
-            Err(BookError::LayoutPending) => {}
-            Err(_) => self.selection = None,
-        }
-        self.repaint_page(ctx, PaintHint::Partial);
+        self.pending_hint = PaintHint::Partial;
+        let viewport = self.viewport;
+        self.job = Some(super::work::spawn(viewport, move || {
+            let selection = session.select_word_at(point, viewport).ok().flatten();
+            Ok((session, selection, None))
+        }));
+        let _ = ctx;
     }
 
-    /// Extends the selection to a point while the hold lasts.
     pub fn drag(&mut self, ctx: &mut Ctx, point: Point) {
         if !self.selecting {
             return;
         }
-        let viewport = self.viewport;
-        let Some(session) = self.session.as_mut() else {
+        let Some(mut session) = self.session.take() else {
             return;
         };
-        if let Ok(Some(selection)) = session.extend_selection(point, viewport) {
-            self.selection = Some(selection);
-        }
-        self.repaint_page(ctx, PaintHint::Partial);
+        let viewport = self.viewport;
+        self.pending_hint = PaintHint::Partial;
+        self.job = Some(super::work::spawn(viewport, move || {
+            let selection = session.extend_selection(point, viewport).ok().flatten();
+            Ok((session, selection, None))
+        }));
+        let _ = ctx;
     }
 
     /// Ends the hold. True when a selection exists and the popover should open.
@@ -379,6 +425,7 @@ impl Core {
         if self.closed {
             return;
         }
+        self.receive_frame(ctx);
         let events = match self.session.as_mut() {
             Some(session) => session.poll(),
             None => Vec::new(),
@@ -396,18 +443,43 @@ impl Core {
                     self.repaint_page(ctx, PaintHint::Full);
                 }
                 BookEvent::SearchProgress { .. } | BookEvent::SearchFinished { .. } => {
-                    self.update_search(ctx);
+                    self.search_dirty = true;
                 }
                 BookEvent::PageRendered { .. } => {}
             }
         }
+        if self.search_dirty {
+            self.update_search(ctx);
+        }
+    }
+
+    pub(super) fn reset_search_paint(&mut self) {
+        self.search_painted = None;
+        self.search_paint_at = std::time::Duration::ZERO;
     }
 
     /// Shows the search results so far in the search panel, if it is open.
     pub fn update_search(&mut self, ctx: &mut Ctx) {
         let Some(layer) = self.panel.clone() else {
+            self.search_dirty = false;
             return;
         };
+        let snapshot = self
+            .session
+            .as_ref()
+            .map(|s| (layer.serial, s.search_results().len(), s.search_running()));
+        if snapshot == self.search_painted {
+            self.search_dirty = false;
+            return;
+        }
+        let now = ctx.scheduler.now();
+        if !search_paint_due(self.search_painted, snapshot, now, self.search_paint_at) {
+            self.search_dirty = true;
+            return;
+        }
+        self.search_dirty = false;
+        self.search_painted = snapshot;
+        self.search_paint_at = now + std::time::Duration::from_millis(500);
         let (rows, status) = match self.session.as_ref() {
             Some(session) => {
                 let results = session.search_results();
@@ -493,4 +565,52 @@ pub fn schedule_if_pending(core: &Rc<RefCell<Core>>, ctx: &mut Ctx) {
             schedule_if_pending(&rc, ctx);
         }),
     );
+}
+
+fn search_paint_due(
+    previous: Option<(u64, usize, bool)>,
+    next: Option<(u64, usize, bool)>,
+    now: std::time::Duration,
+    deadline: std::time::Duration,
+) -> bool {
+    next != previous && (previous.map(|p| p.0) != next.map(|p| p.0) || now >= deadline)
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+    use std::time::Duration;
+    #[test]
+    fn search_paints_only_changed_results_at_two_hz() {
+        let searching = Some((1, 0, true));
+        let changed = Some((1, 1, true));
+        let deadline = Duration::from_millis(500);
+        for ms in (0..500).step_by(20) {
+            assert!(!search_paint_due(
+                searching,
+                searching,
+                Duration::from_millis(ms),
+                deadline
+            ));
+            assert!(!search_paint_due(
+                searching,
+                changed,
+                Duration::from_millis(ms),
+                deadline
+            ));
+        }
+        assert!(search_paint_due(searching, changed, deadline, deadline));
+        assert!(search_paint_due(
+            searching,
+            Some((1, 0, false)),
+            deadline,
+            deadline
+        ));
+        assert!(!search_paint_due(
+            searching,
+            searching,
+            Duration::from_secs(5),
+            deadline
+        ));
+    }
 }

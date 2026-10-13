@@ -11,8 +11,11 @@ pub const HYPHENATION_DICT: &str = "English_US.pattern";
 /// CSS added when text is justified. Appended after the book's own styles.
 const JUSTIFY_CSS: &str = "body { text-align: justify !important; }\n";
 
-/// Reflowable text settings. Sizes are in device pixels for CREngine, which is
-/// the unit KOReader stores. MuPDF layouts read the same numbers as points.
+/// Reflowable text settings. Font size and margins are engine pixels.
+/// The app converts KOReader units before passing them here, using
+/// `ceil(units * min(viewport width, viewport height) / 600)`.
+/// For a Libra Colour viewport, 22 font units become 47 pixels.
+/// MuPDF reflow uses the same numbers as points.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextLayout {
     /// Font face name, such as `Noto Serif`. None keeps the engine default.
@@ -32,8 +35,9 @@ pub struct TextLayout {
 }
 
 impl Default for TextLayout {
-    /// KOReader's defaults: 22 px text, 10 px side margins, 15 px top and
-    /// bottom margins, normal line spacing, hyphenation on, the book's styles on.
+    /// Defaults for a 600-pixel reference viewport. Callers must scale font
+    /// size and margins for larger panels before opening a book.
+    /// Line spacing is a ratio, so KOReader's 100 percent is 1.0.
     fn default() -> Self {
         Self {
             font_family: None,

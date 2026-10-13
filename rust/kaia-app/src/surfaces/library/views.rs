@@ -60,8 +60,8 @@ fn line_row(line: &Line) -> WidgetPod {
     if !line.detail.is_empty() {
         row = row.secondary(line.detail.clone());
     }
-    if let Some(px) = &line.cover {
-        row = row.cover(CoverImage::new(line.title.clone(), Some(px.clone())));
+    if line.key.starts_with("book-") {
+        row = row.cover(CoverImage::new(line.title.clone(), line.cover.clone()));
     }
     row = row.chevron();
     let pod = WidgetPod::new(row);
@@ -160,20 +160,28 @@ pub fn filter_row(t: &Theme, prefs: &Prefs) -> WidgetPod {
 /// The covers view: a grid of tiles, three columns in portrait and four in landscape.
 /// A tile is 100 dp wide and centred in its cell, so two rows of covers fit on a
 /// portrait page next to the header, the chips and the page strip.
-pub fn covers(t: &Theme, screen: Size, infos: Vec<BookInfo>) -> WidgetPod {
+pub fn covers(t: &Theme, screen: Size, infos: Vec<BookInfo>, loader: crate::covers::Shared) -> WidgetPod {
     let portrait = screen.h >= screen.w;
     let columns = if portrait { 3 } else { 4 };
-    let grid = Grid::new(infos, columns, |info: &BookInfo, t: &Theme| {
+    let grid = Grid::new(infos, columns, move |info: &BookInfo, t: &Theme| {
         let tile_w = t.scale.dp(100);
-        let tile = WidgetPod::new(BookTile::new(t, info).on_action("library:open"));
+        let info = info.clone();
+        let theme = t.clone();
+        let id = info.id.parse().unwrap_or_default();
+        let held_id = info.id.clone();
+        let tile = WidgetPod::new(crate::covers::Cell::new(id, loader.clone(), move |cover| {
+            let mut info = info.clone();
+            info.cover = cover;
+            WidgetPod::new(BookTile::new(&theme, &info).on_action("library:open"))
+        }));
         let sized = WidgetPod::new(SizedBox::new(Some(tile)).width(tile_w));
         let centred = WidgetPod::new(Row::new(vec![
             WidgetPod::new(Spacer::new(1)),
             sized,
             WidgetPod::new(Spacer::new(1)),
         ]));
-        let hold = Pressable::new(centred).hold("library:details", vec![Value::Str(info.id.clone())]);
-        WidgetPod::new(hold).with_key(format!("book-{}", info.id))
+        let hold = Pressable::new(centred).hold("library:details", vec![Value::Str(held_id.clone())]);
+        WidgetPod::new(hold).with_key(format!("book-{held_id}"))
     })
     .gap(t.space.sm);
     WidgetPod::new(grid)
@@ -182,6 +190,21 @@ pub fn covers(t: &Theme, screen: Size, infos: Vec<BookInfo>) -> WidgetPod {
 /// The list view and the search results: rows of cover, title and detail, paged.
 pub fn list(lines: Vec<Line>) -> PagedList<Line> {
     PagedList::new(lines, |line: &Line, _t: &Theme| line_row(line))
+}
+pub fn list_covers(lines: Vec<Line>, loader: crate::covers::Shared) -> PagedList<Line> {
+    PagedList::new(lines, move |line: &Line, _t: &Theme| {
+        let line = line.clone();
+        let id = line
+            .key
+            .strip_prefix("book-")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_default();
+        WidgetPod::new(crate::covers::Cell::new(id, loader.clone(), move |cover| {
+            let mut line = line.clone();
+            line.cover = cover;
+            line_row(&line)
+        }))
+    })
 }
 
 /// The folder view: a heading with the place, then the rows.
@@ -269,7 +292,7 @@ pub fn body_text(t: &Theme, text: &str) -> WidgetPod {
 }
 
 /// The search page: a field with a close button, the results, and the keyboard.
-pub fn search(t: &Theme, query: &str, results: Vec<Line>) -> Vec<WidgetPod> {
+pub fn search(t: &Theme, query: &str, results: Vec<Line>, loader: crate::covers::Shared) -> Vec<WidgetPod> {
     let field = WidgetPod::new(
         TextField::new()
             .placeholder("Title, author, series")
@@ -289,7 +312,7 @@ pub fn search(t: &Theme, query: &str, results: Vec<Line>) -> Vec<WidgetPod> {
     // A fixed hint: the results change without a rebuild, so the hint cannot depend on them.
     let hint = body_text(t, "Type a title, an author or a word from the description.");
     let list = WidgetPod::new(Expanded::new(
-        WidgetPod::new(list(results)).with_key("results"),
+        WidgetPod::new(list_covers(results, loader)).with_key("results"),
         1,
     ));
     let keyboard = WidgetPod::new(OnScreenKeyboard::new(&ENGLISH).background(Tone::Surface));

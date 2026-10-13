@@ -7,12 +7,12 @@
 //! | Key | Type | Default | Meaning |
 //! |---|---|---|---|
 //! | `reading.font_family` | string | unset (engine default) | Reading font family name. |
-//! | `reading.font_size` | number | 22 | Reading font size in pixels. |
+//! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.full_refresh_pages` | number | 6 | E Ink full refresh every this many page turns. |
 //! | `display.night_mode` | bool | false | Night mode: light text on a dark page. |
 //! | `display.color_rendering` | bool | true | Color rendering on a color panel. |
-//! | `display.rotation_lock` | bool | false | Keeps the screen orientation when the device turns. |
+//! | `display.rotation_lock` | bool | false | Reserved. Automatic rotation is not available. |
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
@@ -52,7 +52,7 @@ pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
 
-/// Default reading font size, as `kaia_book::TextLayout::default` (KOReader's 22 px).
+/// Default reading font size in KOReader units. It becomes 47 px on the Libra Colour.
 pub const DEFAULT_FONT_SIZE: f64 = 22.0;
 /// Default full refresh interval in page turns.
 pub const DEFAULT_FULL_REFRESH_PAGES: f64 = 6.0;

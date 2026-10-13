@@ -12,6 +12,7 @@ use kaia_ui::Window;
 use super::commands::{self, Command};
 use super::entries;
 use super::facts;
+use super::keys;
 use super::{save, sections};
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
@@ -142,11 +143,19 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let Some(value) = args.first().cloned() else {
         return Outcome::Handled;
     };
+    if key == keys::DISPLAY_ROTATION_LOCK {
+        env.toast("Automatic rotation is not available yet.", 3.0);
+        return Outcome::Handled;
+    }
     env.services.settings.save(key, value);
     if !key.starts_with("sync.") {
         save(env);
     }
-    Outcome::Handled
+    if key == keys::READING_FONT_SIZE {
+        Outcome::Rebuild
+    } else {
+        Outcome::Handled
+    }
 }
 
 /// Writes the option a radio group chose. An empty stored value removes the key.
@@ -160,6 +169,10 @@ fn pick(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     if value.as_str() == Some("") {
         env.services.settings.del(key);
     } else {
+        if key == keys::DISPLAY_ROTATION_LOCK {
+            env.toast("Automatic rotation is not available yet.", 3.0);
+            return Outcome::Handled;
+        }
         env.services.settings.save(key, value);
     }
     save(env);

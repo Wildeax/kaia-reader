@@ -7,10 +7,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use kaia_events::{Refresh, RefreshMode, ShowOpts};
+use crate::slider::Slider;
+use kaia_events::ShowOpts;
 use kaia_gfx::Size;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Row, Spacer};
-use kaia_ui::controls::{Slider, ToolButton};
+use kaia_ui::controls::ToolButton;
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, WidgetPod, Window};
 
@@ -55,7 +56,6 @@ impl Surface for Overlay {
     fn show_opts(&self) -> ShowOpts {
         ShowOpts {
             covers_fullscreen: false,
-            refresh: Some(Refresh::new(RefreshMode::Ui)),
             ..ShowOpts::default()
         }
     }

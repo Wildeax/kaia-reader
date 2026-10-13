@@ -115,8 +115,9 @@ pub struct Filter {
 
 /// A stored cover thumbnail: the encoded image and its MIME type.
 ///
-/// Covers are JPEG (quality 85, color kept). Schema version 2 re-encodes the
-/// PNG covers of version 1, so `mime` is `image/jpeg` for every cover that
+/// Covers are JPEG with color kept. Large covers use quality 80 and small
+/// covers use quality 85. Schema version 2 re-encodes the PNG covers of version
+/// 1, so `mime` is `image/jpeg` for every cover that
 /// [`Library::open`](crate::Library::open) returns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoverImage {
@@ -129,7 +130,8 @@ pub struct CoverImage {
 pub enum CoverSize {
     /// Fits in a 160 x 160 box.
     Small,
-    /// Fits in a 480 x 480 box.
+    /// Fits in a 1264 x 1680 box, the sleep screen size. A cover is never
+    /// enlarged, so a small source stays at its own size.
     Large,
 }
 

@@ -55,8 +55,8 @@ fn first_scan_extracts_metadata_and_covers() {
     assert_eq!(large.mime, "image/jpeg");
     let (w, h) = jpeg_size(&large.bytes);
     assert!(
-        w <= 480 && h <= 480 && h > w.min(h) / 2,
-        "large cover {w}x{h} fits 480 box"
+        w <= 1264 && h <= 1680 && h > 480,
+        "large cover {w}x{h} fits the 1264 x 1680 box"
     );
     assert!(w > 160 || h > 160, "large is bigger than small");
 }

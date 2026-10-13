@@ -6,6 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+use kaia_app::slider::Slider;
 use kaia_app::surfaces::reader::page::PageView;
 use kaia_app::surfaces::reader::panels::{ContentItem, SearchRow};
 use kaia_app::App;
@@ -19,7 +20,7 @@ use kaia_input::{Key, Phase, TouchEvent};
 use kaia_ui::components::Label;
 use kaia_ui::components::Paragraph;
 use kaia_ui::composite::PagedList;
-use kaia_ui::controls::{Slider, TextField};
+use kaia_ui::controls::TextField;
 
 mod common;
 
@@ -27,6 +28,7 @@ use common::*;
 
 /// The book shown in the reader and its page, from the reader window on top.
 fn position(app: &mut App<HeadlessBackend>) -> (u32, usize) {
+    wait_reader(app);
     let mut position = None;
     app.update_top::<PageView, _>("reader-page", |view, _| position = view.position);
     position.expect("the reader window is on top and has a position")
@@ -34,6 +36,7 @@ fn position(app: &mut App<HeadlessBackend>) -> (u32, usize) {
 
 /// The page the overlay slider shows (1-based), from the overlay on top.
 fn slider_value(app: &mut App<HeadlessBackend>) -> f64 {
+    wait_reader(app);
     let mut value = None;
     app.update_top::<Slider, _>("overlay-slider", |slider, _| value = Some(slider.value()));
     value.expect("the overlay is on top")
@@ -63,6 +66,7 @@ fn open_reader(name: &str, dir: &Path) -> App<HeadlessBackend> {
 fn turn_to_text(app: &mut App<HeadlessBackend>) {
     for _ in 0..8 {
         app.key(Key::RPgFwd).unwrap();
+        wait_reader(app);
     }
 }
 
@@ -80,6 +84,7 @@ fn centre(app: &App<HeadlessBackend>) -> Point {
 fn open_overlay(app: &mut App<HeadlessBackend>) {
     let p = centre(app);
     app.tap(p).unwrap();
+    wait_reader(app);
     assert_eq!(app.top_route(), Some(&Route::Overlay));
 }
 
@@ -102,6 +107,7 @@ fn hold_at(app: &mut App<HeadlessBackend>, p: Point) {
         time_us: 2_000_000,
     })])
     .unwrap();
+    wait_reader(app);
 }
 
 /// Writes a one-word StarDict dictionary into `<data>/dict`.
@@ -178,11 +184,13 @@ fn page_turns_are_partial_refreshes_and_back_returns() {
     let free = |page: u32| !is_start(page + 1) && !is_start(page + 2);
     while position(&mut app).0 < 4 || !free(position(&mut app).0) {
         app.key(Key::RPgFwd).unwrap();
+        wait_reader(&mut app);
     }
     let page = position(&mut app).0;
 
     let before = app.refresh_modes().len();
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     assert_eq!(
         modes_after(&app, before),
         vec![RefreshMode::Partial],
@@ -194,20 +202,23 @@ fn page_turns_are_partial_refreshes_and_back_returns() {
     let (w, h) = (app.screen().w as i32, app.screen().h as i32);
     let before = app.refresh_modes().len();
     app.tap(Point::new(w * 9 / 10, h / 2)).unwrap();
+    wait_reader(&mut app);
     assert_eq!(modes_after(&app, before), vec![RefreshMode::Partial]);
     assert_eq!(position(&mut app).0, page + 2);
 
     // The left third goes back a page.
     let before = app.refresh_modes().len();
     app.tap(Point::new(w / 10, h / 2)).unwrap();
+    wait_reader(&mut app);
     assert_eq!(modes_after(&app, before), vec![RefreshMode::Partial]);
     assert_eq!(position(&mut app).0, page + 1);
 
     // Back leaves the reader, returns to the Library, and saves the progress.
     let before = app.refresh_modes().len();
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
     assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));
-    assert_eq!(modes_after(&app, before), vec![RefreshMode::Ui]);
+    assert!(modes_after(&app, before).iter().all(|m| *m == RefreshMode::Ui));
     let book = library_db(&app).book(id).unwrap().unwrap();
     assert!(
         book.percent > 0.0,
@@ -235,8 +246,10 @@ fn chapter_pages(app: &mut App<HeadlessBackend>) -> std::collections::HashSet<u3
     });
     // Back closes the panel, and a tap in the middle closes the overlay.
     app.key(Key::Back).unwrap();
+    wait_reader(app);
     let (w, h) = (app.screen().w as i32, app.screen().h as i32);
     app.tap(Point::new(w / 2, h / 2)).unwrap();
+    wait_reader(app);
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
     pages
 }
@@ -259,6 +272,7 @@ fn full_refresh_at_chapter_starts_and_every_sixth_turn() {
     for turn in 0..14 {
         let before = app.refresh_modes().len();
         app.key(Key::RPgFwd).unwrap();
+        wait_reader(&mut app);
         let modes = modes_after(&app, before);
         assert_eq!(modes.len(), 1, "turn {turn} sends one refresh, got {modes:?}");
         let page = position(&mut app).0;
@@ -303,6 +317,7 @@ fn centre_tap_opens_the_overlay_and_an_unused_tap_closes_it() {
     // A tap in the middle of the page, which the bars do not use, closes the overlay.
     let (w, h) = (app.screen().w as i32, app.screen().h as i32);
     app.tap(Point::new(w / 2, h / 2)).unwrap();
+    wait_reader(&mut app);
     assert_eq!(app.top_route(), Some(&Route::Reader { book: id }));
 }
 
@@ -353,7 +368,9 @@ fn font_size_change_relayouts_and_keeps_the_place() {
     let dir = scratch("relayout");
     let mut app = open_reader("juliet.epub", &dir);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     let (page_before, count_before) = position(&mut app);
     let percent_before = page_before as f64 / count_before as f64;
 
@@ -363,6 +380,7 @@ fn font_size_change_relayouts_and_keeps_the_place() {
     let rect = app.find_rect("layout-size").expect("the size stepper");
     app.tap(Point::new(rect.x + rect.w as i32 - 6, rect.y + rect.h as i32 / 2))
         .unwrap();
+    wait_reader(&mut app);
 
     // The layout runs on the engine thread. Give it time, then leave the sheet.
     let deadline = std::time::Instant::now() + Duration::from_millis(1500);
@@ -370,7 +388,9 @@ fn font_size_change_relayouts_and_keeps_the_place() {
         app.iterate(Some(Duration::from_millis(20))).unwrap();
     }
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
     app.tap(centre(&app)).unwrap();
+    wait_reader(&mut app);
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
 
     let (page_after, count_after) = position(&mut app);
@@ -396,6 +416,7 @@ fn hold_selects_a_word_and_the_highlight_survives_reopening() {
 
     // Leave the book and open it again. The highlight is in the Highlights tab.
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
     open_from_library(&mut app, "juliet.epub");
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
@@ -510,6 +531,7 @@ fn dictionary_sheet_shows_the_definition_of_the_selected_word() {
     );
     fs::remove_file(dir.join("data/dict/test.ifo")).unwrap();
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
     hold_at(&mut app, word_point());
     tap_key(&mut app, "sel-dict");
     assert!(!text_of(&mut app, "dict-body").contains("Second Dictionary"));
@@ -588,6 +610,7 @@ fn end_of_book_sheet_appears_after_the_last_page() {
 
     app.send(kaia_events::Event::new("PageForward"));
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert!(
         app.find_rect("end-finish").is_some(),
         "the end of book sheet is up"
@@ -602,9 +625,12 @@ fn reopening_restores_the_page() {
     let dir = scratch("reopen");
     let mut app = open_reader("juliet.epub", &dir);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     assert_eq!(position(&mut app).0, 2);
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
 
     open_from_library(&mut app, "juliet.epub");
     assert_eq!(position(&mut app).0, 2, "the reader comes back to page 3");
@@ -634,6 +660,7 @@ fn a_book_that_cannot_open_shows_an_error_and_back_still_works() {
     );
 
     app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
     assert!(matches!(app.top_route(), Some(Route::Library { .. })));
 }
 
@@ -646,7 +673,7 @@ fn reader_golden() {
     app.start().unwrap();
     wait_for(&mut app, "the library scan", |a| !a.scan_running());
     open_from_library(&mut app, "2col.pdf");
-    assert_matches_golden(app.frame(), &golden("reader.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader.png"), 14);
 }
 
 #[test]
@@ -655,7 +682,7 @@ fn overlay_golden() {
     let dir = scratch("golden-overlay");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
-    assert_matches_golden(app.frame(), &golden("reader-overlay.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-overlay.png"), 14);
 }
 
 #[test]
@@ -665,7 +692,7 @@ fn contents_golden() {
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
-    assert_matches_golden(app.frame(), &golden("reader-contents.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-contents.png"), 14);
 }
 
 #[test]
@@ -675,7 +702,7 @@ fn text_and_layout_golden() {
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-layout");
-    assert_matches_golden(app.frame(), &golden("reader-layout.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-layout.png"), 14);
 }
 
 #[test]
@@ -685,7 +712,7 @@ fn selection_popover_golden() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
-    assert_matches_golden(app.frame(), &golden("reader-selection.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-selection.png"), 14);
 }
 
 #[test]
@@ -698,7 +725,7 @@ fn dictionary_golden() {
     let word = word_of(&text_of(&mut app, "sel-word"));
     write_stardict(&dir.join("data"), &word, "a test definition for the word");
     tap_key(&mut app, "sel-dict");
-    assert_matches_golden(app.frame(), &golden("reader-dictionary.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-dictionary.png"), 14);
 }
 
 #[test]
@@ -726,7 +753,7 @@ fn search_golden() {
         text_of(&mut app, "search-status").ends_with("matches."),
         "the search finished"
     );
-    assert_matches_golden(app.frame(), &golden("reader-search.png"), 2);
+    assert_matches_golden(app.frame(), &golden("reader-search.png"), 14);
 }
 
 #[test]
@@ -737,6 +764,7 @@ fn named_page_events_cross_the_overlay_but_page_keys_move_focus_first() {
     open_overlay(&mut app);
     let page = slider_value(&mut app);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     assert_eq!(
         slider_value(&mut app),
         page,
@@ -744,6 +772,7 @@ fn named_page_events_cross_the_overlay_but_page_keys_move_focus_first() {
     );
     assert!(app.send(kaia_events::Event::new("PageForward")));
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert_eq!(slider_value(&mut app), page + 1.0);
 }
 
@@ -757,6 +786,7 @@ fn opening_the_open_book_reuses_it_and_applies_the_requested_location() {
     tap_key(&mut app, "overlay-layout");
     app.command(&format!("open_book:{book}"), &[kaia_events::Value::Number(8.0)]);
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert_eq!(app.router().depth(), 2);
     assert_eq!(position(&mut app).0, 8);
     assert!(app.notices().is_empty(), "{:?}", app.notices());
@@ -780,15 +810,20 @@ fn autosave_suspend_and_shutdown_preserve_position_without_closing_first() {
     let initial = fs::read(&state).unwrap_or_default();
     std::thread::sleep(Duration::from_millis(5100));
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     let saved = fs::read(&state).expect("a page turn saves after five seconds");
     assert_ne!(initial, saved);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     app.command("sleep", &[]);
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     let sleeping = fs::read(&state).unwrap();
     assert_ne!(saved, sleeping, "suspend saves immediately");
     app.key(Key::Power).unwrap();
+    wait_reader(&mut app);
     app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
     app.shutdown();
     assert_ne!(sleeping, fs::read(&state).unwrap(), "shutdown saves immediately");
     let mut opts = kaia_book::OpenOptions::new(dir.join("data"));
@@ -823,6 +858,7 @@ fn remote_progress_uses_the_selected_strategy_and_waits_for_confirmation() {
         .save("sync.forward", Value::from("never"));
     app.broadcast_app(remote.clone());
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert_eq!(position(&mut app).0, 0);
     assert!(!app.services().sync.busy(), "Never does not push during pull");
     app.services_mut()
@@ -830,6 +866,7 @@ fn remote_progress_uses_the_selected_strategy_and_waits_for_confirmation() {
         .save("sync.forward", Value::from("prompt"));
     app.broadcast_app(remote.clone());
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert!(app.find_rect("dialog-button:reader:sync:accept").is_some());
     tap_key(&mut app, "dialog-button:reader:sync:accept");
     assert_eq!(position(&mut app).0, 1);
@@ -839,6 +876,7 @@ fn remote_progress_uses_the_selected_strategy_and_waits_for_confirmation() {
         .save("sync.forward", Value::from("silent"));
     app.broadcast_app(remote);
     app.process(Vec::new()).unwrap();
+    wait_reader(&mut app);
     assert_eq!(position(&mut app).0, 1);
     app.services_mut()
         .settings

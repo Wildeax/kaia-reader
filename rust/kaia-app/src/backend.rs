@@ -121,8 +121,14 @@ impl ScriptInput {
                     let [x, y] = coords[..] else {
                         return Err(fail("tap needs x and y".into()));
                     };
-                    let t0 = input.cursor_ms + 100;
-                    input.cursor_ms = t0 + 50;
+                    let t0 = input
+                        .cursor_ms
+                        .checked_add(100)
+                        .ok_or_else(|| fail("timestamp is too large".into()))?;
+                    input.cursor_ms = t0
+                        .checked_add(50)
+                        .filter(|ms| ms.checked_mul(1000).is_some())
+                        .ok_or_else(|| fail("timestamp is too large".into()))?;
                     let pos = Point::new(x, y);
                     input.push(Item::Input(InputEvent::Touch(TouchEvent {
                         slot: 0,

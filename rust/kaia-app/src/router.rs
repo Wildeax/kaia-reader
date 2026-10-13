@@ -40,6 +40,10 @@ impl Router {
     }
 
     /// Number of screens, root included.
+    pub fn busy(&self) -> bool {
+        self.screens.iter().any(|s| s.surface.busy())
+    }
+
     pub fn depth(&self) -> usize {
         self.screens.len()
     }
@@ -140,7 +144,8 @@ impl Router {
             return None;
         }
         let screen = self.screens.pop()?;
-        stack.close(screen.id, Some(Refresh::new(mode)), ctx);
+        let refresh = screen.opts.covers_fullscreen.then(|| Refresh::new(mode));
+        stack.close(screen.id, refresh, ctx);
         Some(screen.route)
     }
 

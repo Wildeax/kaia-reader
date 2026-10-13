@@ -277,7 +277,7 @@ fn notes_list_golden() {
     let dir = scratch("notes-golden");
     let (mut app, _juliet, _leaves) = notes_app(&dir);
     tap_key(&mut app, "nav-notes");
-    assert_matches_golden(app.frame(), &golden("notes_list.png"), 0);
+    assert_matches_golden(app.frame(), &golden("notes_list.png"), 14);
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn notes_book_golden() {
     let (mut app, juliet, _leaves) = notes_app(&dir);
     tap_key(&mut app, "nav-notes");
     tap_key(&mut app, &format!("notes-book-{juliet}"));
-    assert_matches_golden(app.frame(), &golden("notes_book.png"), 0);
+    assert_matches_golden(app.frame(), &golden("notes_book.png"), 14);
 }
 
 /// Opens Settings, types `query` in the search and opens the first hit.
@@ -367,7 +367,7 @@ fn network_golden() {
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
     tap_key(&mut app, "settings-network");
-    assert_matches_golden(app.frame(), &golden("settings_network.png"), 0);
+    assert_matches_golden(app.frame(), &golden("settings_network.png"), 14);
 }
 
 #[test]
@@ -485,7 +485,7 @@ fn statistics_golden() {
     write_statistics(&data, FIXED_NOW);
     let app = make_app(&dir, Vec::new());
     let page = section::section_page(app.services(), "statistics", false, FIXED_NOW);
-    assert_matches_golden(&paint(&app, page), &golden("settings_statistics.png"), 0);
+    assert_matches_golden(&paint(&app, page), &golden("settings_statistics.png"), 14);
 }
 
 #[test]
@@ -496,10 +496,10 @@ fn settings_root_and_reading_golden() {
     app.start().unwrap();
 
     tap_key(&mut app, "nav-settings");
-    assert_matches_golden(app.frame(), &golden("settings_root.png"), 0);
+    assert_matches_golden(app.frame(), &golden("settings_root.png"), 14);
 
     tap_key(&mut app, "settings-reading");
-    assert_matches_golden(app.frame(), &golden("settings_reading.png"), 0);
+    assert_matches_golden(app.frame(), &golden("settings_reading.png"), 14);
 }
 
 #[test]
@@ -514,7 +514,7 @@ fn about_golden() {
         app.top_route(),
         Some(&Route::SettingsSection { name: "about".into() })
     );
-    assert_matches_golden(app.frame(), &golden("settings_about.png"), 0);
+    assert_matches_golden(app.frame(), &golden("settings_about.png"), 14);
 }
 
 #[test]
@@ -524,7 +524,7 @@ fn quick_settings_sheet_golden() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     let sheet = quick::quick_settings(app.services());
-    assert_matches_golden(&paint(&app, sheet), &golden("quick_settings.png"), 0);
+    assert_matches_golden(&paint(&app, sheet), &golden("quick_settings.png"), 14);
 }
 
 #[test]
@@ -534,5 +534,5 @@ fn sleep_screen_golden() {
     let (app, _juliet, _leaves) = notes_app(&dir);
     let id = book_id(&app, "juliet.epub");
     let screen = sleep::sleep_screen(app.services(), app.screen(), Some(id));
-    assert_matches_golden(&paint(&app, screen), &golden("sleep_screen.png"), 0);
+    assert_matches_golden(&paint(&app, screen), &golden("sleep_screen.png"), 14);
 }

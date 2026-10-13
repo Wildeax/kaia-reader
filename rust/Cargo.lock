@@ -886,6 +886,7 @@ dependencies = [
  "kaia-stats",
  "kaia-sync",
  "kaia-ui",
+ "rusqlite",
 ]
 
 [[package]]

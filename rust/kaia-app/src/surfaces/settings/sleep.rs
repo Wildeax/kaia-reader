@@ -51,6 +51,15 @@ fn cover_widget(cover: &Pixmap, screen: Size) -> WidgetPod {
 /// The sleep screen for `book_id`, the book being read. None means no book:
 /// the screen is blank.
 pub fn sleep_screen(services: &Services, screen: Size, book_id: Option<i64>) -> Stack {
+    sleep_screen_with_label(services, screen, book_id, SLEEP_LABEL)
+}
+
+pub fn sleep_screen_with_label(
+    services: &Services,
+    screen: Size,
+    book_id: Option<i64>,
+    label: &str,
+) -> Stack {
     let t = &services.theme;
     let cover = match book_id {
         Some(id) if shows_cover(services) => common::cover(&services.library, id),
@@ -63,11 +72,7 @@ pub fn sleep_screen(services: &Services, screen: Size, book_id: Option<i64>) -> 
         None => WidgetPod::new(Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Surface)),
     };
     let label = WidgetPod::new(Padding::new(
-        WidgetPod::new(Label::new(
-            SLEEP_LABEL,
-            t.font.caption.clone(),
-            Tone::InkSecondary,
-        )),
+        WidgetPod::new(Label::new(label, t.font.caption.clone(), Tone::InkSecondary)),
         Insets::all(t.space.md),
     ));
     let label = WidgetPod::new(Align::new(label, Alignment::Center, Alignment::End));

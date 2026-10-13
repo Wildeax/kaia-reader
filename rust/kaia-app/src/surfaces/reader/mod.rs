@@ -18,7 +18,9 @@ mod dict;
 mod overlay;
 pub mod page;
 pub mod panels;
+mod persistence;
 mod state;
+mod work;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -51,10 +53,23 @@ pub(crate) fn koreader_px(screen: kaia_gfx::Size, units: f64) -> f32 {
 /// the way KOReader scales them. The font is 22 units, the side margins 10 units
 /// and the top and bottom margins 15 units. Line spacing (100 %) and the other
 /// options keep the defaults of `kaia_book`. A book with a saved layout keeps it.
-fn koreader_default_layout(screen: kaia_gfx::Size) -> TextLayout {
+fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Settings) -> TextLayout {
     let base = TextLayout::default();
     TextLayout {
-        font_size: koreader_px(screen, 22.0),
+        font_size: koreader_px(
+            screen,
+            settings
+                .read("reading.font_size")
+                .as_f64()
+                .filter(|n| n.is_finite())
+                .unwrap_or(22.0)
+                .clamp(12.0, 40.0),
+        ),
+        font_family: settings
+            .read("reading.font_family")
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned),
         margins: Margins {
             top: koreader_px(screen, 15.0),
             right: koreader_px(screen, 10.0),
@@ -70,6 +85,7 @@ pub struct ReaderSurface {
     book: i64,
     location: Option<Value>,
     reported: bool,
+    persistence: persistence::Persistence,
     remote: Option<kaia_book::Location>,
     core: Rc<RefCell<Core>>,
 }
@@ -84,6 +100,7 @@ impl ReaderSurface {
             book,
             location,
             reported: false,
+            persistence: persistence::Persistence::default(),
             remote: None,
             core: Rc::new(RefCell::new(Core::new(book))),
         }
@@ -203,6 +220,11 @@ impl ReaderSurface {
 }
 
 impl Surface for ReaderSurface {
+    fn busy(&self) -> bool {
+        let c = self.core.borrow();
+        c.job.is_some() || c.layout_pending || !c.queued.is_empty() || !c.events.is_empty()
+    }
+
     fn route(&self) -> Route {
         Route::Reader { book: self.book }
     }
@@ -227,7 +249,7 @@ impl Surface for ReaderSurface {
         let screen = env.screen;
         let mut opts = OpenOptions::new(env.services.paths.data_dir.clone());
         opts.viewport = screen;
-        opts.default_layout = koreader_default_layout(screen);
+        opts.default_layout = koreader_default_layout(screen, &env.services.settings);
         opts.pixel_format = env.services.theme.pixel_format();
         let color_panel = env.services.theme.color_panel;
         let page = WidgetPod::new(PageView::new()).with_key(PAGE_KEY);
@@ -257,7 +279,9 @@ impl Surface for ReaderSurface {
             if let Some(location) = self.location.take().and_then(location_value) {
                 c.go_to(env.ctx, location);
             }
-            c.repaint_page(env.ctx, PaintHint::Full);
+            if c.job.is_none() {
+                c.repaint_page(env.ctx, PaintHint::Full);
+            }
             c.percent()
         };
         // Opening a book is a reading event, so the library records it now.
@@ -266,10 +290,18 @@ impl Surface for ReaderSurface {
                 env.notice(format!("cannot record the open: {e}"));
             }
         }
+        schedule_if_pending(&self.core, env.ctx);
         Some(window)
     }
 
     fn on_show(&mut self, env: &mut SurfaceEnv<'_>) {
+        if self.core.borrow().session.is_none() {
+            return;
+        }
+        self.core.borrow_mut().opened = true;
+        if let Some(percent) = self.core.borrow().percent() {
+            let _ = env.services.library.record_open(self.book, percent);
+        }
         self.report_state(env);
         if let Some(session) = self.core.borrow().session.as_ref() {
             env.services.sync.pull(
@@ -282,10 +314,50 @@ impl Surface for ReaderSurface {
     }
 
     fn on_event(&mut self, ev: &Event, env: &mut SurfaceEnv<'_>) -> Outcome {
+        if ev.name == "ReaderTick" {
+            self.core.borrow_mut().pump(env.ctx);
+            if self.core.borrow().session.is_some() && !self.core.borrow().opened {
+                self.on_show(env);
+            }
+            self.persistence.tick(&mut self.core.borrow_mut(), env);
+            if self.core.borrow().job.is_none() {
+                let event = self.core.borrow_mut().events.pop_front();
+                if let Some(event) = event {
+                    return self.on_event(&event, env);
+                }
+                let next = self.core.borrow_mut().queued.pop_front();
+                if let Some((cmd, args)) = next {
+                    let result = self.on_command(&cmd, &args, env);
+                    schedule_if_pending(&self.core, env.ctx);
+                    self.persistence.tick(&mut self.core.borrow_mut(), env);
+                    return result;
+                }
+            }
+            schedule_if_pending(&self.core, env.ctx);
+            return Outcome::Handled;
+        }
+        if self.core.borrow().job.is_some()
+            && matches!(
+                ev.name.as_str(),
+                "SyncProgress" | "SyncPushed" | "Suspend" | "SaveState" | "Resume"
+            )
+        {
+            self.core.borrow_mut().events.push_back(ev.clone());
+            return Outcome::Handled;
+        }
+        if matches!(ev.name.as_str(), "Suspend" | "SaveState" | "Resume") {
+            self.persistence.tick(&mut self.core.borrow_mut(), env);
+            self.persistence.event(&ev.name, env);
+        }
         if ev.name == "SyncPushed" {
             let mut core = self.core.borrow_mut();
             if core.session.as_ref().is_some_and(|s| {
                 ev.args.first().and_then(Value::as_str) == Some(s.identity().partial_md5.as_str())
+                    && env
+                        .services
+                        .sync
+                        .pending_progress(&s.identity().partial_md5)
+                        .is_none()
             }) {
                 core.periodic_sync.reset();
             }
@@ -307,10 +379,8 @@ impl Surface for ReaderSurface {
             return Outcome::Handled;
         }
         if matches!(ev.name.as_str(), "SaveState" | "Suspend") {
-            if let Some(session) = self.core.borrow_mut().session.as_mut() {
-                if let Err(e) = session.save() {
-                    env.toast(format!("Cannot save reading progress: {e}"), 5.0);
-                }
+            self.persistence.save(&mut self.core.borrow_mut(), env);
+            if let Some(session) = self.core.borrow().session.as_ref() {
                 env.services.sync.push(
                     &env.services.settings,
                     session,
@@ -324,6 +394,13 @@ impl Surface for ReaderSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if cmd.starts_with("reader:") && self.core.borrow().job.is_some() {
+            self.core
+                .borrow_mut()
+                .queued
+                .push_back((cmd.to_string(), args.to_vec()));
+            return Outcome::Handled;
+        }
         if cmd == "reader:sync:accept" {
             if let Some(location) = self.remote.take() {
                 self.core.borrow_mut().go_to(env.ctx, location);
@@ -347,22 +424,24 @@ impl Surface for ReaderSurface {
         command(&self.core, cmd, args, env)
     }
 
+    fn can_hide(&mut self, env: &mut SurfaceEnv<'_>) -> bool {
+        if self.core.borrow().job.is_some() {
+            env.toast("The page is still loading. Try again when it finishes.", 3.0);
+            return false;
+        }
+        self.persistence.save(&mut self.core.borrow_mut(), env)
+    }
+
     fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
+        self.persistence.event("Close", env);
         let mut c = self.core.borrow_mut();
-        if let Some(session) = c.session.as_mut() {
-            let percent = session.current().percent;
+        if let Some(session) = c.session.as_ref() {
             env.services.sync.push(
                 &env.services.settings,
                 session,
                 env.services.paths.data_dir.join("sync-queue.json"),
                 env.ctx.scheduler.now(),
             );
-            if let Err(e) = session.save() {
-                env.notice(format!("cannot save the reading position: {e}"));
-            }
-            if let Err(e) = env.services.library.record_open(self.book, percent) {
-                env.notice(format!("cannot save progress: {e}"));
-            }
         }
         c.closed = true;
         c.overlay = None;
@@ -383,10 +462,18 @@ pub(super) fn command(
     args: &[Value],
     env: &mut SurfaceEnv<'_>,
 ) -> Outcome {
+    if cmd == "reader:slider:release" {
+        rc.borrow_mut().repaint_page(env.ctx, PaintHint::Ui);
+        schedule_if_pending(rc, env.ctx);
+        return Outcome::Handled;
+    }
     let Some(command) = commands::parse(cmd, args) else {
         return Outcome::NotMine;
     };
     let outcome = handle(rc, command, env);
+    if cmd == "reader:slider" && args.get(1).and_then(Value::as_bool) != Some(true) {
+        rc.borrow_mut().set_pending_hint(PaintHint::Ui);
+    }
     schedule_if_pending(rc, env.ctx);
     outcome
 }
@@ -403,10 +490,25 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let w = f64::from(env.screen.w);
                 let h = f64::from(env.screen.h);
                 let centre = x >= w / 3.0 && x < 2.0 * w / 3.0 && y >= h / 3.0 && y < 2.0 * h / 3.0;
-                if centre {
+                let preset = env
+                    .services
+                    .settings
+                    .read("reading.tap_zones")
+                    .as_str()
+                    .unwrap_or("default");
+                if (centre || y < h / 10.0) && preset != "page_only" {
                     return open_overlay(rc, &mut c, env);
                 }
-                step(rc, &mut c, env, x >= w / 3.0)
+                step(
+                    rc,
+                    &mut c,
+                    env,
+                    if preset == "left_handed" {
+                        x < 2.0 * w / 3.0
+                    } else {
+                        x >= w / 3.0
+                    },
+                )
             }
             Command::Next => step(rc, &mut c, env, true),
             Command::Prev => step(rc, &mut c, env, false),
@@ -472,6 +574,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 };
                 let text = read_field(&layer.window, env.ctx, "search-field").unwrap_or_default();
                 let text = text.trim().to_string();
+                c.reset_search_paint();
                 c.search_text = text.clone();
                 if text.is_empty() {
                     env.toast("Type a word to search.", 2.0);
@@ -519,24 +622,23 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 show_panel(rc, &mut c, env.ctx, window, true)
             }
             Command::ContentsGoto(index) => {
-                let moved = c
+                let location = c
                     .session
-                    .as_mut()
-                    .map(|s| s.go_to_toc_entry(index))
-                    .unwrap_or(Ok(false));
-                match moved {
-                    Ok(true) => {
-                        c.repaint_page(env.ctx, PaintHint::Full);
-                        Outcome::Navigate(Nav::Pop)
-                    }
-                    Ok(false) => {
-                        env.toast("This entry has no page.", 2.0);
-                        Outcome::Handled
-                    }
-                    Err(e) => {
-                        env.notice(format!("cannot open that entry: {e}"));
-                        Outcome::Handled
-                    }
+                    .as_ref()
+                    .and_then(|s| s.toc().get(index))
+                    .and_then(|entry| {
+                        entry
+                            .xpointer
+                            .clone()
+                            .map(kaia_book::Location::Engine)
+                            .or_else(|| entry.page.map(kaia_book::Location::Page))
+                    });
+                if let Some(location) = location {
+                    c.go_to(env.ctx, location);
+                    Outcome::Navigate(Nav::Pop)
+                } else {
+                    env.toast("This entry has no page.", 2.0);
+                    Outcome::Handled
                 }
             }
             Command::ContentsAnnotation(id) => {
@@ -627,6 +729,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     return Outcome::Handled;
                 };
                 let text = selection.text.trim().to_string();
+                c.reset_search_paint();
                 c.search_text = text.clone();
                 c.clear_selection(env.ctx);
                 let started = c.session.as_mut().map(|s| s.start_search(&text));
@@ -674,6 +777,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         env.toast(format!("Cannot mark the book as finished: {e}"), 5.0);
                     }
                     _ => {
+                        if let Some(session) = c.session.as_ref() {
+                            if let Err(e) = persistence::update_index(session, c.book, env) {
+                                env.notice(e);
+                            }
+                        }
                         env.toast("Marked as finished", 2.0);
                     }
                 }
@@ -693,30 +801,7 @@ fn step(rc: &Rc<RefCell<Core>>, c: &mut Core, env: &mut SurfaceEnv<'_>, forward:
             let window = panels::end_of_book(env.services, env.screen);
             push_panel(rc, c, env.ctx, window)
         }
-        Turn::Moved => {
-            if env.services.settings.is_true("sync.enabled") {
-                if let Some(session) = c.session.as_ref() {
-                    if let Some(due) = c.periodic_sync.page_update(
-                        &crate::sync::position(session),
-                        env.ctx.scheduler.now(),
-                        Some(10),
-                    ) {
-                        env.services.sync.periodic(
-                            &env.services.settings,
-                            session,
-                            env.services.paths.data_dir.join("sync-queue.json"),
-                            due,
-                        );
-                    }
-                }
-            }
-            if let Some(session) = c.session.as_mut() {
-                if let Err(e) = session.maybe_save(std::time::Instant::now()) {
-                    env.toast(format!("Cannot save reading progress: {e}"), 5.0);
-                }
-            }
-            Outcome::Handled
-        }
+        Turn::Moved => Outcome::Handled,
         Turn::Blocked => Outcome::Handled,
     }
 }
@@ -770,11 +855,11 @@ fn next_serial(c: &mut Core) -> u64 {
 }
 
 fn goto_percent(c: &mut Core, env: &mut SurfaceEnv<'_>, percent: f64, hint: PaintHint) {
-    let moved = c.session.as_mut().map(|s| s.go_to_percent(percent));
-    match moved {
-        Some(Ok(())) => c.repaint_page(env.ctx, hint),
-        Some(Err(e)) => env.notice(format!("cannot move: {e}")),
-        None => {}
+    let count = c.session.as_ref().map_or(0, |s| s.page_count());
+    if count > 0 {
+        let page = ((percent * count as f64).round() as i64 - 1).clamp(0, count as i64 - 1) as u32;
+        c.go_to(env.ctx, kaia_book::Location::Page(page));
+        c.set_pending_hint(hint);
     }
 }
 

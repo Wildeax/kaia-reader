@@ -16,10 +16,12 @@
 pub mod app;
 pub mod backend;
 pub mod command;
+pub mod covers;
 pub mod refresh;
 pub mod router;
 pub mod scan;
 pub mod services;
+pub mod slider;
 pub mod surface;
 pub mod surfaces;
 pub mod sync;
@@ -32,3 +34,9 @@ pub use scan::{LibraryScan, ScanMessage};
 pub use services::{resources_dir, Services, ServicesError, RESOURCES_ENV};
 pub use surface::{Nav, Outcome, Surface, SurfaceEnv};
 pub use surfaces::Route;
+
+mod durable;
+
+mod sync_queue;
+
+mod book_index;

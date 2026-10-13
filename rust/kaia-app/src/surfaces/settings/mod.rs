@@ -119,7 +119,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("display", "Warmth"),
     ("display", "Night mode"),
     ("display", "Color rendering"),
-    ("display", "Lock rotation"),
+    ("display", "Screen rotation"),
     ("library", "Book folders"),
     ("library", "Scan now"),
     ("library", "Show finished books"),

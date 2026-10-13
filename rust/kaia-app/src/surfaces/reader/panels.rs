@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use kaia_book::{Annotation, TextLayout, ZoomMode};
-use kaia_events::{Refresh, RefreshMode, ShowOpts};
+use kaia_events::ShowOpts;
 use kaia_gfx::Size;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox};
 use kaia_ui::composite::{ListRow, PageLabels, PagedList};
@@ -79,7 +79,6 @@ impl Surface for Panel {
     fn show_opts(&self) -> ShowOpts {
         ShowOpts {
             covers_fullscreen: false,
-            refresh: Some(Refresh::new(RefreshMode::Ui)),
             ..ShowOpts::default()
         }
     }
@@ -429,12 +428,98 @@ pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
 /// The dictionary sheet: the word and its definitions, or the install instructions.
 pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> Window {
     let t = &services.theme;
-    let children = vec![
-        WidgetPod::new(Label::new(word.to_string(), t.font.title.clone(), Tone::Ink)),
-        WidgetPod::new(Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink).max_lines(40))
-            .with_key("dict-body"),
-    ];
-    sheet(services, screen, Some("Dictionary"), children, None)
+    let width = screen
+        .w
+        .saturating_sub(2 * t.space.lg + 2 * t.line.hairline)
+        .max(1);
+    let style = t.style(&t.font.body, Tone::Ink);
+    let layout = services
+        .assets
+        .borrow_mut()
+        .fonts
+        .layout(text, &style, width, None, false);
+    let heading = WidgetPod::new(Label::new(word.to_string(), t.font.title.clone(), Tone::Ink));
+    if layout.height < screen.h / 3 {
+        return sheet(
+            services,
+            screen,
+            Some("Dictionary"),
+            vec![
+                heading,
+                WidgetPod::new(
+                    Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
+                )
+                .with_key("dict-body"),
+            ],
+            None,
+        );
+    }
+    let lines = dictionary_lines(services, text, width);
+    let list = PagedList::new(lines, |line: &String, t| {
+        WidgetPod::new(
+            Paragraph::new(line.trim_end_matches('\n'), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
+        )
+    });
+    sheet(
+        services,
+        screen,
+        Some("Dictionary"),
+        vec![
+            heading,
+            WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("dict-pages"), 1)),
+        ],
+        Some(TALL_PERCENT),
+    )
+}
+
+/// Split at measured line widths. Every byte remains reachable through the pager.
+fn dictionary_lines(services: &Services, text: &str, width: u32) -> Vec<String> {
+    let style = services.theme.style(&services.theme.font.body, Tone::Ink);
+    let mut assets = services.assets.borrow_mut();
+    let mut lines = Vec::new();
+    for paragraph in text.split_inclusive('\n') {
+        let mut rest = paragraph;
+        while !rest.is_empty() {
+            let ends: Vec<_> = rest
+                .char_indices()
+                .skip(1)
+                .map(|(i, _)| i)
+                .chain(std::iter::once(rest.len()))
+                .collect();
+            let mut low = 1;
+            let mut high = ends.len();
+            while low < high {
+                let mid = (low + high).div_ceil(2);
+                let candidate = rest[..ends[mid - 1]].trim_end_matches('\n');
+                if assets
+                    .fonts
+                    .layout(candidate, &style, width, None, false)
+                    .lines
+                    .len()
+                    <= 1
+                {
+                    low = mid;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            let mut end = ends[low - 1];
+            if end < rest.len() {
+                if let Some((at, ch)) = rest[..end]
+                    .char_indices()
+                    .rev()
+                    .find(|(_, ch)| ch.is_whitespace())
+                {
+                    if at > 0 {
+                        end = at + ch.len_utf8();
+                    }
+                }
+            }
+            lines.push(rest[..end].to_owned());
+            rest = &rest[end..];
+        }
+    }
+    lines
 }
 
 /// The search panel: a text field with a Search button, the status, the results

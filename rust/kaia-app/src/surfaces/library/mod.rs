@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use kaia_events::{Event, Value};
-use kaia_library::{CoverSize, Library, Status};
+use kaia_library::{CoverSize, Library};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Padding};
 use kaia_ui::composite::{BookInfo, PagedList};
 use kaia_ui::geometry::Insets;
@@ -64,6 +64,7 @@ pub enum Panel {
 
 /// The Library root screen.
 pub struct LibrarySurface {
+    covers: Option<crate::covers::Shared>,
     page: usize,
     prefs: Prefs,
     loaded: bool,
@@ -91,6 +92,7 @@ impl LibrarySurface {
     /// only matters for the route.
     pub fn new(page: usize) -> Self {
         Self {
+            covers: None,
             page,
             prefs: Prefs::default(),
             loaded: false,
@@ -131,6 +133,7 @@ impl LibrarySurface {
         let results = self.results.clone();
         let window = self.window.clone();
         let db = env.services.library_path();
+        let show_finished = self.prefs.show_finished;
         env.schedule_in(SEARCH_DEBOUNCE, move |ctx| {
             if generation.get() != gen {
                 return;
@@ -140,8 +143,10 @@ impl LibrarySurface {
                     .search(&query, SEARCH_LIMIT)
                     .unwrap_or_default()
                     .iter()
-                    .filter(|b| b.path.exists())
-                    .map(|b| Line::book(&data::info(&lib, b)))
+                    .filter(|b| {
+                        b.path.exists() && (show_finished || b.status != kaia_library::Status::Complete)
+                    })
+                    .map(|b| Line::book(&data::info_without_cover(b)))
                     .collect(),
                 Err(_) => Vec::new(),
             };
@@ -308,7 +313,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::MarkFinished(id) => {
-                match env.services.library.set_status(id, Status::Complete) {
+                match crate::book_index::mark_finished(env.services, id) {
                     Ok(()) => {
                         env.toast("Marked as finished", 2.0);
                     }
@@ -411,7 +416,10 @@ impl LibrarySurface {
     /// The book lines and cover-less lines of the folder on screen, and the
     /// heading for them. Also records the folder state for the folder actions.
     fn folder_view(&mut self, env: &SurfaceEnv<'_>, t: &Theme) -> Vec<WidgetPod> {
-        let all = data::all(&env.services.library);
+        let all: Vec<_> = data::all(&env.services.library)
+            .into_iter()
+            .filter(|b| self.prefs.show_finished || b.status != kaia_library::Status::Complete)
+            .collect();
         let Some(root) = folders::root_of(&all) else {
             return vec![views::body_text(t, "No books yet.")];
         };
@@ -471,7 +479,7 @@ impl LibrarySurface {
         let t = env.services.theme.clone();
         if self.search {
             let results = self.results.borrow().clone();
-            return views::search(&t, &self.query, results);
+            return views::search(&t, &self.query, results, self.covers.as_ref().unwrap().clone());
         }
         if let Some(panel) = self.panel.clone() {
             return vec![self.panel_widget(env, &t, &panel)];
@@ -487,16 +495,19 @@ impl LibrarySurface {
                 if books.is_empty() {
                     return common::empty_library(&t);
                 }
-                let infos: Vec<BookInfo> = books
-                    .iter()
-                    .map(|b| data::info(&env.services.library, b))
-                    .collect();
+                let infos: Vec<BookInfo> = books.iter().map(data::info_without_cover).collect();
                 if self.prefs.view == View::Covers {
-                    vec![views::covers(&t, env.screen, infos)]
+                    vec![views::covers(
+                        &t,
+                        env.screen,
+                        infos,
+                        self.covers.as_ref().unwrap().clone(),
+                    )]
                 } else {
                     let lines: Vec<Line> = infos.iter().map(Line::book).collect();
                     vec![WidgetPod::new(Expanded::new(
-                        WidgetPod::new(views::list(lines)).with_key("list"),
+                        WidgetPod::new(views::list_covers(lines, self.covers.as_ref().unwrap().clone()))
+                            .with_key("list"),
                         1,
                     ))]
                 }
@@ -528,6 +539,9 @@ impl LibrarySurface {
     }
 
     fn build_window(&mut self, env: &mut SurfaceEnv<'_>) -> Window {
+        if self.covers.is_none() {
+            self.covers = Some(crate::covers::Loader::new(env.services.library_path()));
+        }
         if !self.loaded {
             self.prefs = Prefs::load(&env.services.settings);
             self.loaded = true;
@@ -622,6 +636,7 @@ impl Surface for LibrarySurface {
     /// The lists show titles and progress, so a library change rebuilds them.
     fn on_event(&mut self, ev: &Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
         if ev.name == "LibraryUpdated" {
+            self.covers = None;
             Outcome::Rebuild
         } else {
             Outcome::NotMine

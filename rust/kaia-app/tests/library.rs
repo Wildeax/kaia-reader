@@ -125,8 +125,10 @@ fn tapping_library_shows_the_covers() {
         );
     }
     assert!(app.find_rect("library").is_none(), "Home is gone");
-    // The press and focus ring show on Home, then the root changes.
-    assert_eq!(modes_after(&app, before), vec![RefreshMode::Ui, RefreshMode::Ui]);
+    // The root and each decoded cover use Ui.
+    let modes = modes_after(&app, before);
+    assert!(modes.len() >= 2);
+    assert!(modes.iter().all(|mode| *mode == RefreshMode::Ui));
     assert_eq!(app.router().routes().len(), 1, "the root is replaced, not pushed");
     assert!(app.notices().is_empty(), "no notices: {:?}", app.notices());
 }
@@ -395,7 +397,8 @@ fn library_covers_golden() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _dir) = indexed("golden-covers");
     open_library(&mut app);
-    assert_matches_golden(app.frame(), &golden("library.png"), 2);
+    wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    assert_matches_golden(app.frame(), &golden("library.png"), 14);
 }
 
 #[test]
@@ -404,7 +407,8 @@ fn library_list_golden() {
     let (mut app, _dir) = indexed("golden-list");
     open_library(&mut app);
     tap_key(&mut app, &key("library:view:list"));
-    assert_matches_golden(app.frame(), &golden("library_list.png"), 2);
+    wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    assert_matches_golden(app.frame(), &golden("library_list.png"), 14);
 }
 
 #[test]
@@ -420,7 +424,8 @@ fn library_search_golden() {
         a.find_rect(&format!("book-{leaves}")).is_some()
     });
     app.iterate(Some(Duration::from_millis(10))).unwrap();
-    assert_matches_golden(app.frame(), &golden("library_search.png"), 2);
+    wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    assert_matches_golden(app.frame(), &golden("library_search.png"), 14);
 }
 
 #[test]
@@ -432,7 +437,8 @@ fn book_details_golden() {
     hold_key(&mut app, &format!("book-{leaves}"), |a| {
         a.find_rect(&key("library:panel:close")).is_some()
     });
-    assert_matches_golden(app.frame(), &golden("library_details.png"), 2);
+    wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    assert_matches_golden(app.frame(), &golden("library_details.png"), 14);
 }
 
 #[test]

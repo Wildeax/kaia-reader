@@ -27,11 +27,11 @@ pub struct Exported {
 pub fn export(data_dir: &Path, books: &[BookNotes], now: i64) -> io::Result<Exported> {
     let dir = data_dir.join(EXPORTS_DIR);
     fs::create_dir_all(&dir)?;
-    let stamp = timestamp(now);
+    let stamp = timestamp(now).replace(':', "-").replace(' ', "T");
     let markdown = dir.join(format!("kaia-notes-{stamp}.md"));
     let json = dir.join(format!("kaia-notes-{stamp}.json"));
-    fs::write(&markdown, markdown_text(books, now))?;
-    fs::write(&json, json_text(books, now))?;
+    crate::durable::atomic_write(&markdown, markdown_text(books, now).as_bytes())?;
+    crate::durable::atomic_write(&json, json_text(books, now).as_bytes())?;
     let count = books.iter().map(|b| b.notes.len()).sum();
     Ok(Exported {
         markdown,

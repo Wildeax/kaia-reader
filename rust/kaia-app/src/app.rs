@@ -13,6 +13,7 @@
 //! This file knows no surface. It asks the surfaces in [`crate::surfaces`] for
 //! their windows and applies the [`Outcome`]s they return.
 
+mod network;
 mod power;
 
 use std::io;
@@ -92,6 +93,7 @@ pub struct App<B: Backend> {
     router: Router,
     frame: Pixmap,
     presented_color: Option<bool>,
+    presented_night: Option<bool>,
     screen: Size,
     gestures: GestureDetector,
     options: AppOptions,
@@ -110,6 +112,7 @@ pub struct App<B: Backend> {
     input_clock_offset_us: i64,
     exit_at: Option<Duration>,
     quitting: bool,
+    pending_navigation: Option<(String, Vec<Value>)>,
     /// Set by `KAIA_TRACE_INPUT`. Logs every gesture and the top route to stderr.
     trace_input: bool,
 }
@@ -138,6 +141,7 @@ impl<B: Backend> App<B> {
             router: Router::new(),
             frame,
             presented_color: None,
+            presented_night: None,
             screen,
             gestures,
             options,
@@ -152,6 +156,7 @@ impl<B: Backend> App<B> {
             input_clock_offset_us: 0,
             exit_at: None,
             quitting: false,
+            pending_navigation: None,
             trace_input: std::env::var_os("KAIA_TRACE_INPUT").is_some(),
         }
     }
@@ -159,6 +164,9 @@ impl<B: Backend> App<B> {
     /// Shows Home with a full refresh, starts the library scan, and paints the first frame.
     pub fn start(&mut self) -> Result<(), DisplayError> {
         self.switch_root_to(Route::Home, RefreshMode::Full);
+        for notice in std::mem::take(&mut self.services.startup_notices) {
+            env!(self).notice(notice);
+        }
         if !self.options.library_roots.is_empty() {
             let db = self.services.library_path();
             self.scan = Some(LibraryScan::spawn(db, self.options.library_roots.clone()));
@@ -182,7 +190,6 @@ impl<B: Backend> App<B> {
             match self.iterate(None) {
                 Err(error) => break Err(error),
                 Ok(Flow::Exit) => break Ok(()),
-                Ok(Flow::Continue) if self.quitting || self.exit_due() => break Ok(()),
                 Ok(Flow::Continue) => {}
             }
         };
@@ -237,11 +244,23 @@ impl<B: Backend> App<B> {
 
     /// Saves the settings and stops the library scan. [`App::run`] calls it on exit.
     pub fn shutdown(&mut self) {
+        if !self.can_hide_all() {
+            self.quitting = false;
+            return;
+        }
         self.broadcast_app(Event::new("SaveState"));
         self.hide_all();
-        self.services
+        if let Err(error) = self
+            .services
             .sync
-            .finish(&self.services.settings, self.ctx.scheduler.now());
+            .finish(&self.services.settings, self.ctx.scheduler.now())
+        {
+            env!(self).notice(format!(
+                "Cannot save queued sync. Free storage, then try again. {error}"
+            ));
+            self.quitting = false;
+            return;
+        }
         if let Some(scan) = self.scan.take() {
             scan.cancel();
         }
@@ -308,6 +327,10 @@ impl<B: Backend> App<B> {
         self.scan_progress
     }
 
+    pub fn reader_busy(&self) -> bool {
+        self.router.busy()
+    }
+
     pub fn scan_running(&self) -> bool {
         self.scan.is_some()
     }
@@ -334,6 +357,15 @@ impl<B: Backend> App<B> {
     /// paint, tasks and paint again.
     fn step(&mut self, input: Vec<InputEvent>) -> Result<Flow, DisplayError> {
         self.pump_scan();
+        if crate::covers::poll() || crate::covers::busy() {
+            self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
+        }
+        self.broadcast_app(Event::new("ReaderTick"));
+        if !self.reader_busy() {
+            if let Some((id, args)) = self.pending_navigation.take() {
+                self.command(&id, &args);
+            }
+        }
         for reply in self
             .services
             .sync
@@ -366,6 +398,7 @@ impl<B: Backend> App<B> {
         // Each event is dispatched, painted and settled before the next one, so a
         // later event sees the screen that the earlier one produced.
         for event in input {
+            self.note_activity();
             match event {
                 InputEvent::Touch(t) => self.touch(t),
                 InputEvent::TouchFrame(frame) => self.touch_frame(frame),
@@ -387,6 +420,17 @@ impl<B: Backend> App<B> {
         self.settle();
         self.repaint()?;
 
+        if self.quitting || self.exit_due() {
+            if self.reader_busy() {
+                return Ok(Flow::Continue);
+            }
+            if self.can_hide_all() {
+                self.quitting = true;
+            } else {
+                self.quitting = false;
+                self.exit_at = None;
+            }
+        }
         Ok(if self.quitting { Flow::Exit } else { Flow::Continue })
     }
 
@@ -604,9 +648,24 @@ impl<B: Backend> App<B> {
 
     /// Routes an action id through surfaces from top to bottom, then global commands. An id nobody knows is recorded.
     pub fn command(&mut self, id: &str, args: &[Value]) {
+        if self.reader_busy()
+            && matches!(
+                Command::parse(id),
+                Some(Command::Navigate(_) | Command::OpenBook(_) | Command::Back | Command::Quit)
+            )
+        {
+            self.pending_navigation = Some((id.to_string(), args.to_vec()));
+            return;
+        }
         match id {
             "resume" => {
                 self.resume();
+                return;
+            }
+            "settings:quick:wifi" => {
+                if let Some(on) = args.first().and_then(Value::as_bool) {
+                    self.wifi(on);
+                }
                 return;
             }
             "settings:quick:open" => {
@@ -657,6 +716,9 @@ impl<B: Backend> App<B> {
                 None => Outcome::NotMine,
             }
         };
+        if !matches!(outcome, Outcome::NotMine) {
+            self.broadcast_app(Event::new("ReaderTick"));
+        }
         self.apply(index, outcome)
     }
 
@@ -728,6 +790,9 @@ impl<B: Backend> App<B> {
     }
 
     fn switch_root(&mut self, mut surface: Box<dyn Surface>, mode: RefreshMode) {
+        if !self.can_hide_all() {
+            return;
+        }
         self.hide_all();
         let Some(window) = self.build_surface(&mut *surface) else {
             return;
@@ -758,6 +823,9 @@ impl<B: Backend> App<B> {
         let Some(top) = self.router.depth().checked_sub(1).filter(|&top| top > 0) else {
             return;
         };
+        if !self.can_hide(top) {
+            return;
+        }
         let reader_closed = matches!(self.router.top_route(), Some(Route::Reader { .. }));
         self.hide(top);
         self.router.pop(mode, &mut self.stack, &mut self.ctx);
@@ -770,6 +838,10 @@ impl<B: Backend> App<B> {
     /// `back`: closes the top pushed screen (the reader saves its progress on the
     /// way out). From a root that is not Home, it goes to Home.
     fn back(&mut self) {
+        if self.reader_busy() && matches!(self.top_route(), Some(Route::Reader { .. })) {
+            self.pending_navigation = Some(("back".to_string(), Vec::new()));
+            return;
+        }
         if let Some(id) = self.input_window().and_then(|w| w.id()) {
             if self.router.top_window().and_then(|w| w.id()) != Some(id) {
                 self.stack.close(id, None, &mut self.ctx);
@@ -865,6 +937,17 @@ impl<B: Backend> App<B> {
         surface.build(&mut env)
     }
 
+    fn can_hide(&mut self, index: usize) -> bool {
+        let mut env = env!(self);
+        self.router
+            .surface_mut(index)
+            .is_none_or(|surface| surface.can_hide(&mut env))
+    }
+
+    fn can_hide_all(&mut self) -> bool {
+        (0..self.router.depth()).rev().all(|index| self.can_hide(index))
+    }
+
     /// Runs `on_hide` on the screen at `index`.
     fn hide(&mut self, index: usize) {
         let mut env = env!(self);
@@ -956,6 +1039,12 @@ impl<B: Backend> App<B> {
     /// Paints the dirty windows bottom up into the frame and presents each refresh.
     /// Returns the number of refreshes presented.
     fn repaint(&mut self) -> Result<usize, DisplayError> {
+        let night = self.services.settings.is_true("display.night_mode");
+        if self.presented_night != Some(night) {
+            self.backend.set_night_mode(night);
+            self.presented_night = Some(night);
+            self.ctx.dirty.refresh(RefreshMode::Full, None, false);
+        }
         let color = self.services.theme.color_panel
             && self
                 .services
@@ -1025,7 +1114,7 @@ impl<B: Backend> App<B> {
     /// poll interval while a scan runs.
     fn wait_budget(&self, timeout: Option<Duration>) -> Option<Duration> {
         let now = self.ctx.scheduler.now();
-        let mut budget = timeout;
+        let mut budget = min_opt(timeout, self.power_wait());
         if let Some(due) = self.ctx.scheduler.next_due() {
             budget = min_opt(budget, due.saturating_sub(now));
         }
@@ -1036,7 +1125,12 @@ impl<B: Backend> App<B> {
         if let Some(exit) = self.exit_at {
             budget = min_opt(budget, exit.saturating_sub(now));
         }
-        if self.scan.is_some() || self.services.sync.busy() {
+        if self.scan.is_some()
+            || self.services.sync.busy()
+            || crate::covers::busy()
+            || self.power.scripts.busy()
+            || self.pending_navigation.is_some()
+        {
             budget = min_opt(budget, SCAN_POLL);
         }
         budget

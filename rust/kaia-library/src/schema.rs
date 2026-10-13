@@ -122,7 +122,15 @@ ALTER TABLE collections ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE collections ADD COLUMN name_key TEXT NOT NULL DEFAULT '';
 ";
 
-pub(crate) const MIGRATIONS: [Migration; 4] = [
+/// Version 5 changes the cover size and source. This step queues every extracted
+/// book, so the next scan of its file stores the larger cover. A re-extraction
+/// that fails keeps the stored title, metadata and cover (see `scan.rs`). Books
+/// whose file is gone keep their rows and covers. No column changes.
+const SCHEMA_V5: &str = "
+UPDATE books SET extracted = 0, attempts = 0 WHERE extracted = 1;
+";
+
+pub(crate) const MIGRATIONS: [Migration; 5] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -142,6 +150,11 @@ pub(crate) const MIGRATIONS: [Migration; 4] = [
         version: 4,
         sql: SCHEMA_V4,
         step: Some(migrate_collections),
+    },
+    Migration {
+        version: 5,
+        sql: SCHEMA_V5,
+        step: None,
     },
 ];
 
@@ -296,7 +309,7 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         let fts: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name = 'book_fts'",
@@ -321,7 +334,7 @@ mod tests {
             err,
             LibraryError::SchemaTooNew {
                 found: 99,
-                supported: 4
+                supported: 5
             }
         ));
         assert_eq!(fs::read(&path).unwrap(), before, "file is unchanged");
@@ -389,7 +402,7 @@ mod tests {
     }
 
     /// A version 1 database with PNG covers, opened by this build, comes out at
-    /// version 4 with JPEG covers of the same pixel size.
+    /// version 5 with JPEG covers of the same pixel size.
     #[test]
     fn version_one_png_covers_are_reencoded_to_jpeg() {
         let dir = tempfile::tempdir().unwrap();
@@ -428,7 +441,7 @@ mod tests {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         assert_eq!(
             fs::read_dir(dir.path().join("backups")).unwrap().count(),
             1,
@@ -505,6 +518,6 @@ mod tests {
         let version: u32 = raw
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
     }
 }

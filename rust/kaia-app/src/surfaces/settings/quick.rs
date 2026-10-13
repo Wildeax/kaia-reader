@@ -1,5 +1,5 @@
 //! The quick settings sheet: frontlight and warmth sliders, a Wi-Fi switch, a
-//! rotation lock switch and a Sleep button. The app opens it from a swipe down
+//! fixed orientation message and a Sleep button. The app opens it from a swipe down
 //! with `env.sheet(quick_settings(env.services))`.
 //!
 //! The sheet's controls send `settings:quick:<name>` ids. The top surface does
@@ -7,13 +7,14 @@
 //! (see the report for the exact change). The Sleep button sends the global id
 //! `sleep`, which the app handles.
 
+use crate::slider::Slider;
 use kaia_events::Value;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Label, Row};
 use kaia_ui::composite::{ListRow, SheetPanel};
-use kaia_ui::controls::{Button, ButtonStyle, Slider};
+use kaia_ui::controls::{Button, ButtonStyle};
 use kaia_ui::{Theme, Tone, WidgetPod};
 
-use super::{commands, keys, sections};
+use super::{commands, sections};
 use crate::services::Services;
 use crate::surface::{Outcome, SurfaceEnv};
 
@@ -24,7 +25,6 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     let frontlight = f64::from(services.platform.frontlight.intensity());
     let warmth = f64::from(services.platform.frontlight.warmth());
     let wifi_on = services.platform.network.is_wifi_on();
-    let rotation = keys::bool_or(&services.settings, keys::DISPLAY_ROTATION_LOCK, false);
 
     let mut rows = Vec::new();
     rows.push(slider(
@@ -60,9 +60,7 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     );
     rows.push(
         WidgetPod::new(
-            ListRow::new("Lock rotation")
-                .toggle(rotation)
-                .on_action("settings:quick:rotation"),
+            ListRow::new("Fixed orientation").secondary("Automatic rotation is not available yet."),
         )
         .with_key("quick-rotation"),
     );
@@ -114,6 +112,11 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         return Outcome::NotMine;
     };
     match name.as_str() {
+        "frontlight:release" => Outcome::Handled,
+        "warmth:release" => {
+            super::save(env);
+            Outcome::Handled
+        }
         "frontlight" | "warmth" => {
             let Some(v) = args.first().and_then(Value::as_f64) else {
                 return Outcome::NotMine;
@@ -131,32 +134,14 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
                 env.services
                     .settings
                     .save("display.warmth", Value::Number(f64::from(v)));
-                super::save(env);
-            }
-            Outcome::Handled
-        }
-        "wifi" => {
-            let Some(on) = args.first().and_then(Value::as_bool) else {
-                return Outcome::NotMine;
-            };
-            let result = if on {
-                env.services.platform.network.enable_wifi()
-            } else {
-                env.services.platform.network.disable_wifi()
-            };
-            if let Err(e) = result {
-                env.toast(format!("Wi-Fi did not change: {e}"), 4.0);
+                if args.get(1).and_then(Value::as_bool) != Some(true) {
+                    super::save(env);
+                }
             }
             Outcome::Handled
         }
         "rotation" => {
-            let Some(on) = args.first().and_then(Value::as_bool) else {
-                return Outcome::NotMine;
-            };
-            env.services
-                .settings
-                .save(keys::DISPLAY_ROTATION_LOCK, Value::Bool(on));
-            super::save(env);
+            env.toast("Automatic rotation is not available yet.", 3.0);
             Outcome::Handled
         }
         _ => Outcome::NotMine,
