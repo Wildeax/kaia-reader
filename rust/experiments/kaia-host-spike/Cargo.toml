@@ -1,0 +1,16 @@
+[package]
+name = "kaia-host-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "KR-011 feasibility spike: runs KOReader's LuaJIT inside a Rust host. Not product code."
+
+# Standalone project. This is not a member of the rust/ workspace.
+[workspace]
+
+[dependencies]
+# No "vendored" feature: mlua links the LuaJIT that KOReader builds (see build.sh).
+mlua = { version = "0.10", default-features = false, features = ["luajit"] }
+
+[profile.release]
+debug = false
