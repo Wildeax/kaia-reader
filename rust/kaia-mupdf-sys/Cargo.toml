@@ -1,9 +1,13 @@
 [package]
 name = "kaia-mupdf-sys"
-description = "C shim and raw bindings to KOReader's MuPDF build."
+description = "C shim and bindings to KOReader's MuPDF build."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+links = "kaia_mupdf"
 
 [dependencies]
+
+[build-dependencies]
+cc = "1.2"

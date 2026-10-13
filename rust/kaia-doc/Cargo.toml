@@ -7,3 +7,5 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+kaia-gfx = { path = "../kaia-gfx" }
+kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
