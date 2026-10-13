@@ -2,12 +2,14 @@
 Book card for Kaia Home.
 
 Two sizes:
-- "hero": cover on the left, title, author and progress on the right.
-- "shelf": cover above the title, for the recent row.
+- "hero": cover on the left at `cover_h`, with the title, author, progress and
+  detail lines on the right, centered vertically against the cover.
+- "shelf": cover above the title, for the recent row. Covers in a row share one
+  height and sit on a common baseline.
 
-A book without a cover shows a framed placeholder with its title. Covers keep
-their aspect ratio and fit inside the cover box. Tapping the card calls
-`callback(book)`.
+The cover width follows its aspect ratio and is capped at `max_cover_w`. A book
+without a cover shows a framed placeholder with its title. Tapping the card
+calls `callback(book)`.
 
 @module kaia.widget.bookcard
 ]]
@@ -29,16 +31,22 @@ local Theme = require("kaia/theme")
 
 -- Lines shown for a title before it is cut with an ellipsis.
 local TITLE_LINES = 2
+-- Width over height for a book without a cover.
+local PLACEHOLDER_RATIO = 2 / 3
 
 local BookCard = InputContainer:extend{
     -- Book table from kaia/bookdata: file, title, authors, percent, cover_bb.
     book = nil,
     -- "hero" or "shelf".
     size = "shelf",
-    -- Full width of the card.
+    -- Full width of the card. For shelf cards this is the column width.
     width = 0,
-    -- Width of the cover. Defaults to the full width.
-    cover_w = nil,
+    -- Height of the cover box. Every cover in a row uses the same value.
+    cover_h = 0,
+    -- Cap on the cover width. Defaults to the card width.
+    max_cover_w = nil,
+    -- Hero only: extra lines under the progress bar, for example status or pages.
+    detail_lines = nil,
     callback = nil,
 }
 
@@ -49,13 +57,23 @@ local function fitBox(src_w, src_h, max_w, max_h)
     return math.max(1, math.floor(src_w * scale + 0.5)), math.max(1, math.floor(src_h * scale + 0.5))
 end
 
+-- Cover width for a box height, from the cover's aspect ratio, capped at max_w.
+local function coverWidth(book, cover_h, max_w)
+    local ratio = PLACEHOLDER_RATIO
+    if book.cover_bb then
+        ratio = book.cover_bb:getWidth() / book.cover_bb:getHeight()
+    end
+    return math.max(1, math.min(max_w, math.floor(cover_h * ratio + 0.5)))
+end
+
 -- Height of `lines` lines of text in this face. Matches TextBoxWidget's line height.
 local function linesHeight(face, lines)
     return lines * math.floor((1 + 0.3) * face.size + 0.5)
 end
 
 -- Text box that wraps to at most `lines` lines. The last line ends with an ellipsis.
-local function titleBox(text, face, width, lines, align)
+-- With `fixed`, the box is always `lines` tall, so cards in a row line up.
+local function titleBox(text, face, width, lines, align, fixed)
     return TextBoxWidget:new{
         text = text,
         face = face,
@@ -63,7 +81,7 @@ local function titleBox(text, face, width, lines, align)
         width = width,
         alignment = align or "left",
         height = linesHeight(face, lines),
-        height_adjust = true,
+        height_adjust = not fixed,
         height_overflow_show_ellipsis = true,
     }
 end
@@ -114,11 +132,11 @@ end
 
 function BookCard:init()
     local book = self.book
-    local cover_w = self.cover_w or self.width
-    local cover_h = math.floor(cover_w * 3 / 2)
+    local cover_h = self.cover_h
+    local cover_w = coverWidth(book, cover_h, self.max_cover_w or self.width)
     local column
     if self.size == "hero" then
-        local gap = Theme.space.md
+        local gap = Theme.space.lg
         local text_w = math.max(1, self.width - cover_w - gap)
         local info = VerticalGroup:new{
             align = "left",
@@ -140,18 +158,30 @@ function BookCard:init()
                 fraction = book.percent,
             })
         end
+        for _i, line in ipairs(self.detail_lines or {}) do
+            table.insert(info, VerticalSpan:new{ width = Theme.space.xs })
+            table.insert(info, TextWidget:new{
+                text = line,
+                face = Theme:font("caption"),
+                fgcolor = Theme.color.ink_secondary,
+                max_width = text_w,
+            })
+        end
         column = HorizontalGroup:new{
             align = "top",
             coverBox(book, cover_w, cover_h),
             HorizontalSpan:new{ width = gap },
-            info,
+            CenterContainer:new{
+                dimen = Geom:new{ w = text_w, h = cover_h },
+                info,
+            },
         }
     else
         column = VerticalGroup:new{
             align = "left",
             coverBox(book, cover_w, cover_h),
             VerticalSpan:new{ width = Theme.space.xs },
-            titleBox(book.title, Theme:font("book_title"), cover_w, TITLE_LINES),
+            titleBox(book.title, Theme:font("shelf_title"), self.width, TITLE_LINES, "left", true),
         }
     end
     self[1] = column

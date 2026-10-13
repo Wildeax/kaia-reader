@@ -56,7 +56,7 @@ local NavItem = InputContainer:extend{
 }
 
 function NavItem:init()
-    local icon_size = math.floor(Theme.touch_target * 0.6)
+    local icon_size = math.floor(Theme.nav_height * 0.4)
     local label = TextWidget:new{
         text = self.label,
         face = Theme:font(self.active and "label" or "caption"),
@@ -68,6 +68,8 @@ function NavItem:init()
             icon = self.icon,
             width = icon_size,
             height = icon_size,
+            -- Transparent background, so the divider above the bar shows through.
+            alpha = true,
         },
         VerticalSpan:new{ width = Theme.space.xs },
         label,

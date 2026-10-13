@@ -1,5 +1,5 @@
 --[[--
-Surface header: title on the left, battery level on the right.
+Surface header: title on the left, battery level and a settings icon on the right.
 
 The battery value is fixed when the header is built. It only changes when the
 surface repaints, so Home never redraws on a timer.
@@ -8,19 +8,63 @@ surface repaints, so Home never redraws on a timer.
 ]]
 
 local BD = require("ui/bidi")
+local CenterContainer = require("ui/widget/container/centercontainer")
+local Geom = require("ui/geometry")
+local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
+local IconWidget = require("ui/widget/iconwidget")
+local InputContainer = require("ui/widget/container/inputcontainer")
 local TextWidget = require("ui/widget/textwidget")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local T = require("ffi/util").template
 local Theme = require("kaia/theme")
 local _ = require("gettext")
 
+-- Icon centered in a touch-sized tap area.
+local TapIcon = InputContainer:extend{
+    icon = nil,
+    callback = nil,
+}
+
+function TapIcon:init()
+    local box = Theme.touch_target
+    local icon_size = math.floor(Theme.nav_height * 0.4)
+    self.dimen = Geom:new{ x = 0, y = 0, w = box, h = box }
+    self[1] = CenterContainer:new{
+        dimen = Geom:new{ w = box, h = box },
+        IconWidget:new{
+            icon = self.icon,
+            width = icon_size,
+            height = icon_size,
+            alpha = true,
+        },
+    }
+    self.ges_events = {
+        TapTapIcon = {
+            GestureRange:new{
+                ges = "tap",
+                range = function() return self.dimen end,
+            },
+        },
+    }
+end
+
+function TapIcon:onTapTapIcon()
+    if self.callback then
+        self.callback()
+    end
+    return true
+end
+
 local Header = WidgetContainer:extend{
     title = "",
     width = 0,
     -- Battery level from 0 to 100, or nil to hide it.
     battery_percent = nil,
+    -- Icon on the far right, and the function it calls. Nil hides the icon.
+    icon = nil,
+    icon_callback = nil,
 }
 
 function Header:init()
@@ -30,6 +74,15 @@ function Header:init()
             text = T(_("%1%"), self.battery_percent),
             face = Theme:font("caption"),
             fgcolor = Theme.color.ink_secondary,
+        })
+    end
+    if self.icon and self.icon_callback then
+        if #right > 0 then
+            table.insert(right, HorizontalSpan:new{ width = Theme.space.sm })
+        end
+        table.insert(right, TapIcon:new{
+            icon = self.icon,
+            callback = self.icon_callback,
         })
     end
     local right_w = right:getSize().w
