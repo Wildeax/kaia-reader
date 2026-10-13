@@ -793,6 +793,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-stats"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "kaia-storage"
 version = "0.1.0"
 dependencies = [

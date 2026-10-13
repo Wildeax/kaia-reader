@@ -21,6 +21,7 @@ members = [
     "kaia-id",
     "kaia-sync",
     "kaia-app",
+    "kaia-stats",
 ]
 
 [workspace.package]
