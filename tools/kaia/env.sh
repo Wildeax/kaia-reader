@@ -6,3 +6,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
 else
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
+
+# KOReader's LuaJIT for the kaia-lua crate (mlua reads LUA_LIB at build time).
+_kaia_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -n "${_kaia_root}" ] && [ -f "${_kaia_root}/rust/kaia-lua/env.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${_kaia_root}/rust/kaia-lua/env.sh" 2>/dev/null
+fi
+unset _kaia_root

@@ -23,6 +23,7 @@ members = [
     "kaia-app",
     "kaia-stats",
     "kaia-opds",
+    "kaia-lua",
 ]
 
 [workspace.package]

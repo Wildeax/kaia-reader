@@ -12,6 +12,7 @@ cscope.*
 *.orig
 *.lua~
 lua
+!rust/kaia-lua/lua/
 lua-*
 .reader.kpdfview.lua
 *.kdev4

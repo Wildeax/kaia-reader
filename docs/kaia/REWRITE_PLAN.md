@@ -81,6 +81,6 @@ Every surface renders headless to a PNG through the same toolkit code, so agents
 ## Rules
 
 - Each crate has unit tests; UI work includes golden PNG tests.
-- No `unsafe` outside `*-sys` crates and `kaia-display`'s Kobo backend; every `unsafe` block has a comment stating the invariant.
+- No `unsafe` outside `*-sys` crates, `kaia-display`'s Kobo backend, and the one `Lua::unsafe_new` call in `kaia-lua` (KOReader's Lua code needs LuaJIT's `ffi` and `debug` libraries, which mlua only enables through that constructor); every `unsafe` block has a comment stating the invariant.
 - No network access in the product except features the user turns on.
 - The writing style rules in CLAUDE.md apply to code comments, docs and UI strings.

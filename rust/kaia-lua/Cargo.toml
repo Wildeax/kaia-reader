@@ -1,0 +1,12 @@
+[package]
+name = "kaia-lua"
+description = "Embedded LuaJIT and the KOReader plugin compatibility layer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kaia-events = { path = "../kaia-events" }
+# No "vendored" feature: the LuaJIT that KOReader builds is linked (see build.rs and env.sh).
+mlua = { version = "0.10", default-features = false, features = ["luajit"] }
