@@ -10,10 +10,12 @@ rust-version.workspace = true
 # CREngine backend for EPUB, FB2, HTML, TXT, RTF, DOC and CHM. It needs a
 # KOReader desktop build (see kaia-cre-sys). Build with --no-default-features
 # for targets without that build.
-default = ["cre"]
+default = ["cre", "djvu"]
+djvu = ["dep:kaia-djvu-sys"]
 cre = ["dep:kaia-cre-sys"]
 
 [dependencies]
 kaia-gfx = { path = "../kaia-gfx" }
 kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 kaia-cre-sys = { path = "../kaia-cre-sys", optional = true }
+kaia-djvu-sys = { path = "../kaia-djvu-sys", optional = true }

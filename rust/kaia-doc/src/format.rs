@@ -21,6 +21,7 @@ pub enum Format {
     Mobi,
     Html,
     Svg,
+    Djvu,
 }
 
 impl Format {
@@ -35,6 +36,7 @@ impl Format {
             Format::Mobi => ".mobi",
             Format::Html => ".html",
             Format::Svg => ".svg",
+            Format::Djvu => ".djvu",
         }
     }
 
@@ -49,6 +51,7 @@ impl Format {
             "mobi" | "azw" | "azw3" | "prc" => Some(Format::Mobi),
             "htm" | "html" | "xhtml" => Some(Format::Html),
             "svg" => Some(Format::Svg),
+            "djvu" | "djv" => Some(Format::Djvu),
             _ => None,
         }
     }
@@ -89,6 +92,9 @@ fn read_head(path: &Path) -> Result<Vec<u8>> {
 
 /// Returns the format named by the bytes, or None when the bytes do not decide.
 pub fn sniff(head: &[u8]) -> Option<Format> {
+    if head.starts_with(b"AT&TFORM") {
+        return Some(Format::Djvu);
+    }
     if head.starts_with(b"%PDF-") {
         return Some(Format::Pdf);
     }
@@ -111,6 +117,13 @@ pub fn sniff(head: &[u8]) -> Option<Format> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn djvu_header_and_extensions() {
+        assert_eq!(sniff(b"AT&TFORMrest"), Some(Format::Djvu));
+        assert_eq!(Format::from_extension("DJV"), Some(Format::Djvu));
+        assert_eq!(Format::from_extension("djvu"), Some(Format::Djvu));
+    }
 
     #[test]
     fn pdf_header_wins_over_extension() {

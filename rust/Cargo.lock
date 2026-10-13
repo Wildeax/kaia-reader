@@ -892,10 +892,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-djvu-sys"
+version = "0.1.0"
+
+[[package]]
 name = "kaia-doc"
 version = "0.1.0"
 dependencies = [
  "kaia-cre-sys",
+ "kaia-djvu-sys",
  "kaia-gfx",
  "kaia-mupdf-sys",
 ]

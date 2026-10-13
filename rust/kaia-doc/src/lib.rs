@@ -1,16 +1,19 @@
 //! Document trait and engine backends.
 //!
 //! [`open`] picks a backend for a file and returns it behind the [`Document`]
-//! trait. The reader talks only to the trait. Two backends exist:
+//! trait. The reader talks only to the trait. Three backends exist:
 //!
 //! - CREngine (feature `cre`, default on): KOReader's typography for EPUB,
 //!   FB2, HTML, TXT, RTF, DOC and CHM. See [`cre`].
+//! - DjVuLibre (feature `djvu`, default on): DjVu. See [`djvu`].
 //! - MuPDF: PDF, CBZ, XPS, MOBI, SVG, and EPUB or FB2 when asked for with
 //!   [`open_with`] and [`Engine::Mupdf`].
 //!
-//! This crate has no `unsafe` code. The C bindings live in `kaia-mupdf-sys`
-//! and `kaia-cre-sys`.
+//! This crate has no `unsafe` code. The C bindings live in `kaia-mupdf-sys`,
+//! `kaia-cre-sys`, and `kaia-djvu-sys`.
 
+#[cfg(feature = "djvu")]
+pub mod djvu;
 pub mod document;
 pub mod error;
 pub mod format;
@@ -22,6 +25,8 @@ pub mod cre;
 
 use std::path::Path;
 
+#[cfg(feature = "djvu")]
+pub use djvu::DjvuDocument;
 pub use document::Document;
 pub use error::{DocError, Result};
 pub use format::Format;
@@ -64,6 +69,9 @@ pub fn open_with(path: &Path, engine: Engine) -> Result<Box<dyn Document>> {
         };
     }
     let format = format::detect(path)?;
+    if format == Format::Djvu {
+        return open_djvu(path, engine);
+    }
     let use_cre = match engine {
         Engine::Cre => true,
         Engine::Mupdf => false,
@@ -110,6 +118,19 @@ fn open_cre(path: &Path, _kind: Option<()>) -> Result<Box<dyn Document>> {
         "CREngine is not built in (feature cre): {}",
         path.display()
     )))
+}
+
+#[cfg(feature = "djvu")]
+fn open_djvu(path: &Path, engine: Engine) -> Result<Box<dyn Document>> {
+    if engine != Engine::Auto {
+        return Err(DocError::UnknownFormat(path.to_path_buf()));
+    }
+    Ok(Box::new(DjvuDocument::open(path)?))
+}
+
+#[cfg(not(feature = "djvu"))]
+fn open_djvu(path: &Path, _engine: Engine) -> Result<Box<dyn Document>> {
+    Err(DocError::UnknownFormat(path.to_path_buf()))
 }
 
 #[cfg(test)]
