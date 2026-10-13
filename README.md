@@ -1,3 +1,22 @@
+# Kaia Reader
+
+Kaia Reader is an offline-first e-reader for the Kobo Libra Colour, forked from [KOReader](https://github.com/koreader/koreader) v2026.07.1. It keeps KOReader's document engines, plugins and Kobo support, adds a simpler set of screens (Home, Library, Notes) and stickers you can place in books, and moves new features into a Rust library called from LuaJIT.
+
+Status: developer preview. It builds for desktop and Kobo and passes its tests, but it has not run on a physical device yet. Read [docs/kaia/STATUS.md](docs/kaia/STATUS.md) before installing it.
+
+| Home | Library | Notes | Stickers |
+|---|---|---|---|
+| ![Home](docs/kaia/screenshots/home.png) | ![Library](docs/kaia/screenshots/library.png) | ![Notes](docs/kaia/screenshots/notes.png) | ![Stickers](docs/kaia/screenshots/stickers.png) |
+
+- Install on a Kobo: [docs/kaia/INSTALL_KOBO.md](docs/kaia/INSTALL_KOBO.md)
+- Build and contribute: [docs/kaia/CONTRIBUTING.md](docs/kaia/CONTRIBUTING.md)
+- Plan, decisions and specs: [docs/kaia/README.md](docs/kaia/README.md)
+- Report bugs: https://github.com/MoodStudios/kaia-reader/issues
+
+Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.
+
+---
+
 [![KOReader](https://raw.githubusercontent.com/koreader/koreader.github.io/master/koreader-logo.png)](https://koreader.rocks)
 
 #### KOReader is a document viewer primarily aimed at e-ink readers.
