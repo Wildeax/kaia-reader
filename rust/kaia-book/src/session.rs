@@ -23,14 +23,15 @@
 //!
 //! Only [`BookSession::open`] waits for the document to load.
 
-use std::collections::HashMap;
-use std::fs;
+use std::collections::{HashMap, HashSet};
+use std::fs::{self, File};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use kaia_doc::{DocError, Engine, Link, LinkTarget, Location, Metadata, RectF, TocEntry};
+use kaia_events::{Settings, Table, Value};
 use kaia_gfx::{PixelFormat, Pixmap, Point, Rect, Size};
 
 use crate::annotation::{Annotation, AnnotationId, Drawer, PageAnnotation};
@@ -40,7 +41,9 @@ use crate::error::{BookError, Result};
 use crate::layout::TextLayout;
 use crate::pos::Pos;
 use crate::sidecar::{map_sidecar, read_first, sidecar_candidates, ImportReport, SidecarLocation};
-use crate::state::{read_state, write_state, BookState, DocumentId, ReadingTime, MAX_READING_ENTRIES};
+use crate::state::{
+    read_state, write_state, BookState, DocumentId, ReadingTime, StateLoad, MAX_READING_ENTRIES,
+};
 use crate::time::now_datetime;
 use crate::view::{PageTransform, ZoomMode};
 use kaia_id::partial_md5;
@@ -49,6 +52,99 @@ use kaia_id::partial_md5;
 const MAX_VISIT_SECONDS: f64 = 30.0 * 60.0;
 /// Default bound of the rendered page cache.
 const DEFAULT_CACHE_BYTES: usize = 32 * 1024 * 1024;
+const POSITION_SAVE_INTERVAL: Duration = Duration::from_secs(5);
+
+static OPEN_BOOKS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+
+struct SessionLease {
+    book_key: PathBuf,
+    state_key: PathBuf,
+    lock_path: PathBuf,
+    lock: Option<File>,
+}
+
+impl SessionLease {
+    fn acquire(book: &Path, state: &Path) -> Result<Self> {
+        let canonical = fs::canonicalize(book).map_err(|source| BookError::Io {
+            path: book.to_path_buf(),
+            source,
+        })?;
+        let state_key = state.to_path_buf();
+        let book_key = PathBuf::from(format!(
+            "{}::{}",
+            state.parent().unwrap_or(Path::new(".")).display(),
+            canonical.display()
+        ));
+        let registry = OPEN_BOOKS.get_or_init(|| Mutex::new(HashSet::new()));
+        let mut open = registry.lock().unwrap_or_else(|poison| poison.into_inner());
+        if open.contains(&state_key) || open.contains(&book_key) {
+            return Err(BookError::AlreadyOpen(book.to_path_buf()));
+        }
+        open.insert(state_key.clone());
+        open.insert(book_key.clone());
+        drop(open);
+        let lock_path = state.with_extension("lock");
+        let lock = fs::create_dir_all(state.parent().unwrap_or(Path::new(".")))
+            .and_then(|_| {
+                File::options()
+                    .read(true)
+                    .write(true)
+                    .create_new(true)
+                    .open(&lock_path)
+                    .or_else(|error| {
+                        if error.kind() == std::io::ErrorKind::AlreadyExists {
+                            File::options().read(true).write(true).open(&lock_path)
+                        } else {
+                            Err(error)
+                        }
+                    })
+            })
+            .ok()
+            .and_then(|file| file.try_lock().ok().map(|_| file));
+        Ok(Self {
+            book_key,
+            state_key,
+            lock_path,
+            lock,
+        })
+    }
+
+    fn writable(&self) -> bool {
+        self.lock.is_some()
+    }
+}
+
+impl Drop for SessionLease {
+    fn drop(&mut self) {
+        if self.lock.is_some() {
+            let _ = fs::remove_file(&self.lock_path);
+        }
+        let registry = OPEN_BOOKS.get_or_init(|| Mutex::new(HashSet::new()));
+        let mut open = registry.lock().unwrap_or_else(|poison| poison.into_inner());
+        open.remove(&self.state_key);
+        open.remove(&self.book_key);
+    }
+}
+
+/// Why Kaia could not use the main state file for ordinary writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StateIssue {
+    /// A newer Kaia wrote this state. The session is read-only.
+    NewerVersion(i64),
+    /// The main state cannot parse. New edits go to a recovered file.
+    Corrupt,
+    /// Another process holds the book's advisory lock. The session is read-only.
+    Locked,
+}
+
+/// A changed book reused state from its previous partial MD5.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationReport {
+    pub old_md5: String,
+    pub new_md5: String,
+    /// Annotations need new positions in the changed file.
+    pub annotations_need_reanchoring: usize,
+}
 
 /// Options for [`BookSession::open`].
 #[derive(Debug, Clone)]
@@ -179,6 +275,13 @@ pub struct BookSession {
     facts: Facts,
     state: BookState,
     state_path: PathBuf,
+    _lease: SessionLease,
+    read_only: bool,
+    state_issue: Option<StateIssue>,
+    migration: Option<MigrationReport>,
+    save_error: Option<String>,
+    saved_position: Option<Location>,
+    last_position_save: Instant,
     dirty: bool,
     stale: bool,
     import: Option<ImportReport>,
@@ -199,7 +302,7 @@ pub struct BookSession {
 impl BookSession {
     /// Opens a book. The document is loaded on the engine thread. Kaia's
     /// state is read from `<data_dir>/kaia/books/<partial MD5>.json`. When
-    /// that file is missing or unreadable, the first KOReader sidecar in
+    /// that file is missing, the first KOReader sidecar in
     /// `opts.sidecars` is imported. KOReader's files are read and never written.
     /// A saved layout that the engine rejects gives way to the default layout.
     ///
@@ -217,29 +320,83 @@ impl BookSession {
             partial_md5: md5.clone(),
             file_size,
         };
-        let cache = Arc::new(Mutex::new(PageCache::new(opts.cache_bytes)));
-        let (engine, facts) = Handle::spawn(path.clone(), opts.engine, cache.clone())?;
-        let state_path = opts
+        let mut state_path = opts
             .data_dir
             .join("kaia")
             .join("books")
             .join(format!("{md5}.json"));
+        let cache = Arc::new(Mutex::new(PageCache::new(opts.cache_bytes)));
+        let (engine, facts) = Handle::spawn(path.clone(), opts.engine, cache.clone())?;
+        let lease = SessionLease::acquire(&path, &state_path)?;
+        let mut read_only = !lease.writable();
+        let mut state_issue = read_only.then_some(StateIssue::Locked);
 
-        let mut stale = false;
+        let mut migration = None;
+        let mut pending_migration_old = None;
         let mut import = None;
-        let mut state = match read_state(&state_path) {
-            Ok(Some(state)) => {
-                stale = state.doc.file_size != file_size;
-                state
-            }
-            other => {
-                if other.is_err() {
-                    // Keep the unreadable file for inspection. The next save writes a new one.
-                    let _ = fs::rename(&state_path, state_path.with_extension("json.unreadable"));
+        let mut load = read_state(&state_path).map_err(|source| BookError::Io {
+            path: state_path.clone(),
+            source,
+        })?;
+        if matches!(load, StateLoad::Missing) {
+            if let Some(old_md5) = indexed_md5(&opts.data_dir, &path).map_err(|source| BookError::Io {
+                path: path_index_file(&opts.data_dir),
+                source,
+            })? {
+                if old_md5 != md5 {
+                    let old_path = state_path.with_file_name(format!("{old_md5}.json"));
+                    match read_state(&old_path).map_err(|source| BookError::Io {
+                        path: old_path.clone(),
+                        source,
+                    })? {
+                        StateLoad::Loaded(mut old) | StateLoad::Backup(mut old) => {
+                            old.doc = identity.clone();
+                            old.file_change_pending = true;
+                            for annotation in &mut old.annotations {
+                                annotation.orphaned = true;
+                            }
+                            migration = Some(MigrationReport {
+                                old_md5,
+                                new_md5: md5.clone(),
+                                annotations_need_reanchoring: old.annotations.len(),
+                            });
+                            pending_migration_old = Some(old_path);
+                            load = StateLoad::Loaded(old);
+                        }
+                        _ => {}
+                    }
                 }
+            }
+        }
+        let mut recovery_pending = false;
+        let mut state = match load {
+            StateLoad::Loaded(state) | StateLoad::Backup(state) => state,
+            StateLoad::Newer(version) => {
+                read_only = true;
+                state_issue = Some(StateIssue::NewerVersion(version));
+                BookState::new(identity.clone(), opts.default_layout.clone())
+            }
+            StateLoad::Corrupt(backup) => {
+                state_issue = Some(StateIssue::Corrupt);
+                recovery_pending = true;
+                let recovery = recovery_path(&state_path);
+                if let StateLoad::Loaded(existing) =
+                    read_state(&recovery).map_err(|source| BookError::Io {
+                        path: recovery.clone(),
+                        source,
+                    })?
+                {
+                    state_path = recovery;
+                    existing
+                } else {
+                    state_path = recovery;
+                    backup.unwrap_or_else(|| BookState::new(identity.clone(), opts.default_layout.clone()))
+                }
+            }
+            StateLoad::Missing => {
                 let candidates = sidecar_candidates(&path, &md5, &opts.sidecars);
                 match read_first(&candidates) {
-                    Some((root, source)) => {
+                    Some((root, source, lossy)) => {
                         let imported = map_sidecar(&root, !facts.reflowable, &source);
                         let layout = imported
                             .layout
@@ -257,13 +414,18 @@ impl BookSession {
                             a.id = st.assign_id();
                             st.annotations.push(a);
                         }
-                        import = Some(imported.report);
+                        let mut report = imported.report;
+                        report.lossy = lossy;
+                        import = Some(report);
                         st
                     }
                     None => BookState::new(identity.clone(), opts.default_layout.clone()),
                 }
             }
         };
+        if state.doc.file_size != file_size {
+            state.file_change_pending = true;
+        }
         state.doc = identity;
         if state.title.is_none() {
             state.title = facts.metadata.title.clone();
@@ -339,6 +501,8 @@ impl BookSession {
         }
 
         let imported = import.is_some();
+        let saved_position = state.position.clone();
+        let stale = state.file_change_pending;
         let mut session = BookSession {
             path,
             engine,
@@ -346,6 +510,13 @@ impl BookSession {
             facts,
             state,
             state_path,
+            _lease: lease,
+            read_only,
+            state_issue,
+            migration,
+            save_error: None,
+            saved_position,
+            last_position_save: Instant::now(),
             dirty: false,
             stale,
             import,
@@ -364,7 +535,34 @@ impl BookSession {
         };
         if imported {
             session.dirty = true;
-            session.save()?;
+            if session.read_only {
+                session.save_error =
+                    Some(BookError::ReadOnly(format!("{:?}", session.state_issue)).to_string());
+            } else if !recovery_pending {
+                if let Err(error) = session.save() {
+                    session.save_error = Some(error.to_string());
+                }
+            }
+        }
+        if let Some(old_path) = pending_migration_old {
+            if !session.read_only {
+                match session.save() {
+                    Ok(()) => {
+                        let migrated = old_path.with_extension("json.migrated");
+                        if !migrated.exists() {
+                            if let Err(error) = fs::rename(&old_path, &migrated) {
+                                session.save_error = Some(error.to_string());
+                            }
+                        }
+                    }
+                    Err(error) => session.save_error = Some(error.to_string()),
+                }
+            }
+        }
+        if !session.read_only {
+            if let Err(error) = update_path_index(&opts.data_dir, &session.path, &md5) {
+                session.save_error.get_or_insert_with(|| error.to_string());
+            }
         }
         Ok(session)
     }
@@ -383,6 +581,30 @@ impl BookSession {
     /// file changed, and its saved positions may not fit it.
     pub fn state_is_stale(&self) -> bool {
         self.stale
+    }
+
+    /// Clears the file-change warning after the reader has reviewed the book.
+    pub fn acknowledge_file_change(&mut self) -> Result<()> {
+        self.state.file_change_pending = false;
+        self.dirty = true;
+        self.save()?;
+        self.stale = false;
+        Ok(())
+    }
+
+    /// Reports a newer or damaged state file, or a lock held by another process.
+    pub fn state_issue(&self) -> Option<&StateIssue> {
+        self.state_issue.as_ref()
+    }
+
+    /// Reports state moved from a previous partial MD5 after the book changed.
+    pub fn migration_report(&self) -> Option<&MigrationReport> {
+        self.migration.as_ref()
+    }
+
+    /// An automatic save error during sidecar import, migration or index update.
+    pub fn save_error(&self) -> Option<&str> {
+        self.save_error.as_deref()
     }
 
     /// Where the Kaia state file is, whether or not it exists yet.
@@ -721,6 +943,7 @@ impl BookSession {
         };
         self.state.annotations.push(annotation);
         self.dirty = true;
+        self.save()?;
         Ok(id)
     }
 
@@ -731,7 +954,7 @@ impl BookSession {
         a.note = clean_note(note);
         a.datetime_updated = Some(now);
         self.dirty = true;
-        Ok(())
+        self.save()
     }
 
     /// Changes the style and color of a highlight. Fails for a bookmark.
@@ -745,7 +968,7 @@ impl BookSession {
         a.color = Some(color.to_string());
         a.datetime_updated = Some(now);
         self.dirty = true;
-        Ok(())
+        self.save()
     }
 
     /// Removes an annotation. Its text stays in the book.
@@ -757,7 +980,7 @@ impl BookSession {
         }
         self.order.keys.remove(&id);
         self.dirty = true;
-        Ok(())
+        self.save()
     }
 
     /// One annotation as stored. Its `pageno` and `chapter` are as of the last listing.
@@ -870,6 +1093,7 @@ impl BookSession {
         target.datetime_updated = Some(now);
         self.dirty = true;
         self.order.keys.remove(&id);
+        self.save()?;
         Ok(true)
     }
 
@@ -898,6 +1122,7 @@ impl BookSession {
         if let Some(index) = existing {
             self.state.annotations.remove(index);
             self.dirty = true;
+            self.save()?;
             return Ok(false);
         }
         let location = self.state.position.clone().unwrap_or(Location::Page(page));
@@ -919,6 +1144,7 @@ impl BookSession {
             orphaned: false,
         });
         self.dirty = true;
+        self.save()?;
         Ok(true)
     }
 
@@ -1016,9 +1242,10 @@ impl BookSession {
     }
 
     /// Sets the reading status. None clears it.
-    pub fn set_status(&mut self, status: Option<&str>) {
+    pub fn set_status(&mut self, status: Option<&str>) -> Result<()> {
         self.state.status = status.map(str::to_string).filter(|s| !s.is_empty());
         self.dirty = true;
+        self.save()
     }
 
     /// The rating, 1 to 5.
@@ -1033,7 +1260,7 @@ impl BookSession {
         }
         self.state.rating = (rating > 0).then_some(rating);
         self.dirty = true;
-        Ok(())
+        self.save()
     }
 
     /// The time spent on pages, one entry per visit, oldest first.
@@ -1046,15 +1273,36 @@ impl BookSession {
         self.dirty
     }
 
-    /// Writes the Kaia state file, atomically. Callers save on a debounce
-    /// after position changes, and on close. Dropping the session saves when dirty.
+    /// Writes the Kaia state file atomically. The app calls this on suspend.
+    /// Dropping the session also saves when dirty.
     pub fn save(&mut self) -> Result<()> {
+        if self.read_only {
+            return Err(BookError::ReadOnly(format!("{:?}", self.state_issue)));
+        }
         write_state(&self.state_path, &self.state).map_err(|source| BookError::Io {
             path: self.state_path.clone(),
             source,
         })?;
         self.dirty = false;
+        self.saved_position = self.state.position.clone();
+        self.last_position_save = Instant::now();
         Ok(())
+    }
+
+    /// Call after each page turn. Saves a changed position once five seconds
+    /// have passed since its last save. Returns true when it wrote the state.
+    pub fn maybe_save(&mut self, now: Instant) -> Result<bool> {
+        if self.state.position == self.saved_position
+            || now
+                .checked_duration_since(self.last_position_save)
+                .unwrap_or_default()
+                < POSITION_SAVE_INTERVAL
+        {
+            return Ok(false);
+        }
+        self.save()?;
+        self.last_position_save = now;
+        Ok(true)
     }
 
     // ----- internals -----
@@ -1288,6 +1536,91 @@ impl Drop for BookSession {
     }
 }
 
+fn recovery_path(main: &Path) -> PathBuf {
+    let stem = main.file_stem().unwrap_or_default().to_string_lossy();
+    let dir = main.parent().unwrap_or(Path::new("."));
+    let first = dir.join(format!("{stem}.recovered.json"));
+    if !first.exists() || matches!(read_state(&first), Ok(StateLoad::Loaded(_))) {
+        return first;
+    }
+    for number in 1.. {
+        let candidate = dir.join(format!("{stem}.recovered.{number}.json"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!()
+}
+
+fn path_index_file(data_dir: &Path) -> PathBuf {
+    data_dir.join("kaia/books/paths.json")
+}
+
+fn indexed_md5(data_dir: &Path, book: &Path) -> std::io::Result<Option<String>> {
+    let key = fs::canonicalize(book)?.to_string_lossy().into_owned();
+    let index_path = path_index_file(data_dir);
+    let mut old = index_path.as_os_str().to_owned();
+    old.push(".old");
+    if !index_path.exists() && !Path::new(&old).exists() {
+        return Ok(None);
+    }
+    let lock = open_index_lock(&index_path).ok();
+    if let Some(lock) = &lock {
+        lock.lock()?;
+    }
+    let settings = read_index(&index_path)?;
+    Ok(settings
+        .read(key.as_str())
+        .get("md5")
+        .as_str()
+        .map(str::to_string))
+}
+
+fn update_path_index(data_dir: &Path, book: &Path, md5: &str) -> std::io::Result<()> {
+    let index_path = path_index_file(data_dir);
+    fs::create_dir_all(index_path.parent().unwrap_or(Path::new(".")))?;
+    let lock = open_index_lock(&index_path)?;
+    lock.lock()?;
+    let mut settings = read_index(&index_path)?;
+    let canonical = fs::canonicalize(book)?;
+    let metadata = fs::metadata(book)?;
+    let mtime_ns = metadata
+        .modified()?
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut entry = Table::new();
+    entry.insert("md5".into(), Value::from(md5));
+    entry.insert("size".into(), Value::from(metadata.len() as f64));
+    entry.insert("mtime_ns".into(), Value::from(mtime_ns.to_string()));
+    settings.save(canonical.to_string_lossy().as_ref(), Value::Table(entry));
+    settings.flush_book(&index_path)
+}
+
+fn open_index_lock(index_path: &Path) -> std::io::Result<File> {
+    File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(index_path.with_extension("lock"))
+}
+
+fn read_index(index_path: &Path) -> std::io::Result<Settings> {
+    match Settings::read_exact(index_path) {
+        Ok(Some(settings)) => Ok(settings),
+        Ok(None) | Err(_) => {
+            let mut old = index_path.as_os_str().to_owned();
+            old.push(".old");
+            match Settings::read_exact(Path::new(&old)) {
+                Ok(Some(settings)) => Ok(settings),
+                Ok(None) => Settings::read_exact(index_path).map(|settings| settings.unwrap_or_default()),
+                Err(error) => Err(error),
+            }
+        }
+    }
+}
+
 /// The job that restores the reading position on the engine thread. For a
 /// reflowable book it applies the layout first.
 fn restore_job(
@@ -1305,6 +1638,39 @@ fn restore_job(
             let (page, loc) = w.restore_position(position, percent)?;
             Ok((page, loc, w.page_count(), w.layout))
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod fault_tests {
+    use super::*;
+
+    #[test]
+    fn sidecar_import_survives_disk_full_state_write() {
+        let work = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let book = work.path().join("paper.pdf");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/paper.pdf"),
+            &book,
+        )
+        .unwrap();
+        let sidecar = work.path().join("paper.sdr");
+        fs::create_dir_all(&sidecar).unwrap();
+        fs::write(
+            sidecar.join("metadata.pdf.lua"),
+            b"return { [\"last_page\"] = 1 }",
+        )
+        .unwrap();
+        if std::env::var_os("FONTDIR").is_none() {
+            std::env::set_var("FONTDIR", env!("KAIA_BOOK_FONT_DIR"));
+        }
+        crate::state::fail_next_write_with_disk_full();
+        let session = BookSession::open(&book, OpenOptions::new(data.path())).unwrap();
+        assert!(session.import_report().is_some());
+        assert!(session.is_dirty());
+        assert!(session.save_error().is_some());
+        assert!(!session.state_path().exists());
     }
 }
 

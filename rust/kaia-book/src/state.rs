@@ -71,6 +71,8 @@ pub(crate) struct BookState {
     /// The layout and viewport that the annotation positions were made in. Engines
     /// whose positions depend on the layout use it to find stale positions.
     pub layout_key: Option<String>,
+    /// Remains true until the reader acknowledges that the file changed.
+    pub file_change_pending: bool,
 }
 
 impl BookState {
@@ -90,6 +92,7 @@ impl BookState {
             reading_time: Vec::new(),
             imported_from: None,
             layout_key: None,
+            file_change_pending: false,
         }
     }
 
@@ -163,6 +166,9 @@ impl BookState {
         if let Some(key) = &self.layout_key {
             t.insert("layout_key".into(), Value::from(key.as_str()));
         }
+        if self.file_change_pending {
+            t.insert("file_change_pending".into(), Value::Bool(true));
+        }
         t
     }
 
@@ -223,6 +229,7 @@ impl BookState {
         }
         state.imported_from = root.get("imported_from").as_str().map(str::to_string);
         state.layout_key = root.get("layout_key").as_str().map(str::to_string);
+        state.file_change_pending = root.get("file_change_pending").as_bool().unwrap_or(false);
         state.repair_ids();
         Some(state)
     }
@@ -304,26 +311,80 @@ fn zoom_from_value(v: &Value) -> ZoomMode {
     }
 }
 
-/// Reads the state file at `path`. Returns Ok(None) when there is no file
-/// and no backup. Returns Err when a file exists but cannot be used.
-pub(crate) fn read_state(path: &Path) -> Result<Option<BookState>, ()> {
-    use kaia_events::OpenStatus;
-    let settings = Settings::open(path);
-    match settings.open_status() {
-        OpenStatus::Missing => Ok(None),
-        OpenStatus::Unreadable => Err(()),
-        OpenStatus::Loaded | OpenStatus::FromBackup => {
-            BookState::from_table(settings.table()).map(Some).ok_or(())
-        }
+pub(crate) enum StateLoad {
+    Missing,
+    Loaded(BookState),
+    /// The main file was damaged; an older state may be available.
+    Corrupt(Option<BookState>),
+    /// A crash may have happened after rotating the main file to `.old`.
+    Backup(BookState),
+    Newer(i64),
+}
+
+/// Reads the main file first, then `.old`. I/O errors stop the open.
+pub(crate) fn read_state(path: &Path) -> io::Result<StateLoad> {
+    let main = read_one(path)?;
+    match main {
+        Some(Ok(state)) => return Ok(StateLoad::Loaded(state)),
+        Some(Err(Some(version))) => return Ok(StateLoad::Newer(version)),
+        _ => {}
+    }
+    let mut old = path.as_os_str().to_owned();
+    old.push(".old");
+    let old = read_one(Path::new(&old))?;
+    if let Some(Err(Some(version))) = old {
+        return Ok(StateLoad::Newer(version));
+    }
+    let backup = match old {
+        Some(Ok(state)) => Some(state),
+        _ => None,
+    };
+    match main {
+        None => Ok(backup.map_or(StateLoad::Missing, StateLoad::Backup)),
+        Some(Err(_)) => Ok(StateLoad::Corrupt(backup)),
+        Some(Ok(_)) => unreachable!(),
     }
 }
 
-/// Writes the state file atomically. The previous file stays as `.old` when it is old enough.
+fn read_one(path: &Path) -> io::Result<Option<Result<BookState, Option<i64>>>> {
+    let Some(settings) = Settings::read_exact(path).or_else(|error| {
+        if error.kind() == io::ErrorKind::InvalidData {
+            Ok(Some(Settings::new()))
+        } else {
+            Err(error)
+        }
+    })?
+    else {
+        return Ok(None);
+    };
+    let root = Value::Table(settings.table().clone());
+    let version = root.get("version").as_i64();
+    if version.is_some_and(|v| v > STATE_VERSION) {
+        return Ok(Some(Err(version)));
+    }
+    Ok(Some(BookState::from_table(settings.table()).ok_or(None)))
+}
+
+/// Writes the state file atomically. The previous version stays as `.old`.
 pub(crate) fn write_state(path: &Path, state: &BookState) -> io::Result<()> {
+    #[cfg(all(test, unix))]
+    if FAIL_NEXT_WRITE.with(|flag| flag.replace(false)) {
+        return Err(io::Error::from_raw_os_error(28));
+    }
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    Settings::from_table(state.to_table()).flush(path)
+    Settings::from_table(state.to_table()).flush_book(path)
+}
+
+#[cfg(all(test, unix))]
+std::thread_local! {
+    static FAIL_NEXT_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn fail_next_write_with_disk_full() {
+    FAIL_NEXT_WRITE.with(|flag| flag.set(true));
 }
 
 #[cfg(test)]

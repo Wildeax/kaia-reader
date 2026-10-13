@@ -6,15 +6,18 @@
 //! - `read`, `save`, `del`, `has`, `is_true` and `is_false` behave like
 //!   `readSetting`, `saveSetting` (nil deletes), `delSetting`, `has`, `isTrue`
 //!   and `isFalse`.
-//! - `flush` writes the file atomically. It writes `<file>.tmp`, syncs it, moves
+//! - `flush` writes the file atomically. It writes a unique temp file, syncs it, moves
 //!   the current file to `<file>.old` when that file is more than 60 seconds
 //!   old (as `LuaSettings:backup` does), then renames the temp file into place.
+//! - `flush_book` keeps the previous version as `.old` on every write. Readers
+//!   recover from the main file first, then `.old` if the main file cannot parse.
 //!
 //! The JSON format is described in `json.rs`.
 
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crate::json;
@@ -22,6 +25,7 @@ use crate::value::{Key, Table, Value};
 
 /// `LuaSettings:backup` only moves a file to `.old` when it is older than this.
 const BACKUP_AGE: Duration = Duration::from_secs(60);
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 static NIL: Value = Value::Nil;
 
@@ -94,6 +98,24 @@ impl Settings {
         }
     }
 
+    /// Reads only `path`, without backup fallback. A missing file returns None.
+    /// Invalid JSON returns `InvalidData`; other read errors retain their kind.
+    pub fn read_exact(path: &Path) -> io::Result<Option<Settings>> {
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let json: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let data =
+            json::decode_table(&json).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        Ok(Some(Settings {
+            data,
+            status: OpenStatus::Loaded,
+        }))
+    }
+
     pub fn open_status(&self) -> OpenStatus {
         self.status
     }
@@ -153,16 +175,34 @@ impl Settings {
 
     /// Writes the settings to `path` with the steps described in the module comment.
     pub fn flush(&self, path: &Path) -> io::Result<()> {
+        self.flush_inner(path, false)
+    }
+
+    /// Writes a per-book state and preserves its previous version as `.old`.
+    pub fn flush_book(&self, path: &Path) -> io::Result<()> {
+        self.flush_inner(path, true)
+    }
+
+    fn flush_inner(&self, path: &Path, every_backup: bool) -> io::Result<()> {
         let text = serde_json::to_string_pretty(&json::encode_table(&self.data)).map_err(io::Error::other)?;
-        let temp = suffixed(path, ".tmp");
-        write_synced(&temp, text.as_bytes())?;
-        let dir = parent_dir(path);
-        if is_older_than(path, BACKUP_AGE) {
-            fs::rename(path, suffixed(path, ".old"))?;
-            sync_dir(dir)?;
+        let temp = unique_temp(path);
+        let mut file = File::options().write(true).create_new(true).open(&temp)?;
+        let result = (|| {
+            file.write_all(text.as_bytes())?;
+            file.sync_all()?;
+            drop(file);
+            let dir = parent_dir(path);
+            if (every_backup && path.exists()) || (!every_backup && is_older_than(path, BACKUP_AGE)) {
+                fs::rename(path, suffixed(path, ".old"))?;
+                sync_dir(dir)?;
+            }
+            fs::rename(&temp, path)?;
+            sync_dir(dir)
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temp);
         }
-        fs::rename(&temp, path)?;
-        sync_dir(dir)
+        result
     }
 }
 
@@ -201,10 +241,9 @@ fn parent_dir(path: &Path) -> &Path {
         .unwrap_or_else(|| Path::new("."))
 }
 
-fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = File::create(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
+fn unique_temp(path: &Path) -> PathBuf {
+    let number = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    suffixed(path, &format!(".{}.{number}.tmp", std::process::id()))
 }
 
 fn sync_dir(dir: &Path) -> io::Result<()> {
@@ -378,5 +417,28 @@ mod tests {
             Settings::open(&dir.path("settings.json.old")).read("v"),
             &Value::from(1i64)
         );
+    }
+
+    #[test]
+    fn per_book_flush_keeps_previous_version_on_every_save() {
+        let dir = TempDir::new("book-backup");
+        let path = dir.path("book.json");
+        let mut first = Settings::new();
+        first.save("v", Value::from(1i64));
+        first.flush_book(&path).unwrap();
+        let mut second = Settings::new();
+        second.save("v", Value::from(2i64));
+        second.flush_book(&path).unwrap();
+        assert_eq!(
+            Settings::open(&dir.path("book.json.old")).read("v"),
+            &Value::from(1i64)
+        );
+    }
+
+    #[test]
+    fn separate_writes_use_separate_temp_names() {
+        let dir = TempDir::new("unique-temp");
+        let path = dir.path("book.json");
+        assert_ne!(unique_temp(&path), unique_temp(&path));
     }
 }

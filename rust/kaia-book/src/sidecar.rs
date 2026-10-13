@@ -72,15 +72,16 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Reads the first candidate that parses as a Lua table. Returns the table and
-/// the file it came from.
-pub(crate) fn read_first(candidates: &[PathBuf]) -> Option<(Value, PathBuf)> {
+/// Reads the first candidate that parses as a Lua table. Returns the table,
+/// source file and whether UTF-8 conversion replaced any bytes.
+pub(crate) fn read_first(candidates: &[PathBuf]) -> Option<(Value, PathBuf, bool)> {
     for path in candidates {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(bytes) = std::fs::read(path) else {
             continue;
         };
+        let src = String::from_utf8_lossy(&bytes);
         if let Ok(v @ Value::Table(_)) = kaia_luadata::parse(&src) {
-            return Some((v, path.clone()));
+            return Some((v, path.clone(), matches!(src, std::borrow::Cow::Owned(_))));
         }
     }
     None
@@ -91,6 +92,8 @@ pub(crate) fn read_first(candidates: &[PathBuf]) -> Option<(Value, PathBuf)> {
 pub struct ImportReport {
     /// The sidecar file that was read.
     pub source: PathBuf,
+    /// True when invalid UTF-8 bytes in the source were replaced during import.
+    pub lossy: bool,
     /// Annotations and bookmarks taken from the sidecar.
     pub annotations: usize,
     /// Entries that do not fit this book, such as PDF positions in an EPUB.
@@ -166,6 +169,7 @@ pub(crate) fn map_sidecar(root: &Value, fixed: bool, source: &Path) -> Imported 
 
     let report = ImportReport {
         source: source.to_path_buf(),
+        lossy: false,
         annotations: annotations.len(),
         skipped,
         unresolved: 0,
@@ -346,5 +350,27 @@ mod tests {
         assert_eq!(imported.position, Some(Location::Page(11)));
         assert_eq!(imported.zoom, Some(ZoomMode::FitWidth));
         assert!(imported.layout.is_none());
+    }
+
+    #[test]
+    fn non_utf8_main_sidecar_wins_over_old_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("metadata.pdf.lua");
+        let old = dir.path().join("metadata.pdf.lua.old");
+        std::fs::write(
+            &main,
+            b"return { [\"summary\"] = { [\"note\"] = \"bad \xff byte\" } }",
+        )
+        .unwrap();
+        std::fs::write(&old, b"return { [\"summary\"] = { [\"note\"] = \"old\" } }").unwrap();
+        let (value, source, lossy) = read_first(&[main.clone(), old]).unwrap();
+        assert_eq!(source, main);
+        assert!(lossy);
+        assert!(value
+            .get("summary")
+            .get("note")
+            .as_str()
+            .unwrap()
+            .contains('\u{fffd}'));
     }
 }

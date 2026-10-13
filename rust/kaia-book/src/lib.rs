@@ -12,6 +12,14 @@
 //! status and rating) lives in a Kaia file keyed by the partial MD5 of the
 //! book. KOReader's sidecar files are read for import and never written.
 //! See [`state`] and [`sidecar`].
+//!
+//! The app calls [`BookSession::maybe_save`] after each page turn, passing the
+//! current [`std::time::Instant`], and [`BookSession::save`] on suspend. The
+//! session saves annotation, bookmark, status and rating edits before their
+//! methods return. The app should reuse one session per book. It should show
+//! [`BookSession::state_issue`], [`BookSession::migration_report`] and
+//! [`BookSession::save_error`] when present. After the reader reviews a changed
+//! file, the app calls [`BookSession::acknowledge_file_change`].
 
 pub mod annotation;
 pub mod cache;
@@ -37,7 +45,9 @@ pub use kaia_gfx::{PixelFormat, Pixmap, Point, Rect, Size};
 pub use kaia_id::partial_md5;
 pub use layout::TextLayout;
 pub use pos::Pos;
-pub use session::{BookEvent, BookSession, OpenOptions, PageInfo, SearchResult, Selection};
+pub use session::{
+    BookEvent, BookSession, MigrationReport, OpenOptions, PageInfo, SearchResult, Selection, StateIssue,
+};
 pub use sidecar::{ImportReport, SidecarLocation};
 pub use state::{DocumentId, ReadingTime};
 pub use view::{PageTransform, ZoomMode};

@@ -28,6 +28,12 @@ pub enum BookError {
     /// A named annotation does not exist.
     #[error("no annotation with id {0}")]
     NoAnnotation(u64),
+    /// This process already has a session for the same book or state file.
+    #[error("book is already open: {0}")]
+    AlreadyOpen(PathBuf),
+    /// The session can read the book but cannot replace its state file.
+    #[error("book state is read-only: {0}")]
+    ReadOnly(String),
 }
 
 pub type Result<T> = std::result::Result<T, BookError>;

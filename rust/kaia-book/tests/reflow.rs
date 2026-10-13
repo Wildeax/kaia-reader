@@ -142,13 +142,16 @@ fn highlights_and_bookmarks_persist_across_reopen() {
         let (_, word) = common::first_word(&mut s, VIEW);
         s.add_highlight(&word, Drawer::Lighten, "yellow", None).unwrap();
         assert!(s.toggle_bookmark().unwrap());
-        s.set_status(Some("reading"));
+        s.set_status(Some("reading")).unwrap();
         s.set_rating(4).unwrap();
         s.save().unwrap();
         (word.text, s.current().location)
     };
     let state_file = data.path().join("kaia").join("books");
-    assert_eq!(std::fs::read_dir(&state_file).unwrap().count(), 1);
+    assert!(state_file
+        .join(format!("{}.json", kaia_book::partial_md5(&book).unwrap()))
+        .exists());
+    assert!(state_file.join("paths.json").exists());
 
     let mut s = common::open(&book, &data);
     assert_eq!(s.current().location, here);

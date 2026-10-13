@@ -208,7 +208,7 @@ fn stale_state_is_flagged_when_the_file_grows() {
 }
 
 #[test]
-fn unreadable_state_file_is_set_aside_and_the_book_still_opens() {
+fn unreadable_state_file_is_preserved_and_the_book_still_opens() {
     let work = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
     let book = common::copy_into(&common::repo_file("paper.pdf"), work.path());
@@ -219,5 +219,6 @@ fn unreadable_state_file_is_set_aside_and_the_book_still_opens() {
     fs::write(&state, b"{ this is not json").unwrap();
     let s = common::open(&book, &data);
     assert_eq!(s.current().page, 0);
-    assert!(dir.join(format!("{md5}.json.unreadable")).exists());
+    assert_eq!(fs::read(&state).unwrap(), b"{ this is not json");
+    assert!(!dir.join(format!("{md5}.recovered.json")).exists());
 }
