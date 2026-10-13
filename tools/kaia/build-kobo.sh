@@ -38,6 +38,9 @@ tar -C /src \
     --exclude=./base/build --exclude="./koreader-*" --exclude=./dist \
     --exclude=./rust/target -cf - . | tar -xf - --no-same-permissions
 git config --global --add safe.directory "*"
+# Packages from earlier builds stay in the volume; remove them so only this
+# build is copied out.
+rm -f koreader-*.zip
 # Rust library, when the workspace exists.
 if [ -f rust/Cargo.toml ] && command -v cargo >/dev/null; then
     echo "cargo found in image; the Rust library is built by tools/kaia/build-libkaia.sh"
