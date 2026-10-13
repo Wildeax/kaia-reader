@@ -286,15 +286,21 @@ function DocSettings:open(doc_path)
         if lfs.attributes(candidate_path, "size") > 0 then
             ok, stored = pcall(dofile, candidate_path)
             -- Ignore empty tables
-            if ok and next(stored) ~= nil then
+            if ok and type(stored) == "table" and next(stored) ~= nil then
                 logger.dbg("DocSettings: data is read from", candidate_path)
                 break
             end
         end
-        logger.dbg("DocSettings:", candidate_path, "is invalid, removed.")
-        os.remove(candidate_path)
+        -- Kaia: a bad book-folder candidate may belong to KOReader. Skip it.
+        if G_reader_settings:readSetting("document_metadata_folder", "doc") ~= "doc"
+                and new:isInDocLocation(candidate_path) then
+            logger.dbg("DocSettings:", candidate_path, "is invalid, skipped.")
+        else
+            logger.dbg("DocSettings:", candidate_path, "is invalid, removed.")
+            os.remove(candidate_path)
+        end
     end
-    if ok and stored then
+    if ok and type(stored) == "table" then
         new.data = stored
         new.candidates = candidates
         new.source_candidate = candidate_path
@@ -395,6 +401,10 @@ function DocSettings:isInDocLocation(path)
 end
 
 function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
+    -- Kaia: no caller may remove KOReader's book-folder files while Kaia uses
+    -- its own sidecar location, including Reset and updateLocation.
+    keep_doc_location = keep_doc_location
+        or G_reader_settings:readSetting("document_metadata_folder", "doc") ~= "doc"
     local custom_cover_file, custom_metadata_file
     if sidecar_to_keep == nil then
         custom_cover_file    = self:getCustomCoverFile()
@@ -409,9 +419,21 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
     end
 
     -- Remove any of the old ones we may consider as candidates in DocSettings:open()
-    if data_to_purge.doc_settings and self.candidates then
-        for _, t in ipairs(self.candidates) do
-            local candidate_path = t.path
+    if data_to_purge.doc_settings then
+        -- Kaia: include files written since this settings object was opened.
+        -- Reset can receive an object whose candidate list predates flush().
+        local candidate_paths = {}
+        for _, t in ipairs(self.candidates or {}) do
+            candidate_paths[t.path] = true
+        end
+        for _, dir in ipairs({ self.doc_sidecar_dir, self.dir_sidecar_dir, self.hash_sidecar_dir }) do
+            if dir then
+                local path = dir .. "/" .. self.sidecar_filename
+                candidate_paths[path] = true
+                candidate_paths[path .. ".old"] = true
+            end
+        end
+        for candidate_path in pairs(candidate_paths) do
             if isFile(candidate_path) and not (keep_doc_location and self:isInDocLocation(candidate_path)) then
                 if (not sidecar_to_keep)
                         or (candidate_path ~= sidecar_to_keep and candidate_path ~= sidecar_to_keep .. ".old") then
@@ -423,11 +445,13 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
     end
 
     -- Remove custom
-    if data_to_purge.custom_cover_file then
+    if data_to_purge.custom_cover_file
+            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_cover_file)) then
         os.remove(data_to_purge.custom_cover_file)
         self:getCustomCoverFile(true) -- reset cache
     end
-    if data_to_purge.custom_metadata_file then
+    if data_to_purge.custom_metadata_file
+            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_metadata_file)) then
         os.remove(data_to_purge.custom_metadata_file)
         self:getCustomMetadataFile(true) -- reset cache
     end
@@ -457,18 +481,19 @@ end
 
 --- Updates sdr location for file rename/copy/move/delete operations.
 function DocSettings.updateLocation(doc_path, new_doc_path, copy)
-    local has_sidecar_file = DocSettings:hasSidecarFile(doc_path)
+    local sidecar_file, sidecar_location = DocSettings:findSidecarFile(doc_path)
+    local has_sidecar_file = sidecar_file ~= nil
     local custom_cover_file = DocSettings:findCustomCoverFile(doc_path)
     local custom_metadata_file = DocSettings:findCustomMetadataFile(doc_path)
     if not (has_sidecar_file or custom_cover_file or custom_metadata_file) then return end
 
     local doc_settings = DocSettings:open(doc_path)
-    local do_purge
+    local do_purge, new_sidecar_dir
 
     if new_doc_path then -- copy/rename/move
         if doc_path == new_doc_path -- move book metadata
-                or G_reader_settings:readSetting("document_metadata_folder") ~= "hash" then -- keep hash location unchanged
-            local new_sidecar_dir
+                or G_reader_settings:readSetting("document_metadata_folder") ~= "hash"
+                or sidecar_location ~= "hash" then -- keep an existing hash location unchanged
             if has_sidecar_file then
                 local new_doc_settings = DocSettings:open(new_doc_path)
                 doc_settings.data.doc_path = new_doc_path
@@ -501,7 +526,22 @@ function DocSettings.updateLocation(doc_path, new_doc_path, copy)
     if do_purge then
         doc_settings.custom_cover_file = custom_cover_file -- cache
         doc_settings.custom_metadata_file = custom_metadata_file -- cache
-        doc_settings:purge()
+        -- Kaia: keep the new copy when metadata moves for one book, or when
+        -- the old and new paths share a content-based hash directory.
+        local sidecar_to_keep
+        if new_sidecar_dir and (new_doc_path == doc_path
+                or new_sidecar_dir == doc_settings:getSidecarDir(doc_path, "hash")) then
+            sidecar_to_keep = new_sidecar_dir .. "/" .. DocSettings.getSidecarFilename(new_doc_path)
+        end
+        if sidecar_to_keep then
+            doc_settings:purge(sidecar_to_keep, {
+                doc_settings = true,
+                custom_cover_file = custom_cover_file,
+                custom_metadata_file = custom_metadata_file,
+            })
+        else
+            doc_settings:purge()
+        end
     end
 end
 
@@ -510,7 +550,11 @@ end
 function DocSettings:getCustomLocationCandidates(doc_path)
     local sidecar_dir
     local sidecar_file = self:findSidecarFile(doc_path, true) -- new locations only
-    if sidecar_file then -- book was opened, write custom metadata to its sidecar dir
+    -- Kaia: never replace a custom file in KOReader's book-folder sidecar.
+    local doc_sidecar_dir = self:getSidecarDir(doc_path, "doc")
+    local in_doc_location = sidecar_file and sidecar_file:sub(1, #doc_sidecar_dir + 1) == doc_sidecar_dir .. "/"
+    if sidecar_file and (G_reader_settings:readSetting("document_metadata_folder", "doc") == "doc"
+            or not in_doc_location) then -- book was opened, write custom metadata to its sidecar dir
         sidecar_dir = util.splitFilePathName(sidecar_file):sub(1, -2)
         return { sidecar_dir }
     end
@@ -519,7 +563,6 @@ function DocSettings:getCustomLocationCandidates(doc_path)
     if preferred_location ~= "hash" then
         sidecar_dir = self:getSidecarDir(doc_path, "dir")
         if preferred_location == "doc" then
-            local doc_sidecar_dir = self:getSidecarDir(doc_path, "doc")
             return { doc_sidecar_dir, sidecar_dir } -- fallback for read-only book storage
         end
     else -- "hash"

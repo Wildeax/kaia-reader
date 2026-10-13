@@ -1,5 +1,5 @@
 describe("kaia importko", function()
-    local ImportKO, LuaSettings, lfs, util, ffiutil
+    local ImportKO, LuaSettings, SQ3, lfs, util, ffiutil
     local root
 
     local function writeFile(path, content)
@@ -103,6 +103,7 @@ describe("kaia importko", function()
         lfs = require("libs/libkoreader-lfs")
         util = require("util")
         ffiutil = require("ffi/util")
+        SQ3 = require("lua-ljsqlite3/init")
     end)
 
     before_each(function()
@@ -226,6 +227,26 @@ describe("kaia importko", function()
     end)
 
     describe("run", function()
+        it("imports statistics rows that are still in KOReader's WAL", function()
+            local src, dest = root .. "/koreader", root .. "/kaia"
+            writeFile(src .. "/settings.reader.lua", "return {}\n")
+            util.makePath(src .. "/settings")
+            local source_db = src .. "/settings/statistics.sqlite3"
+            local db = SQ3.open(source_db)
+            db:exec("PRAGMA journal_mode=WAL")
+            db:exec("CREATE TABLE import_test (value TEXT)")
+            db:exec("INSERT INTO import_test VALUES ('uncheckpointed')")
+            assert.is_truthy(lfs.attributes(source_db .. "-wal"))
+            local before = snapshot(src)
+            local report = ImportKO.run(src, dest)
+            assert.are.same({}, report.failed)
+            local imported = SQ3.open(dest .. "/settings/statistics.sqlite3", "ro")
+            assert.are.equal("uncheckpointed", imported:rowexec("SELECT value FROM import_test"))
+            imported:close()
+            assert.are.same(before, snapshot(src))
+            db:close()
+        end)
+
         it("imports settings, history, sidecars and plugin data into the right folders", function()
             local src, dest = root .. "/koreader", root .. "/kaia"
             populateKoreader(src)

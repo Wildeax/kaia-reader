@@ -1335,6 +1335,11 @@ end
 --- A shortcut to execute mv.
 -- @treturn boolean result of mv command
 function FileManager:moveFile(from, to)
+    -- Kaia: cache the source hash while the book still exists. updateLocation
+    -- uses it to find Kaia's sidecar after the file has moved.
+    if G_reader_settings:readSetting("document_metadata_folder", "doc") == "hash" and isFile(from) then
+        DocSettings:getSidecarDir(from, "hash")
+    end
     return ffiUtil.execute(self.mv_bin, from, to) == 0
 end
 

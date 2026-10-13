@@ -220,6 +220,12 @@ local function isSkippedPluginFile(rel)
         or name:find("%-shm$") ~= nil
 end
 
+-- Kaia: these databases can have committed rows only in their WAL files.
+local function isImportedDatabase(rel)
+    return rel == "settings/statistics.sqlite3"
+        or rel == "settings/vocabulary_builder.sqlite3"
+end
+
 -- Number of books in a history file. Zero when the file cannot be read.
 local function countHistory(path)
     local ok, data = pcall(dofile, path)
@@ -265,13 +271,19 @@ function ImportKO.plan(source, dest, opts)
     -- Returns true when the file is queued for copying.
     local function add(kind, rel, src, size, mtime)
         local dst = dest .. "/" .. rel
-        if lfs.attributes(dst, "mode") then
+        local wal_src, wal_size
+        if isImportedDatabase(rel) and isFile(src .. "-wal") then
+            wal_src = src .. "-wal"
+            wal_size = lfs.attributes(wal_src, "size") or 0
+        end
+        if lfs.attributes(dst, "mode") or (wal_src and lfs.attributes(dst .. "-wal", "mode")) then
             table.insert(p.existing, rel)
-        elseif size > limit then
-            table.insert(p.too_large, { rel = rel, size = size })
+        elseif size + (wal_size or 0) > limit then
+            table.insert(p.too_large, { rel = rel, size = size + (wal_size or 0) })
         else
-            table.insert(p.items, { kind = kind, rel = rel, src = src, dst = dst, size = size, mtime = mtime })
-            p.total_bytes = p.total_bytes + size
+            table.insert(p.items, { kind = kind, rel = rel, src = src, dst = dst,
+                size = size, mtime = mtime, wal_src = wal_src, wal_size = wal_size })
+            p.total_bytes = p.total_bytes + size + (wal_size or 0)
             if kind == "sidecar" then
                 p.book_files = p.book_files + 1
             elseif kind == "plugin" or kind == "styletweak" then
@@ -372,6 +384,19 @@ local function copyAtomic(src, dst, size, mtime)
     return nil, err
 end
 
+-- Kaia: copy the WAL with the database so SQLite can recover committed rows
+-- when Kaia first opens the copy. The source folder is only read.
+local function copyWithWal(item)
+    local ok, err = copyAtomic(item.src, item.dst, item.size, item.mtime)
+    if ok and item.wal_src then
+        ok, err = copyAtomic(item.wal_src, item.dst .. "-wal", item.wal_size)
+        if not ok then
+            os.remove(item.dst)
+        end
+    end
+    return ok, err
+end
+
 -- Merges KOReader's settings into Kaia's settings and records the import time.
 -- Kaia's values win. Returns the merge summary.
 local function writeSettings(source, dest, opts)
@@ -416,10 +441,10 @@ function ImportKO.run(source, dest, opts)
         if lfs.attributes(item.dst, "mode") then
             table.insert(report.existing, item.rel)
         else
-            local ok, err = copyAtomic(item.src, item.dst, item.size, item.mtime)
+            local ok, err = copyWithWal(item)
             if ok then
                 report.copied = report.copied + 1
-                report.bytes = report.bytes + item.size
+                report.bytes = report.bytes + item.size + (item.wal_size or 0)
                 if item.kind == "history" then
                     report.history_books = p.history_books
                 end

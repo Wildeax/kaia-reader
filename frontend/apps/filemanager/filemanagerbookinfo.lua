@@ -810,6 +810,7 @@ function BookInfo:showNotebookFileDialog(notebook_file, doc_settings_or_file, bo
             if new_notebook_file or doc_settings_or_file:readSetting("summary") then
                 doc_settings_or_file:flush()
             else -- remove empty sidecar
+                -- Kaia: purge keeps KOReader's book-folder sidecar when Kaia uses its own location.
                 doc_settings_or_file:purge(nil, { doc_settings = true }) -- keep custom
                 doc_settings_or_file = file -- to reopen bookinfo
             end
@@ -992,6 +993,7 @@ function BookInfo:moveBookMetadata()
                     ok_callback = function()
                         UIManager:close(self.menu_container)
                         for _, book in ipairs(books_to_move) do
+                            -- Kaia: updateLocation copies a book-folder source and keeps it.
                             DocSettings.updateLocation(book, book)
                         end
                         file_chooser:refreshPath()

@@ -18,6 +18,12 @@ local T = ffiUtil.template
 
 local filemanagerutil = {}
 
+-- Kaia: a book-folder sidecar may belong to stock KOReader.
+local function hasKoreaderSidecar(file)
+    return G_reader_settings:readSetting("document_metadata_folder", "doc") ~= "doc"
+        and lfs.attributes(DocSettings:getSidecarDir(file, "doc"), "mode") == "directory"
+end
+
 function filemanagerutil.getDefaultDir()
     return Device.home_dir or "."
 end
@@ -190,6 +196,8 @@ function filemanagerutil.genResetSettingsButton(doc_settings_or_file, caller_cal
     local has_custom_cover_file = custom_cover_file and true or false
     local custom_metadata_file = DocSettings:findCustomMetadataFile(file)
     local has_custom_metadata_file = custom_metadata_file and true or false
+    local ko_sidecar_note = hasKoreaderSidecar(file)
+        and "\n\n" .. _("Only Kaia's copy will be reset. KOReader's book-folder sidecar will remain.") or ""
     return {
         text = _("Reset"),
         enabled = not button_disabled and (has_sidecar_file or has_custom_metadata_file or has_custom_cover_file),
@@ -198,7 +206,7 @@ function filemanagerutil.genResetSettingsButton(doc_settings_or_file, caller_cal
             local confirmbox = ConfirmBox:new{
                 text = T(_("Reset this document?") .. "\n\n%1\n\n" ..
                          _("Information will be permanently lost."),
-                    BD.filepath(file)),
+                    BD.filepath(file)) .. ko_sidecar_note,
                 ok_text = _("Reset"),
                 ok_callback = function()
                     local data_to_purge = {
@@ -206,6 +214,7 @@ function filemanagerutil.genResetSettingsButton(doc_settings_or_file, caller_cal
                         custom_cover_file    = check_button_cover.checked and custom_cover_file,
                         custom_metadata_file = check_button_metadata.checked and custom_metadata_file,
                     }
+                    -- Kaia: purge preserves the book-folder sidecar outside doc mode.
                     (doc_settings or DocSettings:open(file)):purge(nil, data_to_purge)
                     if data_to_purge.custom_cover_file or data_to_purge.custom_metadata_file then
                         UIManager:broadcastEvent(Event:new("InvalidateMetadataCache", file))
@@ -244,13 +253,22 @@ function filemanagerutil.genResetSettingsButton(doc_settings_or_file, caller_cal
 end
 
 function filemanagerutil.genMultipleResetSettingsButton(files, caller_callback, button_disabled)
+    local ko_sidecar_present = false
+    for file in pairs(files) do
+        if hasKoreaderSidecar(file) then
+            ko_sidecar_present = true
+            break
+        end
+    end
+    local ko_sidecar_note = ko_sidecar_present
+        and "\n" .. _("Only Kaia's copies will be reset. KOReader's book-folder sidecars will remain.") or ""
     return {
         text = _("Reset"),
         enabled = not button_disabled,
         callback = function()
             UIManager:show(ConfirmBox:new{
                 text = _("Reset selected documents?") .. "\n" ..
-                       _("Information will be permanently lost."),
+                       _("Information will be permanently lost.") .. ko_sidecar_note,
                 ok_text = _("Reset"),
                 ok_callback = function()
                     for file in pairs(files) do
