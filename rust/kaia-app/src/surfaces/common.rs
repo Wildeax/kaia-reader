@@ -2,15 +2,20 @@
 //! body text, buttons, the nav bar and the book helpers. The app shell owns this
 //! file. A surface worker adds to it only when two surfaces need the same helper.
 
+use std::path::Path;
+
 use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::{Pixmap, Size};
 use kaia_library::{Book, CoverSize, Library};
+use kaia_stats::{Stats, DEFAULT_MAX_READ_SEC};
 use kaia_ui::components::{Column, Label, Padding, Paragraph, Spacer};
 use kaia_ui::controls::{Button, ButtonStyle};
 use kaia_ui::geometry::Insets;
-use kaia_ui::{Tone, Widget, WidgetPod, Window};
+use kaia_ui::{Theme, Tone, Widget, WidgetPod, Window};
 
 use crate::services::Services;
+use crate::surfaces::library::EMPTY_LIBRARY;
+use crate::surfaces::settings::facts;
 
 /// Longest book title shown in a list row. Longer titles end with an ellipsis.
 const ROW_TITLE_CHARS: usize = 60;
@@ -87,6 +92,45 @@ pub(crate) fn short(text: &str) -> String {
 pub(crate) fn cover(library: &Library, book_id: i64) -> Option<Pixmap> {
     let image = library.cover(book_id, CoverSize::Large).ok()??;
     decode_rgb(&image.bytes, DecodeLimits::default()).ok()
+}
+
+/// The empty library: a heading, then the steps to add books.
+pub(crate) fn empty_library(t: &Theme) -> Vec<WidgetPod> {
+    vec![
+        WidgetPod::new(Label::new("No books yet", t.font.title.clone(), Tone::Ink)),
+        WidgetPod::new(Paragraph::new(
+            EMPTY_LIBRARY,
+            t.font.body.clone(),
+            Tone::InkSecondary,
+        )),
+    ]
+}
+
+/// Seconds of reading per page for a book, for time-left estimates. The average
+/// comes from the statistics database when that database has the book with read
+/// pages. Otherwise it is the default KOReader starts with: half the longest
+/// stay that counts.
+pub(crate) fn seconds_per_page(data_dir: &Path, title: &str, authors: &str) -> f64 {
+    let fallback = (0.5 * DEFAULT_MAX_READ_SEC as f64).floor();
+    let path = facts::stats_path(data_dir);
+    if !path.is_file() {
+        return fallback;
+    }
+    let Ok(mut stats) = Stats::open(&path) else {
+        return fallback;
+    };
+    let id = stats.books().ok().and_then(|books| {
+        books
+            .into_iter()
+            .find(|b| b.title == title && b.authors == authors)
+            .map(|b| b.id)
+    });
+    match id {
+        Some(id) => stats
+            .book_estimate(id)
+            .map_or(fallback, |estimate| estimate.avg_page_seconds),
+        None => fallback,
+    }
 }
 
 /// Header taps outside its buttons open quick settings.

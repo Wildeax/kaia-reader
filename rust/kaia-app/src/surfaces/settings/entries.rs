@@ -2,9 +2,12 @@
 //! from the settings and the device; [`widget`] turns each one into a widget.
 //! The list is paged, so the entries are plain data and cheap to build again.
 
-use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox, Spacer};
+use kaia_ui::components::{
+    Column, CrossAlign, Expanded, Frame, Label, Padding, Paragraph, Row, SizedBox, Spacer,
+};
 use kaia_ui::composite::ListRow;
 use kaia_ui::controls::{Button, ButtonStyle, RadioGroup, Slider, Stepper, TextField};
+use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, WidgetPod};
 
 use super::commands::Light;
@@ -82,9 +85,16 @@ const BAR_LABEL_ROW_HEIGHTS: u32 = 2;
 /// The widget for one entry of a section.
 pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
     match entry {
-        Entry::Heading(text) => {
-            WidgetPod::new(Label::new(text.clone(), t.font.label.clone(), Tone::InkSecondary))
-        }
+        // A heading starts a new group, so it has a space above it.
+        Entry::Heading(text) => WidgetPod::new(Padding::new(
+            WidgetPod::new(Label::new(text.clone(), t.font.label.clone(), Tone::InkSecondary)),
+            Insets {
+                left: 0,
+                top: t.space.md,
+                right: 0,
+                bottom: 0,
+            },
+        )),
         Entry::Text(text) => WidgetPod::new(Paragraph::new(
             text.clone(),
             t.font.caption.clone(),
@@ -214,12 +224,19 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
 }
 
 /// One day or one book: the label, a bar scaled to the longest one, and the
-/// detail text. A zero bar draws nothing.
+/// detail text. Every bar starts in the same column, and every detail ends at the
+/// right edge, so the rows line up. A zero bar draws nothing.
 fn bar(label: &str, detail: &str, fraction: f64, t: &Theme) -> WidgetPod {
     let label_w = t.row_height * BAR_LABEL_ROW_HEIGHTS;
     let max_w = t.row_height * BAR_ROW_HEIGHTS;
     let w = (fraction.clamp(0.0, 1.0) * f64::from(max_w)).round() as u32;
-    let fill = (w > 0).then(|| WidgetPod::new(Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Ink)));
+    let fill = (w > 0).then(|| WidgetPod::new(Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Accent)));
+    let bar_area = WidgetPod::new(
+        Row::new(vec![WidgetPod::new(
+            SizedBox::new(fill).width(w).height(t.space.md),
+        )])
+        .cross_align(CrossAlign::Center),
+    );
     let children = vec![
         WidgetPod::new(
             SizedBox::new(Some(WidgetPod::new(Label::new(
@@ -229,7 +246,7 @@ fn bar(label: &str, detail: &str, fraction: f64, t: &Theme) -> WidgetPod {
             ))))
             .width(label_w),
         ),
-        WidgetPod::new(SizedBox::new(fill).width(w).height(t.space.md)),
+        WidgetPod::new(Expanded::new(bar_area, 1)),
         WidgetPod::new(Label::new(detail, t.font.body.clone(), Tone::InkSecondary)),
     ];
     WidgetPod::new(Row::new(children).gap(t.space.sm).cross_align(CrossAlign::Center))

@@ -44,7 +44,7 @@ impl Line {
         Line {
             key: format!("book-{}", info.id),
             title: short(&info.title),
-            detail: parts.join("  "),
+            detail: parts.join(" · "),
             cover: info.cover.clone(),
             tap: format!("library:open:{}", info.id),
             hold: Some(format!("library:details:{}", info.id)),
@@ -517,6 +517,7 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
         &format!("library:open:{id}"),
     ));
     children.push(pair(
+        t,
         button(
             ButtonStyle::Secondary,
             "Add to collection",
@@ -534,6 +535,7 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
         &format!("library:book:history:{id}"),
     ));
     children.push(pair(
+        t,
         button(
             ButtonStyle::Secondary,
             "Delete file",
@@ -545,12 +547,12 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
 }
 
 /// Two buttons side by side, each taking half the row.
-fn pair(left: WidgetPod, right: WidgetPod) -> WidgetPod {
+fn pair(t: &Theme, left: WidgetPod, right: WidgetPod) -> WidgetPod {
     WidgetPod::new(
         Row::new(vec![
             WidgetPod::new(Expanded::new(left, 1)),
             WidgetPod::new(Expanded::new(right, 1)),
         ])
-        .gap(8),
+        .gap(t.space.sm),
     )
 }

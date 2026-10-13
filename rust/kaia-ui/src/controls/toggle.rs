@@ -2,7 +2,7 @@
 //! by fill and by label, so it never depends on color alone.
 
 use kaia_events::Value;
-use kaia_gfx::{Point, Rect, Size};
+use kaia_gfx::{Color, Point, Rect, Size};
 use kaia_input::{Gesture, Key};
 
 use super::{measure_text, Reaction, UNBOUNDED};
@@ -19,6 +19,29 @@ pub struct Toggle {
     on_label: String,
     enabled: bool,
     reaction: Reaction,
+    /// Draw the pill of a list row instead of the two labelled halves.
+    pill: bool,
+}
+
+/// Draws the pill of a switch in `track`: a track with a knob, filled with `color`
+/// when on, and the knob on the right. Off, the knob sits on the left in `color`.
+/// The same drawing serves list rows and pill toggles.
+pub(crate) fn draw_pill(cx: &mut PaintCx, track: Rect, on: bool, color: Color, paper: Color) {
+    let ring = cx.theme.line.focus;
+    let h = track.h;
+    let mid_y = track.y + (h / 2) as i32;
+    let knob = (h as i32 / 2) - ring as i32;
+    if on {
+        cx.fill_rrect(track, h / 2, color);
+        cx.fill_circle(
+            Point::new(track.right() - h as i32 / 2, mid_y),
+            knob as f32,
+            paper,
+        );
+    } else {
+        cx.border(track, h / 2, ring, color);
+        cx.fill_circle(Point::new(track.x + h as i32 / 2, mid_y), knob as f32, color);
+    }
 }
 
 impl Toggle {
@@ -30,6 +53,16 @@ impl Toggle {
             on_label: "On".to_string(),
             enabled: true,
             reaction: Reaction::None,
+            pill: false,
+        }
+    }
+
+    /// A switch drawn as the pill of a list row, so every on or off setting
+    /// looks the same, with or without a row around it.
+    pub fn pill(on: bool) -> Self {
+        Self {
+            pill: true,
+            ..Self::new(on)
         }
     }
 
@@ -93,6 +126,11 @@ impl Widget for Toggle {
 
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let t = cx.theme;
+        if self.pill {
+            // The pill is one and a half touch targets wide, inside one touch target high.
+            let w = t.touch_target * 3 / 2;
+            return c.constrain(Size::new(w, t.touch_target));
+        }
         let off = measure_text(cx.fonts, t, &self.off_label, &t.font.body_bold, Tone::Ink).0;
         let on = measure_text(cx.fonts, t, &self.on_label, &t.font.body_bold, Tone::Ink).0;
         let half = (off.max(on) + 2 * t.space.md).max(t.touch_target);
@@ -105,6 +143,22 @@ impl Widget for Toggle {
         let t = cx.theme;
         let ring = t.line.focus;
         let radius = t.radius.button;
+        if self.pill {
+            let b = cx.bounds();
+            let (w, h) = (t.touch_target * 3 / 2, t.touch_target / 2);
+            let track = Rect::new(
+                b.x + (b.w as i32 - w as i32) / 2,
+                b.y + (b.h as i32 - h as i32) / 2,
+                w,
+                h,
+            );
+            let tone = if self.enabled { Tone::Ink } else { Tone::InkMuted };
+            let color = cx.color(tone);
+            let paper = cx.color(super::backdrop(cx, self.background));
+            draw_pill(cx, track, self.on, color, paper);
+            cx.focus_ring(radius + ring);
+            return;
+        }
         let inner = cx.bounds().inset(ring as i32);
         let ink = if self.enabled { Tone::Ink } else { Tone::InkMuted };
         let mid = inner.x + (inner.w / 2) as i32;

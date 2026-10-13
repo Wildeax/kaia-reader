@@ -14,7 +14,7 @@ mod paged;
 mod sheet;
 mod toast;
 
-pub use cover::{BookInfo, BookTile, CoverImage};
+pub use cover::{trim_blank_margins, BookInfo, BookTile, CoverImage};
 pub use dialog::{Dialog, DialogButton};
 pub use header::Header;
 pub use list_row::{ListRow, Trailing};

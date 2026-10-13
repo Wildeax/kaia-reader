@@ -16,7 +16,7 @@ use kaia_book::{
 };
 use kaia_events::Ctx;
 use kaia_ui::components::Label;
-use kaia_ui::controls::{Button, Slider, TextField};
+use kaia_ui::controls::{Slider, TextField, ToolButton};
 use kaia_ui::widget::PaintHint;
 use kaia_ui::Window;
 
@@ -68,6 +68,8 @@ pub struct Core {
     pub search_text: String,
     pub contents_tab: usize,
     pub color_panel: bool,
+    /// Seconds of reading per page, for the time-left line. Set when the book opens.
+    pub seconds_per_page: f64,
     pub pump_due: bool,
     pub layout_pending: bool,
     pub closed: bool,
@@ -96,6 +98,7 @@ impl Core {
             color_panel: false,
             pump_due: false,
             layout_pending: false,
+            seconds_per_page: 60.0,
             closed: false,
         }
     }
@@ -197,7 +200,7 @@ impl Core {
             title: self.title.clone(),
             page: info.page,
             page_count: info.page_count,
-            chapter: chapter_line(&info),
+            time_left: time_line(&info, self.seconds_per_page),
             bookmarked,
         })
     }
@@ -217,19 +220,20 @@ impl Core {
                 slider.set_value(value);
                 cx.request_paint();
             });
-        let chapter = model.chapter.clone();
+        let time_left = model.time_left.clone();
         layer
             .window
             .update::<Label, _>(ctx, "overlay-chapter", move |label, cx| {
-                label.set_text(chapter);
+                label.set_text(time_left);
                 cx.request_layout();
                 cx.request_paint();
             });
         let label = bookmark_label(model.bookmarked);
         layer
             .window
-            .update::<Button, _>(ctx, "overlay-bookmark", move |button, cx| {
-                button.set_text(label);
+            .update::<ToolButton, _>(ctx, "overlay-bookmark", move |button, cx| {
+                button.set_label(label);
+                cx.request_layout();
                 cx.request_paint();
             });
     }
@@ -433,14 +437,25 @@ impl Core {
     }
 }
 
-/// The chapter line of the overlay: the chapter and the pages left in it.
-pub fn chapter_line(info: &PageInfo) -> String {
-    match (&info.chapter, info.pages_left_in_chapter) {
-        (Some(chapter), Some(1)) => format!("{chapter}, 1 page left in chapter"),
-        (Some(chapter), Some(n)) => format!("{chapter}, {n} pages left in chapter"),
-        (Some(chapter), None) => chapter.clone(),
-        _ => String::new(),
+/// The time-left line of the overlay, such as `12 min left in chapter`. The
+/// pages left in the chapter are timed at `seconds_per_page`. A page before the
+/// first chapter counts the rest of the book instead. On the last page it says so.
+pub fn time_line(info: &PageInfo, seconds_per_page: f64) -> String {
+    if info.page_count == 0 {
+        return String::new();
     }
+    let (pages, scope) = match (&info.chapter, info.pages_left_in_chapter) {
+        (Some(_), Some(n)) => (u64::from(n), "chapter"),
+        _ => (
+            info.page_count.saturating_sub(info.page as usize + 1) as u64,
+            "book",
+        ),
+    };
+    if pages == 0 {
+        return format!("Last page of the {scope}");
+    }
+    let minutes = (pages as f64 * seconds_per_page / 60.0).round().max(1.0) as u64;
+    format!("{minutes} min left in {scope}")
 }
 
 /// The face for a font index from the Text and layout sheet.

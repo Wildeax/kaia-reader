@@ -103,7 +103,7 @@ fn controls_screen(t: &Theme) -> Padding {
         text,
         WidgetPod::new(Spacer::new(1)),
     ])
-    .gap(t.space.md);
+    .gap(t.space.sm);
 
     Padding::new(WidgetPod::new(page), Insets::all(t.space.lg))
 }

@@ -116,7 +116,9 @@ impl Widget for Stepper {
             let text = (self.format)(v);
             value_w = value_w.max(measure_text(cx.fonts, t, &text, &t.font.body_bold, Tone::Ink).0);
         }
-        let value_w = (value_w + 2 * t.space.md).max(sq);
+        // A value area of at least three touch targets keeps the minus buttons of
+        // stacked steppers in one column.
+        let value_w = (value_w + 2 * t.space.md).max(3 * sq);
         let ring = t.line.focus;
         c.constrain(Size::new(2 * sq + value_w + 2 * ring, sq + 2 * ring))
     }
@@ -147,8 +149,9 @@ impl Widget for Stepper {
         );
         let minus_color = cx.color(minus_tone);
         let plus_color = cx.color(plus_tone);
-        cx.border(minus, radius, t.line.divider, minus_color);
-        cx.border(plus, radius, t.line.divider, plus_color);
+        // The same ring as a button, so steppers and buttons share one outline weight.
+        cx.border(minus, radius, t.line.focus, minus_color);
+        cx.border(plus, radius, t.line.focus, plus_color);
 
         // Minus and plus are drawn as bars, so they need no icon font.
         let bar = sq / 3;

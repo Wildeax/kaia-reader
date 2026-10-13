@@ -40,6 +40,8 @@ pub struct ListRow {
     reaction: Reaction,
     enabled: bool,
     pressed: bool,
+    /// Steps of `space.md` the text is moved in by, for nested lists.
+    indent: u32,
 }
 
 /// Width of the switch: one and a half touch targets.
@@ -71,7 +73,15 @@ impl ListRow {
             reaction: Reaction::None,
             enabled: true,
             pressed: false,
+            indent: 0,
         }
+    }
+
+    /// Moves the text in by `levels` steps of `space.md`, so a nested entry sits
+    /// under its parent. Both lines move, and the leading icon or cover stays put.
+    pub fn indent(mut self, levels: u32) -> Self {
+        self.indent = levels;
+        self
     }
 
     /// One line under the primary text.
@@ -200,6 +210,7 @@ impl ListRow {
     fn text_width(&self, fonts: &mut kaia_gfx::text::FontSystem, t: &Theme, width: u32) -> u32 {
         let lead = self.leading_w(t);
         let lead_block = if lead > 0 { lead + t.space.md } else { 0 };
+        let indent = self.indent * t.space.md;
         let trail = match &self.trailing {
             Trailing::None => 0,
             Trailing::Chevron => t.icon_size,
@@ -215,7 +226,7 @@ impl ListRow {
         };
         let trail_block = if trail > 0 { trail + t.space.md } else { 0 };
         width
-            .saturating_sub(t.space.md + lead_block + trail_block + t.space.md)
+            .saturating_sub(t.space.md + indent + lead_block + trail_block + t.space.md)
             .max(1)
     }
 
@@ -273,7 +284,8 @@ impl Widget for ListRow {
         }
         let md = t.space.md as i32;
         let lead_w = self.leading_w(t) as i32;
-        let text_x = md + if lead_w > 0 { lead_w + md } else { 0 };
+        let indent = (self.indent * t.space.md) as i32;
+        let text_x = md + indent + if lead_w > 0 { lead_w + md } else { 0 };
         let (primary, secondary) = self.text_layouts(cx.fonts, t, b.w);
 
         if let Some(name) = &self.icon {
@@ -388,18 +400,7 @@ impl ListRow {
             Trailing::Toggle(on) => {
                 let (w, h) = (switch_w(t), switch_h(t));
                 let track = Rect::new(right - w as i32, mid_y - h as i32 / 2, w, h);
-                let knob = (h as i32 / 2) - ring as i32;
-                if *on {
-                    cx.fill_rrect(track, h / 2, color);
-                    cx.fill_circle(
-                        Point::new(track.right() - h as i32 / 2, mid_y),
-                        knob as f32,
-                        paper,
-                    );
-                } else {
-                    cx.border(track, h / 2, ring, color);
-                    cx.fill_circle(Point::new(track.x + h as i32 / 2, mid_y), knob as f32, color);
-                }
+                crate::controls::draw_pill(cx, track, *on, color, paper);
             }
             Trailing::Checkbox(checked) => {
                 let side = switch_h(t);

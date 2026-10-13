@@ -1,6 +1,10 @@
 //! [`Header`]: the title bar at the top of a surface. It has an optional back
 //! chevron on the leading edge, up to two icon actions on the trailing edge,
 //! and status text (such as the battery level) before the actions.
+//!
+//! The title and the icon boxes sit on the page edges. Each touch target hangs
+//! over its edge by the space around the icon, so the icon lines up with the
+//! content below the header.
 
 use kaia_gfx::text::TextLayout;
 use kaia_gfx::{Point, Rect, Size};
@@ -28,12 +32,13 @@ pub struct Header {
     status_box: Rect,
 }
 
-/// A logical x (counted from the start edge) as a physical x in a row of `w`.
-fn physical(rtl: bool, w: u32, lx: u32, item_w: u32) -> i32 {
+/// A logical x (counted from the start edge, negative past it) as a physical x
+/// in a row of `w`.
+fn physical(rtl: bool, w: u32, lx: i32, item_w: u32) -> i32 {
     if rtl {
-        w as i32 - lx as i32 - item_w as i32
+        w as i32 - lx - item_w as i32
     } else {
-        lx as i32
+        lx
     }
 }
 
@@ -116,26 +121,33 @@ impl Widget for Header {
 
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
         let t = cx.theme;
-        let w = c.max.w;
+        let w = c.max.w as i32;
         let touch = t.touch_target;
+        let icon = t.icon_size as i32;
+        // The icon is centred in its touch target, so the target hangs over the
+        // edge by `hang`. The icon box then sits exactly on the edge.
+        let hang = (touch as i32 - icon) / 2;
         let side = t.space.sm;
-        let gap = t.space.md;
+        let gap = t.space.md as i32;
+        let n = self.actions.len() as i32;
 
-        let actions_w = self.actions.len() as u32 * touch;
         let status_tl = self.status.as_ref().map(|s| {
             let style = t.style(&t.font.caption, Tone::InkSecondary);
-            cx.fonts.layout(s, &style, (w / 4).max(1), Some(1), true)
+            cx.fonts.layout(s, &style, (w / 4).max(1) as u32, Some(1), true)
         });
-        // The status keeps a gap before the actions. The title keeps one before the status.
-        let status_w = status_tl.as_ref().map_or(0, |tl| tl.width + gap);
-        let title_start = if self.back.is_some() {
-            side + touch + t.space.xs
-        } else {
-            gap
+
+        // The first action's icon box starts here. The last one ends at the page edge.
+        let icons_left = w - n * touch as i32 + 2 * hang;
+        let status_right = if n > 0 { icons_left - gap } else { w };
+        let status_w = status_tl.as_ref().map_or(0, |tl| tl.width as i32);
+        let status_x = status_right - status_w;
+        let title_start = if self.back.is_some() { icon + gap } else { 0 };
+        let title_end = match (status_tl.is_some(), n > 0) {
+            (true, _) => status_x - gap,
+            (false, true) => icons_left - gap,
+            (false, false) => w,
         };
-        let trailing = side + actions_w + status_w;
-        let title_end = w.saturating_sub(trailing + gap);
-        let title_w = title_end.saturating_sub(title_start).max(1);
+        let title_w = (title_end - title_start).max(1) as u32;
         let title_tl = cx.fonts.layout(
             &self.title,
             &t.style(&t.font.title, Tone::Ink),
@@ -150,37 +162,33 @@ impl Widget for Header {
         let btn_y = band_y + (inner_h as i32 - touch as i32) / 2;
 
         self.title_box = Rect::new(
-            physical(t.rtl, w, title_start, title_w),
+            physical(t.rtl, c.max.w, title_start, title_w),
             band_y + (inner_h as i32 - title_tl.height as i32) / 2,
             title_w,
             title_tl.height,
         );
         if let Some(back) = &mut self.back {
             back.layout(cx, Constraints::tight(Size::new(touch, touch)));
-            back.set_origin(Point::new(physical(t.rtl, w, side, touch), btn_y));
+            back.set_origin(Point::new(physical(t.rtl, c.max.w, -hang, touch), btn_y));
         }
-        let n = self.actions.len() as u32;
         for (i, pod) in self.actions.iter_mut().enumerate() {
-            let from_end = (n - i as u32) * touch;
-            let lx = w.saturating_sub(side + from_end);
+            // Action i is the (n - i)th target from the page edge.
+            let lx = w - (n - i as i32) * touch as i32 + hang;
             pod.layout(cx, Constraints::tight(Size::new(touch, touch)));
-            pod.set_origin(Point::new(physical(t.rtl, w, lx, touch), btn_y));
+            pod.set_origin(Point::new(physical(t.rtl, c.max.w, lx, touch), btn_y));
         }
         self.status_box = match &status_tl {
-            Some(tl) => {
-                let lx = w.saturating_sub(side + actions_w + gap + tl.width);
-                Rect::new(
-                    physical(t.rtl, w, lx, tl.width),
-                    band_y + (inner_h as i32 - tl.height as i32) / 2,
-                    tl.width,
-                    tl.height,
-                )
-            }
+            Some(tl) => Rect::new(
+                physical(t.rtl, c.max.w, status_x, tl.width),
+                band_y + (inner_h as i32 - tl.height as i32) / 2,
+                tl.width,
+                tl.height,
+            ),
             None => Rect::default(),
         };
         self.title_tl = Some(title_tl);
         self.status_tl = status_tl;
-        c.constrain(Size::new(w, height))
+        c.constrain(Size::new(c.max.w, height))
     }
 
     fn paint(&mut self, cx: &mut PaintCx) {

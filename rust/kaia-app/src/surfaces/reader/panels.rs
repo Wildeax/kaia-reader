@@ -45,6 +45,8 @@ pub struct ContentItem {
     /// True for the entry that holds the page being read. Shown as a trailing "Now".
     pub current: bool,
     pub action: String,
+    /// How deep the entry is in the table of contents. The top level is 0.
+    pub level: u32,
 }
 
 /// One row of the search results.
@@ -130,7 +132,7 @@ fn sheet(
             .fill(Tone::Surface)
             .border(Tone::Ink, t.line.hairline)
             .radius(t.radius.card)
-            .padding(Insets::all(t.space.md)),
+            .padding(Insets::all(t.space.lg)),
     );
     let sized = match height_percent {
         Some(p) => WidgetPod::new(SizedBox::new(Some(framed)).height(screen.h * p / 100)),
@@ -141,6 +143,17 @@ fn sheet(
         screen,
         Column::new(vec![fill(), sized]).cross_align(CrossAlign::Stretch),
     )
+}
+
+/// The heading of a group of choices, such as the font list. The choices below it
+/// are a radio group, which is a list of rows of its own.
+fn group_heading(services: &Services, text: &str) -> WidgetPod {
+    let t = &services.theme;
+    WidgetPod::new(Label::new(
+        text.to_string(),
+        t.font.label.clone(),
+        Tone::InkSecondary,
+    ))
 }
 
 /// A labelled row: the label on the left, the control on the right.
@@ -202,7 +215,9 @@ pub fn contents(
         )));
     } else {
         let list = PagedList::new(items, |item: &ContentItem, _t: &Theme| {
-            let mut row = ListRow::new(item.label.clone()).on_action(item.action.clone());
+            let mut row = ListRow::new(item.label.clone())
+                .indent(item.level)
+                .on_action(item.action.clone());
             if !item.detail.is_empty() {
                 row = row.secondary(item.detail.clone());
             }
@@ -248,11 +263,17 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
                 .collect();
             let font = WidgetPod::new(RadioGroup::new(options, selected).on_action("reader:layout:font"))
                 .with_key("layout-font");
-            children.push(labelled(services, "Font", font));
+            children.push(group_heading(services, "Font"));
+            children.push(font);
             let size = WidgetPod::new(
-                Stepper::new(f64::from(layout.font_size), 12.0, 40.0, 1.0)
-                    .format(|v| format!("{}", v as i64))
-                    .on_action("reader:layout:size"),
+                Stepper::new(
+                    f64::from(layout.font_size),
+                    f64::from(super::koreader_px(screen, 12.0)),
+                    f64::from(super::koreader_px(screen, 44.0)),
+                    1.0,
+                )
+                .format(|v| format!("{}", v as i64))
+                .on_action("reader:layout:size"),
             )
             .with_key("layout-size");
             children.push(labelled(services, "Size", size));
@@ -270,8 +291,9 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
             )
             .with_key("layout-margins");
             children.push(labelled(services, "Margins", margins));
+            // The pill switch of the Settings rows, so every on or off setting looks the same.
             let toggle = |on: bool, action: &str, key: &str| {
-                WidgetPod::new(Toggle::new(on).labels("Off", "On").on_action(action)).with_key(key)
+                WidgetPod::new(Toggle::pill(on).on_action(action)).with_key(key)
             };
             children.push(labelled(
                 services,
@@ -302,7 +324,8 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
             let zoom_group =
                 WidgetPod::new(RadioGroup::new(options, Some(index)).on_action("reader:layout:zoom"))
                     .with_key("layout-zoom");
-            children.push(labelled(services, "Zoom", zoom_group));
+            children.push(group_heading(services, "Zoom"));
+            children.push(zoom_group);
         }
     }
     let title = if reflow.is_some() {
@@ -407,7 +430,7 @@ pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
 pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> Window {
     let t = &services.theme;
     let children = vec![
-        WidgetPod::new(Label::new(word.to_string(), t.font.body_bold.clone(), Tone::Ink)),
+        WidgetPod::new(Label::new(word.to_string(), t.font.title.clone(), Tone::Ink)),
         WidgetPod::new(Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink).max_lines(40))
             .with_key("dict-body"),
     ];
@@ -534,6 +557,7 @@ pub fn annotation_items(annotations: &[Annotation], bookmarks: bool) -> Vec<Cont
                 detail,
                 current: false,
                 action: format!("reader:contents:annot:{}", a.id),
+                level: 0,
             }
         })
         .collect()

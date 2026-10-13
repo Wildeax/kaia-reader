@@ -195,7 +195,7 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
         ),
         filter_row(services, filter),
         button(
-            ButtonStyle::Secondary,
+            ButtonStyle::Text,
             "Export all notes",
             "notes:export",
             "notes-export",
@@ -326,7 +326,8 @@ fn build_item(item: &Item, _theme: &Theme) -> WidgetPod {
         } => {
             let mut row = ListRow::new(primary.clone()).secondary(secondary.clone());
             if let Some((id, args)) = open.clone() {
-                row = row.on_hook(move |cx| {
+                // A row that opens its place in the book shows the same chevron as a book row.
+                row = row.chevron().on_hook(move |cx| {
                     cx.action(AppAction {
                         id: id.clone(),
                         args: args.clone(),

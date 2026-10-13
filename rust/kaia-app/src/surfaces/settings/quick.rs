@@ -86,7 +86,8 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
         .gap(t.space.md),
     ));
 
-    let content = WidgetPod::new(Column::new(rows).gap(t.space.md).cross_align(CrossAlign::Stretch));
+    // The sheet is short, so its rows are spaced by the small gap.
+    let content = WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch));
     SheetPanel::new(t, "Quick settings", content)
 }
 

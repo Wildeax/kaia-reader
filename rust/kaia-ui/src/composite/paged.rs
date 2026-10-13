@@ -90,9 +90,10 @@ fn nav_rects(b: Rect, t: &Theme) -> NavRects {
     // The strip sits one gap above the bottom edge, so it never touches a nav bar below.
     let strip_y = b.bottom() - touch as i32 - side;
     // Three touch targets wide: enough for "Previous" in the body bold face.
+    // The buttons sit on the edges of the pager, so they line up with the page margin.
     let btn_w = (3 * touch).min(b.w / 3);
-    let prev = Rect::new(b.x + side, strip_y, btn_w, touch);
-    let next = Rect::new(b.right() - side - btn_w as i32, strip_y, btn_w, touch);
+    let prev = Rect::new(b.x, strip_y, btn_w, touch);
+    let next = Rect::new(b.right() - btn_w as i32, strip_y, btn_w, touch);
     let label_x = prev.right() + side;
     let label_w = (next.x - side - label_x).max(0) as u32;
     NavRects {

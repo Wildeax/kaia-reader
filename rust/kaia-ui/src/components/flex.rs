@@ -52,6 +52,7 @@ struct Flex {
     main: MainAlign,
     cross: CrossAlign,
     size: MainSize,
+    hide_overflow: bool,
 }
 
 impl Flex {
@@ -63,6 +64,7 @@ impl Flex {
             main: MainAlign::Start,
             cross: CrossAlign::Start,
             size: MainSize::Max,
+            hide_overflow: false,
         }
     }
 
@@ -80,8 +82,43 @@ impl Flex {
         let n = self.children.len();
         let cross_align = self.cross;
         let gap = self.gap;
-        let gaps = self.gap as u64 * n.saturating_sub(1) as u64;
         let mut sizes = vec![Size::new(0, 0); n];
+
+        // With `hide_overflow`, a child whose natural size does not fit in what is
+        // left is hidden, and so is every child after it. Each child is measured
+        // visible first, because a hidden pod lays out to zero. Flex children stay shown.
+        if self.hide_overflow {
+            let mut used: u64 = 0;
+            let mut count: u64 = 0;
+            let mut cut = false;
+            for child in self.children.iter_mut() {
+                child.set_visible(true);
+                if child.flex() > 0 {
+                    continue;
+                }
+                let s = child.layout(
+                    cx,
+                    child_constraints(vertical, cross_align, 0, max_main, max_cross),
+                );
+                let step = main_of(vertical, s) as u64 + if count > 0 { gap as u64 } else { 0 };
+                let fits = !cut && used + step <= max_main as u64;
+                cut |= !fits;
+                child.set_visible(fits);
+                if fits {
+                    used += step;
+                    count += 1;
+                }
+            }
+        }
+
+        // Gaps between the children that are laid out. A hidden child in hide
+        // mode takes no gap.
+        let laid_out = if self.hide_overflow {
+            self.children.iter().filter(|c| c.is_visible()).count()
+        } else {
+            n
+        };
+        let gaps = self.gap as u64 * laid_out.saturating_sub(1) as u64;
 
         // Pass 1: children without flex take their natural size.
         let mut used: u64 = 0;
@@ -227,6 +264,14 @@ macro_rules! linear {
         pub struct $name(Flex);
 
         impl $name {
+            /// Hides the children that do not fit whole, instead of letting them
+            /// run past the end and get cut in half. The container owns the
+            /// visibility of its children while this is on.
+            pub fn hide_overflow(mut self) -> Self {
+                self.0.hide_overflow = true;
+                self
+            }
+
             pub fn new(children: Vec<WidgetPod>) -> Self {
                 Self(Flex::new($axis, children))
             }

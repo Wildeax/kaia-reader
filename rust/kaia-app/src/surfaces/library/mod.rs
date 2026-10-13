@@ -23,6 +23,7 @@ use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, WidgetPod, Window};
 
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
+use crate::surfaces::common;
 use crate::surfaces::common::root_window as window;
 use crate::surfaces::Route;
 use commands::{parse, Command, FolderStep, View};
@@ -484,7 +485,7 @@ impl LibrarySurface {
             View::Covers | View::List => {
                 let books = data::list(&env.services.library, &self.prefs);
                 if books.is_empty() {
-                    return vec![views::body_text(&t, EMPTY_LIBRARY)];
+                    return common::empty_library(&t);
                 }
                 let infos: Vec<BookInfo> = books
                     .iter()
@@ -559,7 +560,7 @@ impl LibrarySurface {
                     .gap(t.space.sm)
                     .cross_align(CrossAlign::Stretch),
             ),
-            Insets::all(t.space.md),
+            Insets::all(t.space.lg),
         );
         let win = window(env.services, env.screen, page);
         self.window = Some(win.clone());
@@ -567,8 +568,8 @@ impl LibrarySurface {
     }
 }
 
-/// The message on an empty library.
-pub const EMPTY_LIBRARY: &str = "No books yet. Connect the Kobo to a computer over USB and copy book files into the Books folder. Kaia adds them after the next scan.";
+/// The steps to add books to an empty library. The heading is "No books yet".
+pub const EMPTY_LIBRARY: &str = "Connect the Kobo to a computer over USB and copy book files into the Books folder. Kaia adds them after the next scan.";
 
 /// Deletes the file of book `id` and reports the result. The row leaves the list
 /// the next time the lists are read, because they skip books whose file is gone.

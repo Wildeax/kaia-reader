@@ -24,6 +24,7 @@ mod slider;
 mod stepper;
 mod text_field;
 mod toggle;
+mod tool_button;
 
 pub use button::{Button, ButtonStyle, IconButton};
 pub use checkbox::Checkbox;
@@ -33,7 +34,9 @@ pub use radio::RadioGroup;
 pub use slider::Slider;
 pub use stepper::Stepper;
 pub use text_field::TextField;
+pub(crate) use toggle::draw_pill;
 pub use toggle::Toggle;
+pub use tool_button::ToolButton;
 
 use std::rc::Rc;
 

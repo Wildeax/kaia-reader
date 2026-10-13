@@ -50,7 +50,8 @@ impl SheetPanel {
             .gap(t.space.md)
             .cross_align(CrossAlign::Stretch)
             .shrink();
-        let padded = WidgetPod::new(Padding::new(WidgetPod::new(column), Insets::all(t.space.md)));
+        // Sheet content lines up with the page margin, as on every page.
+        let padded = WidgetPod::new(Padding::new(WidgetPod::new(column), Insets::all(t.space.lg)));
         let sheet = Frame::new(padded)
             .fill(Tone::Surface)
             .border(Tone::Ink, t.line.hairline)

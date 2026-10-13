@@ -1,7 +1,8 @@
 //! The reader overlay: a top bar with Home, the title, search, the bookmark and
-//! More, and a bottom bar with the page slider, the chapter line and the Contents,
-//! Notes and Text and layout buttons. The page stays visible between the bars.
-//! A tap the bars do not use closes the overlay.
+//! More, and a bottom bar with the page slider, the time left in the chapter and
+//! the Contents, Notes, Text and layout and Light buttons. Every bar item is an
+//! icon with its label, the same style as the nav bar. The page stays visible
+//! between the bars. A tap the bars do not use closes the overlay.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,14 +10,14 @@ use std::rc::Rc;
 use kaia_events::{Refresh, RefreshMode, ShowOpts};
 use kaia_gfx::Size;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Row, Spacer};
-use kaia_ui::controls::{ButtonStyle, IconButton, Slider};
+use kaia_ui::controls::{Slider, ToolButton};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, WidgetPod, Window};
 
 use super::state::Core;
 use crate::services::Services;
 use crate::surface::{Surface, SurfaceEnv};
-use crate::surfaces::common::{button, window};
+use crate::surfaces::common::window;
 use crate::surfaces::Route;
 
 /// What the bars show. The reader fills it from the session.
@@ -26,8 +27,9 @@ pub struct OverlayModel {
     /// The page shown, 0-based.
     pub page: u32,
     pub page_count: usize,
-    /// The chapter and the pages left in it, as one line. Empty when unknown.
-    pub chapter: String,
+    /// The time left in the chapter, or in the book before the first chapter, as
+    /// one line such as `12 min left in chapter`. Empty when the book has no pages.
+    pub time_left: String,
     pub bookmarked: bool,
 }
 
@@ -74,31 +76,33 @@ impl Surface for Overlay {
     }
 }
 
+/// One bar item: an icon over its label. Tapping it queues `action`. The item is
+/// focusable, so a page-turn key moves focus along the bar before it turns a page.
+fn tool(icon: &str, label: &str, action: &str, key: &str) -> WidgetPod {
+    WidgetPod::new(ToolButton::new(icon, label).on_action(action))
+        .focusable(true)
+        .with_key(key)
+}
+
 /// The window of the overlay for `model`.
 pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window {
     let t = &services.theme;
     let sp = t.space.md;
+    let bar_pad = Insets::symmetric(t.space.lg, t.space.sm);
 
-    let home = button(ButtonStyle::Secondary, "Home", "nav:home", "overlay-home");
+    let home = tool("home", "Home", "nav:home", "overlay-home");
     let title = WidgetPod::new(Label::new(
         model.title.clone(),
         t.font.body_bold.clone(),
         Tone::Ink,
     ));
-    let search = WidgetPod::new(IconButton::new("appbar.search").on_action("reader:search:open"))
-        .with_key("overlay-search");
-    let bookmark = button(
-        ButtonStyle::Secondary,
-        bookmark_label(model.bookmarked),
-        "reader:bookmark",
-        "overlay-bookmark",
-    );
-    let more = button(
-        ButtonStyle::Secondary,
-        "More",
-        "reader:panel:more",
-        "overlay-more",
-    );
+    let search = tool("appbar.search", "Search", "reader:search:open", "overlay-search");
+    let bookmark = WidgetPod::new(
+        ToolButton::new("bookmark", bookmark_label(model.bookmarked)).on_action("reader:bookmark"),
+    )
+    .focusable(true)
+    .with_key("overlay-bookmark");
+    let more = tool("appbar.menu", "More", "reader:panel:more", "overlay-more");
     let top = WidgetPod::new(
         Row::new(vec![
             home,
@@ -119,53 +123,61 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
             .on_action("reader:slider"),
     )
     .with_key("overlay-slider");
-    let chapter = WidgetPod::new(Label::new(
-        model.chapter.clone(),
+    let time_left = WidgetPod::new(Label::new(
+        model.time_left.clone(),
         t.font.caption.clone(),
         Tone::InkSecondary,
     ))
     .with_key("overlay-chapter");
-    let contents = button(
-        ButtonStyle::Secondary,
-        "Contents",
-        "reader:panel:contents",
-        "overlay-contents",
-    );
-    let notes = button(ButtonStyle::Secondary, "Notes", "nav:notes", "overlay-notes");
-    let layout = button(
-        ButtonStyle::Secondary,
-        "Text and layout",
-        "reader:panel:layout",
-        "overlay-layout",
+    let tools = WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                tool(
+                    "appbar.navigation",
+                    "Contents",
+                    "reader:panel:contents",
+                    "overlay-contents",
+                ),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                tool("edit", "Notes", "nav:notes", "overlay-notes"),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                tool(
+                    "appbar.typeset",
+                    "Text and layout",
+                    "reader:panel:layout",
+                    "overlay-layout",
+                ),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                tool("appbar.contrast", "Light", "settings:quick:open", "overlay-light"),
+                1,
+            )),
+        ])
+        .gap(t.space.sm),
     );
     let bottom = WidgetPod::new(
-        Column::new(vec![
-            slider,
-            chapter,
-            WidgetPod::new(
-                Row::new(vec![
-                    WidgetPod::new(Expanded::new(contents, 1)),
-                    WidgetPod::new(Expanded::new(notes, 1)),
-                    WidgetPod::new(Expanded::new(layout, 1)),
-                ])
-                .gap(sp),
-            ),
-        ])
-        .gap(sp)
-        .shrink(),
+        Column::new(vec![slider, time_left, tools])
+            .gap(sp)
+            .cross_align(CrossAlign::Stretch)
+            .shrink(),
     );
 
     let top_bar = WidgetPod::new(
         Frame::new(top)
             .fill(Tone::Surface)
             .border(Tone::Divider, t.line.divider)
-            .padding(Insets::all(sp)),
+            .padding(bar_pad),
     );
     let bottom_bar = WidgetPod::new(
         Frame::new(bottom)
             .fill(Tone::Surface)
             .border(Tone::Divider, t.line.divider)
-            .padding(Insets::all(sp)),
+            .padding(bar_pad),
     );
     let middle = WidgetPod::new(Expanded::new(WidgetPod::new(Spacer::new(1)), 1));
     let root = Column::new(vec![top_bar, middle, bottom_bar]).cross_align(CrossAlign::Stretch);

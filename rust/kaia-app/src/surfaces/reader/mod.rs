@@ -23,7 +23,7 @@ mod state;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use kaia_book::{Drawer, Margins, OpenOptions, Point, ZoomMode};
+use kaia_book::{Drawer, Margins, OpenOptions, Point, TextLayout, ZoomMode};
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, Value};
 use kaia_ui::components::Stack;
 use kaia_ui::widget::PaintHint;
@@ -36,8 +36,34 @@ use panels::ContentItem;
 use state::{font_face, read_field, schedule_if_pending, Core, Layer, Turn};
 
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{display_title, window};
+use crate::surfaces::common::{self, display_title, window};
 use crate::surfaces::Route;
+
+/// KOReader's `scaleBySize` for `units` of its font sizes and margins, in pixels on
+/// this screen. KOReader uses `min(width, height) / 600` as the scale when no DPI
+/// override is set, which is the case on the Libra Colour. So 22 is 47 px and 10 is
+/// 22 px there.
+pub(crate) fn koreader_px(screen: kaia_gfx::Size, units: f64) -> f32 {
+    (units * f64::from(screen.w.min(screen.h)) / 600.0).ceil() as f32
+}
+
+/// The text layout for a book with no saved layout: KOReader's defaults, scaled
+/// the way KOReader scales them. The font is 22 units, the side margins 10 units
+/// and the top and bottom margins 15 units. Line spacing (100 %) and the other
+/// options keep the defaults of `kaia_book`. A book with a saved layout keeps it.
+fn koreader_default_layout(screen: kaia_gfx::Size) -> TextLayout {
+    let base = TextLayout::default();
+    TextLayout {
+        font_size: koreader_px(screen, 22.0),
+        margins: Margins {
+            top: koreader_px(screen, 15.0),
+            right: koreader_px(screen, 10.0),
+            bottom: koreader_px(screen, 15.0),
+            left: koreader_px(screen, 10.0),
+        },
+        ..base
+    }
+}
 
 /// The reader screen for one book.
 pub struct ReaderSurface {
@@ -201,6 +227,7 @@ impl Surface for ReaderSurface {
         let screen = env.screen;
         let mut opts = OpenOptions::new(env.services.paths.data_dir.clone());
         opts.viewport = screen;
+        opts.default_layout = koreader_default_layout(screen);
         opts.pixel_format = env.services.theme.pixel_format();
         let color_panel = env.services.theme.color_panel;
         let page = WidgetPod::new(PageView::new()).with_key(PAGE_KEY);
@@ -209,6 +236,11 @@ impl Surface for ReaderSurface {
         let progress = {
             let mut c = self.core.borrow_mut();
             c.title = display_title(&row);
+            c.seconds_per_page = common::seconds_per_page(
+                &env.services.paths.data_dir,
+                &c.title,
+                row.authors.as_deref().unwrap_or("N/A"),
+            );
             c.viewport = screen;
             c.color_panel = color_panel;
             c.refresh_every = env
@@ -805,14 +837,11 @@ fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
                     .iter()
                     .enumerate()
                     .map(|(index, entry)| ContentItem {
-                        label: format!(
-                            "{}{}",
-                            "  ".repeat(entry.level.saturating_sub(1) as usize),
-                            entry.title
-                        ),
+                        label: entry.title.clone(),
                         detail: entry.page.map(|p| format!("Page {}", p + 1)).unwrap_or_default(),
                         current: current.as_deref() == Some(entry.title.as_str()),
                         action: format!("reader:contents:goto:{index}"),
+                        level: entry.level.saturating_sub(1),
                     })
                     .collect();
                 (items, "This book has no table of contents.")

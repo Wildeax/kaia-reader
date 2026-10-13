@@ -6,11 +6,16 @@ mod common;
 
 use common::*;
 use kaia_gfx::golden::assert_matches_golden;
-use kaia_ui::components::{Column, CrossAlign, Expanded};
+use kaia_ui::components::{Column, CrossAlign, Expanded, Padding};
 use kaia_ui::composite::{
     BookInfo, BookTile, Dialog, DialogButton, Grid, Header, ListRow, Menu, NavBar, NavItem, PagedList, Toast,
 };
-use kaia_ui::{render, Theme, WidgetPod, Window};
+use kaia_ui::{render, Insets, Theme, Widget, WidgetPod, Window};
+
+/// A screen inside the page margin, as the app lays out its pages.
+fn page(t: &Theme, body: impl Widget + 'static) -> Padding {
+    Padding::new(WidgetPod::new(body), Insets::all(t.space.lg))
+}
 
 /// A body above a nav bar. The body takes the space the bar does not need.
 fn with_nav(body: WidgetPod, active: NavItem) -> Column {
@@ -89,21 +94,21 @@ fn list_screen(t: &Theme) -> Column {
 #[test]
 fn settings_screen_golden_matches() {
     let t = theme(false);
-    let pm = render(settings_screen(), SCREEN, &t, &assets());
+    let pm = render(page(&t, settings_screen()), SCREEN, &t, &assets());
     assert_matches_golden(&pm, &golden("screen_settings_gray.png"), 0);
 }
 
 #[test]
 fn library_screen_golden_matches() {
     let t = theme(false);
-    let pm = render(library_screen(&t), SCREEN, &t, &assets());
+    let pm = render(page(&t, library_screen(&t)), SCREEN, &t, &assets());
     assert_matches_golden(&pm, &golden("screen_library_gray.png"), 0);
 }
 
 #[test]
 fn list_screen_golden_matches() {
     let t = theme(false);
-    let pm = render(list_screen(&t), SCREEN, &t, &assets());
+    let pm = render(page(&t, list_screen(&t)), SCREEN, &t, &assets());
     assert_matches_golden(&pm, &golden("screen_list_gray.png"), 0);
 }
 
@@ -112,7 +117,7 @@ fn dialog_screen_golden_matches() {
     let t = theme(false);
     let a = assets();
     // The list behind the dialog is dimmed by the dialog's scrim.
-    let list = Window::new(list_screen(&t), t.clone(), a.clone(), SCREEN);
+    let list = Window::new(page(&t, list_screen(&t)), t.clone(), a.clone(), SCREEN);
     let dialog = Window::new(
         Dialog::new(
             &t,

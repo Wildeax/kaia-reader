@@ -170,10 +170,16 @@ fn page_turns_are_partial_refreshes_and_back_returns() {
     let dir = scratch("page-turns");
     let mut app = open_reader("juliet.epub", &dir);
     let id = book_id(&app, "juliet.epub");
-    // Pages 4 to 8 of juliet are not chapter starts, so turns there are partial.
-    for _ in 0..4 {
+
+    // A turn is partial unless it lands on a chapter start. Walk forward, on pages
+    // past the front matter, to a page whose next two pages are not chapter starts.
+    let chapters = chapter_pages(&mut app);
+    let is_start = |page: u32| chapters.contains(&(page - 1));
+    let free = |page: u32| !is_start(page + 1) && !is_start(page + 2);
+    while position(&mut app).0 < 4 || !free(position(&mut app).0) {
         app.key(Key::RPgFwd).unwrap();
     }
+    let page = position(&mut app).0;
 
     let before = app.refresh_modes().len();
     app.key(Key::RPgFwd).unwrap();
@@ -182,20 +188,20 @@ fn page_turns_are_partial_refreshes_and_back_returns() {
         vec![RefreshMode::Partial],
         "one page forward"
     );
-    assert_eq!(position(&mut app).0, 5);
+    assert_eq!(position(&mut app).0, page + 1);
 
     // A tap on the right side turns the page too.
     let (w, h) = (app.screen().w as i32, app.screen().h as i32);
     let before = app.refresh_modes().len();
     app.tap(Point::new(w * 9 / 10, h / 2)).unwrap();
     assert_eq!(modes_after(&app, before), vec![RefreshMode::Partial]);
-    assert_eq!(position(&mut app).0, 6);
+    assert_eq!(position(&mut app).0, page + 2);
 
     // The left third goes back a page.
     let before = app.refresh_modes().len();
     app.tap(Point::new(w / 10, h / 2)).unwrap();
     assert_eq!(modes_after(&app, before), vec![RefreshMode::Partial]);
-    assert_eq!(position(&mut app).0, 5);
+    assert_eq!(position(&mut app).0, page + 1);
 
     // Back leaves the reader, returns to the Library, and saves the progress.
     let before = app.refresh_modes().len();

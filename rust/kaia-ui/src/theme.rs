@@ -102,6 +102,17 @@ pub struct Palette {
 /// The accent green from DESIGN.md.
 const ACCENT_RGB: Color = Color::rgb(0x1F, 0x6F, 0x5C);
 
+/// The smallest tappable size: 9 mm, which is `scaleBySize(50)` when the scale
+/// follows the screen (106 px on the Libra Colour). A DPI override changes the
+/// scale and can make the same 50 units smaller than 9 mm (100 px at 300 DPI),
+/// so the 9 mm size at the override DPI is the floor.
+pub(crate) fn touch_target(scale: &Scale) -> u32 {
+    let mm_px = scale
+        .dpi
+        .map_or(0, |dpi| (9.0 * f64::from(dpi) / 25.4).ceil() as u32);
+    scale.dp(50).max(mm_px)
+}
+
 /// All tokens for one panel.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
@@ -113,7 +124,7 @@ pub struct Theme {
     pub line: Lines,
     pub font: Fonts,
     pub palette: Palette,
-    /// Smallest size of a tappable control: 9 mm, `scaleBySize(50)`.
+    /// Smallest size of a tappable control: 9 mm. See [`touch_target`].
     pub touch_target: u32,
     /// Icon size for controls: `scaleBySize(32)`.
     pub icon_size: u32,
@@ -166,7 +177,7 @@ impl Theme {
                 caption: font("Noto Sans", 16, 400),
                 label: font("Noto Sans", 15, 700),
             },
-            touch_target: dp(50),
+            touch_target: touch_target(&scale),
             icon_size: dp(32),
             nav_bar: dp(60),
             row_height: dp(83),
@@ -248,5 +259,19 @@ mod tests {
             dpi: None,
         };
         assert_eq!(fractional.dp(2), 3, "ceil(2 * 1.5)");
+    }
+
+    #[test]
+    fn touch_target_is_nine_millimetres_at_the_panel_dpi() {
+        let libra = Scale {
+            width: 1264,
+            height: 1680,
+            dpi: Some(300),
+        };
+        // 9 mm at 300 DPI is 106.3 px, so the floor is 107 px. dp(50) with the
+        // override would be 100 px, which is 8.5 mm.
+        assert_eq!(touch_target(&libra), 107);
+        let no_override = Scale { dpi: None, ..libra };
+        assert_eq!(touch_target(&no_override), 106, "dp(50) without an override");
     }
 }

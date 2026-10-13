@@ -25,14 +25,14 @@ impl CoverImage {
     pub fn new(title: impl Into<String>, cover: Option<Pixmap>) -> Self {
         Self {
             title: title.into(),
-            cover,
+            cover: cover.map(|c| trim_blank_margins(&c)),
             scaled: None,
         }
     }
 
     /// Replaces the picture, or removes it with `None`.
     pub fn set_cover(&mut self, cover: Option<Pixmap>) {
-        self.cover = cover;
+        self.cover = cover.map(|c| trim_blank_margins(&c));
         self.scaled = None;
     }
 
@@ -88,6 +88,50 @@ impl Widget for CoverImage {
     }
 }
 
+/// A channel at or above this value counts as white for a blank margin.
+const BLANK_FLOOR: u8 = 240;
+
+/// The cover without its white margins. A cover rendered from a page has white
+/// margins around the text and the picture, so the picture would fill only part
+/// of the box. Rows and columns at the edges where every channel is near white
+/// are cut. Only white counts, so dark art and gradients keep their edges. A
+/// picture with no white edge comes back unchanged.
+pub fn trim_blank_margins(src: &Pixmap) -> Pixmap {
+    let (w, h) = (src.width() as usize, src.height() as usize);
+    let bpp = src.format().bytes_per_pixel();
+    let data = src.data();
+    if w < 3 || h < 3 || data.len() < w * h * bpp {
+        return src.clone();
+    }
+    let blank = |x: usize, y: usize| {
+        let i = (y * w + x) * bpp;
+        data[i..i + bpp].iter().all(|v| *v >= BLANK_FLOOR)
+    };
+    let (mut top, mut bottom, mut left, mut right) = (0, h, 0, w);
+    while top < bottom && (left..right).all(|x| blank(x, top)) {
+        top += 1;
+    }
+    while bottom > top && (left..right).all(|x| blank(x, bottom - 1)) {
+        bottom -= 1;
+    }
+    while left < right && (top..bottom).all(|y| blank(left, y)) {
+        left += 1;
+    }
+    while right > left && (top..bottom).all(|y| blank(right - 1, y)) {
+        right -= 1;
+    }
+    if (top, bottom, left, right) == (0, h, 0, w) || right <= left || bottom <= top {
+        return src.clone();
+    }
+    let (cw, ch) = (right - left, bottom - top);
+    let mut out = Vec::with_capacity(cw * ch * bpp);
+    for y in top..bottom {
+        let start = (y * w + left) * bpp;
+        out.extend_from_slice(&data[start..start + cw * bpp]);
+    }
+    Pixmap::from_data(cw as u32, ch as u32, src.format(), out).unwrap_or_else(|| src.clone())
+}
+
 /// What a [`BookTile`] shows. `id` goes back to the app with the tap.
 #[derive(Clone)]
 pub struct BookInfo {
@@ -100,36 +144,38 @@ pub struct BookInfo {
 }
 
 /// A grid cell: the cover, the title in two lines at most, the author in one
-/// line, and a thin progress line. A tap queues the action set with
-/// [`BookTile::on_action`] and passes the book id as its argument.
+/// line, and a thin progress line. The cover is 2 by 3 at the full width of the
+/// cell, and the text takes the height below it. A tap queues the action set
+/// with [`BookTile::on_action`] and passes the book id as its argument.
 pub struct BookTile {
     id: String,
-    column: Column,
+    cover: WidgetPod,
+    details: WidgetPod,
     reaction: Reaction,
 }
 
 impl BookTile {
     pub fn new(theme: &Theme, book: &BookInfo) -> Self {
-        let mut children = vec![
-            WidgetPod::new(CoverImage::new(book.title.clone(), book.cover.clone())),
-            WidgetPod::new(
-                Paragraph::new(book.title.clone(), theme.font.book_title.clone(), Tone::Ink).max_lines(2),
-            ),
-        ];
+        let mut details = vec![WidgetPod::new(
+            Paragraph::new(book.title.clone(), theme.font.book_title.clone(), Tone::Ink).max_lines(2),
+        )];
         if let Some(author) = &book.author {
-            children.push(WidgetPod::new(Label::new(
+            details.push(WidgetPod::new(Label::new(
                 author.clone(),
                 theme.font.caption.clone(),
                 Tone::InkSecondary,
             )));
         }
-        children.push(WidgetPod::new(ThinBar::new(book.progress)));
+        details.push(WidgetPod::new(ThinBar::new(book.progress)));
         Self {
             id: book.id.clone(),
-            column: Column::new(children)
-                .gap(theme.space.sm)
-                .cross_align(CrossAlign::Stretch)
-                .shrink(),
+            cover: WidgetPod::new(CoverImage::new(book.title.clone(), book.cover.clone())),
+            details: WidgetPod::new(
+                Column::new(details)
+                    .gap(theme.space.sm)
+                    .cross_align(CrossAlign::Stretch)
+                    .shrink(),
+            ),
             reaction: Reaction::None,
         }
     }
@@ -145,7 +191,21 @@ impl Widget for BookTile {
     crate::impl_as_any!();
 
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
-        self.column.layout(cx, c)
+        let t = cx.theme;
+        let w = c.max.w;
+        // The cover keeps its 2 by 3 shape at the full width. The text gets the rest
+        // of the height, so a tall cover never leaves the title with no room.
+        let cover_h = (w * 3 / 2).min(c.max.h);
+        self.cover.layout(cx, Constraints::tight(Size::new(w, cover_h)));
+        self.cover.set_origin(Point::new(0, 0));
+        let top = cover_h + t.space.sm;
+        let details_max = Constraints {
+            min: Size::new(w, 0),
+            max: Size::new(w, c.max.h.saturating_sub(top)),
+        };
+        let details = self.details.layout(cx, details_max);
+        self.details.set_origin(Point::new(0, top as i32));
+        c.constrain(Size::new(w, top + details.h))
     }
 
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
@@ -160,7 +220,7 @@ impl Widget for BookTile {
     }
 
     fn children_mut(&mut self) -> Vec<&mut WidgetPod> {
-        self.column.children_mut()
+        vec![&mut self.cover, &mut self.details]
     }
 }
 

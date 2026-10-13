@@ -185,8 +185,14 @@ impl Widget for Slider {
         let knob = cx.color(tone);
         cx.fill_circle(center, knob_r, knob);
 
+        // The readout stays readable when the slider is disabled. Only the knob dims.
         let text = (self.format)(self.value);
-        let style = t.style(&t.font.body, tone);
+        let readout = if self.enabled {
+            Tone::Ink
+        } else {
+            Tone::InkSecondary
+        };
+        let style = t.style(&t.font.body, readout);
         let tl = cx.fonts.layout(&text, &style, UNBOUNDED, Some(1), true);
         let ring = t.line.focus as i32;
         let at = Point::new(

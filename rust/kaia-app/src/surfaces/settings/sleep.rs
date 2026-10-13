@@ -24,8 +24,10 @@ pub fn shows_cover(services: &Services) -> bool {
     keys::text_or(&services.settings, keys::DEVICE_SLEEP_SCREEN, "cover") != "blank"
 }
 
-/// The cover scaled to fit `screen` and placed in its middle.
+/// The cover scaled to fit `screen` and placed in its middle. The white margins
+/// of a page-rendered cover are cut first, so the picture fills the screen.
 fn cover_widget(cover: &Pixmap, screen: Size) -> WidgetPod {
+    let cover = kaia_ui::composite::trim_blank_margins(cover);
     let src = cover.size();
     let k =
         (f64::from(screen.w) / f64::from(src.w.max(1))).min(f64::from(screen.h) / f64::from(src.h.max(1)));
@@ -33,7 +35,7 @@ fn cover_widget(cover: &Pixmap, screen: Size) -> WidgetPod {
         (f64::from(src.w) * k).round() as u32,
         (f64::from(src.h) * k).round() as u32,
     );
-    let scaled = scale_pixmap(cover, target);
+    let scaled = scale_pixmap(&cover, target);
     let insets = Insets {
         left: screen.w.saturating_sub(target.w) / 2,
         top: screen.h.saturating_sub(target.h) / 2,

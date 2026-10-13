@@ -6,10 +6,10 @@ mod common;
 use common::*;
 use kaia_gfx::golden::assert_matches_golden;
 use kaia_gfx::{Point, Rect};
-use kaia_ui::components::{Column, CrossAlign, Spacer};
+use kaia_ui::components::{Column, CrossAlign, Padding, Spacer};
 use kaia_ui::composite::{Header, NavBar, NavItem};
 use kaia_ui::widget::{AppAction, Out};
-use kaia_ui::{render, Harness, Theme, WidgetPod};
+use kaia_ui::{render, Harness, Insets, Theme, WidgetPod};
 
 fn actions_of(h: &Harness) -> Vec<String> {
     h.outbox()
@@ -86,7 +86,10 @@ fn rtl_moves_the_back_chevron_and_the_actions_to_the_other_edge() {
 fn header_golden_matches() {
     let t = theme(false);
     let root = Column::new(vec![
-        WidgetPod::new(header_screen_top(&t)),
+        WidgetPod::new(Padding::new(
+            WidgetPod::new(header_screen_top(&t)),
+            Insets::all(t.space.lg),
+        )),
         WidgetPod::new(Spacer::new(1)),
     ]);
     let pm = render(root, SCREEN, &t, &assets());
@@ -97,7 +100,10 @@ fn header_golden_matches() {
 fn header_rtl_golden_matches() {
     let t = theme(false).with_rtl(true);
     let root = Column::new(vec![
-        WidgetPod::new(header_screen_top(&t)),
+        WidgetPod::new(Padding::new(
+            WidgetPod::new(header_screen_top(&t)),
+            Insets::all(t.space.lg),
+        )),
         WidgetPod::new(Spacer::new(1)),
     ]);
     let pm = render(root, SCREEN, &t, &assets());

@@ -135,3 +135,13 @@ The existing menu, opened from the nav bar.
 - Layout mirrors for right-to-left languages using `BD.mirroredUILayout()`, as KOReader widgets already do.
 - Large UI font sizes must not clip: titles wrap to two lines and truncate with an ellipsis after that.
 - Page-turn buttons move focus between nav bar items on devices with keys (`FocusManager`).
+
+## Decisions, 2026-10-13 (visual polish of the Rust app)
+
+- Touch target: the floor is 9 mm at the panel DPI. That is 107 px on the Libra Colour. `scaleBySize(50)` gives 100 px there, because services set a DPI override, so the toolkit takes the larger of the two.
+- Page margin: 48 px (`space.lg`) on every page, sheet and bar. Headers, chips, pagers and nav bars start on that edge. Icons in headers sit on the edge too, and the touch target hangs over it. List rows keep their inset of `space.md`.
+- Reader bars: every item is an icon over a label, as in the nav bar. The bottom bar shows the time left in the chapter, or in the book before the first chapter, and the Light button opens quick settings.
+- Reader defaults: a book with no saved layout uses KOReader's defaults scaled as KOReader scales them: font 22 units, side margins 10, top and bottom 15, line spacing 100 %. On the Libra Colour that is 47 px, 22 px and 32 px. Saved layouts keep their values.
+- Switches: the pill of list rows is the one on or off control. `Toggle::pill` draws it outside a list.
+- Covers: white margins are cut before a cover fills its box. A book tile keeps its cover at 2 by 3 and gives the text the rest of the height.
+- Home: a section that does not fit is left out whole, so no heading is cut.
