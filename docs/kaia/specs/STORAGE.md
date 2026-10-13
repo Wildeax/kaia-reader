@@ -40,7 +40,7 @@ Sticker {
   id:          string, UUID v4, lowercase, assigned by the store on insert
   doc:         DocumentId
   anchor:      Anchor
-  asset:       AssetRef or null      (null for text-only stickers)
+  asset:       string sha256 of an AssetRef, or null (null for text-only stickers)
   text:        string or null        (caption or text sticker, max 2000 chars)
   size:        { w: f32, h: f32 }    fraction of page width and height, each in (0, 1]
   rotation:    i16 degrees, -180..180

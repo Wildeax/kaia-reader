@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+    "kaia-core",
+    "kaia-storage",
+    # "kaia-ffi",  # added by the FFI task
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+rust-version = "1.80"
+
+[profile.release]
+panic = "unwind"
+lto = "thin"
+opt-level = "s"
