@@ -24,6 +24,7 @@ members = [
     "kaia-stats",
     "kaia-opds",
     "kaia-lua",
+    "kaia-i18n",
 ]
 
 [workspace.package]

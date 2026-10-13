@@ -44,3 +44,4 @@ i18n
 .gitignore~
 dist/
 *.actual.png
+!tools/kaia/i18n/

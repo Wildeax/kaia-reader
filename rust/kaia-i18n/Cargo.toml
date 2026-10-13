@@ -1,0 +1,9 @@
+[package]
+name = "kaia-i18n"
+description = "Translations for Kaia UI strings in gettext format."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
