@@ -10,11 +10,13 @@ This page lists each backlog item, what exists in the repository, how it was che
 |---|---|
 | Fork, identity, separate data | Done. Kaia has its own data folder, install folder, launcher, and no KOReader update feed. |
 | Rust library through LuaJIT FFI | Done on desktop and under armv7 emulation with the Kobo build of LuaJIT. |
-| Annotation storage and stickers | Done on desktop. Margin stickers in EPUB, fault tests, export and import. Paged-document stickers are untested. |
-| Kaia surfaces | Home, Library, Notes, Extensions, Settings (existing menus) share one nav bar. Portrait and landscape layouts checked in screenshots. |
+| Annotation storage and stickers | Done on desktop. Image stickers and text notes in the margin of EPUBs, page stickers in PDFs, repair of orphaned stickers from Notes, fault tests, export and import. |
+| Kaia surfaces | Home, Library, Notes and Settings (existing menus) share one nav bar; Extensions lists every plugin with its compatibility status. Portrait and landscape layouts checked in screenshots. |
+| Moving from KOReader | One-time import of KOReader settings, history, book data and plugin data. KOReader's own files are never changed. |
+| Extension API | Versioned Lua API v1 for commands, menu items, settings and messages, with an example plugin. |
 | Safe mode and recovery | Done on desktop. Device recovery procedure written, not run. |
 | Kobo packages | Built for firmware 4.x (`kobo`) and 5.x (`kobov5`). 40 package checks pass. Not installed on a device. |
-| CI | Rust, Lua, shell and docs workflows on GitHub. |
+| CI | Rust, Lua (including the emulator build and full front suite), shell and docs workflows on GitHub, all passing. |
 | Device gates (power, latency, ghosting, soak, 500 suspend cycles) | Not started. They need hardware. |
 
 ## Backlog items
@@ -34,7 +36,7 @@ This page lists each backlog item, what exists in the repository, how it was che
 | KR-011 embedded LuaJIT spike | Done; recommends keeping the Lua host | `docs/kaia/spikes/KR-011-embedded-luajit.md` | Device numbers before revisiting |
 | KR-012 compatibility tracing | Done | `frontend/kaia/trace.lua`, `docs/kaia/inventory/TRACING.md` | Traces of real use |
 | KR-013 design system | Done | `frontend/kaia/theme.lua`, `docs/kaia/specs/DESIGN.md`, restyled `ui/size.lua` | Readability on the panel |
-| KR-014 daily-reading slice | Done on desktop | Home, Library, Notes, return to Home after reading | Daily use on the device |
+| KR-014 daily-reading slice | Done on desktop | Home, Library, Notes, Extensions, return to Home after reading, import from KOReader | Daily use on the device |
 | KR-015 annotation storage | Done | `docs/kaia/specs/STORAGE.md`, `rust/kaia-storage` with the seven fault tests | Power-cut and full-disk tests on real storage |
 | KR-016 architecture review | Prepared | `docs/kaia/adr/` (all proposed), this page | The go/no-go decision needs device evidence |
 
@@ -46,8 +48,8 @@ This page lists each backlog item, what exists in the repository, how it was che
 
 ## Known gaps
 
-- Stickers in PDF, DjVu and CBZ use page coordinates. That code is untested, and rotation and crop are not handled.
-- Text-only stickers are stored but not drawn.
+- Stickers in PDFs are placed where the user selects text and can cover it; there is no margin placement for fixed pages.
+- In a narrow margin an image sticker is drawn faded over the end of its line, while a text note becomes a marker.
 - New UI strings are English only; they go through gettext but have no translations.
 - The NickelMenu entry syntax and the KFMon path are unverified on a device.
 - The Library title bar is KOReader's, so its header is not aligned with the Kaia headers.
