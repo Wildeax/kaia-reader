@@ -70,6 +70,10 @@ jobs:
     # koreader/kobase:1.0.0-22.04 (multi-arch index), read from Docker Hub.
     container:
       image: koreader/kobase@sha256:0751390e1a93b57e4836ceb67b4ffc701b46df675853f7662e3aefb6d6af648f
+    # The container's default shell is sh (dash), which has no pipefail.
+    defaults:
+      run:
+        shell: bash
     steps:
 
       - name: Checkout
