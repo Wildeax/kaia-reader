@@ -72,7 +72,7 @@ UI strings go through gettext: `local _ = require("gettext")`.
 
 ## Bugs and security reports
 
-File bugs in the Kaia tracker at https://github.com/MoodStudios/kaia-reader/issues. Do not file Kaia bugs in KOReader's tracker. [SUPPORT.md](SUPPORT.md) lists what to include in a report.
+File bugs in the Kaia tracker at https://github.com/Wildeax/kaia-reader/issues. Do not file Kaia bugs in KOReader's tracker. [SUPPORT.md](SUPPORT.md) lists what to include in a report.
 
 Report security problems privately. Follow [SECURITY.md](SECURITY.md). Do not open a public issue for a vulnerability.
 

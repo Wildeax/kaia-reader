@@ -19,7 +19,7 @@ Kaia Reader has no release yet. This policy applies to the first certified relea
 
 ## Report a bug
 
-File bugs in the Kaia tracker at https://github.com/MoodStudios/kaia-reader/issues. Include these details:
+File bugs in the Kaia tracker at https://github.com/Wildeax/kaia-reader/issues. Include these details:
 
 - The Kaia version and the firmware version.
 - The steps to reproduce the problem, what you expected and what happened.

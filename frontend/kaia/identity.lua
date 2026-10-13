@@ -15,8 +15,8 @@ local Identity = {
     version = "0.1.0-dev",
     upstream = "KOReader v2026.07.1",
     upstream_commit = "9192014d8bd82a91dc1012473be0f238dedfdb54",
-    issues_url = "https://github.com/MoodStudios/kaia-reader/issues",
-    source_url = "https://github.com/MoodStudios/kaia-reader",
+    issues_url = "https://github.com/Wildeax/kaia-reader/issues",
+    source_url = "https://github.com/Wildeax/kaia-reader",
     -- Kaia has no update channel yet. While this is nil, the KOReader OTA
     -- menu is hidden so Kaia never downloads KOReader packages over itself.
     update_channel = nil,

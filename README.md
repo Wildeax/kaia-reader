@@ -11,7 +11,7 @@ Status: developer preview. It builds for desktop and Kobo and passes its tests, 
 - Install on a Kobo: [docs/kaia/INSTALL_KOBO.md](docs/kaia/INSTALL_KOBO.md)
 - Build and contribute: [docs/kaia/CONTRIBUTING.md](docs/kaia/CONTRIBUTING.md)
 - Plan, decisions and specs: [docs/kaia/README.md](docs/kaia/README.md)
-- Report bugs: https://github.com/MoodStudios/kaia-reader/issues
+- Report bugs: https://github.com/Wildeax/kaia-reader/issues
 
 Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.
 

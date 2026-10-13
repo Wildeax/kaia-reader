@@ -4,7 +4,7 @@
 
 Report security problems privately. Do not open a public issue.
 
-Use GitHub private vulnerability reporting on MoodStudios/kaia-reader. Open the Security tab of the repository and choose the option to report a vulnerability.
+Use GitHub private vulnerability reporting on Wildeax/kaia-reader. Open the Security tab of the repository and choose the option to report a vulnerability.
 
 Include the affected commit or release, the steps to reproduce the problem and the impact you expect. Leave device serial numbers, account data and other personal information out of the report.
 
