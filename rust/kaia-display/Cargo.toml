@@ -10,11 +10,10 @@ rust-version.workspace = true
 default = ["desktop"]
 # Desktop window through minifb. The armv7 device build turns it off.
 desktop = ["dep:minifb"]
-# Kobo backends: the native E Ink display (the default, see KoboDisplay::open_auto),
-# the FBInk display (used only when KAIA_DISPLAY=fbink), and evdev for touch and keys.
-# The native display needs no FBInk. The FBInk code is still compiled in, so linking
-# needs KAIA_FBINK_LIB (see kaia-fbink-sys). Off by default.
-kobo = ["dep:kaia-fbink-sys", "dep:libc"]
+# Native HWTCON display, evdev and kernel device events.
+kobo = ["dep:libc", "dep:kaia-fbink-sys"]
+# Optional comparison backend. Needs KAIA_FBINK_LIB and an IMAGE=1 build.
+fbink = ["kobo"]
 
 [dependencies]
 kaia-gfx = { path = "../kaia-gfx" }

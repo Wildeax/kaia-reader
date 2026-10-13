@@ -1,0 +1,1 @@
+menu_item :main :Kaia Reader Rust :cmd_spawn :quiet:exec /mnt/onboard/.adds/kaia/kaia-rust.sh

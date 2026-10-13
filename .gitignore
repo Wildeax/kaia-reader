@@ -45,3 +45,4 @@ i18n
 dist/
 *.actual.png
 !tools/kaia/i18n/
+!rust/**/src/bin/

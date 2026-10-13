@@ -13,7 +13,7 @@ Kaia builds one package per firmware family.
 | 4.x | `kaia-kobo-<version>-<hash>.zip` | `dist/koreader-kobo-*.zip` and `dist/kobo/libkaia.so` |
 | 5.x | `kaia-kobo-v5-<version>-<hash>.zip` | `dist/koreader-kobov5-*.zip` and `dist/kobov5/libkaia.so` |
 
-The `kobov5` package is not built yet. Only the 4.x package exists in `dist/` at the moment.
+Both packages include the Lua app and an optional Rust app. Choose the package that matches your firmware. Neither package has passed a real device test.
 
 ## Check the firmware version
 
@@ -29,9 +29,41 @@ There are two ways to read the firmware version.
 3. Eject the Kobo in the file manager, then unplug the cable.
 4. Start Kaia from the NickelMenu entry "Kaia Reader".
 
-NickelMenu is not part of the package. Install it separately and follow its own documentation. The entry file `.adds/nm/kaia` is a single line. This repository does not include NickelMenu's documentation, so the entry syntax was written from the documented format and not checked against the NickelMenu version on the device. If the entry does nothing, check its syntax against that version.
+NickelMenu is not part of the package. Install it separately and follow its own documentation. The entry file `.adds/nm/kaia` has separate Lua and Rust entries. This repository does not include NickelMenu's documentation, so the entry syntax was written from the documented format and not checked against the NickelMenu version on the device. If the entry does nothing, check its syntax against that version.
 
 NickelMenu states that it does not support firmware 5.x. On firmware 5.x, start Kaia with another launcher, such as KFMon, and follow that launcher's documentation. The Kaia launcher reads `.adds/kfmon/config/kaia.ini` when it exits under KFMon. If that file contains the line `reboot_on_exit=false`, the launcher restarts Nickel. Without that line, the launcher reboots the device.
+
+## Start the Rust app
+
+The Lua app remains the default entry, "Kaia Reader". The separate
+"Kaia Reader Rust" entry starts the Rust app on a Kobo Libra Colour.
+Read `docs/kaia/device/RUST_APP_TEST.md` before its first device run.
+
+1. Eject the storage and unplug USB.
+2. Choose "Kaia Reader Rust" in NickelMenu. On firmware 5.x, use a launcher
+   that supports that firmware and point it at
+   `/mnt/onboard/.adds/kaia/kaia-rust.sh`.
+3. Wait for Home and the library scan. Books come from `/mnt/onboard`.
+4. Open a book from Library. Use the page buttons or touch to turn pages.
+5. Press both page buttons together to save and exit to Nickel. If one button
+   arrives first, it may turn a page before the exit shortcut fires.
+6. Choose "Kaia Reader" in NickelMenu to return to the Lua app.
+
+Connecting a computer while the Rust app runs saves and exits to Nickel.
+Use Nickel's USB connection prompt to mount storage. The Rust app does not
+unmount storage while its database or books are open. A power-only charger
+updates charging state without asking the app to exit. This distinction
+still needs a device test.
+
+The Rust launcher writes `/mnt/onboard/.kaia/rust.log` and keeps the last
+500 KB at each launch. It restores the framebuffer depth and rotation on
+exit, then restarts Nickel if Nickel was running when it started. It does
+not use the Lua app's crash restart loop or safe-mode counter.
+
+Rust settings, library data and reading state live in `/mnt/onboard/.kaia`.
+The Rust app reads packaged `fonts/`, `data/` and `resources/` beside its
+binary. It does not write the Lua app's settings, history or sidecars.
+Screen orientation starts in portrait. Sensor-driven rotation is not wired.
 
 ## Uninstall
 
@@ -39,6 +71,8 @@ NickelMenu states that it does not support firmware 5.x. On firmware 5.x, start 
 2. Connect the Kobo over USB. Delete `.adds/kaia` and `.adds/nm/kaia`.
 3. If you added a KFMon entry for Kaia, delete `.adds/kfmon/config/kaia.ini` too.
 4. Eject the Kobo, then unplug the cable.
+
+The Rust data folder `.kaia` remains after uninstall. Back it up before deleting it.
 
 Deleting `.adds/kaia` removes Kaia's settings, per-book reading data, sticker data and user patches. It does not remove books, and it does not touch stock KOReader's `.sdr` folders next to them.
 
@@ -52,7 +86,10 @@ Deleting `.adds/kaia` removes Kaia's settings, per-book reading data, sticker da
 | `.adds/kaia/kaia/` | Sticker store |
 | `.adds/kaia/kaia-startup-attempts` | Counter of failed starts for safe mode |
 | `.adds/kaia/crash.log` | Launcher and app log. The launcher trims it to the last 500 KB at each launch. |
-| `.adds/nm/kaia` | NickelMenu entry |
+| `.adds/nm/kaia` | Lua and Rust NickelMenu entries |
+| `.adds/kaia/kaia`, `kaia-rust.sh`, `resources/` | Rust binary, launcher and UI assets |
+| `.kaia/settings.json`, `library.sqlite3`, `kaia/books/` | Rust settings, library index and reading state |
+| `.kaia/rust.log` | Rust app and launcher log |
 
 Kaia keeps per-book data (reading position, highlights, notes) in its own folder, `.adds/kaia/docsettings/`. The first time Kaia opens a book that stock KOReader already read, it copies KOReader's `<book>.sdr` data, so highlights carry over. After that the two apps keep separate copies, and Kaia never changes or deletes KOReader's `.sdr` folder. You can switch this in Settings, Document, Book metadata location; choosing the book folder shares the `.sdr` folder with KOReader. Both apps also read fonts from `/mnt/onboard/fonts`.
 
@@ -71,15 +108,17 @@ When Kaia exits with a crash, the launcher shows a crash screen and writes the l
 ## Build the package
 
 ```sh
+source tools/kaia/env.sh
+tools/kaia/build-rust-kobo.sh kobo build -p kaia-app --bin kaia --no-default-features --features kobo
+tools/kaia/build-rust-kobo.sh kobov5 build -p kaia-app --bin kaia --no-default-features --features kobo
 tools/kaia/package-kobo.sh dist/koreader-kobo-*.zip dist/kobo/libkaia.so dist/kaia
 ```
 
-The script writes `dist/kaia/kaia-kobo-<version>-<hash>.zip` and `dist/kaia/SHA256SUMS`. The same input gives the same zip, byte for byte. The package is built from the upstream zip, not from the working tree.
+The script writes `dist/kaia/kaia-kobo-<version>-<hash>.zip` and `dist/kaia/SHA256SUMS`. The same input gives the same zip, byte for byte. Lua files come from the upstream zip. The packager adds `dist/rust/<target>/kaia`, the Rust launcher and UI resources from the checkout. CREngine uses the upstream `fonts/` and `data/` folders beside the binary. The packager runs `tools/kaia/check-rust-package.sh`; `bash spec/kobo-package/test-package.sh` also checks both packages and deterministic output.
 
 ## Known gaps
 
 - The package has not been tested on a Kobo, for either firmware family.
-- The `kobov5` package is not built yet.
 - Kaia has no update channel. The package does not update itself. Follow `docs/kaia/RELEASE_PROCESS.md` for upgrades. Kaia hides KOReader's update menu.
 - The package has no Kaia artwork yet. A later task adds it.
 - The NickelMenu entry syntax is not checked against NickelMenu on the device (see above).

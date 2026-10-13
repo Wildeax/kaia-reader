@@ -13,7 +13,7 @@
 # Kaia has no update channel yet, so the package has no OTA index and no
 # update marker. The zip is deterministic: entries are sorted and every file
 # gets the commit time as its mtime. The git hash in the name is HEAD. The
-# package is built from the upstream zip, not from the working tree.
+# Lua files come from the upstream zip. Rust resources come from this checkout.
 set -euo pipefail
 
 usage() {
@@ -53,9 +53,22 @@ done
 
 # The firmware target comes from the upstream zip name.
 case "$(basename "${IN_ZIP}")" in
-    koreader-kobo-*) TARGET_SUFFIX="" ;;
-    koreader-kobov5-*) TARGET_SUFFIX="-v5" ;;
+    koreader-kobo-*)
+        TARGET_SUFFIX=""
+        TARGET=kobo
+        ;;
+    koreader-kobov5-*)
+        TARGET_SUFFIX="-v5"
+        TARGET=kobov5
+        ;;
     *) fail "cannot tell the firmware from the zip name: $(basename "${IN_ZIP}")" ;;
+esac
+
+RUST_BIN="${ROOT}/dist/rust/${TARGET}/kaia"
+[ -f "${RUST_BIN}" ] || fail "missing ${RUST_BIN}; run build-rust-kobo.sh ${TARGET} build -p kaia-app --bin kaia --no-default-features --features kobo"
+case "$(file -b "${RUST_BIN}")" in
+    *ELF*ARM*executable* | *ELF*executable*ARM*) ;;
+    *) fail "not an ARM executable: ${RUST_BIN}" ;;
 esac
 
 case "$(file -b "${LIB}")" in
@@ -112,6 +125,17 @@ cp "${LIB}" "${APP}/libs/libkaia.so"
 chmod 644 "${APP}/libs/libkaia.so"
 cp "${NICKELMENU}" "${WORK}/stage/.adds/nm/kaia"
 chmod 644 "${WORK}/stage/.adds/nm/kaia"
+
+# RuntimeOptions finds CREngine data/ and fonts/ beside kaia. Keep the upstream
+# copies unchanged. UI assets have their own resources/ folder.
+cp "${RUST_BIN}" "${APP}/kaia"
+cp "${ROOT}/platform/kobo/kaia/kaia-rust.sh" "${APP}/kaia-rust.sh"
+chmod 755 "${APP}/kaia" "${APP}/kaia-rust.sh"
+cat "${ROOT}/platform/kobo/kaia/nickelmenu-kaia-rust" >>"${WORK}/stage/.adds/nm/kaia"
+mkdir -p "${APP}/resources/fonts" "${APP}/resources/icons"
+cp -R "${ROOT}/resources/fonts/noto" "${APP}/resources/fonts/"
+cp -R "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/"
+bash "${ROOT}/tools/kaia/check-rust-package.sh" "${WORK}/stage" "${RUST_BIN}"
 
 # Fixed mtimes, so the zip does not depend on when the files were unpacked.
 find "${WORK}/stage" -exec env TZ=UTC touch -t "${STAMP}" {} +

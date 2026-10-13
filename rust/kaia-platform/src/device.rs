@@ -63,6 +63,12 @@ pub struct DeviceInfo {
 }
 
 impl DeviceInfo {
+    /// The launcher sets the framebuffer to upright portrait before opening it.
+    /// Logical rotation starts from that orientation on the Libra Colour.
+    pub fn startup_rotation_degrees(&self) -> u32 {
+        0
+    }
+
     /// The Libra Colour. The screen size comes from the Kobo product page
     /// (1264 by 1680), not from KOReader, which reads the framebuffer. Unverified.
     pub fn libra_colour(codename: String, product_id: String, firmware: Option<String>) -> Self {

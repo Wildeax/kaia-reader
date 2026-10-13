@@ -107,6 +107,21 @@ pub fn classify(ev: &Uevent<'_>) -> Option<UsbEvent> {
     None
 }
 
+/// Classifies the NUL-separated fields of a kernel uevent datagram.
+pub fn classify_bytes(bytes: &[u8]) -> Option<UsbEvent> {
+    let fields: Vec<&str> = bytes
+        .split(|b| *b == 0)
+        .filter_map(|v| std::str::from_utf8(v).ok())
+        .collect();
+    let value = |key: &str| fields.iter().find_map(|v| v.strip_prefix(key));
+    classify(&Uevent {
+        devpath: value("DEVPATH=")?,
+        action: value("ACTION=")?,
+        subsystem: value("SUBSYSTEM="),
+        devname: value("DEVNAME="),
+    })
+}
+
 /// Steps for a mass storage session, from the point where KOReader exits with code 86.
 ///
 /// Mirrors `platform/kobo/koreader.sh:528-602`. `language` is the value for
@@ -195,6 +210,21 @@ pub fn handover_plan(paths: &Paths, language: &str) -> Plan {
 mod tests {
     use super::*;
     use crate::plan::Action;
+
+    #[test]
+    fn kernel_datagram_fields() {
+        assert_eq!(
+            classify_bytes(
+                b"add@/devices/platform/usb_host\0ACTION=add\0DEVPATH=/devices/platform/usb_host\0"
+            ),
+            Some(UsbEvent::PluggedIntoHost)
+        );
+        assert_eq!(classify_bytes(b"ACTION=add\0"), None);
+        assert_eq!(
+            classify_bytes(b"ACTION=change\0DEVPATH=/devices/platform/usb_host\0"),
+            None
+        );
+    }
 
     fn ev<'a>(
         devpath: &'a str,

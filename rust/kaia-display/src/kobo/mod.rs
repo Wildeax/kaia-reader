@@ -6,8 +6,8 @@
 //! - [`native`] drives the panel the way KOReader does: it maps `/dev/fb0` and sends
 //!   the HWTCON ioctls. Its pure parts compile on every host. Its device part is Linux
 //!   only. See [`NativeKoboDisplay`]. This is the default for [`KoboDisplay::open_auto`].
-//! - `display` (Linux only) draws on the E Ink panel through FBInk. See
-//!   [`KoboDisplay`]. It is used only when `KAIA_DISPLAY=fbink` is set.
+//! - `display` draws through FBInk on Linux when built with the `fbink` feature.
+//!   Set `KAIA_DISPLAY=fbink` to select it at runtime.
 //! - `evdev` (Linux only) reads the touch and key event nodes. See [`EvdevInput`].
 //!
 //! The rules come from KOReader's Kobo code, named in each module. KOReader's Lua
@@ -21,10 +21,10 @@
 //! test before the backend is trusted:
 //!
 //! - FBInk build: KOReader's pinned FBInk is built with `MINIMAL=1` and no image
-//!   support. `fbink_print_raw_data` needs image support, so [`KoboDisplay::open`]
+//!   support. `fbink_print_raw_data` needs image support, so `KoboDisplay::open`
 //!   refuses a build without it. Kaia needs an FBInk build with `IMAGE=1`.
 //! - Panel orientation: the framebuffer must start in native portrait at
-//!   1264 by 1680. [`KoboDisplay::open`] refuses any other size. Rotation is done in
+//!   1264 by 1680. `KoboDisplay::open` refuses any other size. Rotation is done in
 //!   software, so the framebuffer is never rotated.
 //! - FULL update mode: KOReader forces FULL mode for REAGL and Kaleido updates
 //!   (`mxc_update`). The plan does the same. That may flash on every partial refresh.
@@ -54,13 +54,16 @@ pub mod decode;
 pub mod native;
 pub mod plan;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "fbink"))]
 mod display;
 #[cfg(target_os = "linux")]
 mod evdev;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "fbink"))]
 pub use display::KoboDisplay;
+/// Selects the native panel backend when the optional FBInk backend is absent.
+#[cfg(all(target_os = "linux", not(feature = "fbink")))]
+pub struct KoboDisplay;
 #[cfg(target_os = "linux")]
 pub use evdev::EvdevInput;
 #[cfg(target_os = "linux")]
@@ -71,16 +74,30 @@ impl KoboDisplay {
     /// Opens the Libra Colour panel with the backend that the environment picks.
     ///
     /// The native backend is the default. `KAIA_DISPLAY=fbink` (any case) selects the
-    /// FBInk backend, which needs an FBInk build with image support. The result is
+    /// FBInk backend, which needs the `fbink` feature and FBInk with image support. The result is
     /// boxed as a [`Display`](crate::Display), so the methods that only one backend
     /// has are not reachable through it.
     pub fn open_auto() -> Result<Box<dyn crate::display::Display>, crate::display::DisplayError> {
         let fbink =
             std::env::var("KAIA_DISPLAY").is_ok_and(|value| value.trim().eq_ignore_ascii_case("fbink"));
         if fbink {
-            Ok(Box::new(Self::libra_colour()?))
+            #[cfg(feature = "fbink")]
+            {
+                Ok(Box::new(Self::libra_colour()?))
+            }
+            #[cfg(not(feature = "fbink"))]
+            {
+                Err(crate::DisplayError::Backend(
+                    "KAIA_DISPLAY=fbink requires the fbink cargo feature".into(),
+                ))
+            }
         } else {
             Ok(Box::new(NativeKoboDisplay::libra_colour()?))
         }
     }
 }
+
+#[cfg(target_os = "linux")]
+mod uevent;
+#[cfg(target_os = "linux")]
+pub use uevent::Uevents;

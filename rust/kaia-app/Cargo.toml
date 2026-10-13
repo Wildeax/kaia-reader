@@ -9,6 +9,15 @@ rust-version.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 
+[[bin]]
+name = "kaia"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["kaia-display/desktop"]
+kobo = ["kaia-display/kobo"]
+
 [dependencies]
 kaia-book = { path = "../kaia-book" }
 kaia-dict = { path = "../kaia-dict" }
@@ -16,7 +25,7 @@ kaia-stats = { path = "../kaia-stats" }
 kaia-sync = { path = "../kaia-sync" }
 kaia-opds = { path = "../kaia-opds" }
 kaia-id = { path = "../kaia-id" }
-kaia-display = { path = "../kaia-display" }
+kaia-display = { path = "../kaia-display", default-features = false }
 kaia-doc = { path = "../kaia-doc" }
 kaia-events = { path = "../kaia-events" }
 kaia-gfx = { path = "../kaia-gfx" }
