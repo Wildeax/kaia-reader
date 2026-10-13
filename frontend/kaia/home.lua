@@ -226,6 +226,14 @@ function Home:init()
 end
 
 --- Rebuilds the page from current data and repaints Home.
+--- Rebuilds for the new screen size after a rotation.
+function Home:onScreenResize(dimen)
+    self.dimen = Geom:new{ x = 0, y = 0, w = dimen and dimen.w or Screen:getWidth(), h = dimen and dimen.h or Screen:getHeight() }
+    self:buildContent()
+    UIManager:setDirty(self, "ui")
+    return false
+end
+
 function Home:refresh()
     self:buildContent()
     UIManager:setDirty(self, "ui")
@@ -244,6 +252,10 @@ function Home:buildContent()
     local power = Device:hasBattery() and Device:getPowerDevice():getCapacity() or nil
     local history = self.history or require("readhistory").hist
     local now = os.time()
+    -- Landscape has about 75 percent of the portrait height, so the shelf
+    -- covers shrink to keep the nav bar on screen. The hero cover keeps its
+    -- size because its text column needs that height.
+    local shelf_scale = screen_h < screen_w and 0.45 or 1
 
     -- Rows the focus manager moves through, top to bottom.
     self.selected = { x = 1, y = 1 }
@@ -311,7 +323,7 @@ function Home:buildContent()
                     book = books[i],
                     size = "shelf",
                     width = card_w,
-                    cover_h = Theme.cover.shelf_h,
+                    cover_h = math.floor(Theme.cover.shelf_h * shelf_scale),
                     callback = function(book) self:openBook(book.file) end,
                 }
                 table.insert(shelf, card)
@@ -325,8 +337,11 @@ function Home:buildContent()
         end
     end
 
-    table.insert(body, VerticalSpan:new{ width = section_gap })
-    table.insert(body, countsRow(counts.books_in_history, content_w, function() self:openLibrary() end))
+    -- In landscape the nav bar's Library item replaces this row.
+    if screen_h >= screen_w then
+        table.insert(body, VerticalSpan:new{ width = section_gap })
+        table.insert(body, countsRow(counts.books_in_history, content_w, function() self:openLibrary() end))
+    end
 
     local navbar = NavBar:new{
         width = screen_w,

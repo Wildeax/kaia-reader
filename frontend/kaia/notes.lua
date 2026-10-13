@@ -264,6 +264,14 @@ function Notes:init()
 end
 
 --- Rebuilds the page from current data and repaints Notes.
+--- Rebuilds for the new screen size after a rotation.
+function Notes:onScreenResize(dimen)
+    self.dimen = Geom:new{ x = 0, y = 0, w = dimen and dimen.w or Screen:getWidth(), h = dimen and dimen.h or Screen:getHeight() }
+    self:buildContent()
+    UIManager:setDirty(self, "ui")
+    return false
+end
+
 function Notes:refresh()
     self:buildContent()
     UIManager:setDirty(self, "ui")
