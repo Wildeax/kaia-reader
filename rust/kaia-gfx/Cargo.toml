@@ -1,0 +1,9 @@
+[package]
+name = "kaia-gfx"
+description = "Pixmaps, geometry, drawing, text and images for the Kaia UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

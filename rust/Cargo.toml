@@ -4,6 +4,8 @@ members = [
     "kaia-core",
     "kaia-storage",
     "kaia-ffi",
+    "kaia-gfx",
+    "kaia-events",
 ]
 
 [workspace.package]

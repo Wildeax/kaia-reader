@@ -322,6 +322,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-events"
+version = "0.1.0"
+
+[[package]]
 name = "kaia-ffi"
 version = "0.1.0"
 dependencies = [
@@ -334,6 +338,10 @@ dependencies = [
  "serde_json",
  "tempfile",
 ]
+
+[[package]]
+name = "kaia-gfx"
+version = "0.1.0"
 
 [[package]]
 name = "kaia-storage"

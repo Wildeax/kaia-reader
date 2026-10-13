@@ -4,6 +4,7 @@ Kaia Reader is a KOReader fork for the Kobo Libra Colour. This directory holds t
 
 ## Start here
 
+- [REWRITE_PLAN.md](REWRITE_PLAN.md): the plan for the Rust app, its compatibility seams and phases.
 - [STATUS.md](STATUS.md): what is done, how it was checked, and what still needs a device.
 - [INSTALL_KOBO.md](INSTALL_KOBO.md): which package to use and how to install, remove and recover it.
 

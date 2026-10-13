@@ -1,6 +1,6 @@
 # ADR-001: Incremental application migration
 
-Status: Proposed
+Status: Superseded by ADR-008
 
 Date: 2026-10-13
 

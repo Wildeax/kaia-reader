@@ -1,13 +1,13 @@
 # Kaia Reader
 
-Kaia Reader is a fork of KOReader (baseline tag `v2026.07.1`, commit `9192014d8`) for the Kobo Libra Colour. The fork keeps KOReader's Lua frontend, LuaJIT runtime, document engines and Kobo integration, and adds a Rust library (`libkaia`) called through LuaJIT FFI. Read `docs/kaia/ENGINEERING_PLAN.md` and `docs/kaia/INITIAL_BACKLOG.md` before changing architecture.
+Kaia Reader is a fork of KOReader (baseline tag `v2026.07.1`, commit `9192014d8`) for the Kobo Libra Colour. The fork keeps KOReader's Lua frontend, LuaJIT runtime, document engines and Kobo integration, and adds a Rust library (`libkaia`) called through LuaJIT FFI. The project is being rewritten as a Rust app (ADR-008, `docs/kaia/REWRITE_PLAN.md`); the Lua app is the shipped product and the behavior reference until the Rust app passes its gates. Read `docs/kaia/REWRITE_PLAN.md` before changing architecture.
 
 ## Layout
 
 - `frontend/`, `plugins/`, `base/`, `platform/`: upstream KOReader. Change them only when a Kaia task needs it, and keep each change small so upstream merges stay easy. No mass reformatting or renames.
 - `frontend/kaia/`: Kaia Lua modules (FFI binding, theme, home, notes, tracing).
 - `plugins/kaia*.koplugin/`: Kaia plugins.
-- `rust/`: Cargo workspace (`kaia-core`, `kaia-storage`, `kaia-ffi`, `kaia-compat`).
+- `rust/`: Cargo workspace. Rust app crates are listed in `docs/kaia/REWRITE_PLAN.md` (Architecture). `kaia-ffi` serves the Lua app.
 - `tools/kaia/`: Kaia scripts (inventories, packaging, device helpers).
 - `docs/kaia/`: plan, specs, ADRs, inventories, device procedures.
 - `spec/unit/kaia_*_spec.lua`: Kaia Lua tests (busted, run by `./kodev test front kaia_<name>`).

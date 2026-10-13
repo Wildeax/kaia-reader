@@ -1,0 +1,9 @@
+[package]
+name = "kaia-events"
+description = "Values, events, window stack, scheduler and registries: the Kaia app core that the Lua plugin layer maps onto."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
