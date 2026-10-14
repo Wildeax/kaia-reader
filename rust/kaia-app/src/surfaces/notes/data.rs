@@ -65,6 +65,8 @@ pub struct BookNotes {
     pub latest: String,
     /// The annotations in reading order.
     pub notes: Vec<Note>,
+    /// Stroke counts by their original page number, starting at one.
+    pub ink_counts: Vec<(u32, u64)>,
 }
 
 /// The filter the Notes surface applies to the lists.
@@ -203,6 +205,29 @@ pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> 
         .collect();
     if data_dir.join("kaia/kaia.sqlite3").exists() {
         if let Ok(store) = kaia_storage::Store::open(&data_dir.join("kaia")) {
+            if let Ok(counts) = store.ink_counts() {
+                for (doc, page, count) in counts {
+                    let index = books
+                        .iter()
+                        .position(|b| b.md5 == doc.partial_md5)
+                        .unwrap_or_else(|| {
+                            let row = library.get(&doc.partial_md5);
+                            books.push(BookNotes {
+                                title: row
+                                    .and_then(|b| b.title.clone())
+                                    .or(doc.title)
+                                    .unwrap_or_else(|| doc.partial_md5.clone()),
+                                md5: doc.partial_md5,
+                                library_id: row.map(|b| b.id),
+                                latest: String::new(),
+                                notes: Vec::new(),
+                                ink_counts: Vec::new(),
+                            });
+                            books.len() - 1
+                        });
+                    books[index].ink_counts.push((page + 1, count));
+                }
+            }
             if let Ok(stickers) = store.list_all() {
                 for sticker in stickers {
                     let md5 = &sticker.doc.partial_md5;
@@ -217,6 +242,7 @@ pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> 
                             library_id: row.map(|b| b.id),
                             latest: String::new(),
                             notes: Vec::new(),
+                            ink_counts: Vec::new(),
                         });
                         books.len() - 1
                     });
@@ -292,6 +318,7 @@ pub fn read_book(path: &Path, library: &HashMap<String, Book>) -> Option<BookNot
         library_id: library_book.map(|b| b.id),
         latest,
         notes,
+        ink_counts: Vec::new(),
     })
 }
 

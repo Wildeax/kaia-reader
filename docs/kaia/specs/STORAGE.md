@@ -21,6 +21,7 @@ state. In the Rust app, Kaia owns all reading state:
 | Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
 | Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
 | Stickers and assets | `kaia-storage` | as below |
+| Page ink strokes | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `ink_strokes`, schema version 5 |
 | Word list | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `words`, see schema versions 3 and 4 |
 | Reading statistics and imported Kobo sessions | `kaia-stats` | `<data dir>/statistics.sqlite3`, including `nickel_sessions` |
 | App settings | `kaia-app` | `<data dir>/settings.json` |
@@ -256,6 +257,52 @@ ALTER TABLE words ADD COLUMN dict_suffix TEXT;
 `dict_suffix` keeps the Kobo dictionary suffix when supplied. The importer
 clips it to 100 characters. Older words have NULL. Native word saves retain an
 existing suffix. Q34 does not block importing a supplied suffix as text.
+
+### Schema version 5
+
+```sql
+CREATE TABLE ink_strokes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc TEXT NOT NULL REFERENCES documents(partial_md5),
+  page INTEGER NOT NULL CHECK (page >= 0),
+  locator TEXT,
+  points_json TEXT NOT NULL,
+  width REAL NOT NULL CHECK (width > 0),
+  color TEXT NOT NULL
+);
+CREATE INDEX ink_doc_page ON ink_strokes(doc, page);
+```
+
+`kaia-storage` is the only owner of page ink. The reader never writes ink to
+KOReader sidecars. Each row is one complete stroke. `page` is the zero-based
+page number at creation. `points_json` is an array of `{x, y, pressure}` objects.
+Pressure is the raw device value. Brush widths are constant for now, with two
+choices in the reader. Colors are `black`, `blue`, `green`, and `red`; colored
+ink uses the highlight palette and displays as black on grayscale panels.
+
+Fixed-layout books use unrotated document page coordinates and a NULL locator.
+The reader applies the page's scale and centering at draw time. Width is also in
+page units, so ink follows PDF and CBZ zoom changes.
+
+Reflowable books use the page's text xpointer as `locator`. Points are offsets
+from its first character box in layout pixels. On a later visit, the reader
+resolves that xpointer to its new page and character box, then applies the saved
+offsets. A font or margin change does not rewrite the stroke. Ink can drift away
+from the words after a relayout because the stroke keeps its original shape.
+Unresolved anchors stay in storage but do not draw. Reflowable engines without
+text positions cannot accept ink.
+
+The store validates finite coordinates and widths, supported colors, a maximum
+of 100,000 points per stroke, and a maximum locator length of 16,384 bytes. A
+stroke commits on pen lift. An interrupted stroke is not saved. Erasing removes
+whole strokes in one transaction on lift. Undo removes the latest remaining
+stroke on the visible page. Delete all removes the visible page's strokes after
+confirmation. Undo does not restore erased or deleted ink.
+
+Notes export includes `ink_counts`, an array of `{page, count}` objects per book,
+and a count per page in Markdown. Export page numbers start at one and refer to
+the original layout. Counts can therefore differ from the current page numbers
+after a relayout. The sticker transfer format does not include ink.
 
 ## Export format
 

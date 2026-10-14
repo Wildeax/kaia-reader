@@ -80,7 +80,7 @@ pub struct Migration {
 }
 
 /// The migrations this build supports, in order.
-pub const MIGRATIONS: [Migration; 4] = [
+pub const MIGRATIONS: [Migration; 5] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -96,6 +96,19 @@ pub const MIGRATIONS: [Migration; 4] = [
     Migration {
         version: 4,
         sql: "ALTER TABLE words ADD COLUMN dict_suffix TEXT;",
+    },
+    Migration {
+        version: 5,
+        sql: "CREATE TABLE ink_strokes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc TEXT NOT NULL REFERENCES documents(partial_md5),
+            page INTEGER NOT NULL CHECK (page >= 0),
+            locator TEXT,
+            points_json TEXT NOT NULL,
+            width REAL NOT NULL CHECK (width > 0),
+            color TEXT NOT NULL
+        );
+        CREATE INDEX ink_doc_page ON ink_strokes(doc, page);",
     },
 ];
 

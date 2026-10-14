@@ -56,6 +56,8 @@ const _: () = assert!(EVENT_SIZE == 16);
 pub struct EvdevInput {
     touch: Option<Node>,
     keys: Option<Node>,
+    pen: Option<Node>,
+    pen_decoder: EvdevDecoder,
     decoder: EvdevDecoder,
 }
 
@@ -75,6 +77,17 @@ impl EvdevInput {
         let y_range =
             axis_range(&touch_file, code::ABS_MT_POSITION_Y, code::ABS_Y).unwrap_or(FALLBACK_Y_RANGE);
         let calibration = Calibration::libra_colour(x_range, y_range, rotation);
+        let mut decoder = EvdevDecoder::new(calibration);
+        let pen_x = axis_range(&touch_file, code::ABS_X, code::ABS_X).unwrap_or(x_range);
+        let pen_y = axis_range(&touch_file, code::ABS_Y, code::ABS_Y).unwrap_or(y_range);
+        decoder.set_pen_calibration(Calibration::libra_colour(pen_x, pen_y, rotation));
+        let pen = find_pen(touch, keys);
+        let mut pen_decoder = EvdevDecoder::new(calibration);
+        if let Some(file) = &pen {
+            let x = axis_range(file, code::ABS_X, code::ABS_X).unwrap_or(x_range);
+            let y = axis_range(file, code::ABS_Y, code::ABS_Y).unwrap_or(y_range);
+            pen_decoder.set_pen_calibration(Calibration::libra_colour(x, y, rotation));
+        }
         let keys = keys.map(open_node).transpose()?;
         Ok(Self {
             touch: Some(Node {
@@ -85,7 +98,12 @@ impl EvdevInput {
                 file,
                 rest: Vec::new(),
             }),
-            decoder: EvdevDecoder::new(calibration),
+            decoder,
+            pen: pen.map(|file| Node {
+                file,
+                rest: Vec::new(),
+            }),
+            pen_decoder,
         })
     }
 
@@ -98,18 +116,19 @@ impl EvdevInput {
     /// `Display::set_rotation`.
     pub fn set_rotation(&mut self, rotation: Rotation) {
         self.decoder.set_rotation(rotation);
+        self.pen_decoder.set_rotation(rotation);
     }
 
     fn is_open(&self) -> bool {
-        self.touch.is_some() || self.keys.is_some()
+        self.touch.is_some() || self.keys.is_some() || self.pen.is_some()
     }
 
     /// Waits up to `timeout_ms` (-1 for no limit) for readable nodes, reads them, and
     /// returns the decoded raw events.
-    fn read_ready(&mut self, timeout_ms: i32) -> Vec<RawEvent> {
-        let mut fds: Vec<libc::pollfd> = Vec::with_capacity(2);
-        let mut which: Vec<bool> = Vec::with_capacity(2); // true for the touch node
-        for (is_touch, node) in [(true, &self.touch), (false, &self.keys)] {
+    fn read_ready(&mut self, timeout_ms: i32) -> (Vec<RawEvent>, Vec<RawEvent>) {
+        let mut fds: Vec<libc::pollfd> = Vec::with_capacity(3);
+        let mut which: Vec<usize> = Vec::with_capacity(3);
+        for (is_touch, node) in [(0, &self.touch), (1, &self.keys), (2, &self.pen)] {
             if let Some(node) = node {
                 fds.push(libc::pollfd {
                     fd: node.file.as_raw_fd(),
@@ -120,7 +139,7 @@ impl EvdevInput {
             }
         }
         if fds.is_empty() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
 
         // SAFETY: `fds` is a valid array of `fds.len()` pollfd structs for the duration
@@ -128,17 +147,22 @@ impl EvdevInput {
         let ready = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms) };
         if ready <= 0 {
             // Timeout, or EINTR. The caller loops.
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
 
         let mut raw = Vec::new();
+        let mut pen_raw = Vec::new();
         for (fd, is_touch) in fds.iter().zip(which) {
-            let slot = if is_touch { &mut self.touch } else { &mut self.keys };
+            let slot = match is_touch {
+                0 => &mut self.touch,
+                1 => &mut self.keys,
+                _ => &mut self.pen,
+            };
             let Some(node) = slot.as_mut() else {
                 continue;
             };
             let hung_up = fd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0;
-            let alive = drain(node, &mut raw);
+            let alive = drain(node, if is_touch == 2 { &mut pen_raw } else { &mut raw });
             if !alive || (hung_up && fd.revents & libc::POLLIN == 0) {
                 // The node is gone. Stop polling it, so that the loop does not spin.
                 *slot = None;
@@ -146,7 +170,7 @@ impl EvdevInput {
         }
         // Keep the two nodes in time order. Each node is already in order.
         raw.sort_by_key(|event| event.time_us);
-        raw
+        (raw, pen_raw)
     }
 }
 
@@ -169,15 +193,17 @@ impl InputSource for EvdevInput {
                     .as_millis()
                     .min(i32::MAX as u128) as i32,
             };
-            let raw = self.read_ready(timeout_ms);
+            let (raw, pen_raw) = self.read_ready(timeout_ms);
             // One frame per SYN_REPORT, so two fingers that move together reach
             // the gesture detector together, as in KOReader.
             let events: Vec<InputEvent> = self
                 .decoder
                 .feed_frames(&raw)
                 .into_iter()
+                .chain(self.pen_decoder.feed_frames(&pen_raw))
                 .map(|decoded| match decoded {
                     DecodedEvent::Light => InputEvent::Light,
+                    DecodedEvent::Pen(pen) => InputEvent::Pen(pen),
                     DecodedEvent::Key(k) => InputEvent::Key(k),
                     DecodedEvent::TouchFrame(frame) => InputEvent::TouchFrame(frame),
                 })
@@ -190,6 +216,26 @@ impl InputSource for EvdevInput {
             }
         }
     }
+}
+
+/// Finds the stylus by its Linux tool capability, without assuming an event number.
+fn find_pen(touch: &Path, keys: Option<&Path>) -> Option<File> {
+    for index in 0..32 {
+        let path = std::path::PathBuf::from(format!("/dev/input/event{index}"));
+        if path == touch || keys == Some(path.as_path()) {
+            continue;
+        }
+        let Ok(file) = open_node(&path) else { continue };
+        let mut bits = [0u8; 80];
+        let request = (IOC_READ << 30) | ((bits.len() as u32) << 16) | ((b'E' as u32) << 8) | 0x21;
+        // SAFETY: EVIOCGBIT writes at most the size encoded in the request into bits.
+        let result = unsafe { libc::ioctl(file.as_raw_fd(), request as libc::c_ulong, bits.as_mut_ptr()) };
+        let code = usize::from(code::BTN_TOOL_PEN);
+        if result >= 0 && bits[code / 8] & (1 << (code % 8)) != 0 {
+            return Some(file);
+        }
+    }
+    None
 }
 
 fn open_node(path: &Path) -> io::Result<File> {

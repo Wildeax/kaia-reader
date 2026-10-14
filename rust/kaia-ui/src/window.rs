@@ -191,7 +191,7 @@ impl Window {
                     _ => Handled::No,
                 }
             }
-            UiEvent::Named(_) => inner.root.route_named(&mut d, ORIGIN, &ev),
+            UiEvent::Named(_) | UiEvent::Pen(_) => inner.root.route_named(&mut d, ORIGIN, &ev),
             UiEvent::FocusGained | UiEvent::FocusLost => Handled::No,
         };
         if let Some(id) = d.focus_request.take() {

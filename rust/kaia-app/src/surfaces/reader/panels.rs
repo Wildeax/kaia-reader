@@ -521,6 +521,12 @@ pub fn more(services: &Services, screen: Size) -> Window {
         Column::new(vec![
             button(
                 ButtonStyle::Secondary,
+                &tr("Ink mode"),
+                "reader:ink:toggle",
+                "more-ink",
+            ),
+            button(
+                ButtonStyle::Secondary,
                 &tr("Go to page"),
                 "reader:goto:open",
                 "more-goto",

@@ -7,6 +7,7 @@ use std::sync::{mpsc, Arc};
 
 pub(super) struct Frame {
     pub session: BookSession,
+    pub ink: Option<super::ink::PageInk>,
     pub page: Option<Arc<Pixmap>>,
     pub marks: Vec<Mark>,
     /// True when the page has a bookmark. The page draws its dog-ear.
@@ -27,6 +28,7 @@ pub(super) enum WorkError {
     GoTo(String),
     Draw(String),
     Stickers(String),
+    Ink(String),
     /// An engine message that the page shows as it is.
     Engine(String),
     Stopped,
@@ -36,6 +38,15 @@ impl WorkError {
     pub(super) fn message(&self) -> String {
         match self {
             Self::Engine(e) => e.clone(),
+            Self::Ink(e) => {
+                let detail = match e.as_str() {
+                    "This book engine has no text positions for ink." => {
+                        tr("This book engine has no text positions for ink.")
+                    }
+                    other => other.to_string(),
+                };
+                tr_format(&tr("Cannot load ink. %1"), &[&detail])
+            }
             Self::Open(e) => tr_format(&tr("Cannot open this book. %1"), &[e.as_str()]),
             Self::Turn(e) => tr_format(&tr("Cannot turn the page. %1"), &[e.as_str()]),
             Self::GoTo(e) => tr_format(&tr("Cannot go there. %1"), &[e.as_str()]),
@@ -131,7 +142,15 @@ pub(super) fn spawn(
                         (Vec::new(), None)
                     }
                 };
+            let ink = match super::ink::frame(&mut session, viewport) {
+                Ok(ink) => Some(ink),
+                Err(e) => {
+                    error = Some(WorkError::Ink(e));
+                    None
+                }
+            };
             Frame {
+                ink,
                 stickers,
                 sticker_anchor,
                 session,

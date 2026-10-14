@@ -17,6 +17,7 @@
 mod commands;
 pub(crate) mod dict;
 mod footer;
+pub mod ink;
 mod navigation;
 mod overlay;
 pub mod page;
@@ -468,7 +469,10 @@ impl Surface for ReaderSurface {
         opts.pixel_format = env.services.theme.pixel_format();
         let color_panel = env.services.theme.color_panel;
         let page = WidgetPod::new(PageView::new()).with_key(PAGE_KEY);
-        let window = window(env.services, screen, Stack::new(vec![page]));
+        let mut toolbar = ink::toolbar(env.theme());
+        toolbar.set_visible(false);
+        let root = WidgetPod::new(Stack::new(vec![page, toolbar])).with_key("ink-root");
+        let window = window(env.services, screen, Stack::new(vec![root]));
 
         let progress = {
             let mut c = self.core.borrow_mut();
@@ -786,9 +790,10 @@ impl Surface for ReaderSurface {
         }
     }
 
-    /// A picture is dithered on a full refresh only (see `kaia_display`).
+    /// Color ink also needs the color waveform when a stroke or its tools settle.
     fn content_dither(&self, mode: RefreshMode) -> bool {
         mode == RefreshMode::Full
+            || self.core.borrow().ink_color_content && matches!(mode, RefreshMode::Partial | RefreshMode::Ui)
     }
 }
 
@@ -803,6 +808,9 @@ pub(super) fn command(
         rc.borrow_mut().repaint_page(env.ctx, PaintHint::Ui);
         schedule_if_pending(rc, env.ctx);
         return Outcome::Handled;
+    }
+    if let Some(outcome) = ink::command(rc, cmd, args, env) {
+        return outcome;
     }
     if let Some(outcome) = sticker_actions::command(rc, cmd, env) {
         schedule_if_pending(rc, env.ctx);

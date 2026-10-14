@@ -56,7 +56,7 @@ Each row is one feature. Duplicates across the four reports are merged. Kobo-onl
 | Fit and zoom for images | Fit width, height, page or half width. A zoom slider, panning and a magnifier. | Yes | Partly. Fit page, fit width and a zoom sheet. No half width. | Medium | Confirmed |
 | Comic archives | Opens CBZ and CBR as comics. Full-screen image pages are detected. | Partly. CBZ through MuPDF. CBR not tested. | Partly. CBZ only. | Medium | Likely |
 | PDF | Renders PDF with a separate engine. Annotations sit on their own layer. | Yes. Crop too. | Partly. Fixed pages with fit zoom. No crop. | Medium | Confirmed |
-| Stylus ink and notebooks | Pen and eraser tools with color and size. Handwriting converts to text and math. Notebooks use templates. | No | No. Pen events exist, and nothing routes them. | Medium | Confirmed |
+| Stylus ink and notebooks | Pen and eraser tools with color and size. Handwriting converts to text and math. Notebooks use templates. | No | Partly. Page ink with pen, eraser, colors, widths and undo. No recognition or notebooks. | Medium | Confirmed |
 | Audiobooks and read-aloud | Plays audiobooks inside the reader. Read-aloud is an early-access item, and no speech engine turns up in the firmware. | No | No | Low | Confirmed |
 | Reading statistics for a book | Hours read, pages per minute, average session length and time left. End matter can be left out. | Yes | Partly. Time per book. No per-book screen. | Medium | Confirmed |
 | End-of-book prompt | Asks whether the book is finished on reaching the end. A choice can stop the prompt for that book. | Partly. End menu, no prompt. | Partly. End sheet with Mark as finished and Keep reading. | Medium | Confirmed |
@@ -270,7 +270,7 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 
 | # | Item | Kaia files or crates | Size | Blocked by |
 |---|---|---|---|---|
-| T3-1 | Stylus ink on pages, without handwriting recognition. | `rust/kaia-input/src/event.rs` (route `PenEvent`, line 96), a reader ink layer in `rust/kaia-app`, `rust/kaia-storage` (strokes), `rust/kaia-display` (ink refresh) | L | Q22 sets the ink refresh mode. Not blocking. Recognition needs an engine license, a separate decision. |
+| T3-1 | Stylus ink on pages, without handwriting recognition. Implemented; device checks remain. See status below. | `rust/kaia-input/src/event.rs` (route `PenEvent`, line 96), a reader ink layer in `rust/kaia-app`, `rust/kaia-storage` (strokes), `rust/kaia-display` (ink refresh) | L | Q22 sets the ink refresh mode. Not blocking. Recognition needs an engine license, a separate decision. |
 | T3-2 | Read aloud and a screen reader. High value. | A new speech module, a platform audio path, reader text access in `rust/kaia-book` | L | Q28 blocks. No offline speech engine turned up in the firmware. |
 | T3-3 | Large print mode. | `rust/kaia-app/src/surfaces/settings/sections.rs` (mode switch), the reader font scale | S | Built. The scale is 1.25. |
 | T3-4 | Japanese and Chinese input methods. | `rust/kaia-ui/src/controls/keyboard_layout.rs` (layouts), a new input engine crate | L | Decision: engine choice and license. |
@@ -289,6 +289,32 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 | T3-17 | Calibre browse and search. | `rust/kaia-app/src/surfaces/catalogs` (Calibre view), `rust/kaia-calibre` | M | Built. Search and browse work on the Calibre metadata file the device downloads. |
 | T3-18 | Factory reset path. | `rust/kaia-platform` (data wipe), `rust/kaia-app/src/surfaces/settings` | M | Decision: warning text, scope and recovery steps. `ENGINEERING_PLAN.md` safe mode rules apply. |
 | T3-19 | Ambient light sensor and auto brightness, with the sunlight turn-off. Optional. Stock Libra Colour does not run it, because Nickel gates ambient sensing to another device name and Monza fails the gate (from code). Stock parity does not need it. The older sensor paths were written for that other device, so check each one before any use. | `rust/kaia-platform` (reader for the `als_*` sysfs nodes), `frontlight.rs` (ramp), `rust/kaia-app/src/app/power.rs` (poll), `keys.rs` | L | None for stock parity. Q13 and Q15 matter only if this item is built. |
+
+
+### T3-1 implementation status
+
+Implemented in the Rust reader on 2026-10-14. The More menu toggles an ink bar
+with two pen widths, black and three highlight colors on color panels, an
+eraser, undo, and confirmed deletion of all ink on the page. Pen samples bypass
+finger gestures. The stylus eraser end and either barrel button select whole
+stroke erasing. Desktop Alt-left drag simulates the pen; Alt-right drag simulates
+the eraser. There is no handwriting recognition or notebook editor.
+
+Q22 choice for device confirmation: live stroke rectangles request A2, the
+fastest waveform exposed by `kaia-display`. Pen lift requests a partial refresh
+to settle the stroke. Color uses the display's dithered color path on that
+refresh. Live strokes preview in black because A2 is black and white. Confirm latency, ghosting, and the color
+settle on the Libra Colour before treating this waveform choice as final.
+
+Ink belongs to `kaia-storage` schema version 5. Fixed pages use page coordinates;
+reflowable pages use a text xpointer plus offsets. Ink may drift relative to text
+after a font or margin change. Notes export counts strokes by their original
+page number. See `specs/STORAGE.md` for the schema and anchoring rules.
+
+Device checks remain for the stylus event node, axis ranges and orientation,
+`BTN_TOUCH`, `BTN_TOOL_PEN`, `BTN_TOOL_RUBBER`, barrel button codes, raw pressure,
+and pen latency. The input backend discovers a separate stylus node by its pen
+tool capability. Pressure is stored but does not change line width yet.
 
 ## 5. Import plan for Nickel data
 
