@@ -140,6 +140,10 @@ chmod 755 "${APP}/kaia" "${APP}/kaia-rust.sh"
 cat "${ROOT}/platform/kobo/kaia/nickelmenu-kaia-rust" >>"${WORK}/stage/.adds/nm/kaia"
 mkdir -p "${APP}/resources/fonts" "${APP}/resources/icons"
 cp -R "${ROOT}/resources/fonts/noto" "${APP}/resources/fonts/"
+# FreeSans and FreeSerif give the UI Hebrew, Georgian and Thai.
+mkdir -p "${APP}/resources/fonts/freefont"
+cp "${ROOT}/resources/fonts/freefont/FreeSans.ttf" "${ROOT}/resources/fonts/freefont/FreeSerif.ttf" \
+    "${ROOT}/resources/fonts/freefont/COPYING" "${APP}/resources/fonts/freefont/"
 cp -R "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/"
 bash "${ROOT}/tools/kaia/check-rust-package.sh" "${WORK}/stage" "${RUST_BIN}"
 

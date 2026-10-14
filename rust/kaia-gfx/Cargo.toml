@@ -15,3 +15,5 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # SVG icons. resvg re-exports usvg and tiny-skia, so their versions match.
 resvg = { version = "0.45", default-features = false }
 unicode-script = "0.5"
+# Font files are mapped, not read, so large script fonts cost RAM only when used.
+memmap2 = "0.9"

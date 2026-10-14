@@ -1010,6 +1010,7 @@ version = "0.1.0"
 dependencies = [
  "cosmic-text",
  "image",
+ "memmap2",
  "resvg",
  "unicode-script",
 ]

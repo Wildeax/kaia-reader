@@ -74,9 +74,16 @@ pub struct Assets {
 
 impl Assets {
     /// Loads the Noto fonts from `fonts_dir` and points the icon cache at
-    /// `icons_dir` (the `mdlight` set, one `<name>.svg` per icon).
+    /// `icons_dir` (the `mdlight` set, one `<name>.svg` per icon). The `freefont`
+    /// folder next to `fonts_dir`, when present, adds Hebrew, Georgian and Thai.
     pub fn load(fonts_dir: &Path, icons_dir: &Path) -> Result<Self, AssetError> {
-        let fonts = FontSystem::load(&[fonts_dir], NOTO_FONT_PREFIXES).map_err(AssetError::Fonts)?;
+        let mut dirs = vec![fonts_dir.to_path_buf()];
+        if let Some(freefont) = fonts_dir.parent().map(|fonts| fonts.join("freefont")) {
+            if freefont.is_dir() {
+                dirs.push(freefont);
+            }
+        }
+        let fonts = FontSystem::load(&dirs, NOTO_FONT_PREFIXES).map_err(AssetError::Fonts)?;
         fs::read_dir(icons_dir).map_err(|source| AssetError::IconDir {
             path: icons_dir.to_path_buf(),
             source,

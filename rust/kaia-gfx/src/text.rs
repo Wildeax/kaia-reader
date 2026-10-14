@@ -9,7 +9,9 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use cosmic_text::fontdb::Source;
 use cosmic_text::{
     Attrs, Buffer, Color as CtColor, Fallback, Family, Metrics, Shaping, Style, SwashCache, Weight, Wrap,
 };
@@ -18,9 +20,20 @@ use unicode_script::Script;
 use crate::geom::{Point, Rect};
 use crate::pixmap::{Color, Pixmap};
 
-/// File name prefixes of the Noto fonts the UI uses by default. Arabic text
-/// falls back to `NotoNaskhArabic-` (see `NotoFallback`), so it is in the list.
-pub const NOTO_FONT_PREFIXES: &[&str] = &["NotoSans-", "NotoSerif-", "NotoNaskhArabic-"];
+/// File name prefixes of the fonts the UI uses by default: Noto Sans and Serif
+/// for Latin, Greek and Cyrillic, then one font per script that `NotoFallback`
+/// names. `FreeSans` covers Hebrew and Georgian and `FreeSerif` covers Thai,
+/// which the bundled Noto fonts lack.
+pub const NOTO_FONT_PREFIXES: &[&str] = &[
+    "NotoSans-",
+    "NotoSerif-",
+    "NotoNaskhArabic-",
+    "NotoSansCJKsc-",
+    "NotoSansBengaliUI-",
+    "NotoSansDevanagariUI-",
+    "FreeSans.",
+    "FreeSerif.",
+];
 
 /// Errors while loading fonts.
 #[derive(Debug)]
@@ -59,6 +72,9 @@ impl FontSystem {
     /// Loads the `.ttf` and `.otf` files in `dirs` whose file names start with
     /// one of `prefixes`. An empty `prefixes` loads every font file. Files are
     /// loaded in sorted order, so the result does not depend on directory order.
+    ///
+    /// Files are mapped into memory, not read. The 16 MB CJK font costs no RAM
+    /// until a CJK glyph is drawn.
     pub fn load<P: AsRef<Path>>(dirs: &[P], prefixes: &[&str]) -> Result<Self, TextError> {
         let mut files = Vec::new();
         for dir in dirs {
@@ -83,11 +99,16 @@ impl FontSystem {
 
         let mut db = cosmic_text::fontdb::Database::new();
         for path in &files {
-            let data = fs::read(path).map_err(|source| TextError::Io {
+            let io_error = |source| TextError::Io {
                 path: path.clone(),
                 source,
-            })?;
-            db.load_font_data(data);
+            };
+            let file = fs::File::open(path).map_err(io_error)?;
+            // SAFETY: font files are read-only assets in the install folder. Nothing
+            // writes them while the app runs. A Kobo install replaces them only with
+            // the app closed, because USB storage needs Nickel.
+            let map = unsafe { memmap2::Mmap::map(&file) }.map_err(io_error)?;
+            db.load_font_source(Source::SharedFile(path.clone(), Arc::new(map)));
         }
         if db.is_empty() {
             return Err(TextError::NoFonts);
@@ -296,6 +317,11 @@ impl Fallback for NotoFallback {
             Script::Arabic => &["Noto Naskh Arabic", "Noto Sans Arabic UI", "Noto Sans Arabic"],
             Script::Bengali => &["Noto Sans Bengali UI"],
             Script::Devanagari => &["Noto Sans Devanagari UI"],
+            Script::Han | Script::Hiragana | Script::Katakana | Script::Hangul | Script::Bopomofo => {
+                &["Noto Sans CJK SC"]
+            }
+            Script::Hebrew | Script::Georgian => &["FreeSans"],
+            Script::Thai => &["FreeSerif"],
             _ => &[],
         }
     }
@@ -397,9 +423,44 @@ mod tests {
 
     const FONT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources/fonts/noto");
 
+    const FREEFONT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources/fonts/freefont");
+
     fn fonts() -> FontSystem {
         FontSystem::load(&[FONT_DIR], &["NotoSans-", "NotoSerif-", "NotoNaskhArabic-"])
             .expect("Noto fonts in resources/fonts/noto")
+    }
+
+    /// Glyphs that no loaded font has. They draw as boxes.
+    fn missing_glyphs(fs: &mut FontSystem, text: &str) -> usize {
+        let layout = fs.layout(text, &TextStyle::new(32.0), 2000, None, false);
+        layout
+            .buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter())
+            .filter(|glyph| glyph.glyph_id == 0)
+            .count()
+    }
+
+    #[test]
+    fn every_ui_language_script_has_glyphs() {
+        let mut fs = FontSystem::load(&[FONT_DIR, FREEFONT_DIR], NOTO_FONT_PREFIXES).unwrap();
+        for (script, sample) in [
+            ("Latin", "Paramètres de lecture"),
+            ("Cyrillic", "Настройки"),
+            ("Greek", "Ρυθμίσεις"),
+            ("Arabic", "الإعدادات"),
+            ("Persian", "تنظیمات"),
+            ("Hebrew", "הגדרות"),
+            ("Georgian", "პარამეტრები"),
+            ("Thai", "การตั้งค่า"),
+            ("Devanagari", "सेटिंग्स"),
+            ("Bengali", "সেটিংস"),
+            ("Chinese", "设置 設定"),
+            ("Japanese", "設定 ひらがな カタカナ"),
+            ("Korean", "설정"),
+        ] {
+            assert_eq!(missing_glyphs(&mut fs, sample), 0, "{script}: {sample}");
+        }
     }
 
     const ENGLISH: &str = "The quick brown fox jumps over the lazy dog while the reader turns \
