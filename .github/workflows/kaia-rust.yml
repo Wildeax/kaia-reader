@@ -6,9 +6,9 @@ name: kaia-rust
 on:
   push:
     branches: [main]
-    paths: ['rust/**']
+    paths: ['rust/**', '.github/workflows/kaia-rust.yml']
   pull_request:
-    paths: ['rust/**']
+    paths: ['rust/**', '.github/workflows/kaia-rust.yml']
 
 permissions:
   contents: read
@@ -42,6 +42,17 @@ jobs:
           set -euo pipefail
           git submodule update --init --depth 1 -- l10n resources/fonts
           git submodule status -- l10n resources/fonts
+
+      # The l10n submodule tracks .po sources, not the .mo files that the
+      # parser tests compare with them. Compile every catalog for those tests.
+      - name: Compile gettext catalogs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gettext
+          for po in l10n/*/koreader.po; do
+            msgfmt -o "${po%.po}.mo" "${po}"
+          done
 
       # The channel comes from rust/rust-toolchain.toml, so the toolchain
       # version is set in one place.
