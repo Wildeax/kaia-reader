@@ -1053,6 +1053,7 @@ dependencies = [
  "kaia-id",
  "kaia-luadata",
  "kaia-mupdf-sys",
+ "kaia-platform",
  "md-5",
  "roxmltree 0.21.1",
  "rusqlite",
@@ -1106,6 +1107,7 @@ name = "kaia-platform"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "rustix",
  "tempfile",
 ]
 

@@ -73,6 +73,9 @@ impl Surface for SettingsSectionSurface {
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         match cmd {
+            "settings:storage" => {
+                return Outcome::Navigate(Nav::Push(Box::new(super::storage::StorageSurface::default())));
+            }
             "settings:data:kobo" => {
                 match crate::nickel::Plan::prepare(&env.services.paths.books_dir, &env.services.library) {
                     Ok(plan) => {
@@ -143,6 +146,10 @@ impl Surface for SettingsSectionSurface {
                 "language".into(),
             )))),
             Some(Command::LanguagePick(tag)) => pick_language(&tag, env),
+            Some(Command::TimeZone) => Outcome::Navigate(Nav::Push(Box::new(SettingsSectionSurface::new(
+                "timezone".into(),
+            )))),
+            Some(Command::TimeZonePick(name)) => pick_time_zone(&name, env),
             Some(Command::Dictionaries) => Outcome::Navigate(Nav::Push(Box::new(
                 SettingsSectionSurface::new("dictionaries".into()),
             ))),
@@ -293,6 +300,28 @@ fn pick_language(tag: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
     env.services.set_language(known);
     save(env);
     Outcome::Handled
+}
+
+/// Stores the zone the Time zone page chose. An empty name removes the key, which
+/// means the system zone. A name that is not on offer changes nothing. Kaia sets the
+/// process zone at startup only, so the new zone shows after the next start.
+fn pick_time_zone(name: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
+    let before = keys::time_zone(&env.services.settings).map(|zone| zone.name);
+    if name.is_empty() {
+        env.services.settings.del(keys::DEVICE_TIME_ZONE);
+    } else if kaia_platform::timezone::find(name).is_some() {
+        env.services
+            .settings
+            .save(keys::DEVICE_TIME_ZONE, Value::from(name));
+    } else {
+        return Outcome::NotMine;
+    }
+    save(env);
+    let after = keys::time_zone(&env.services.settings).map(|zone| zone.name);
+    if after != before {
+        env.toast(tr("The new time zone applies after a restart."), 4.0);
+    }
+    Outcome::Rebuild
 }
 
 /// Sets the frontlight or warmth of the platform. Only Kobo devices have them;

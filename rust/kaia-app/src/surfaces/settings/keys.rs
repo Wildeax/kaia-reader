@@ -9,7 +9,7 @@
 //! | `reading.font_family` | string | unset (engine default) | Reading font family name. |
 //! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
-//! | `reading.full_refresh_pages` | number | 6 | E Ink full refresh every this many page turns. |
+//! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
 //! | `reading.footer_percent` | bool | false | Reader footer shows the reading percent. |
 //! | `reading.footer_time_chapter` | bool | false | Reader footer shows the time left in the chapter, or in the book before the first chapter. |
@@ -33,6 +33,7 @@
 //! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
 //! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
+//! | `device.time_zone` | string | unset (system zone) | IANA name of the zone for Kaia's clock, such as `America/Bogota`. Set from the Time zone page. Kaia sets `TZ` at startup, so the footer clock, natural light and statistics dates follow it. An unknown name counts as unset. See `kaia_platform::timezone`. |
 //! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
 //! | `network.airplane_mode` | bool | false | Airplane mode: Wi-Fi stays off and Kaia does not turn it on. Set from quick settings. |
 //! | `experimental.enabled` | bool | false | Master switch of the experimental features. See `experiments`. |
@@ -93,6 +94,8 @@ pub const SYNC_USERKEY: &str = "sync.userkey";
 pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
+/// IANA name of the zone for Kaia's clock. Unset means the system zone.
+pub const DEVICE_TIME_ZONE: &str = "device.time_zone";
 pub const UI_LANGUAGE: &str = crate::i18n::SETTING;
 pub const DISPLAY_LARGE_PRINT: &str = "display.large_print";
 pub const NETWORK_AIRPLANE_MODE: &str = "network.airplane_mode";
@@ -100,8 +103,10 @@ pub const EXPERIMENTAL_ENABLED: &str = "experimental.enabled";
 
 /// Default reading font size in KOReader units. It becomes 47 px on the Libra Colour.
 pub const DEFAULT_FONT_SIZE: f64 = 22.0;
-/// Default full refresh interval in page turns.
-pub const DEFAULT_FULL_REFRESH_PAGES: f64 = 6.0;
+/// Default full refresh cadence: zero, which means at each chapter.
+pub const DEFAULT_FULL_REFRESH_PAGES: f64 = 0.0;
+/// The largest page count the full refresh choice offers. Larger saved values read as this.
+pub const FULL_REFRESH_PAGES_MAX: u32 = 10;
 /// Default sleep timeout in minutes.
 pub const DEFAULT_SLEEP_MINUTES: f64 = 15.0;
 
@@ -131,6 +136,19 @@ pub fn number_or(settings: &Settings, key: &str, default: f64) -> f64 {
     settings.read(key).as_f64().unwrap_or(default)
 }
 
+/// The full refresh cadence from `reading.full_refresh_pages`. Zero means a full
+/// refresh at each chapter start. From 1 to 10, the value is the page count, and
+/// a larger value reads as 10. A negative value reads as zero. The Settings row
+/// and the reader both read through here, so they show and do the same thing.
+pub fn full_refresh_pages(settings: &Settings) -> u32 {
+    let n = number_or(settings, READING_FULL_REFRESH_PAGES, DEFAULT_FULL_REFRESH_PAGES);
+    if n >= 1.0 {
+        n.min(f64::from(FULL_REFRESH_PAGES_MAX)).floor() as u32
+    } else {
+        0
+    }
+}
+
 /// The string at `key`, or `default` when the key is unset or not a string.
 pub fn text_or(settings: &Settings, key: &str, default: &str) -> String {
     settings.read(key).as_str().unwrap_or(default).to_string()
@@ -144,4 +162,42 @@ pub fn text(settings: &Settings, key: &str) -> String {
 /// The index of the preset `value` in `presets`, or 0 for an unknown value.
 pub fn preset_index(presets: &[(&str, &str)], value: &str) -> usize {
     presets.iter().position(|(id, _)| *id == value).unwrap_or(0)
+}
+
+/// The zone stored under `device.time_zone`. None when the key is unset or names a
+/// zone that is not on offer. Both mean the system zone.
+pub fn time_zone(settings: &Settings) -> Option<&'static kaia_platform::timezone::Zone> {
+    kaia_platform::timezone::find(settings.read(DEVICE_TIME_ZONE).as_str()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaia_events::Value;
+
+    /// The cadence for a stored value, or for no stored value when `value` is None.
+    fn cadence(value: Option<f64>) -> u32 {
+        // The file does not exist, so nothing is read from disk and nothing is written.
+        let mut settings = Settings::open(std::path::Path::new("/nonexistent/kaia-keys-test/settings.json"));
+        if let Some(v) = value {
+            settings.save(READING_FULL_REFRESH_PAGES, Value::from(v));
+        }
+        full_refresh_pages(&settings)
+    }
+
+    #[test]
+    fn full_refresh_pages_reads_chapter_pages_and_clamps() {
+        assert_eq!(cadence(None), 0, "an unset key is each chapter");
+        assert_eq!(cadence(Some(0.0)), 0, "zero is each chapter");
+        assert_eq!(cadence(Some(1.0)), 1);
+        assert_eq!(
+            cadence(Some(6.0)),
+            6,
+            "a page count saved before this change keeps its value"
+        );
+        assert_eq!(cadence(Some(10.0)), 10);
+        assert_eq!(cadence(Some(25.0)), 10, "a saved value above 10 reads as 10");
+        assert_eq!(cadence(Some(2.7)), 2);
+        assert_eq!(cadence(Some(-3.0)), 0, "a negative value reads as each chapter");
+    }
 }

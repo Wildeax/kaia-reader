@@ -18,6 +18,8 @@
 //! - `settings:language` opens the language page. `settings:language:<tag>`
 //!   shows the screens in that language.
 //! - `settings:dictionaries` opens the Dictionary settings page.
+//! - `settings:timezone` opens the Time zone page. `settings:timezone:<name>`
+//!   stores the zone `name`. An empty name stores the system zone.
 //! - `settings:dicts:<toggle|up|down>:<index>` changes one dictionary. `index` is
 //!   its place in the lookup order. The change is `reader::dict::Change`.
 
@@ -70,6 +72,10 @@ pub enum Command {
         index: usize,
         change: Change,
     },
+    /// Opens the Time zone page.
+    TimeZone,
+    /// Stores the zone called `name`. An empty name stores the system zone.
+    TimeZonePick(String),
 }
 
 /// Parses a settings action id. None for every other id, and for an unknown section.
@@ -88,7 +94,11 @@ pub fn parse(id: &str) -> Option<Command> {
         "data:export" => return Some(Command::ExportNotes),
         "language" => return Some(Command::Language),
         "dictionaries" => return Some(Command::Dictionaries),
+        "timezone" => return Some(Command::TimeZone),
         _ => {}
+    }
+    if let Some(name) = rest.strip_prefix("timezone:") {
+        return Some(Command::TimeZonePick(name.to_string()));
     }
     if let Some(action) = rest.strip_prefix("dicts:") {
         let (change, index) = action.split_once(':')?;
@@ -298,6 +308,19 @@ mod tests {
         assert_eq!(parse("settings:dicts:sideways:0"), None);
         assert_eq!(parse("settings:dicts:up:first"), None);
         assert_eq!(parse("settings:dicts:up"), None);
+    }
+
+    #[test]
+    fn parses_the_time_zone_page_and_its_picks() {
+        assert_eq!(parse("settings:timezone"), Some(Command::TimeZone));
+        assert_eq!(
+            parse("settings:timezone:America/Bogota"),
+            Some(Command::TimeZonePick("America/Bogota".into()))
+        );
+        assert_eq!(
+            parse("settings:timezone:"),
+            Some(Command::TimeZonePick(String::new()))
+        );
     }
 
     #[test]

@@ -25,12 +25,14 @@ pub fn title(name: &str) -> String {
         "network" => tr("Network and sync"),
         "statistics" => tr("Statistics"),
         "device" => tr("Device"),
+        "storage" => tr("Storage"),
         "extensions" => tr("Extensions"),
         "plugin-menus" => tr("Plugins"),
         "data" => tr("Data"),
         "about" => tr("About"),
         "advanced" => tr("Advanced"),
         "language" => tr("Language"),
+        "timezone" => tr("Time zone"),
         _ if name.starts_with("plugin:") => tr("Plugin"),
         _ => tr("Settings"),
     }
@@ -51,9 +53,11 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "network" => network(services),
         "statistics" => statistics(services, now),
         "device" => device(services),
+        "storage" => super::storage::entries(services),
         "extensions" => extensions(services),
         "plugin-menus" => reader_menus(services),
         "language" => language(services),
+        "timezone" => time_zone_page(services),
         "data" => data(services),
         "about" => about(),
         "advanced" => advanced(),
@@ -115,15 +119,11 @@ fn reading(services: &Services) -> Vec<Entry> {
         Entry::Stepper {
             key: keys::READING_FULL_REFRESH_PAGES,
             label: tr("Full refresh every"),
-            value: keys::number_or(
-                s,
-                keys::READING_FULL_REFRESH_PAGES,
-                keys::DEFAULT_FULL_REFRESH_PAGES,
-            ),
-            min: 1.0,
-            max: 50.0,
+            value: f64::from(keys::full_refresh_pages(s)),
+            min: 0.0,
+            max: f64::from(keys::FULL_REFRESH_PAGES_MAX),
             step: 1.0,
-            unit: StepUnit::Pages,
+            unit: StepUnit::ChapterOrPages,
         },
         Entry::Heading(tr("Dictionary")),
         Entry::Row {
@@ -283,6 +283,33 @@ fn language(services: &Services) -> Vec<Entry> {
             action: format!("settings:language:{tag}"),
         })
         .collect()
+}
+
+/// The Time zone page. "System default" comes first. The zones follow, by standard
+/// offset and then by name, and the zone in use has a checkbox. The zone applies
+/// at the next start.
+fn time_zone_page(services: &Services) -> Vec<Entry> {
+    let current = keys::time_zone(&services.settings).map(|zone| zone.name);
+    let mut out = vec![
+        Entry::Text(tr(
+            "Kaia uses this zone for the clock, natural light and reading statistics. A change applies after a restart.",
+        )),
+        Entry::Choice {
+            label: tr("System default"),
+            selected: current.is_none(),
+            action: "settings:timezone:".into(),
+        },
+    ];
+    out.extend(
+        kaia_platform::timezone::sorted()
+            .into_iter()
+            .map(|zone| Entry::Choice {
+                label: format!("{}  {}", kaia_platform::timezone::offset_label(zone), zone.name),
+                selected: current == Some(zone.name),
+                action: format!("settings:timezone:{}", zone.name),
+            }),
+    );
+    out
 }
 
 fn library(services: &Services) -> Vec<Entry> {
@@ -492,6 +519,11 @@ fn idle_choices(s: &kaia_events::Settings, key: &'static str, default: f64) -> E
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     vec![
+        Entry::Button {
+            key: "settings-storage",
+            label: tr("Storage"),
+            action: "settings:storage".into(),
+        },
         Entry::Heading(tr("Sleep after")),
         idle_choices(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
         Entry::Heading(tr("Power off after")),
@@ -518,6 +550,13 @@ fn device(services: &Services) -> Vec<Entry> {
             ),
         },
         Entry::Text(tr("The cover of the book you are reading, or a blank screen.")),
+        Entry::Heading(tr("Time zone")),
+        Entry::Row {
+            primary: keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string()),
+            secondary: None,
+            value: None,
+            action: Some("settings:timezone".into()),
+        },
     ]
 }
 

@@ -18,6 +18,7 @@ pub mod quick;
 pub mod section;
 pub mod sections;
 pub mod sleep;
+pub mod storage;
 
 use kaia_events::Value;
 use kaia_gfx::Size;
@@ -138,6 +139,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("statistics", "Today"),
     ("statistics", "This week"),
     ("statistics", "Books"),
+    ("device", "Storage"),
     ("device", "Sleep after"),
     ("device", "Sleep screen"),
     ("extensions", "KOReader plugins"),
@@ -193,6 +195,7 @@ fn item_title(english: &str) -> String {
         "Today" => tr("Today"),
         "This week" => tr("This week"),
         "Books" => tr("Books"),
+        "Storage" => tr("Storage"),
         "Sleep after" => tr("Sleep after"),
         "Sleep screen" => tr("Sleep screen"),
         "KOReader plugins" => tr("KOReader plugins"),

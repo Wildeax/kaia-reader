@@ -148,12 +148,13 @@ pub struct App<B: Backend> {
 
 impl<B: Backend> App<B> {
     /// Builds the app on `backend`. Call [`App::start`] to show Home.
-    pub fn new(backend: B, services: Services, clock: Box<dyn Clock>, mut options: AppOptions) -> Self {
+    pub fn new(backend: B, mut services: Services, clock: Box<dyn Clock>, mut options: AppOptions) -> Self {
         for root in &mut options.library_roots {
             if let Ok(absolute) = std::path::absolute(&*root) {
                 *root = absolute;
             }
         }
+        services.library_roots = options.library_roots.clone();
         #[cfg(feature = "lua")]
         if let Some(root) = options.library_roots.first() {
             services.plugins.library.borrow_mut().folder = root.clone();

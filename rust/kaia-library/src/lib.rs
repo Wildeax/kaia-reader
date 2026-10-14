@@ -25,6 +25,7 @@ mod import;
 mod query;
 mod scan;
 mod schema;
+pub mod storage;
 mod types;
 
 use std::path::Path;

@@ -108,6 +108,8 @@ pub enum Entry {
 pub enum StepUnit {
     KoreaderUnits,
     Pages,
+    /// Zero reads as `Chapter`. Any other value reads as a page count.
+    ChapterOrPages,
     Minutes,
     ClockTime,
     Percent,
@@ -328,6 +330,8 @@ fn unit_text(unit: StepUnit, v: f64) -> String {
     match unit {
         StepUnit::KoreaderUnits => tr_format(&tr("%1 KOReader units"), &[&n]),
         StepUnit::Pages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),
+        StepUnit::ChapterOrPages if v < 1.0 => tr("Chapter"),
+        StepUnit::ChapterOrPages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),
         StepUnit::Minutes => tr_format(&tr("%1 min"), &[&n]),
         StepUnit::ClockTime => {
             let minutes = (v.round() as u32) % 1440;

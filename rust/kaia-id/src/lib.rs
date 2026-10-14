@@ -37,12 +37,16 @@ const SAMPLE_OFFSETS: [u64; 12] = [
 /// 12 KiB. A file shorter than a sample contributes the bytes it has. Samples
 /// past the end are skipped, as in KOReader.
 pub fn partial_md5(path: &Path) -> io::Result<String> {
-    let mut file = File::open(path)?;
+    partial_md5_file(&mut File::open(path)?)
+}
+
+/// Hashes an already open file with the same samples as [`partial_md5`].
+pub fn partial_md5_file(file: &mut File) -> io::Result<String> {
     let mut hasher = Md5::new();
     let mut buf = [0u8; SAMPLE_SIZE];
     for &offset in &SAMPLE_OFFSETS {
         file.seek(SeekFrom::Start(offset))?;
-        let n = read_up_to(&mut file, &mut buf)?;
+        let n = read_up_to(file, &mut buf)?;
         if n == 0 {
             break;
         }

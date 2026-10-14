@@ -258,6 +258,12 @@ fn chapter_pages(app: &mut App<HeadlessBackend>) -> std::collections::HashSet<u3
 fn full_refresh_at_chapter_starts_and_every_sixth_turn() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("sixth-turn");
+    // The default is now a full refresh per chapter. This test keeps the page count.
+    let data = dir.join("data");
+    fs::create_dir_all(&data).unwrap();
+    let mut settings = Settings::open(&data.join("settings.json"));
+    settings.save("reading.full_refresh_pages", kaia_events::Value::from(6.0));
+    settings.flush(&data.join("settings.json")).unwrap();
     let mut app = open_reader("juliet.epub", &dir);
     let chapters = chapter_pages(&mut app);
     assert!(

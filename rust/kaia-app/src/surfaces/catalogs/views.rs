@@ -1,11 +1,13 @@
+use kaia_calibre::metadata::{Book, Field};
 use kaia_gfx::{image::FitMode, Size};
-use kaia_i18n::{format as tr_format, tr};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Image, Label, Paragraph, Row, SizedBox};
 use kaia_ui::composite::{Header, ListRow, PagedList, SheetPanel};
 use kaia_ui::controls::{ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
 use kaia_ui::{Theme, Tone, WidgetPod, Window};
 
-use super::{store, CatalogSurface, View};
+use super::cache::{field_key, field_title, Cache};
+use super::{store, CatalogSurface, View, CALIBRE_QUERY_FIELD};
 use crate::services::Services;
 use crate::surfaces::common::{body, button, page, root_window};
 
@@ -44,6 +46,21 @@ fn row(item: &Item, t: &Theme) -> WidgetPod {
     } else {
         main
     }
+}
+/// The second line of a Calibre search row: the authors, then the series and its number.
+fn calibre_detail(book: &Book) -> String {
+    let mut parts = Vec::new();
+    if !book.authors.is_empty() {
+        parts.push(book.authors.join(", "));
+    }
+    if let Some(series) = &book.series {
+        parts.push(match book.series_index {
+            Some(n) if n.fract() == 0.0 => format!("{series} {n:.0}"),
+            Some(n) => format!("{series} {n}"),
+            None => series.clone(),
+        });
+    }
+    parts.join(", ")
 }
 fn list(items: Vec<Item>) -> WidgetPod {
     WidgetPod::new(Expanded::new(
@@ -91,6 +108,8 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         View::Feed { feed, .. } => feed.title.clone(),
         View::Book { .. } => tr("Book details"),
         View::Calibre => tr("Calibre wireless"),
+        View::CalibreBooks { title, .. } => title.clone(),
+        View::CalibreGroups { field, .. } => field_title(*field),
         View::Downloads => tr("Downloads folder"),
     };
     let mut children = Vec::new();
@@ -290,7 +309,16 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         }
         View::Calibre => {
             if state.typing {
-                if state.field == 1 {
+                if state.field == CALIBRE_QUERY_FIELD {
+                    children.push(text_field(
+                        t,
+                        &tr("Search Calibre books"),
+                        &state.calibre_query,
+                        "calibre-query",
+                        false,
+                    ));
+                    children.push(action(&tr("Search"), "catalogs:calibre-search-go"));
+                } else if state.field == 1 {
                     children.push(text_field(
                         t,
                         &tr("Server password, optional"),
@@ -309,6 +337,30 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                 }
                 children.push(action(&tr("Done"), "catalogs:hide-keyboard"));
             } else if !active {
+                match &state.cache {
+                    Cache::Loaded { .. } => {
+                        children.push(actions(
+                            t,
+                            vec![action(&tr("Search Calibre books"), "catalogs:calibre-search")],
+                        ));
+                        for field in [Field::Author, Field::Series, Field::Tag] {
+                            children.push(row(
+                                &item(
+                                    field_title(field),
+                                    match field {
+                                        Field::Author => tr("Find books by author"),
+                                        Field::Series => tr("Find books in a series"),
+                                        Field::Tag => tr("Find books with a tag"),
+                                    },
+                                    format!("catalogs:calibre-browse:{}", field_key(field)),
+                                ),
+                                t,
+                            ));
+                        }
+                    }
+                    Cache::Failed(message) => children.push(body(services, message.clone())),
+                    Cache::Missing => {}
+                }
                 children.push(body(
                     services,
                     tr("Start Calibre's wireless device connection, then connect here to receive books."),
@@ -340,6 +392,43 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                     .iter()
                     .enumerate()
                     .map(|(i, s)| item(&s.name, s.address.to_string(), format!("catalogs:server:{i}")))
+                    .collect(),
+            ));
+        }
+        View::CalibreBooks { books, .. } => {
+            let items: Vec<Item> = books
+                .iter()
+                .enumerate()
+                .filter_map(|(pos, &index)| {
+                    let book = state.cache.metadata()?.books().get(index)?;
+                    Some(item(
+                        book.display_title(),
+                        calibre_detail(book),
+                        format!("catalogs:calibre-book:{pos}"),
+                    ))
+                })
+                .collect();
+            if items.is_empty() {
+                children.push(body(services, tr("No books found.")));
+            }
+            children.push(list(items));
+        }
+        View::CalibreGroups { groups, .. } => {
+            if groups.is_empty() {
+                children.push(body(services, tr("No values in the Calibre metadata file.")));
+            }
+            children.push(list(
+                groups
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (value, count))| {
+                        let count = *count as i64;
+                        item(
+                            value.clone(),
+                            tr_format(&tr_n("%1 book", "%1 books", count), &[&count.to_string()]),
+                            format!("catalogs:calibre-group:{i}"),
+                        )
+                    })
                     .collect(),
             ));
         }

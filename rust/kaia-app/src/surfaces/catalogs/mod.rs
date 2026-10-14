@@ -1,8 +1,13 @@
-//! Catalog browsing and Calibre wireless, opened from Network and sync.
+//! Catalog browsing and Calibre wireless, opened from Network and sync. The Calibre
+//! view also searches and browses the metadata file that a wireless transfer leaves.
+mod cache;
 pub mod store;
 mod views;
 pub mod worker;
 
+use std::path::PathBuf;
+
+use kaia_calibre::metadata::{Field, Options};
 use kaia_events::{Event, ShowOpts, TaskId, Value};
 use kaia_gfx::Pixmap;
 use kaia_i18n::tr;
@@ -12,7 +17,11 @@ use kaia_ui::Window;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::settings::keys;
 use crate::surfaces::Route;
+use cache::{parse_field, Cache};
 use worker::{worker_text, Reply, Request, Worker};
+
+/// The text field of the Calibre search. The address is field 0 and the password is 1.
+const CALIBRE_QUERY_FIELD: usize = 2;
 
 pub(super) enum View {
     Catalogs,
@@ -31,6 +40,17 @@ pub(super) enum View {
         cover: Option<Pixmap>,
     },
     Calibre,
+    /// Books from a Calibre search, or from a browse group. Each index is a position in
+    /// the loaded metadata.
+    CalibreBooks {
+        title: String,
+        books: Vec<usize>,
+    },
+    /// The values of one browse field, with the number of books that have each one.
+    CalibreGroups {
+        field: Field,
+        groups: Vec<(String, usize)>,
+    },
     Downloads,
 }
 
@@ -52,6 +72,11 @@ pub struct CatalogSurface {
     loading_first: bool,
     connection: bool,
     initialized: bool,
+    /// The Calibre metadata file, read when the Calibre view first opens.
+    cache: Cache,
+    /// The folder that holds the metadata file: the downloads folder.
+    cache_root: PathBuf,
+    calibre_query: String,
 }
 
 impl Default for CatalogSurface {
@@ -79,6 +104,9 @@ impl CatalogSurface {
             loading_first: false,
             connection: false,
             initialized: false,
+            cache: Cache::default(),
+            cache_root: PathBuf::new(),
+            calibre_query: String::new(),
         }
     }
     pub fn calibre() -> Self {
@@ -145,7 +173,7 @@ impl CatalogSurface {
 impl Surface for CatalogSurface {
     fn route(&self) -> Route {
         match self.view {
-            View::Calibre => Route::Calibre,
+            View::Calibre | View::CalibreBooks { .. } | View::CalibreGroups { .. } => Route::Calibre,
             View::Book { .. } => Route::CatalogBook,
             _ => Route::Catalogs,
         }
@@ -181,6 +209,8 @@ impl Surface for CatalogSurface {
                     .as_str()
                     .unwrap_or("")
                     .into();
+                self.cache_root = store::downloads(env.services);
+                self.reload_cache();
             }
         }
         Some(views::build(self, env.services, env.screen))
@@ -245,6 +275,10 @@ impl Surface for CatalogSurface {
                 }
                 Reply::Finished(result) => {
                     self.worker = None;
+                    // A transfer may have rewritten the metadata file.
+                    if matches!(self.view, View::Calibre) {
+                        self.reload_cache();
+                    }
                     self.status = match result {
                         Err(message) => worker_text(&message),
                         Ok(()) if self.book.is_some() => tr("Book saved to the library."),
@@ -340,12 +374,16 @@ impl Surface for CatalogSurface {
                 "address" => self.address = text,
                 "calibre-password" => self.password = text,
                 "folder" => self.download_folder = text,
+                "calibre-query" => self.calibre_query = text,
                 _ => {}
             }
             return Outcome::Handled;
         }
         if self.worker.is_some() || self.pending.is_some() {
             return Outcome::Handled;
+        }
+        if let Some(outcome) = self.calibre_command(action, env) {
+            return outcome;
         }
         if let Some(index) = action
             .strip_prefix("field:")
@@ -516,6 +554,86 @@ impl Surface for CatalogSurface {
     }
 }
 impl CatalogSurface {
+    fn reload_cache(&mut self) {
+        if !self.cache_root.as_os_str().is_empty() {
+            self.cache = Cache::load(&self.cache_root);
+        }
+    }
+
+    /// The offline Calibre search and browse actions. Returns None for any other action.
+    fn calibre_command(&mut self, action: &str, env: &mut SurfaceEnv<'_>) -> Option<Outcome> {
+        if action == "calibre-search" {
+            self.typing = true;
+            self.field = CALIBRE_QUERY_FIELD;
+            return Some(Outcome::Rebuild);
+        }
+        if action == "calibre-search-go" {
+            let query = self.calibre_query.trim().to_owned();
+            if query.is_empty() {
+                self.status = tr("Enter a word to search.");
+                return Some(Outcome::Rebuild);
+            }
+            let books = self
+                .cache
+                .metadata()
+                .map(|m| m.search(&query, Options::default()))
+                .unwrap_or_default();
+            self.status.clear();
+            self.enter(View::CalibreBooks {
+                title: tr("Search results"),
+                books,
+            });
+            return Some(Outcome::Rebuild);
+        }
+        if let Some(key) = action.strip_prefix("calibre-browse:") {
+            let field = parse_field(key)?;
+            let groups = self.cache.metadata().map(|m| m.groups(field)).unwrap_or_default();
+            self.status.clear();
+            self.enter(View::CalibreGroups { field, groups });
+            return Some(Outcome::Rebuild);
+        }
+        if let Some(n) = action
+            .strip_prefix("calibre-group:")
+            .and_then(|n| n.parse::<usize>().ok())
+        {
+            let (field, value) = match &self.view {
+                View::CalibreGroups { field, groups } => match groups.get(n) {
+                    Some((value, _)) => (*field, value.clone()),
+                    None => return Some(Outcome::Handled),
+                },
+                _ => return Some(Outcome::Handled),
+            };
+            let books = self
+                .cache
+                .metadata()
+                .map(|m| m.books_with(field, &value))
+                .unwrap_or_default();
+            self.status.clear();
+            self.enter(View::CalibreBooks { title: value, books });
+            return Some(Outcome::Rebuild);
+        }
+        if let Some(pos) = action
+            .strip_prefix("calibre-book:")
+            .and_then(|n| n.parse::<usize>().ok())
+        {
+            let index = match &self.view {
+                View::CalibreBooks { books, .. } => books.get(pos).copied(),
+                _ => None,
+            };
+            let Some(index) = index else {
+                return Some(Outcome::Handled);
+            };
+            return Some(match self.cache.library_id(&env.services.library, index) {
+                Some(book) => Outcome::Navigate(Nav::OpenBook { book, location: None }),
+                None => {
+                    self.status = tr("This book is not on the device.");
+                    Outcome::Rebuild
+                }
+            });
+        }
+        None
+    }
+
     fn connect(&mut self, env: &mut SurfaceEnv<'_>) {
         if self.address.trim().is_empty() {
             self.status = tr("Enter the server address and port.");

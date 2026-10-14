@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+pub mod metadata;
 mod policy;
 
 pub use policy::{check_lpath, check_target, Refusal, BOOK_EXTENSIONS};
@@ -644,16 +645,36 @@ fn slim_book(book: &Value) -> Value {
     Value::Object(map)
 }
 
-pub fn read_metadata_cache(root: &Path) -> io::Result<Vec<Value>> {
+/// Reads the metadata cache and fails on a damaged file. Code that decides what to
+/// delete from the cache, such as the storage page, uses this one.
+pub fn read_metadata_cache_strict(root: &Path) -> io::Result<Vec<Value>> {
     let path = existing_file(root, "metadata.calibre");
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let value: Value = serde_json::from_reader(File::open(path)?).map_err(io::Error::other)?;
+    let value: Value =
+        serde_json::from_reader(BufReader::new(File::open(&path)?)).map_err(io::Error::other)?;
     let books = value
         .as_array()
         .ok_or_else(|| invalid("metadata.calibre must be an array"))?;
     Ok(books.iter().map(slim_book).collect())
+}
+
+/// Reads the wireless metadata cache. A damaged file does not stop the connection:
+/// as KOReader's `loadBookList` does, the cache starts empty and Calibre sends what
+/// it needs again. The damaged bytes are first copied to `metadata.calibre.damaged`,
+/// because the next save replaces the file. A file that cannot be opened is still
+/// an error.
+pub fn read_metadata_cache(root: &Path) -> io::Result<Vec<Value>> {
+    match read_metadata_cache_strict(root) {
+        Err(e) if matches!(e.kind(), io::ErrorKind::Other | io::ErrorKind::InvalidData) => {
+            eprintln!("kaia: calibre: damaged metadata cache, starting empty: {e}");
+            let path = existing_file(root, "metadata.calibre");
+            fs::copy(&path, path.with_extension("calibre.damaged"))?;
+            Ok(Vec::new())
+        }
+        other => other,
+    }
 }
 
 pub fn write_metadata_cache(root: &Path, books: &[Value]) -> io::Result<()> {
@@ -741,6 +762,19 @@ mod tests {
         ));
         fs::create_dir_all(&path).unwrap();
         path
+    }
+
+    #[test]
+    fn a_damaged_metadata_cache_starts_empty_and_keeps_a_copy() {
+        let root = temp_root();
+        fs::write(root.join("metadata.calibre"), b"[{\"lpath\": ").unwrap();
+        assert!(read_metadata_cache(&root).unwrap().is_empty());
+        assert_eq!(
+            fs::read(root.join("metadata.calibre.damaged")).unwrap(),
+            b"[{\"lpath\": "
+        );
+        fs::write(root.join("metadata.calibre"), b"{}").unwrap();
+        assert!(read_metadata_cache(&root).unwrap().is_empty(), "not an array");
     }
 
     fn pair() -> (Connection<TestStorage>, TcpStream, PathBuf) {

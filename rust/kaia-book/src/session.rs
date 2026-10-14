@@ -56,6 +56,26 @@ const POSITION_SAVE_INTERVAL: Duration = Duration::from_secs(5);
 
 static OPEN_BOOKS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 
+/// Reserves a closed book until file deletion finishes. Dropping this guard
+/// releases the same path, content and file locks that reader sessions use.
+pub struct ClosedBookGuard {
+    _lease: SessionLease,
+}
+
+/// Returns no guard if a reader has the path or content open. A new reader in
+/// this process cannot acquire its session lease while the guard exists.
+pub fn hold_closed_book(book: &Path, data: &Path, md5: &str) -> Result<Option<ClosedBookGuard>> {
+    if md5.len() != 32 || !md5.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(BookError::Invalid("invalid book identity".into()));
+    }
+    let state = data.join("kaia/books").join(format!("{md5}.json"));
+    match SessionLease::acquire(book, &state) {
+        Ok(lease) if lease.writable() => Ok(Some(ClosedBookGuard { _lease: lease })),
+        Ok(_) | Err(BookError::AlreadyOpen(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 struct SessionLease {
     book_key: PathBuf,
     state_key: PathBuf,

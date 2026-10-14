@@ -13,7 +13,6 @@ pub mod views;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -1077,35 +1076,22 @@ fn check_marks(
     }
 }
 
-/// Deletes the file of book `id` and reports the result. The row leaves the list
-/// the next time the lists are read, because they skip books whose file is gone.
+/// Deletes an indexed file after the shared folder and open-book checks.
+/// Reading state and annotations stay in Kaia's data directory.
 fn delete_file(env: &mut SurfaceEnv<'_>, id: i64) {
-    let path = match env.services.library.book(id) {
-        Ok(Some(book)) => book.path,
-        _ => {
-            env.notice(tr_format(&tr("no book %1"), &[&id.to_string()]));
-            return;
-        }
-    };
-    match fs::remove_file(&path) {
-        Ok(()) => {
-            if let Err(e) = env.services.library.remove_book(id) {
-                env.toast(
-                    tr_format(
-                        &tr("File deleted, but the library could not update: %1"),
-                        &[&e.to_string()],
-                    ),
-                    4.0,
-                );
-            }
+    match crate::surfaces::settings::storage::delete_one(env.services, id) {
+        Ok(true) => {
             env.toast(tr("File deleted"), 2.0);
         }
-        Err(e) => {
+        Ok(false) => {
+            env.toast(tr("Close the book before deleting it."), 4.0);
+        }
+        Err(error) => {
             env.notice(tr_format(
-                &tr("cannot delete %1: %2"),
-                &[&path.display().to_string(), &e.to_string()],
+                &tr("Cannot delete the book: %1"),
+                &[&error.to_string()],
             ));
-            env.toast(tr("The file could not be deleted"), 2.0);
+            env.toast(tr("The file could not be deleted"), 4.0);
         }
     }
 }

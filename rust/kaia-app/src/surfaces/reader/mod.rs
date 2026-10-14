@@ -11,7 +11,8 @@
 //! they answer [`Outcome::NotMine`].
 //!
 //! The reader saves its position in `on_hide`. A page turn that crosses a chapter
-//! start, or the sixth turn since the last full refresh, is a full refresh.
+//! start is a full refresh. So is a page of a fixed-layout book. With a page count
+//! in `reading.full_refresh_pages`, every Nth turn is one too.
 
 mod commands;
 pub(crate) mod dict;
@@ -477,13 +478,7 @@ impl Surface for ReaderSurface {
             c.viewport = opts.viewport;
             c.footer = footer;
             c.color_panel = color_panel;
-            c.refresh_every = env
-                .services
-                .settings
-                .read("reading.full_refresh_pages")
-                .as_i64()
-                .unwrap_or(6)
-                .max(0) as u32;
+            c.refresh_every = crate::surfaces::settings::keys::full_refresh_pages(&env.services.settings);
             c.page_window = Some(window.clone());
             if c.session.is_none() {
                 c.open(&row.path, opts);

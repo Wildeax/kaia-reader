@@ -36,6 +36,8 @@ pub struct Services {
     pub settings: Settings,
     /// The library index, at `<data>/library.sqlite3`. The scan thread has its own connection.
     pub library: Library,
+    /// Books folders supplied when the app starts.
+    pub library_roots: Vec<PathBuf>,
     /// A copy of `platform.paths`, with the data folder the app is using.
     pub paths: Paths,
     pub theme: Theme,
@@ -117,6 +119,9 @@ impl Services {
             }
         }
         let mut settings = Settings::open(&settings_path);
+        // Kaia's clock zone. It is set here, before any local time is read and before the
+        // threads below start. See `kaia_platform::timezone::apply`.
+        kaia_platform::timezone::apply(keys::time_zone(&settings));
         // The language comes before the notices, so the notices show in it.
         let catalog_root = crate::i18n::catalog_root(&platform);
         let on_offer = crate::i18n::available(&catalog_root);
@@ -196,6 +201,7 @@ impl Services {
             dictionary: None,
             settings,
             library,
+            library_roots: Vec::new(),
             paths,
             theme,
             assets,

@@ -26,9 +26,6 @@ use super::panels::{search_rows, SearchRow, FONT_CHOICES};
 use super::work::WorkError;
 use kaia_ui::composite::PagedList;
 
-/// Full refresh every this many page turns, so the panel clears its ghosts.
-pub const REFRESH_EVERY: u32 = 6;
-
 /// Seconds between pump ticks while the engine has work.
 const PUMP_SECONDS: f64 = 0.02;
 
@@ -84,6 +81,8 @@ pub struct Core {
     pub panel: Option<Layer>,
     pub next_serial: u64,
     pub pages_since_full: u32,
+    /// Page turns between full refreshes, from `reading.full_refresh_pages`. Zero
+    /// means only chapter starts and picture pages take a full refresh.
     pub refresh_every: u32,
     pub selecting: bool,
     pub selection: Option<Selection>,
@@ -138,7 +137,7 @@ impl Core {
             panel: None,
             next_serial: 0,
             pages_since_full: 0,
-            refresh_every: REFRESH_EVERY,
+            refresh_every: 0,
             selecting: false,
             selection: None,
             sticker_anchor: None,
@@ -373,8 +372,9 @@ impl Core {
             });
     }
 
-    /// Turns one page. The refresh is partial, except on a chapter start and on
-    /// every [`REFRESH_EVERY`]th turn, which are full.
+    /// Turns one page. The refresh is full on a chapter start, on every
+    /// `refresh_every`th turn when that is set, and on every page of a fixed-layout
+    /// book (PDF, comic). Other turns are partial.
     pub fn turn(&mut self, ctx: &mut Ctx, forward: bool) -> Turn {
         let Some(mut session) = self.session.take() else {
             return Turn::Blocked;
@@ -394,14 +394,20 @@ impl Core {
             current.page - 1
         };
         let chapter_start = session.toc().iter().any(|t| t.page == Some(page));
-        self.pending_hint =
-            if chapter_start || self.refresh_every > 0 && self.pages_since_full + 1 >= self.refresh_every {
-                self.pages_since_full = 0;
-                PaintHint::Full
-            } else {
-                self.pages_since_full += 1;
-                PaintHint::Partial
-            };
+        // A fixed-layout page is a picture, and stock clears the screen for it.
+        // A reflowable book has no cheap test for an image page, so it takes no
+        // rule here.
+        let picture = !session.is_reflowable();
+        self.pending_hint = if chapter_start
+            || picture
+            || self.refresh_every > 0 && self.pages_since_full + 1 >= self.refresh_every
+        {
+            self.pages_since_full = 0;
+            PaintHint::Full
+        } else {
+            self.pages_since_full += 1;
+            PaintHint::Partial
+        };
         self.last_page_turn = crate::sync::now_unix();
         self.selection = None;
         self.sticker_anchor = None;

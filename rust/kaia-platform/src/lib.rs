@@ -34,8 +34,10 @@ pub mod paths;
 pub mod plan;
 pub mod platform;
 pub mod power;
+pub mod storage;
 pub mod suspend;
 pub mod sysfs;
+pub mod timezone;
 pub mod usb;
 pub mod wpa;
 
