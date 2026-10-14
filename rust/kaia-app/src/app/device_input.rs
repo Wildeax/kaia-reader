@@ -4,7 +4,7 @@ use kaia_display::{DisplayError, InputEvent, Rotation};
 use kaia_events::{DirtyQueue, Event, RefreshMode, Value};
 use kaia_gfx::{Pixmap, Size};
 use kaia_i18n::{format as tr_format, tr};
-use kaia_input::Key;
+use kaia_input::{Key, KeyEvent};
 use kaia_platform::usb::UsbEvent;
 
 use super::App;
@@ -23,6 +23,17 @@ pub(super) fn rotation(degrees: i64) -> Rotation {
 
 pub(super) fn is_page_key(key: Key) -> bool {
     matches!(key, Key::LPgBack | Key::LPgFwd | Key::RPgBack | Key::RPgFwd)
+}
+
+/// Called after orientation and inversion have mapped the physical page key.
+pub(super) fn reader_page_key(event: KeyEvent) -> Event {
+    Event::with_args(
+        "ReaderPageKey",
+        vec![
+            Value::Bool(matches!(event.key, Key::LPgFwd | Key::RPgFwd)),
+            Value::Bool(event.pressed),
+        ],
+    )
 }
 
 pub(super) fn page_key(key: Key, rotation: Rotation, inverted: bool) -> Key {

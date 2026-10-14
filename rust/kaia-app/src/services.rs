@@ -130,6 +130,13 @@ impl Services {
         if let Some(warmth) = settings.read("display.warmth").as_i64() {
             let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
         }
+        // Older versions stored the sync password as typed. Keep only its user key, once.
+        crate::sync::migrate_password_file(&mut settings, &settings_path).map_err(|source| {
+            ServicesError::Io {
+                path: settings_path.clone(),
+                source,
+            }
+        })?;
         if settings.read("sync.device_id").as_str().is_none() {
             let identity = format!(
                 "{}-{}-{}",

@@ -197,8 +197,8 @@ fn newer_schema_is_refused_without_writing() {
             err,
             StoreError::SchemaTooNew {
                 found: 99,
-                supported: 2
-            }
+                supported
+            } if supported == MIGRATIONS.len() as u32
         ),
         "got {err:?}"
     );
@@ -348,8 +348,8 @@ fn version_1_store_upgrades_and_keeps_its_assets() {
     }
     write_file(&dir.join("assets"), &format!("{sha}.png"), PNG_RED);
 
-    let mut store = Store::open(&dir).expect("open with version 2");
-    assert_eq!(user_version(&dir.join(DB_FILE)), 2);
+    let mut store = Store::open(&dir).expect("open with the latest version");
+    assert_eq!(user_version(&dir.join(DB_FILE)), MIGRATIONS.len() as u32);
     assert_eq!(backup_names(&dir).len(), 1, "the upgrade takes a backup first");
     assert!(
         store.asset_path(&sha).is_ok(),

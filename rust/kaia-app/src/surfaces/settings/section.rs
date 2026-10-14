@@ -18,6 +18,7 @@ use super::{save, sections};
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common::{page, root_window as window};
+use crate::surfaces::reader::dict;
 use crate::surfaces::Route;
 
 /// One settings section, shown above the Settings root. `typing` shows the
@@ -41,6 +42,9 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        if lists_dictionaries(&self.name) {
+            dict::load(env.services);
+        }
         Some(build(
             env.services,
             env.screen,
@@ -75,6 +79,10 @@ impl Surface for SettingsSectionSurface {
                 "language".into(),
             )))),
             Some(Command::LanguagePick(tag)) => pick_language(&tag, env),
+            Some(Command::Dictionaries) => Outcome::Navigate(Nav::Push(Box::new(
+                SettingsSectionSurface::new("dictionaries".into()),
+            ))),
+            Some(Command::Dictionary { index, change }) => dictionary(index, change, env),
             Some(Command::Light(which)) => light(which, args, env),
             Some(Command::SyncTest) => {
                 sync_test(env);
@@ -150,6 +158,21 @@ fn has_text_fields(name: &str) -> bool {
     name == "network"
 }
 
+/// Whether section `name` lists the dictionaries. Those sections load them before they build.
+fn lists_dictionaries(name: &str) -> bool {
+    matches!(name, "reading" | "dictionaries")
+}
+
+/// Turns a dictionary on or off, or moves it one place in the lookup order. The page
+/// is rebuilt, so it shows the new state.
+fn dictionary(index: usize, change: dict::Change, env: &mut SurfaceEnv<'_>) -> Outcome {
+    if !dict::apply(env.services, index, change) {
+        return Outcome::Handled;
+    }
+    save(env);
+    Outcome::Rebuild
+}
+
 /// Writes a toggle, stepper or text value. Other keys are not stored.
 fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     if !commands::is_known_key(key) {
@@ -158,6 +181,11 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let Some(value) = args.first().cloned() else {
         return Outcome::Handled;
     };
+    if key == keys::SYNC_PASSWORD {
+        // The typed text never reaches settings.json. Only its user key is stored.
+        crate::sync::store_password(&mut env.services.settings, value.as_str().unwrap_or(""));
+        return Outcome::Handled;
+    }
     env.services.settings.save(key, value);
     if !key.starts_with("sync.") {
         save(env);

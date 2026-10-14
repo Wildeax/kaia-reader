@@ -12,11 +12,13 @@ use super::entries::{Entry, StepUnit};
 use super::facts::{self, duration, KoreaderFolder, StatsView};
 use super::keys;
 use crate::services::Services;
+use crate::surfaces::reader::dict;
 
 /// The title of a section.
 pub fn title(name: &str) -> String {
     match name {
         "reading" => tr("Reading"),
+        "dictionaries" => tr("Dictionary settings"),
         "display" => tr("Display and light"),
         "library" => tr("Library"),
         "network" => tr("Network and sync"),
@@ -42,6 +44,7 @@ pub fn has_frontlight(services: &Services) -> bool {
 pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
     match name {
         "reading" => reading(services),
+        "dictionaries" => dictionary_page(services),
         "display" => display(services),
         "library" => library(services),
         "network" => network(services),
@@ -65,9 +68,10 @@ fn reading(services: &Services) -> Vec<Entry> {
         .and_then(|opts| opts.iter().position(|(v, _)| *v == family))
         .unwrap_or(0);
     let zones = keys::text_or(s, keys::READING_TAP_ZONES, "default");
-    let dictionaries = services.paths.data_dir.join("dict");
-    let found = facts::dictionary_count(&services.paths.data_dir);
-    vec![
+    // The section loads the dictionaries before it builds. See `section::lists_dictionaries`.
+    let dictionaries = dict::folder(services);
+    let found = dict::installed(services).len();
+    let mut out = vec![
         Entry::Heading(tr("Text")),
         Entry::Radio {
             key: keys::READING_FONT_FAMILY,
@@ -122,7 +126,35 @@ fn reading(services: &Services) -> Vec<Entry> {
             value: Some(tr_format(&tr("%1 found"), &[&found.to_string()])),
             action: None,
         },
-    ]
+    ];
+    if found > 0 {
+        out.push(Entry::Row {
+            primary: tr("Dictionary settings"),
+            secondary: None,
+            value: None,
+            action: Some("settings:dictionaries".into()),
+        });
+    }
+    out
+}
+
+/// The Dictionary settings page. It lists the installed dictionaries in lookup order,
+/// each with its switch and move buttons. With no dictionary installed, the page
+/// shows the install hint instead. Call `dict::load` first.
+fn dictionary_page(services: &Services) -> Vec<Entry> {
+    let names = dict::ordered(services);
+    if names.is_empty() {
+        return vec![Entry::Text(dict::install_hint(&services.paths.data_dir))];
+    }
+    let off = dict::disabled(services);
+    let mut out = vec![Entry::Text(tr(
+        "Dictionaries are searched in this order. A dictionary that is off is skipped.",
+    ))];
+    for (index, name) in names.into_iter().enumerate() {
+        let enabled = !off.contains(&name);
+        out.push(Entry::Dictionary { index, name, enabled });
+    }
+    out
 }
 
 fn display(services: &Services) -> Vec<Entry> {
@@ -273,7 +305,8 @@ fn network(services: &Services) -> Vec<Entry> {
         Entry::Field {
             key: keys::SYNC_PASSWORD,
             label: tr("Password"),
-            value: keys::text(s, keys::SYNC_PASSWORD),
+            // The password is never stored, so the field starts empty.
+            value: String::new(),
             password: true,
         },
         Entry::Button {

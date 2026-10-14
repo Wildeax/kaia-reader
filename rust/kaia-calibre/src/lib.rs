@@ -178,9 +178,12 @@ pub struct DeviceInfo {
 
 impl Default for DeviceInfo {
     fn default() -> Self {
+        // Exactly BOOK_EXTENSIONS, in the device's preference order with epub first.
+        // Calibre converts a book to the first format of this list when the book has none of them.
+        // The test `advertised_formats_are_the_accepted_book_formats` keeps the two lists equal.
         let formats = [
-            "epub", "fb2", "mobi", "azw", "xps", "doc", "docx", "djv", "djvu", "pdf", "cbz", "htm", "html",
-            "xhtml", "pdb", "prc", "rtf", "txt", "md", "chm", "zip",
+            "epub", "fb2", "mobi", "azw", "azw3", "xps", "djv", "djvu", "pdf", "cbz", "htm", "html", "xhtml",
+            "prc",
         ];
         Self {
             model: "Kobo".into(),
@@ -204,6 +207,8 @@ pub struct Connection<S: Storage> {
     reader: BufReader<TcpStream>,
     writer: TcpStream,
     password: String,
+    /// Calibre's version from the handshake. None when the handshake has no version.
+    calibre_version: Option<[u64; 3]>,
     device: DeviceInfo,
     root: PathBuf,
     storage: S,
@@ -233,6 +238,7 @@ impl<S: Storage> Connection<S> {
             reader: BufReader::new(stream),
             writer,
             password: password.into(),
+            calibre_version: None,
             device: device_info,
             root,
             storage,
@@ -281,6 +287,7 @@ impl<S: Storage> Connection<S> {
         use opcode::*;
         match op {
             GET_INITIALIZATION_INFO => {
+                self.calibre_version = calibre_version(&arg);
                 let hash = match arg.get("passwordChallenge").and_then(Value::as_str) {
                     Some(challenge) if !self.password.is_empty() => format!("{:x}", Sha1::digest(format!("{}{}", self.password, challenge).as_bytes())),
                     _ => String::new(),
@@ -356,8 +363,7 @@ impl<S: Storage> Connection<S> {
             Err(err) => return Err(self.refuse(err)),
         };
         if self.storage.free_space(&self.root)? < length.saturating_add(128 * 1024) {
-            self.send(opcode::ERROR, json!({"message":"No space left on device"}))?;
-            return Ok(Event::None);
+            return self.refuse_for_space(length);
         }
         self.send(opcode::OK, json!({}))?;
         let mut source = CancelReader {
@@ -467,6 +473,31 @@ impl<S: Storage> Connection<S> {
         }
     }
 
+    /// Answers a book that does not fit, as KOReader's `sendBook` does. For Calibre
+    /// 4.18 and later it sends ERROR and reads no book bytes. For older Calibre, and
+    /// for a handshake without a version, it sends OK and reads the bytes that follow,
+    /// so the next message is not read from inside the book. The bytes are dropped.
+    fn refuse_for_space(&mut self, length: u64) -> io::Result<Event> {
+        const MESSAGE: &str = "No space left on device";
+        if self.calibre_version.is_some_and(|version| version >= [4, 18, 0]) {
+            self.send(opcode::ERROR, json!({"message": MESSAGE}))?;
+            return Ok(Event::None);
+        }
+        self.send(opcode::OK, json!({}))?;
+        let mut source = CancelReader {
+            reader: &mut self.reader,
+            cancelled: &self.cancelled,
+        };
+        let copied = io::copy(&mut (&mut source).take(length), &mut io::sink())?;
+        if copied != length {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "short book"));
+        }
+        Ok(Event::Message {
+            text: MESSAGE.into(),
+            kind: Some(opcode::ERROR),
+        })
+    }
+
     /// Tells the server why a file was refused. Other errors go back without a reply.
     fn refuse(&mut self, err: io::Error) -> io::Error {
         if err.kind() == io::ErrorKind::PermissionDenied {
@@ -574,6 +605,17 @@ impl Read for CancelReader<'_> {
             }
         }
     }
+}
+
+/// The Calibre version from the handshake: the first three numbers of
+/// `calibre_version`. None when the handshake does not carry three numbers.
+fn calibre_version(arg: &Value) -> Option<[u64; 3]> {
+    let parts = arg.get("calibre_version")?.as_array()?;
+    Some([
+        parts.first()?.as_u64()?,
+        parts.get(1)?.as_u64()?,
+        parts.get(2)?.as_u64()?,
+    ])
 }
 
 fn invalid(message: &str) -> io::Error {
@@ -702,6 +744,10 @@ mod tests {
     }
 
     fn pair() -> (Connection<TestStorage>, TcpStream, PathBuf) {
+        pair_with(TestStorage)
+    }
+
+    fn pair_with<S: Storage>(storage: S) -> (Connection<S>, TcpStream, PathBuf) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let root = temp_root();
         let server = Server {
@@ -709,11 +755,34 @@ mod tests {
             name: "test".into(),
             opds_port: 8080,
         };
-        let client =
-            Connection::connect(&server, "secret", DeviceInfo::default(), &root, TestStorage).unwrap();
+        let client = Connection::connect(&server, "secret", DeviceInfo::default(), &root, storage).unwrap();
         let (peer, _) = listener.accept().unwrap();
         peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
         (client, peer, root)
+    }
+
+    /// A device with no free space. Every book is refused.
+    struct FullStorage;
+    impl Storage for FullStorage {
+        fn free_space(&self, _: &Path) -> io::Result<u64> {
+            Ok(0)
+        }
+        fn total_space(&self, _: &Path) -> io::Result<u64> {
+            Ok(2_000_000)
+        }
+        fn write_file_atomically(&self, _: &Path, _: &mut dyn Read, _: u64) -> io::Result<()> {
+            Err(io::Error::other("no space"))
+        }
+        fn delete(&self, _: &Path) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Sends the handshake that Calibre sends first and reads the reply.
+    fn initialize<S: Storage>(client: &mut Connection<S>, peer: &mut TcpStream, arg: Value) {
+        send(peer, opcode::GET_INITIALIZATION_INFO, arg);
+        client.run_once().unwrap();
+        assert_eq!(recv(peer).0, opcode::OK);
     }
 
     fn send(peer: &mut TcpStream, op: u64, arg: Value) {
@@ -737,6 +806,21 @@ mod tests {
         peer.read_exact(&mut body[1..]).unwrap();
         let array: Value = serde_json::from_slice(&body).unwrap();
         (array[0].as_u64().unwrap(), array[1].clone())
+    }
+
+    #[test]
+    fn advertised_formats_are_the_accepted_book_formats() {
+        let advertised = DeviceInfo::default().accepted_extensions;
+        assert_eq!(advertised.first().map(String::as_str), Some("epub"));
+        let mut listed: Vec<&str> = advertised.iter().map(String::as_str).collect();
+        let mut accepted: Vec<&str> = BOOK_EXTENSIONS.to_vec();
+        listed.sort_unstable();
+        accepted.sort_unstable();
+        assert_eq!(listed, accepted);
+        // Every advertised format passes the rule that a received book name must pass.
+        for extension in &advertised {
+            assert!(check_lpath(&format!("Book.{extension}")).is_ok(), "{extension}");
+        }
     }
 
     #[test]
@@ -826,6 +910,76 @@ mod tests {
         assert_eq!(recv(&mut peer).1["uuid"], "id-1");
         assert!(!root.join("Author/Book.epub").exists());
         assert!(read_metadata_cache(&root).unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Calibre 4.18 and later: a refused book gets ERROR, and no bytes follow it.
+    #[test]
+    fn refused_book_on_new_calibre_gets_error_and_no_bytes() {
+        let (mut client, mut peer, root) = pair_with(FullStorage);
+        initialize(&mut client, &mut peer, json!({"calibre_version": [5, 44, 0]}));
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"Author/Book.epub","length":5,"metadata":{}}),
+        );
+        assert_eq!(client.run_once().unwrap(), Event::None);
+        assert_eq!(recv(&mut peer).0, opcode::ERROR);
+        // No bytes follow, so the next message is read as a message.
+        send(&mut peer, opcode::FREE_SPACE, json!({}));
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer).1["free_space_on_device"], 0);
+        assert!(!root.join("Author/Book.epub").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Older Calibre, and a handshake without a version, send the bytes after OK. The
+    /// refused bytes are read and dropped, so the next message is read in step.
+    #[test]
+    fn refused_book_on_old_calibre_is_read_and_dropped() {
+        for handshake in [json!({"calibre_version": [4, 17, 0]}), json!({})] {
+            let (mut client, mut peer, root) = pair_with(FullStorage);
+            initialize(&mut client, &mut peer, handshake);
+            send(
+                &mut peer,
+                opcode::SEND_BOOK,
+                json!({"lpath":"Author/Book.epub","length":5,"metadata":{}}),
+            );
+            // The test runs both ends on one thread, so the bytes are written before the read.
+            peer.write_all(b"hello").unwrap();
+            assert!(matches!(
+                client.run_once().unwrap(),
+                Event::Message {
+                    kind: Some(opcode::ERROR),
+                    ..
+                }
+            ));
+            assert_eq!(recv(&mut peer).0, opcode::OK);
+            send(&mut peer, opcode::FREE_SPACE, json!({}));
+            client.run_once().unwrap();
+            assert_eq!(recv(&mut peer).1["free_space_on_device"], 0);
+            assert!(!root.join("Author/Book.epub").exists());
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    /// A refused book that ends early is an error, as a received book is.
+    #[test]
+    fn refused_book_cut_short_is_an_error() {
+        let (mut client, mut peer, root) = pair_with(FullStorage);
+        initialize(&mut client, &mut peer, json!({"calibre_version": [4, 17, 0]}));
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"Author/Book.epub","length":5,"metadata":{}}),
+        );
+        peer.write_all(b"he").unwrap();
+        peer.shutdown(std::net::Shutdown::Write).unwrap();
+        assert_eq!(
+            client.run_once().unwrap_err().kind(),
+            io::ErrorKind::UnexpectedEof
+        );
+        assert_eq!(recv(&mut peer).0, opcode::OK);
         fs::remove_dir_all(root).unwrap();
     }
 

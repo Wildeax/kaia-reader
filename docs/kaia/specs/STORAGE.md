@@ -21,6 +21,7 @@ state. In the Rust app, Kaia owns all reading state:
 | Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
 | Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
 | Stickers and assets | `kaia-storage` | as below |
+| Word list | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `words`, see schema version 3 |
 | App settings | `kaia-app` | `<data dir>/settings.json` |
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
@@ -166,6 +167,21 @@ ALTER TABLE assets ADD COLUMN pending_since INTEGER;
 ```
 
 `pending_since` holds the unix time of the last add of an asset, if no sticker has saved that asset since. Otherwise it is NULL, and so is every row that existed before version 2. Exports do not carry it, and an import leaves the assets it adds not pending.
+
+### Schema version 3
+
+```sql
+CREATE TABLE words (
+  id          INTEGER PRIMARY KEY,
+  word        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  book_title  TEXT,
+  context     TEXT,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX words_created ON words(created_at);
+```
+
+`words` is the word list. It holds the words the reader saved from dictionary lookups. `word` is unique ignoring case. Saving a word again keeps its `id` and replaces `book_title`, `context` and `created_at`. `created_at` holds the Unix time of the last save. `context` is the sentence around the word. The store clips `book_title` to 300 characters and `context` to 1000. It refuses a word that is empty or longer than 100 characters. The list reads newest first, by `created_at` and then `id`. The sticker export does not carry the word list.
 
 ## Export format
 

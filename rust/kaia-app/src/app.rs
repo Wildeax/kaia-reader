@@ -115,6 +115,7 @@ pub struct App<B: Backend> {
     usb_mass_storage: bool,
     scan_again: bool,
     gestures: GestureDetector,
+    held_page_keys: Vec<Key>,
     options: AppOptions,
     scan: Option<LibraryScan>,
     scan_progress: Option<(usize, usize)>,
@@ -184,6 +185,7 @@ impl<B: Backend> App<B> {
             usb_mass_storage: false,
             scan_again: false,
             gestures,
+            held_page_keys: Vec::new(),
             options,
             scan: None,
             scan_progress: None,
@@ -631,6 +633,14 @@ impl<B: Backend> App<B> {
         #[cfg(feature = "lua")]
         let quick = quick && self.services.plugins.foreign_window_count() == 0;
         if quick {
+            // The page has already seen the pan. Let it finish a claimed
+            // brightness swipe before opening a sheet over its release.
+            let reader_edge = matches!(self.top_route(), Some(Route::Reader { .. }))
+                && matches!(&gesture, Gesture::Swipe { pos, .. }
+                    if pos.x >= 0 && i64::from(pos.x) * 100 < i64::from(self.screen.w) * 13);
+            if reader_edge && self.dispatch_input(UiEvent::Gesture(gesture.clone())) {
+                return;
+            }
             self.quick_settings();
             return;
         }
@@ -675,7 +685,17 @@ impl<B: Backend> App<B> {
             self.power_key(ev);
             return;
         }
-        if !ev.pressed {
+        let page_key = device_input::is_page_key(ev.key);
+        let repeat = page_key && self.held_page_keys.contains(&ev.key);
+        if page_key {
+            if !ev.pressed {
+                self.held_page_keys.retain(|key| *key != ev.key);
+            } else if !repeat {
+                self.held_page_keys.push(ev.key);
+            }
+        }
+        let reader = !self.sleeping() && matches!(self.top_route(), Some(Route::Reader { .. }));
+        if !ev.pressed && !(page_key && reader) {
             return;
         }
         match ev.key {
@@ -716,6 +736,15 @@ impl<B: Backend> App<B> {
                 .settings
                 .is_true(surfaces::settings::keys::READING_INVERT_PAGE_BUTTONS),
         );
+        if page_key {
+            if reader && self.dispatch_input(UiEvent::Named(device_input::reader_page_key(ev))) {
+                return;
+            }
+            // Sheets and other surfaces keep their single turn on the first press.
+            if !ev.pressed || repeat {
+                return;
+            }
+        }
         let handled = self.dispatch_input(UiEvent::Key(ev));
         if !handled {
             match ev.key {

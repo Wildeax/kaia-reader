@@ -1,4 +1,4 @@
-//! SQLite store for Kaia stickers and their image assets.
+//! SQLite store for Kaia stickers, their image assets and the word list.
 //!
 //! The store directory holds `kaia.sqlite3`, `assets/`, `backups/` and
 //! `exports/`. See `docs/kaia/specs/STORAGE.md`.
@@ -10,6 +10,7 @@ mod error;
 mod image;
 mod store;
 mod transfer;
+mod words;
 
 pub use assets::PENDING_ASSET_GRACE_SECS;
 pub use error::StoreError;
@@ -20,3 +21,4 @@ pub use kaia_core::{
 };
 pub use store::{Migration, Store, DB_FILE, MIGRATIONS};
 pub use transfer::ImportReport;
+pub use words::{Word, BOOK_TITLE_MAX_CHARS, CONTEXT_MAX_CHARS, WORD_MAX_CHARS};

@@ -4,7 +4,7 @@
 mod common;
 
 use common::*;
-use kaia_gfx::{Pixmap, Rect, Size};
+use kaia_gfx::{Color, Pixmap, Rect, Size};
 use kaia_ui::components::{Column, CrossAlign, Frame, Icon, Label, Paragraph, ProgressBar, Row, SizedBox};
 use kaia_ui::controls::{Button, ButtonStyle};
 use kaia_ui::geometry::Constraints;
@@ -203,6 +203,46 @@ fn a_progress_bar_that_changes_leaves_no_old_percent_behind() {
     let pm = h.frame().clone();
     let fresh = render(make(0.05), SCREEN, &t, &a);
     assert_eq!(differing(&pm, &fresh, h.find_rect("w").unwrap()), 0);
+}
+
+/// Multiplies a rectangle far bigger than its bounds by a highlight color. The clip
+/// keeps the tint inside the bounds.
+struct Tinter;
+
+impl Widget for Tinter {
+    kaia_ui::impl_as_any!();
+    fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
+        c.constrain(Size::new(100, 100))
+    }
+    fn paint(&mut self, cx: &mut PaintCx) {
+        let b = cx.bounds();
+        cx.multiply_rect(
+            Rect::new(b.x - 500, b.y - 500, 2000, 2000),
+            Color::rgb(255, 51, 0),
+        );
+    }
+}
+
+#[test]
+fn a_multiply_is_cut_at_the_bounds() {
+    let t = theme(true);
+    let a = assets();
+    let row = Row::new(vec![WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(Tinter))).width(100).height(100),
+    )]);
+    let root = Frame::new(WidgetPod::new(Column::new(vec![WidgetPod::new(row)]))).fill(Tone::Surface);
+    let pm = render(root, SCREEN, &t, &a);
+    let surface = t.color(Tone::Surface);
+    // Each channel is in * color / 255: the red and blue factors are 255 and 0, the green is 51.
+    let tinted = Color::rgb(surface.r, (u32::from(surface.g) * 51 / 255) as u8, 0);
+    assert_eq!(
+        pm.get(0, 0),
+        Some(tinted),
+        "inside the bounds the surface takes the tint"
+    );
+    assert_eq!(pm.get(99, 99), Some(tinted), "the last pixel inside the bounds");
+    assert_eq!(pm.get(100, 0), Some(surface), "right of the bounds is untouched");
+    assert_eq!(pm.get(0, 100), Some(surface), "below the bounds is untouched");
 }
 
 #[test]

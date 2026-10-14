@@ -12,6 +12,7 @@ use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, WidgetPod};
 
 use super::commands::Light;
+use crate::surfaces::common::button;
 
 /// One line of a section.
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +91,15 @@ pub enum Entry {
         label: String,
         detail: String,
         fraction: f64,
+    },
+    /// One installed dictionary. It shows its name with an on or off switch, and move
+    /// up and move down buttons. `index` is its place in the lookup order. The switch
+    /// sends `settings:dicts:toggle:<index>`, and the buttons send
+    /// `settings:dicts:up:<index>` and `settings:dicts:down:<index>`.
+    Dictionary {
+        index: usize,
+        name: String,
+        enabled: bool,
     },
 }
 
@@ -272,6 +282,41 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             detail,
             fraction,
         } => bar(label, detail, *fraction, t),
+        Entry::Dictionary { index, name, enabled } => {
+            let switch = WidgetPod::new(
+                ListRow::new(name.clone())
+                    .toggle(*enabled)
+                    .on_action(format!("settings:dicts:toggle:{index}")),
+            )
+            .with_key(format!("dict-toggle-{index}"));
+            let up = WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Move up"),
+                    &format!("settings:dicts:up:{index}"),
+                    &format!("dict-up-{index}"),
+                ),
+                1,
+            ));
+            let down = WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Move down"),
+                    &format!("settings:dicts:down:{index}"),
+                    &format!("dict-down-{index}"),
+                ),
+                1,
+            ));
+            WidgetPod::new(
+                Column::new(vec![
+                    switch,
+                    WidgetPod::new(Row::new(vec![up, down]).gap(t.space.sm)),
+                ])
+                .gap(t.space.sm)
+                .cross_align(CrossAlign::Stretch)
+                .shrink(),
+            )
+        }
     }
 }
 

@@ -4,6 +4,33 @@
 
 use kaia_events::Value;
 
+/// Gesture updates bypass the reader's queued document commands.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum GestureCommand {
+    Brightness { delta: f64, release: bool },
+    Flip(u8),
+    FlipStop,
+}
+
+pub(super) fn gesture(id: &str, args: &[Value]) -> Option<GestureCommand> {
+    match id {
+        "reader:brightness" => {
+            let delta = number(args, 0).filter(|n| n.is_finite())?;
+            Some(GestureCommand::Brightness {
+                delta,
+                release: args.get(1).and_then(Value::as_bool) == Some(true),
+            })
+        }
+        "reader:flip" => {
+            let zone = number(args, 0)?;
+            (zone.is_finite() && (0.0..=4.0).contains(&zone) && zone.fract() == 0.0)
+                .then_some(GestureCommand::Flip(zone as u8))
+        }
+        "reader:flip:stop" => Some(GestureCommand::FlipStop),
+        _ => None,
+    }
+}
+
 /// One change from the Text and layout sheet, with the value the control sent.
 /// `Font` and `Zoom` carry the index of the radio choice.
 #[derive(Debug, Clone, Copy, PartialEq)]

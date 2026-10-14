@@ -256,6 +256,31 @@ impl PaintCx<'_> {
         self.target.fill_rect(local, color);
     }
 
+    /// Multiplies the pixels in `rect` by `color`: white takes the color and black
+    /// stays black. A lighten highlight tints the page this way, so the text stays
+    /// dark under it.
+    pub fn multiply_rect(&mut self, rect: Rect, color: Color) {
+        let visible = rect.intersect(&self.clip);
+        if visible.is_empty() {
+            return;
+        }
+        self.drew = true;
+        let local = self.local_rect(visible);
+        self.target.multiply_rect(local, color);
+    }
+
+    /// Inverts every channel in `rect`. An invert highlight is drawn this way, as
+    /// KOReader draws it, so it ignores the highlight color.
+    pub fn invert_rect(&mut self, rect: Rect) {
+        let visible = rect.intersect(&self.clip);
+        if visible.is_empty() {
+            return;
+        }
+        self.drew = true;
+        let local = self.local_rect(visible);
+        draw::invert_rect(self.target, local);
+    }
+
     pub fn fill_rrect(&mut self, rect: Rect, radius: u32, color: Color) {
         if !self.reaches_clip(rect) {
             return;

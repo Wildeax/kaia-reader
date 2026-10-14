@@ -37,7 +37,9 @@ mod doc;
 mod engine;
 mod time;
 
-pub use annotation::{Annotation, AnnotationId, Drawer, PageAnnotation};
+pub use annotation::{
+    highlight_rgb, Annotation, AnnotationId, Drawer, PageAnnotation, HIGHLIGHT_COLORS, HIGHLIGHT_DRAWERS,
+};
 pub use cache::CacheStats;
 pub use error::{BookError, Result};
 pub use kaia_doc::{Engine, Link, LinkTarget, Location, Margins, Metadata, PageSize, RectF, TocEntry};
@@ -50,4 +52,5 @@ pub use session::{
 };
 pub use sidecar::{ImportReport, SidecarLocation};
 pub use state::{DocumentId, ReadingTime};
+pub use time::local_date;
 pub use view::{PageTransform, ZoomMode};

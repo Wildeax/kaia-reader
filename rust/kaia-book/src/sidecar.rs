@@ -167,6 +167,8 @@ pub(crate) struct Imported {
     pub status: Option<String>,
     pub rating: Option<u8>,
     pub summary_note: Option<String>,
+    /// KOReader's `preferred_dictionaries`, in its order.
+    pub preferred_dictionaries: Vec<String>,
     pub report: ImportReport,
 }
 
@@ -219,6 +221,13 @@ pub(crate) fn map_sidecar(root: &Value, fixed: bool, source: &Path) -> Imported 
         .filter(|r| (0..=5).contains(r))
         .map(|r| r as u8);
     let summary_note = summary.get("note").as_str().map(str::to_string);
+    let preferred_dictionaries = match root.get("preferred_dictionaries") {
+        Value::Table(list) => list
+            .values()
+            .filter_map(|v| v.as_str().filter(|n| !n.is_empty()).map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    };
 
     let report = ImportReport {
         source: source.to_path_buf(),
@@ -240,6 +249,7 @@ pub(crate) fn map_sidecar(root: &Value, fixed: bool, source: &Path) -> Imported 
         status,
         rating,
         summary_note,
+        preferred_dictionaries,
         report,
     }
 }
@@ -547,6 +557,27 @@ mod tests {
         assert!(!layout.hyphenation);
         assert_eq!(imported.status.as_deref(), Some("complete"));
         assert_eq!(imported.rating, Some(5));
+    }
+
+    #[test]
+    fn imports_koreader_preferred_dictionaries_in_order() {
+        let src = r#"return {
+            ["preferred_dictionaries"] = { "Second Dictionary", "", "Test Dictionary" },
+            ["annotations"] = {},
+        }"#;
+        let root = kaia_luadata::parse(src).expect("parse");
+        let imported = map_sidecar(&root, false, Path::new("/x/metadata.epub.lua"));
+        assert_eq!(
+            imported.preferred_dictionaries,
+            ["Second Dictionary", "Test Dictionary"],
+            "order is kept and empty names are dropped"
+        );
+        let none = map_sidecar(
+            &kaia_luadata::parse(r#"return { ["annotations"] = {} }"#).expect("parse"),
+            false,
+            Path::new("/x/metadata.epub.lua"),
+        );
+        assert!(none.preferred_dictionaries.is_empty());
     }
 
     #[test]

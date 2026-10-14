@@ -50,7 +50,21 @@ pub enum Turn {
     Blocked,
 }
 
+/// The word the dictionary sheet shows, kept for the sheet's actions: the word list,
+/// the book's dictionary order and the lookup again after a change.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LookupState {
+    pub word: String,
+    /// The sentence around the word, when the reader had the page text.
+    pub context: Option<String>,
+    /// The dictionary of the first definition, if the lookup found one.
+    pub dictionary: Option<String>,
+    /// The title of the book the word was looked up in.
+    pub book_title: String,
+}
+
 pub struct Core {
+    pub(super) gestures: super::navigation::Gestures,
     pub book: i64,
     pub last_page_turn: i64,
     pub periodic_sync: kaia_sync::PeriodicPush,
@@ -82,6 +96,8 @@ pub struct Core {
     search_paint_at: std::time::Duration,
     search_dirty: bool,
     pub contents_tab: usize,
+    /// The word of the open dictionary sheet. None when no sheet has looked up a word.
+    pub lookup: Option<LookupState>,
     pub color_panel: bool,
     /// Seconds of reading per page, for the time-left line. Set when the book opens.
     pub seconds_per_page: f64,
@@ -98,6 +114,7 @@ pub struct Core {
 impl Core {
     pub fn new(book: i64) -> Self {
         Self {
+            gestures: super::navigation::Gestures::default(),
             book,
             last_page_turn: 0,
             periodic_sync: kaia_sync::PeriodicPush::default(),
@@ -128,6 +145,7 @@ impl Core {
             search_paint_at: std::time::Duration::ZERO,
             search_dirty: false,
             contents_tab: 0,
+            lookup: None,
             color_panel: false,
             pump_due: false,
             layout_pending: false,

@@ -59,6 +59,19 @@ CREATE TABLE library_cache (
 /// means not pending.
 const SCHEMA_V2: &str = "ALTER TABLE assets ADD COLUMN pending_since INTEGER;";
 
+/// Version 3 adds the word list: the words saved from dictionary lookups. A word is
+/// unique ignoring case. Saving it again replaces its book, context and time.
+const SCHEMA_V3: &str = "
+CREATE TABLE words (
+  id          INTEGER PRIMARY KEY,
+  word        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  book_title  TEXT,
+  context     TEXT,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX words_created ON words(created_at);
+";
+
 /// One schema step. `version` is the `user_version` after the step runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Migration {
@@ -67,7 +80,7 @@ pub struct Migration {
 }
 
 /// The migrations this build supports, in order.
-pub const MIGRATIONS: [Migration; 2] = [
+pub const MIGRATIONS: [Migration; 3] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -75,6 +88,10 @@ pub const MIGRATIONS: [Migration; 2] = [
     Migration {
         version: 2,
         sql: SCHEMA_V2,
+    },
+    Migration {
+        version: 3,
+        sql: SCHEMA_V3,
     },
 ];
 

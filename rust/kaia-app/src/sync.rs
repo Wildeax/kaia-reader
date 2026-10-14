@@ -2,7 +2,9 @@
 
 use kaia_i18n::tr;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc,
@@ -11,7 +13,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use kaia_book::{BookSession, Location};
-use kaia_events::Settings;
+use kaia_events::{Settings, Value};
 use kaia_sync::{Credentials, Progress, SyncClient, SyncOptions, Timeouts};
 
 use crate::sync_queue::SyncQueue;
@@ -29,7 +31,8 @@ pub enum Reply {
 struct Config {
     server: String,
     user: String,
-    password: String,
+    /// The MD5 user key of the password. The password itself is not stored.
+    userkey: String,
     device: String,
     invalid_certs: bool,
 }
@@ -39,7 +42,7 @@ impl Config {
         Self {
             server: text("sync.server"),
             user: text("sync.username"),
-            password: text("sync.password"),
+            userkey: text("sync.userkey"),
             device: text("sync.device_id"),
             invalid_certs: settings.is_true("sync.accept_invalid_certs"),
         }
@@ -47,7 +50,7 @@ impl Config {
     fn client(&self) -> Result<SyncClient, kaia_sync::Error> {
         SyncClient::new_with_options(
             &self.server,
-            Credentials::new(&self.user, &self.password)?,
+            Credentials::from_stored(&self.user, &self.userkey)?,
             "Kaia Reader",
             &self.device,
             Timeouts::default(),
@@ -87,6 +90,54 @@ pub fn position(session: &BookSession) -> String {
         Location::Page(page) => (page + 1).to_string(),
         Location::Engine(p) => p,
     }
+}
+
+/// The client for the settings, built from the stored user key. It fails when the
+/// username or the key is blank. It sends no request.
+pub fn client(settings: &Settings) -> Result<SyncClient, kaia_sync::Error> {
+    Config::read(settings).client()
+}
+
+/// Stores what a typed password leaves behind: its MD5 user key under `sync.userkey`.
+/// The password is never stored. Blank text removes the key, so sync reports an
+/// invalid password. A plain `sync.password` from an older version is removed too.
+pub fn store_password(settings: &mut Settings, typed: &str) {
+    match kaia_sync::userkey_for(typed) {
+        Some(key) => settings.save("sync.userkey", Value::from(key)),
+        None => settings.del("sync.userkey"),
+    }
+    settings.del("sync.password");
+}
+
+/// Replaces a plain `sync.password` from an older version with its user key. Returns
+/// true when the settings held a password. The password key is gone after the first
+/// call, so a second call returns false.
+pub fn migrate_password(settings: &mut Settings) -> bool {
+    if !settings.has("sync.password") {
+        return false;
+    }
+    let typed = settings.read("sync.password").as_str().unwrap_or("").to_owned();
+    store_password(settings, &typed);
+    true
+}
+
+/// Runs [`migrate_password`] and writes the result to `path`. Returns true when the file
+/// was written. A flush keeps the previous file as `<path>.old`. That copy still holds the
+/// password, so it is removed when it does.
+pub fn migrate_password_file(settings: &mut Settings, path: &Path) -> io::Result<bool> {
+    if !migrate_password(settings) {
+        return Ok(false);
+    }
+    settings.flush(path)?;
+    let mut backup = path.as_os_str().to_owned();
+    backup.push(".old");
+    let backup = PathBuf::from(backup);
+    let holds_password =
+        fs::read(&backup).is_ok_and(|bytes| String::from_utf8_lossy(&bytes).contains("sync.password"));
+    if holds_password {
+        fs::remove_file(&backup)?;
+    }
+    Ok(true)
 }
 
 impl ProgressSync {
@@ -363,5 +414,79 @@ mod queue_recovery_tests {
             .any(|entry| std::fs::read(entry.path()).is_ok_and(|b| b == bad)));
         queue.push(p, 1000).unwrap();
         assert_eq!(queue.load().unwrap().len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod password_tests {
+    use super::*;
+
+    /// md5("password"), the digest KOReader stores for that password.
+    const USER_KEY: &str = "5f4dcc3b5aa765d61d8327deb882cf99";
+
+    fn settings_with(pairs: &[(&str, &str)]) -> Settings {
+        let mut settings = Settings::new();
+        for (key, value) in pairs {
+            settings.save(*key, Value::from(*value));
+        }
+        settings
+    }
+
+    #[test]
+    fn typing_stores_the_user_key_and_never_the_password() {
+        let mut settings = Settings::new();
+        store_password(&mut settings, "password");
+        assert_eq!(settings.read("sync.userkey").as_str(), Some(USER_KEY));
+        assert!(!settings.has("sync.password"));
+        // Blank text removes the key, so the next request reports an invalid password.
+        store_password(&mut settings, "  ");
+        assert!(!settings.has("sync.userkey"));
+    }
+
+    #[test]
+    fn a_plain_password_is_replaced_once() {
+        let mut settings = settings_with(&[("sync.username", "reader"), ("sync.password", "password")]);
+        assert!(migrate_password(&mut settings));
+        assert_eq!(settings.read("sync.userkey").as_str(), Some(USER_KEY));
+        assert!(!settings.has("sync.password"));
+        assert!(!migrate_password(&mut settings));
+    }
+
+    #[test]
+    fn the_client_needs_the_key_and_no_password() {
+        let stored = settings_with(&[
+            ("sync.server", "http://127.0.0.1:9"),
+            ("sync.username", "reader"),
+            ("sync.userkey", USER_KEY),
+        ]);
+        assert!(client(&stored).is_ok());
+        let missing = settings_with(&[("sync.server", "http://127.0.0.1:9"), ("sync.username", "reader")]);
+        assert!(matches!(
+            client(&missing),
+            Err(kaia_sync::Error::InvalidCredentials(
+                kaia_sync::InvalidField::Password
+            ))
+        ));
+    }
+
+    #[test]
+    fn the_settings_file_loses_the_password_and_its_old_copy() {
+        let dir = std::env::temp_dir().join(format!("kaia-sync-password-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        let old = dir.join("settings.json.old");
+        let mut settings = settings_with(&[("sync.password", "password")]);
+        settings.flush(&path).unwrap();
+        fs::write(&old, br#"{"sync.password": "password"}"#).unwrap();
+
+        assert!(migrate_password_file(&mut settings, &path).unwrap());
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains(USER_KEY), "{text}");
+        assert!(!text.contains("sync.password"), "{text}");
+        assert!(!text.contains("\"password\""), "{text}");
+        assert!(!old.exists(), "the old copy held the password");
+        assert!(!migrate_password_file(&mut settings, &path).unwrap());
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

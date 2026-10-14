@@ -25,6 +25,6 @@ mod test_server;
 pub use client::{SyncClient, SyncOptions, Timeout, Timeouts, DEFAULT_SERVER};
 pub use doc_id::{filename_md5, md5_hex, partial_md5, round_percent};
 pub use error::{Error, InvalidField};
-pub use model::{Credentials, Metadata, Progress};
+pub use model::{userkey_for, Credentials, Metadata, Progress};
 pub use policy::{decide, decide_manual, Decision, LocalState, Policy, Strategy};
 pub use queue::{pull_debounced, PeriodicPush, QueuedProgress, SyncQueue};

@@ -9,15 +9,19 @@ use std::rc::Rc;
 
 use kaia_book::{Annotation, TextLayout, ZoomMode};
 use kaia_events::ShowOpts;
-use kaia_gfx::Size;
+use kaia_gfx::{Color, Size};
 use kaia_i18n::{format as tr_format, tr};
+use kaia_input::Gesture;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox};
 use kaia_ui::composite::{ListRow, PageLabels, PagedList};
 use kaia_ui::controls::{
     ButtonStyle, IconButton, OnScreenKeyboard, RadioGroup, Stepper, TextField, Toggle, ENGLISH,
 };
 use kaia_ui::geometry::Insets;
-use kaia_ui::{Theme, Tone, WidgetPod, Window};
+use kaia_ui::{
+    AppAction, Constraints, EventCx, Handled, LayoutCx, PaintCx, Theme, Tone, UiEvent, Widget, WidgetPod,
+    Window,
+};
 
 use super::state::Core;
 use crate::services::Services;
@@ -378,6 +382,12 @@ pub fn more(services: &Services, screen: Size) -> Window {
             ),
             button(
                 ButtonStyle::Secondary,
+                &tr("Word list"),
+                "reader:words:open",
+                "more-words",
+            ),
+            button(
+                ButtonStyle::Secondary,
                 &tr("Plugins"),
                 "reader:plugins",
                 "more-plugins",
@@ -389,12 +399,173 @@ pub fn more(services: &Services, screen: Size) -> Window {
     sheet(services, screen, Some(&tr("More")), children, None)
 }
 
-/// The selection popover and its annotation actions.
-pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
-    selection_popover(services, screen, word, false)
+/// A square filled with one highlight color, framed. A tap sends its action when it
+/// has one. The fill goes through the page's pixel format, so a grayscale panel
+/// shows the luminance of the color.
+struct Swatch {
+    color: Color,
+    selected: bool,
+    action: Option<String>,
 }
 
-pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, moving: bool) -> Window {
+impl Widget for Swatch {
+    kaia_ui::impl_as_any!();
+
+    fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> kaia_gfx::Size {
+        let height = cx.theme.touch_target;
+        c.constrain(Size::new(c.max.w, height))
+    }
+
+    fn paint(&mut self, cx: &mut PaintCx) {
+        let t = cx.theme;
+        let inner = cx.bounds().inset(t.line.focus as i32);
+        cx.fill_rect(inner, self.color);
+        let (width, frame) = if self.selected {
+            (t.line.focus.max(4), Color::BLACK)
+        } else {
+            (t.line.hairline, Color::gray(0x66))
+        };
+        cx.border(inner, 0, width, frame);
+    }
+
+    fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
+        match (ev, &self.action) {
+            (UiEvent::Gesture(Gesture::Tap { .. }), Some(id)) => {
+                cx.action(AppAction {
+                    id: id.clone(),
+                    args: Vec::new(),
+                });
+                Handled::Yes
+            }
+            // An inert swatch keeps the tap, so the sheet does not close on it.
+            (UiEvent::Gesture(Gesture::Tap { .. }), None) => Handled::Yes,
+            _ => Handled::No,
+        }
+    }
+}
+
+/// The name of a highlight color, as KOReader writes it.
+pub fn color_label(name: &str) -> String {
+    match name {
+        "red" => tr("Red"),
+        "orange" => tr("Orange"),
+        "yellow" => tr("Yellow"),
+        "green" => tr("Green"),
+        "olive" => tr("Olive"),
+        "cyan" => tr("Cyan"),
+        "blue" => tr("Blue"),
+        "purple" => tr("Purple"),
+        "gray" => tr("Gray"),
+        other => other.to_string(),
+    }
+}
+
+/// The name of a drawer style, as KOReader writes it.
+pub fn style_label(drawer: &str) -> String {
+    match drawer {
+        "lighten" => tr("Lighten"),
+        "underscore" => tr("Underline"),
+        "strikeout" => tr("Strikethrough"),
+        "invert" => tr("Invert"),
+        other => other.to_string(),
+    }
+}
+
+/// The color and style choices: a row of color swatches with their names, then a
+/// row of drawer styles. `prefix` starts each action id, such as `reader:highlight`,
+/// so the action for a color is `prefix:color:<name>`. Invert draws no color, so the
+/// swatches are shown without actions while it is chosen.
+fn style_rows(services: &Services, prefix: &str, drawer: &str, color: &str) -> Vec<WidgetPod> {
+    let t = &services.theme;
+    let swatches: Vec<WidgetPod> = kaia_book::HIGHLIGHT_COLORS
+        .iter()
+        .map(|name| {
+            let rgb = kaia_book::highlight_rgb(name).unwrap_or([0, 0, 0]);
+            let swatch = Swatch {
+                color: Color::rgb(rgb[0], rgb[1], rgb[2]),
+                selected: *name == color,
+                action: (drawer != "invert").then(|| format!("{prefix}:color:{name}")),
+            };
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(
+                    Column::new(vec![
+                        WidgetPod::new(swatch).with_key(format!("color-{name}")),
+                        WidgetPod::new(Label::new(
+                            color_label(name),
+                            t.font.caption.clone(),
+                            Tone::InkSecondary,
+                        )),
+                    ])
+                    .shrink()
+                    .gap(t.space.xs)
+                    .cross_align(CrossAlign::Center),
+                ),
+                1,
+            ))
+        })
+        .collect();
+    let styles: Vec<WidgetPod> = kaia_book::HIGHLIGHT_DRAWERS
+        .iter()
+        .map(|style| {
+            let name = style.as_str();
+            let look = if name == drawer {
+                ButtonStyle::Primary
+            } else {
+                ButtonStyle::Secondary
+            };
+            WidgetPod::new(Expanded::new(
+                button(
+                    look,
+                    &style_label(name),
+                    &format!("{prefix}:drawer:{name}"),
+                    &format!("style-{name}"),
+                ),
+                1,
+            ))
+        })
+        .collect();
+    // Two rows of two, so the longest name, Strikethrough, fits its button.
+    let mut styles = styles.into_iter();
+    let first: Vec<WidgetPod> = styles.by_ref().take(2).collect();
+    let second: Vec<WidgetPod> = styles.collect();
+    vec![
+        group_heading(services, &tr("Color")),
+        WidgetPod::new(Row::new(swatches).gap(t.space.xs)),
+        group_heading(services, &tr("Style")),
+        WidgetPod::new(Row::new(first).gap(t.space.sm)),
+        WidgetPod::new(Row::new(second).gap(t.space.sm)),
+    ]
+}
+
+/// The sheet of an existing highlight: its text, and the color and style to change it to.
+pub fn highlight_sheet(services: &Services, screen: Size, annotation: &Annotation) -> Window {
+    let t = &services.theme;
+    let text = annotation.text.clone().unwrap_or_default();
+    let mut children = vec![WidgetPod::new(
+        Paragraph::new(shorten(&text, 200), t.font.label.clone(), Tone::InkSecondary).max_lines(3),
+    )];
+    children.extend(style_rows(
+        services,
+        &format!("reader:annot:{}", annotation.id),
+        annotation.drawer.as_deref().unwrap_or("lighten"),
+        annotation.color.as_deref().unwrap_or("yellow"),
+    ));
+    sheet(services, screen, Some(&tr("Highlight")), children, None)
+}
+
+/// The selection popover and its annotation actions. `style` is the drawer and the
+/// color that the Highlight button uses.
+pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
+    selection_popover(services, screen, word, false, ("lighten", "yellow"))
+}
+
+pub(super) fn selection_popover(
+    services: &Services,
+    screen: Size,
+    word: &str,
+    moving: bool,
+    style: (&str, &str),
+) -> Window {
     if word.is_empty() {
         let mut children = vec![button(
             ButtonStyle::Primary,
@@ -437,8 +608,9 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
             .gap(t.space.sm),
         )
     };
-    let mut children = vec![
-        heading,
+    let mut children = vec![heading];
+    children.extend(style_rows(services, "reader:highlight", style.0, style.1));
+    let rest = vec![
         WidgetPod::new(
             Row::new(vec![
                 WidgetPod::new(Expanded::new(
@@ -491,6 +663,7 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
             .gap(t.space.sm),
         ),
     ];
+    children.extend(rest);
     if moving {
         children.push(button(
             ButtonStyle::Secondary,
@@ -502,8 +675,31 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
     sheet(services, screen, None, children, None)
 }
 
-/// The dictionary sheet: the word and its definitions, or the install instructions.
+/// The dictionary sheet without the word actions: the word and its definitions, or
+/// the install instructions.
 pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> Window {
+    dictionary_sheet(services, screen, word, text, None)
+}
+
+/// What the dictionary sheet offers beyond the definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DictActions<'a> {
+    /// The dictionary of the first definition, if the lookup found one.
+    pub first: Option<&'a str>,
+    /// True when the book already uses that dictionary first.
+    pub preferred: bool,
+}
+
+/// The dictionary sheet: the word and its definitions, or the install instructions.
+/// With `actions`, it also offers the word list, the dictionary settings and the
+/// dictionary to use first for the book.
+pub fn dictionary_sheet(
+    services: &Services,
+    screen: Size,
+    word: &str,
+    text: &str,
+    actions: Option<DictActions<'_>>,
+) -> Window {
     let t = &services.theme;
     let width = screen
         .w
@@ -516,22 +712,21 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
         .fonts
         .layout(text, &style, width, None, false);
     let heading = WidgetPod::new(Label::new(word.to_string(), t.font.title.clone(), Tone::Ink));
+    let extra = dictionary_actions(services, actions);
     if layout.height < screen.h / 3 {
+        let mut children = vec![
+            heading,
+            WidgetPod::new(
+                Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
+            )
+            .with_key("dict-body"),
+        ];
+        children.extend(extra);
         return sheet(
             services,
             screen,
             Some(&tr("Dictionary")),
-            dictionary_plugins(
-                services,
-                vec![
-                    heading,
-                    WidgetPod::new(
-                        Paragraph::new(text.to_string(), t.font.body.clone(), Tone::Ink)
-                            .max_lines(usize::MAX),
-                    )
-                    .with_key("dict-body"),
-                ],
-            ),
+            dictionary_plugins(services, children),
             None,
         );
     }
@@ -541,17 +736,213 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
             Paragraph::new(line.trim_end_matches('\n'), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
         )
     });
+    let mut children = vec![
+        heading,
+        WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("dict-pages"), 1)),
+    ];
+    children.extend(extra);
     sheet(
         services,
         screen,
         Some(&tr("Dictionary")),
-        dictionary_plugins(
+        dictionary_plugins(services, children),
+        Some(TALL_PERCENT),
+    )
+}
+
+/// The word actions of the dictionary sheet: the word list and the dictionary
+/// settings, then the book's first dictionary when the lookup found one.
+fn dictionary_actions(services: &Services, actions: Option<DictActions<'_>>) -> Vec<WidgetPod> {
+    let Some(actions) = actions else {
+        return Vec::new();
+    };
+    let t = &services.theme;
+    let mut rows = vec![WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Add to word list"),
+                    "reader:words:add",
+                    "dict-add-word",
+                ),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Dictionary settings"),
+                    "reader:dicts:open",
+                    "dict-settings",
+                ),
+                1,
+            )),
+        ])
+        .gap(t.space.sm),
+    )];
+    if actions.first.is_some() {
+        let label = if actions.preferred {
+            tr("Stop using this dictionary first for this book")
+        } else {
+            tr("Use this dictionary first for this book")
+        };
+        rows.push(button(
+            ButtonStyle::Secondary,
+            &label,
+            "reader:dict:first",
+            "dict-first",
+        ));
+    }
+    rows
+}
+
+/// One installed dictionary on the Dictionary settings screen. `index` is its place
+/// in the lookup order, which the actions use.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictRow {
+    pub index: usize,
+    pub name: String,
+    pub enabled: bool,
+}
+
+/// The Dictionary settings screen: the installed dictionaries in lookup order. Each
+/// row has an on or off switch and move up and move down buttons. `empty` is shown
+/// when no dictionary is installed.
+pub fn dictionary_settings(services: &Services, screen: Size, rows: Vec<DictRow>, empty: &str) -> Window {
+    let t = &services.theme;
+    if rows.is_empty() {
+        return sheet(
             services,
-            vec![
-                heading,
-                WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("dict-pages"), 1)),
-            ],
-        ),
+            screen,
+            Some(&tr("Dictionary settings")),
+            vec![WidgetPod::new(Paragraph::new(
+                empty.to_string(),
+                t.font.body.clone(),
+                Tone::InkSecondary,
+            ))],
+            None,
+        );
+    }
+    let list = PagedList::new(rows, |row: &DictRow, t: &Theme| {
+        let toggle =
+            WidgetPod::new(Toggle::pill(row.enabled).on_action(format!("reader:dicts:toggle:{}", row.index)))
+                .with_key(format!("dict-toggle-{}", row.index));
+        let name = WidgetPod::new(Expanded::new(
+            WidgetPod::new(Label::new(row.name.clone(), t.font.body.clone(), Tone::Ink)),
+            1,
+        ));
+        let up = WidgetPod::new(Expanded::new(
+            button(
+                ButtonStyle::Secondary,
+                &tr("Move up"),
+                &format!("reader:dicts:up:{}", row.index),
+                &format!("dict-up-{}", row.index),
+            ),
+            1,
+        ));
+        let down = WidgetPod::new(Expanded::new(
+            button(
+                ButtonStyle::Secondary,
+                &tr("Move down"),
+                &format!("reader:dicts:down:{}", row.index),
+                &format!("dict-down-{}", row.index),
+            ),
+            1,
+        ));
+        WidgetPod::new(
+            Column::new(vec![
+                WidgetPod::new(
+                    Row::new(vec![name, toggle])
+                        .gap(t.space.md)
+                        .cross_align(CrossAlign::Center),
+                ),
+                WidgetPod::new(Row::new(vec![up, down]).gap(t.space.sm)),
+            ])
+            .shrink()
+            .gap(t.space.sm)
+            .cross_align(CrossAlign::Stretch),
+        )
+        .with_key(format!("dict-row-{}", row.index))
+    })
+    .labels(page_labels());
+    let children = vec![
+        WidgetPod::new(Paragraph::new(
+            tr("Dictionaries are searched in this order. A dictionary that is off is skipped."),
+            t.font.caption.clone(),
+            Tone::InkSecondary,
+        )),
+        WidgetPod::new(Expanded::new(
+            WidgetPod::new(list).with_key("dict-settings-list"),
+            1,
+        )),
+    ];
+    sheet(
+        services,
+        screen,
+        Some(&tr("Dictionary settings")),
+        children,
+        Some(TALL_PERCENT),
+    )
+}
+
+/// One saved word on the word list. `detail` is the book and the sentence, and
+/// `date` is the local date it was last saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WordRow {
+    pub id: i64,
+    pub word: String,
+    pub detail: String,
+    pub date: String,
+}
+
+/// The word list, newest first. Each row has a Delete button. `rows` is empty when
+/// no word is saved yet.
+pub fn words(services: &Services, screen: Size, rows: Vec<WordRow>) -> Window {
+    let t = &services.theme;
+    if rows.is_empty() {
+        return sheet(
+            services,
+            screen,
+            Some(&tr("Word list")),
+            vec![WidgetPod::new(Paragraph::new(
+                tr("No words yet. Hold a word in a book, then choose Dictionary and Add to word list."),
+                t.font.body.clone(),
+                Tone::InkSecondary,
+            ))],
+            None,
+        );
+    }
+    let list = PagedList::new(rows, |row: &WordRow, t: &Theme| {
+        let mut item = ListRow::new(row.word.clone()).value(row.date.clone());
+        if !row.detail.is_empty() {
+            item = item.secondary(row.detail.clone());
+        }
+        let delete = button(
+            ButtonStyle::Secondary,
+            &tr("Delete"),
+            &format!("reader:words:delete:{}", row.id),
+            &format!("word-delete-{}", row.id),
+        );
+        WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(Expanded::new(WidgetPod::new(item), 1)),
+                delete,
+            ])
+            .gap(t.space.sm)
+            .cross_align(CrossAlign::Center),
+        )
+        .with_key(format!("word-row-{}", row.id))
+    })
+    .labels(page_labels());
+    let children = vec![WidgetPod::new(Expanded::new(
+        WidgetPod::new(list).with_key("words-list"),
+        1,
+    ))];
+    sheet(
+        services,
+        screen,
+        Some(&tr("Word list")),
+        children,
         Some(TALL_PERCENT),
     )
 }

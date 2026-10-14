@@ -1,7 +1,7 @@
 //! Blocking session calls run away from the app. The document stays on its engine thread.
 use super::page::{Mark, MarkStyle};
 use kaia_book::{BookSession, Drawer, Selection, Size};
-use kaia_gfx::{Pixmap, Rect};
+use kaia_gfx::{Color, Pixmap, Rect};
 use kaia_i18n::{format as tr_format, tr};
 use std::sync::{mpsc, Arc};
 
@@ -70,9 +70,15 @@ pub(super) fn spawn(
                     let style = match item.annotation.drawer.as_deref().and_then(Drawer::parse) {
                         Some(Drawer::Underscore) => MarkStyle::Underline,
                         Some(Drawer::Strikeout) => MarkStyle::Strike,
+                        Some(Drawer::Invert) => MarkStyle::Invert,
                         _ => MarkStyle::Box,
                     };
-                    marks.extend(item.rects.iter().map(|rect| Mark { rect: *rect, style }));
+                    let color = mark_color(item.annotation.color.as_deref());
+                    marks.extend(item.rects.iter().map(|rect| Mark {
+                        rect: *rect,
+                        style,
+                        color,
+                    }));
                 }
             }
             let mut hits = Vec::new();
@@ -124,6 +130,13 @@ pub(super) fn spawn(
     reply
 }
 
+/// The page color of a highlight. None when the highlight has no color, or KOReader
+/// does not know its name.
+fn mark_color(name: Option<&str>) -> Option<Color> {
+    let [r, g, b] = kaia_book::highlight_rgb(name?)?;
+    Some(Color::rgb(r, g, b))
+}
+
 // The read-only sticker document stays on this thread between page draws.
 fn submit(task: Box<dyn FnOnce() + Send>) {
     static WORKER: std::sync::OnceLock<mpsc::Sender<Box<dyn FnOnce() + Send>>> = std::sync::OnceLock::new();
@@ -157,5 +170,13 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(1))
             .unwrap()
             .is_err());
+    }
+
+    #[test]
+    fn a_mark_takes_the_color_of_its_highlight() {
+        assert_eq!(mark_color(Some("yellow")), Some(Color::rgb(0xFF, 0xFF, 0x33)));
+        assert_eq!(mark_color(Some("gray")), Some(Color::rgb(204, 204, 204)));
+        assert_eq!(mark_color(Some("teal")), None, "KOReader has no teal");
+        assert_eq!(mark_color(None), None, "a highlight without a color has none");
     }
 }

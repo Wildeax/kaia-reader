@@ -176,6 +176,33 @@ impl Pixmap {
             }
         }
     }
+
+    /// Multiplies the pixels inside `rect` by `c`, clipped to the pixmap. Each channel
+    /// becomes `in * c / 255`, so white takes the color and black stays black. A gray
+    /// pixmap multiplies by the luma of `c`.
+    pub fn multiply_rect(&mut self, rect: Rect, c: Color) {
+        let r = rect.intersect(&self.bounds());
+        if r.is_empty() {
+            return;
+        }
+        let bpp = self.format.bytes_per_pixel();
+        let stride = self.stride();
+        // One factor per channel. A gray pixel has one channel and reads the first factor.
+        let factors = match self.format {
+            PixelFormat::Gray8 => [c.luma(); 3],
+            PixelFormat::Rgb24 => [c.r, c.g, c.b],
+        };
+        for y in r.y..r.bottom() {
+            let row = y as usize * stride;
+            let start = row + r.x as usize * bpp;
+            let end = start + r.w as usize * bpp;
+            for px in self.data[start..end].chunks_exact_mut(bpp) {
+                for (byte, &factor) in px.iter_mut().zip(&factors) {
+                    *byte = (u32::from(*byte) * u32::from(factor) / 255) as u8;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -196,5 +223,41 @@ mod tests {
         p.put(1, 0, Color::rgb(10, 20, 30));
         assert_eq!(p.get(1, 0), Some(Color::rgb(10, 20, 30)));
         assert_eq!(p.get(2, 0), None);
+    }
+
+    #[test]
+    fn multiply_scales_each_channel_and_clips() {
+        let mut p = Pixmap::new(4, 1, PixelFormat::Rgb24);
+        p.put(1, 0, Color::rgb(100, 200, 50));
+        p.put(3, 0, Color::BLACK);
+        // The rect starts one pixel left of the pixmap, so it covers x = 0 and x = 1.
+        p.multiply_rect(Rect::new(-1, 0, 3, 1), Color::rgb(255, 51, 0));
+        assert_eq!(p.get(0, 0), Some(Color::rgb(255, 51, 0)), "white takes the color");
+        assert_eq!(
+            p.get(1, 0),
+            Some(Color::rgb(100, 40, 0)),
+            "each channel is in * color / 255"
+        );
+        assert_eq!(p.get(2, 0), Some(Color::WHITE), "outside the rect");
+        p.multiply_rect(Rect::new(0, 0, 4, 1), Color::rgb(255, 51, 0));
+        assert_eq!(p.get(3, 0), Some(Color::BLACK), "black stays black");
+    }
+
+    #[test]
+    fn multiply_on_gray_uses_the_luma_of_the_color() {
+        let mut p = Pixmap::new(3, 1, PixelFormat::Gray8);
+        p.put(1, 0, Color::gray(128));
+        p.multiply_rect(Rect::new(0, 0, 2, 1), Color::rgb(255, 51, 0));
+        assert_eq!(
+            p.get(0, 0),
+            Some(Color::gray(106)),
+            "white takes the luma of the color"
+        );
+        assert_eq!(
+            p.get(1, 0),
+            Some(Color::gray(53)),
+            "128 * 106 / 255 is 53.2, rounded down"
+        );
+        assert_eq!(p.get(2, 0), Some(Color::WHITE), "outside the rect");
     }
 }

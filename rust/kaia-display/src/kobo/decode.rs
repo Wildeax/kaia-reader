@@ -68,6 +68,7 @@ pub mod key {
 /// Values of `input_event.value` for `EV_KEY`.
 const KEY_RELEASE: i32 = 0;
 const KEY_PRESS: i32 = 1;
+const KEY_REPEAT: i32 = 2;
 
 /// How many touch slots the decoder tracks. A slot number at or above this is ignored.
 pub const MAX_SLOTS: usize = 10;
@@ -308,13 +309,14 @@ fn set_axis(axis: &mut i32, value: i32, moved: &mut bool) {
     }
 }
 
-/// Maps a `EV_KEY` event to a [`KeyEvent`]. Returns None for keys with no mapping,
-/// for autorepeat (value 2), and for the light button.
+/// Maps page-key repeats to another press. Other key repeats, unmapped keys and
+/// the light button produce no key event.
 fn key_event(ev: &RawEvent) -> Option<KeyEvent> {
-    if ev.value != KEY_PRESS && ev.value != KEY_RELEASE {
+    let page_repeat = ev.value == KEY_REPEAT && matches!(ev.code, key::RPG_BACK | key::RPG_FWD);
+    if ev.value != KEY_PRESS && ev.value != KEY_RELEASE && !page_repeat {
         return None;
     }
-    let pressed = ev.value == KEY_PRESS;
+    let pressed = ev.value != KEY_RELEASE;
     let key = match ev.code {
         key::RPG_BACK => Key::RPgBack,
         key::RPG_FWD => Key::RPgFwd,
@@ -734,13 +736,51 @@ mod tests {
     fn light_release_is_decoded_but_presses_repeats_and_unknown_keys_are_dropped() {
         let mut d = EvdevDecoder::new(identity());
         let out = d.feed(&[
-            key(key::RPG_FWD, 2, 1),
+            key(key::POWER, KEY_REPEAT, 1),
+            key(key::HOME, KEY_REPEAT, 1),
+            key(key::SLEEP_COVER_A, KEY_REPEAT, 1),
+            key(key::SLEEP_COVER_B, KEY_REPEAT, 1),
             key(10, KEY_PRESS, 2),
             key(key::LIGHT_BUTTON, KEY_PRESS, 3),
             key(key::LIGHT_BUTTON, 2, 4),
             key(key::LIGHT_BUTTON, KEY_RELEASE, 5),
         ]);
         assert_eq!(out, vec![InputEvent::Light]);
+    }
+
+    #[test]
+    fn page_key_holds_keep_every_repeat_and_release_in_order() {
+        for (code, mapped) in [(key::RPG_BACK, Key::RPgBack), (key::RPG_FWD, Key::RPgFwd)] {
+            let mut d = EvdevDecoder::new(identity());
+            let values = [
+                KEY_PRESS,
+                KEY_REPEAT,
+                KEY_REPEAT,
+                KEY_REPEAT,
+                KEY_REPEAT,
+                KEY_REPEAT,
+                KEY_REPEAT,
+                KEY_RELEASE,
+            ];
+            let raw: Vec<_> = values
+                .iter()
+                .enumerate()
+                .map(|(i, value)| key(code, *value, i as u64))
+                .collect();
+            let expected: Vec<_> = values
+                .iter()
+                .enumerate()
+                .map(|(i, value)| {
+                    DecodedEvent::Key(KeyEvent {
+                        key: mapped,
+                        pressed: *value != KEY_RELEASE,
+                        time_us: i as u64,
+                    })
+                })
+                .collect();
+            assert_eq!(d.feed_frames(&raw), expected);
+            assert!(d.feed(&[key(code, 3, 100)]).is_empty());
+        }
     }
 
     #[test]

@@ -73,6 +73,10 @@ pub(crate) struct BookState {
     pub layout_key: Option<String>,
     /// Remains true until the reader acknowledges that the file changed.
     pub file_change_pending: bool,
+    /// Dictionary names to try first for this book. KOReader keeps the same list
+    /// as `preferred_dictionaries` in the book's settings. Names come from the
+    /// `.ifo` files, as `bookname`.
+    pub preferred_dictionaries: Vec<String>,
 }
 
 impl BookState {
@@ -93,6 +97,7 @@ impl BookState {
             imported_from: None,
             layout_key: None,
             file_change_pending: false,
+            preferred_dictionaries: Vec::new(),
         }
     }
 
@@ -169,6 +174,16 @@ impl BookState {
         if self.file_change_pending {
             t.insert("file_change_pending".into(), Value::Bool(true));
         }
+        if !self.preferred_dictionaries.is_empty() {
+            t.insert(
+                "preferred_dictionaries".into(),
+                Value::array(
+                    self.preferred_dictionaries
+                        .iter()
+                        .map(|n| Value::from(n.as_str())),
+                ),
+            );
+        }
         t
     }
 
@@ -230,6 +245,12 @@ impl BookState {
         state.imported_from = root.get("imported_from").as_str().map(str::to_string);
         state.layout_key = root.get("layout_key").as_str().map(str::to_string);
         state.file_change_pending = root.get("file_change_pending").as_bool().unwrap_or(false);
+        if let Value::Table(list) = root.get("preferred_dictionaries") {
+            state.preferred_dictionaries = list
+                .values()
+                .filter_map(|v| v.as_str().filter(|n| !n.is_empty()).map(str::to_string))
+                .collect();
+        }
         state.repair_ids();
         Some(state)
     }
@@ -454,6 +475,30 @@ mod tests {
         assert_eq!(back.rating, s.rating);
         assert_eq!(back.reading_time, s.reading_time);
         assert_eq!(back.next_id, 2);
+    }
+
+    #[test]
+    fn preferred_dictionaries_use_koreader_key_and_round_trip() {
+        let mut s = state();
+        s.preferred_dictionaries = vec!["Second Dictionary".into(), "Test Dictionary".into()];
+        let table = s.to_table();
+        let list = Value::Table(table.clone());
+        assert_eq!(
+            list.get("preferred_dictionaries").array_len(),
+            2,
+            "the KOReader key holds the names in order"
+        );
+        let back = BookState::from_table(&table).expect("state");
+        assert_eq!(back.preferred_dictionaries, s.preferred_dictionaries);
+    }
+
+    #[test]
+    fn no_preferred_dictionary_writes_no_key() {
+        let s = state();
+        assert!(s.preferred_dictionaries.is_empty());
+        assert!(!s
+            .to_table()
+            .contains_key(&kaia_events::Key::from("preferred_dictionaries")));
     }
 
     #[test]

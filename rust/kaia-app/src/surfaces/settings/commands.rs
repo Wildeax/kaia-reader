@@ -17,10 +17,14 @@
 //!   passes these ids to [`super::quick::command`].
 //! - `settings:language` opens the language page. `settings:language:<tag>`
 //!   shows the screens in that language.
+//! - `settings:dictionaries` opens the Dictionary settings page.
+//! - `settings:dicts:<toggle|up|down>:<index>` changes one dictionary. `index` is
+//!   its place in the lookup order. The change is `reader::dict::Change`.
 
 use kaia_events::Value;
 
 use super::keys;
+use crate::surfaces::reader::dict::Change;
 
 /// The sections, in the order the root lists them.
 pub const SECTIONS: [&str; 10] = [
@@ -59,6 +63,13 @@ pub enum Command {
     Quick(String),
     Language,
     LanguagePick(String),
+    /// Opens the Dictionary settings page.
+    Dictionaries,
+    /// Changes the dictionary at `index` in lookup order.
+    Dictionary {
+        index: usize,
+        change: Change,
+    },
 }
 
 /// Parses a settings action id. None for every other id, and for an unknown section.
@@ -74,7 +85,19 @@ pub fn parse(id: &str) -> Option<Command> {
         "data:import" => return Some(Command::Import),
         "data:export" => return Some(Command::ExportNotes),
         "language" => return Some(Command::Language),
+        "dictionaries" => return Some(Command::Dictionaries),
         _ => {}
+    }
+    if let Some(action) = rest.strip_prefix("dicts:") {
+        let (change, index) = action.split_once(':')?;
+        let change = match change {
+            "toggle" => Change::Toggle,
+            "up" => Change::Up,
+            "down" => Change::Down,
+            _ => return None,
+        };
+        let index = index.parse().ok()?;
+        return Some(Command::Dictionary { index, change });
     }
     if let Some(key) = rest.strip_prefix("set:") {
         return (!key.is_empty()).then(|| Command::Set(key.to_string()));
@@ -183,6 +206,28 @@ mod tests {
             Some(Command::Light(Light::Warmth))
         );
         assert_eq!(parse("nav:settings"), None);
+    }
+
+    #[test]
+    fn parses_the_dictionary_page_and_its_changes() {
+        assert_eq!(parse("settings:dictionaries"), Some(Command::Dictionaries));
+        assert_eq!(
+            parse("settings:dicts:down:3"),
+            Some(Command::Dictionary {
+                index: 3,
+                change: Change::Down
+            })
+        );
+        assert_eq!(
+            parse("settings:dicts:toggle:0"),
+            Some(Command::Dictionary {
+                index: 0,
+                change: Change::Toggle
+            })
+        );
+        assert_eq!(parse("settings:dicts:sideways:0"), None);
+        assert_eq!(parse("settings:dicts:up:first"), None);
+        assert_eq!(parse("settings:dicts:up"), None);
     }
 
     #[test]

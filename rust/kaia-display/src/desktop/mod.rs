@@ -127,8 +127,13 @@ impl DesktopDisplay {
             self.quit_sent = true;
             self.pending.push_back(InputEvent::Quit);
         }
-        for key in self.window.get_keys_pressed(KeyRepeat::No) {
-            if let Some(key) = map_key(key) {
+        for physical_key in self.window.get_keys_pressed(KeyRepeat::Yes) {
+            if let Some(key) = map_key(physical_key) {
+                if !matches!(key, Key::LPgBack | Key::LPgFwd | Key::RPgBack | Key::RPgFwd)
+                    && !self.window.is_key_pressed(physical_key, KeyRepeat::No)
+                {
+                    continue;
+                }
                 self.pending.push_back(InputEvent::Key(KeyEvent {
                     key,
                     pressed: true,

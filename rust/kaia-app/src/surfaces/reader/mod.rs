@@ -14,7 +14,7 @@
 //! start, or the sixth turn since the last full refresh, is a full refresh.
 
 mod commands;
-mod dict;
+pub(crate) mod dict;
 mod navigation;
 mod overlay;
 pub mod page;
@@ -43,8 +43,9 @@ use commands::{Command, LayoutChange, PanelName};
 use overlay::Overlay;
 use page::{PageView, PAGE_KEY};
 use panels::ContentItem;
-use state::{font_face, read_field, schedule_if_pending, Core, Layer, Turn};
+use state::{font_face, read_field, schedule_if_pending, Core, Layer, LookupState, Turn};
 
+use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common::{self, display_title, window};
 use crate::surfaces::Route;
@@ -522,6 +523,7 @@ impl Surface for ReaderSurface {
     }
 
     fn on_event(&mut self, ev: &Event, env: &mut SurfaceEnv<'_>) -> Outcome {
+        navigation::interrupt(&self.core, &ev.name, env.ctx);
         if ev.name == "ReaderTick" {
             self.core.borrow_mut().pump(env.ctx);
             if self.core.borrow().session.is_some() && !self.core.borrow().opened {
@@ -631,6 +633,9 @@ impl Surface for ReaderSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if let Some(outcome) = navigation::command(&self.core, cmd, args, env) {
+            return outcome;
+        }
         if cmd.starts_with("reader:") && self.core.borrow().job.is_some() {
             self.core
                 .borrow_mut()
@@ -638,16 +643,15 @@ impl Surface for ReaderSurface {
                 .push_back((cmd.to_string(), args.to_vec()));
             return Outcome::Handled;
         }
+        if let Some(outcome) = sheet_command(&self.core, cmd, env) {
+            schedule_if_pending(&self.core, env.ctx);
+            return outcome;
+        }
         if cmd == "reader:dictionary-word" {
             if let Some(word) = args.first().and_then(Value::as_str) {
-                let text = dict::lookup(word, env.services);
-                #[cfg(feature = "lua")]
-                env.services
-                    .plugins
-                    .requests
-                    .push(crate::plugins::Request::Dictionary(word.into(), text.clone()));
-                let window = panels::dictionary(env.services, env.screen, word, &text);
-                return show_panel(&self.core, &mut self.core.borrow_mut(), env.ctx, window, true);
+                let mut c = self.core.borrow_mut();
+                let preferred = preferred_dictionaries(&c);
+                return open_dictionary(&self.core, &mut c, env, word, None, preferred);
             }
             return Outcome::Handled;
         }
@@ -735,6 +739,7 @@ impl Surface for ReaderSurface {
     }
 
     fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
+        navigation::interrupt(&self.core, "Close", env.ctx);
         #[cfg(feature = "lua")]
         if self.plugin_attached {
             env.services.plugins.event("CloseDocument", vec![]);
@@ -849,6 +854,10 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         }
                     }
                 }
+                if let Some(annotation) = highlight_at(&mut c, x, y) {
+                    let window = panels::highlight_sheet(env.services, env.screen, &annotation);
+                    return push_panel(rc, &mut c, env.ctx, window);
+                }
                 let w = f64::from(env.screen.w);
                 let h = f64::from(env.screen.h);
                 let centre = x >= w / 3.0 && x < 2.0 * w / 3.0 && y >= h / 3.0 && y < 2.0 * h / 3.0;
@@ -913,11 +922,13 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
             Command::Release => {
                 if c.release() && c.panel.is_none() {
                     let word = c.selection.as_ref().map(|s| s.text.clone()).unwrap_or_default();
+                    let (drawer, color) = highlight_style(env.services, c.color_panel);
                     let window = panels::selection_popover(
                         env.services,
                         env.screen,
                         &word,
                         c.moving_sticker.is_some(),
+                        (drawer.as_str(), &color),
                     );
                     return push_panel(rc, &mut c, env.ctx, window);
                 }
@@ -1087,11 +1098,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let Some(selection) = c.selection.clone() else {
                     return Outcome::Handled;
                 };
-                let color = highlight_color(&c);
+                let (drawer, color) = highlight_style(env.services, c.color_panel);
                 let result = c
                     .session
                     .as_mut()
-                    .map(|s| s.add_highlight(&selection, Drawer::Lighten, color, None));
+                    .map(|s| s.add_highlight(&selection, drawer, &color, None));
                 finish_highlight(&mut c, env, result);
                 Outcome::Navigate(Nav::Pop)
             }
@@ -1115,15 +1126,15 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     return Outcome::Handled;
                 };
                 let word = kaia_dict::clean_selection(&selection.text);
-                let text = dict::lookup(&word, env.services);
-                #[cfg(feature = "lua")]
-                env.services
-                    .plugins
-                    .requests
-                    .push(crate::plugins::Request::Dictionary(word.clone(), text.clone()));
+                // Read the session before the selection clears. Clearing repaints the
+                // page, and the repaint takes the session until its frame comes back.
+                let context = c
+                    .session
+                    .as_mut()
+                    .and_then(|s| s.selection_sentence(&selection).ok().flatten());
+                let preferred = preferred_dictionaries(&c);
                 c.clear_selection(env.ctx);
-                let window = panels::dictionary(env.services, env.screen, &word, &text);
-                show_panel(rc, &mut c, env.ctx, window, true)
+                open_dictionary(rc, &mut c, env, &word, context, preferred)
             }
             Command::SelSearch => {
                 let Some(selection) = c.selection.clone() else {
@@ -1154,11 +1165,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     .map(|t| t.trim().to_string())
                     .filter(|t| !t.is_empty());
                 if let Some(selection) = c.selection.clone() {
-                    let color = highlight_color(&c);
+                    let (drawer, color) = highlight_style(env.services, c.color_panel);
                     let result = c
                         .session
                         .as_mut()
-                        .map(|s| s.add_highlight(&selection, Drawer::Lighten, color, note.as_deref()));
+                        .map(|s| s.add_highlight(&selection, drawer, &color, note.as_deref()));
                     finish_highlight(&mut c, env, result);
                 }
                 Outcome::Navigate(Nav::Pop)
@@ -1284,12 +1295,396 @@ fn finish_highlight(
     }
 }
 
-fn highlight_color(c: &Core) -> &'static str {
-    if c.color_panel {
-        "yellow"
-    } else {
-        "gray"
+/// Settings keys of the last highlight choice. A new highlight takes them.
+const HIGHLIGHT_COLOR_KEY: &str = "reading.highlight_color";
+const HIGHLIGHT_DRAWER_KEY: &str = "reading.highlight_drawer";
+
+/// The drawer and the color for a new highlight: the last choice in the settings, or
+/// KOReader's defaults. KOReader's default color is yellow on a color panel and gray
+/// on a grayscale one.
+fn highlight_style(services: &Services, color_panel: bool) -> (Drawer, String) {
+    let drawer = services
+        .settings
+        .read(HIGHLIGHT_DRAWER_KEY)
+        .as_str()
+        .and_then(Drawer::parse)
+        .unwrap_or(Drawer::Lighten);
+    let fallback = if color_panel { "yellow" } else { "gray" };
+    let color = services
+        .settings
+        .read(HIGHLIGHT_COLOR_KEY)
+        .as_str()
+        .filter(|name| kaia_book::highlight_rgb(name).is_some())
+        .unwrap_or(fallback)
+        .to_string();
+    (drawer, color)
+}
+
+/// The highlight under a tap, if there is one. Bookmarks have no area, so they never match.
+fn highlight_at(c: &mut Core, x: f64, y: f64) -> Option<kaia_book::Annotation> {
+    let point = Point::new(x as i32, y as i32);
+    let viewport = c.viewport;
+    let session = c.session.as_mut()?;
+    // Listing the highlights costs engine calls, so a book with none skips it.
+    if !session.has_highlights() {
+        return None;
     }
+    let items = session.annotations_on_page(viewport).ok()?;
+    items
+        .into_iter()
+        .find(|item| !item.annotation.is_bookmark() && item.rects.iter().any(|r| r.contains(point)))
+        .map(|item| item.annotation)
+}
+
+fn save_settings(env: &mut SurfaceEnv<'_>) {
+    if let Err(e) = env.services.settings.flush(&env.services.settings_path()) {
+        env.notice(tr_format(&tr("Cannot save settings: %1"), &[&e.to_string()]));
+    }
+}
+
+/// The commands of the highlight sheets, the dictionary sheet's actions, the
+/// Dictionary settings screen and the word list. None for any other command.
+fn sheet_command(rc: &Rc<RefCell<Core>>, cmd: &str, env: &mut SurfaceEnv<'_>) -> Option<Outcome> {
+    let parts: Vec<&str> = cmd.strip_prefix("reader:")?.split(':').collect();
+    Some(match parts.as_slice() {
+        ["highlight", "color", name] => default_style(rc, env, Some(*name), None),
+        ["highlight", "drawer", name] => default_style(rc, env, None, Some(*name)),
+        ["annot", id, "color", name] => annotation_style(rc, env, id, None, Some(*name)),
+        ["annot", id, "drawer", name] => annotation_style(rc, env, id, Some(*name), None),
+        ["dict", "first"] => prefer_dictionary(rc, env),
+        ["dicts", "open"] => open_dictionary_settings(rc, env),
+        ["dicts", action @ ("toggle" | "up" | "down"), index] => move_dictionary(rc, env, action, index),
+        ["words", "open"] => open_words(rc, env),
+        ["words", "add"] => add_word(rc, env),
+        ["words", "delete", id] => delete_word(rc, env, id),
+        _ => return None,
+    })
+}
+
+/// Saves a color or a drawer as the default for new highlights, then shows the
+/// selection popover again with the choice marked.
+fn default_style(
+    rc: &Rc<RefCell<Core>>,
+    env: &mut SurfaceEnv<'_>,
+    color: Option<&str>,
+    drawer: Option<&str>,
+) -> Outcome {
+    if let Some(name) = color {
+        if kaia_book::highlight_rgb(name).is_none() {
+            return Outcome::Handled;
+        }
+        env.services.settings.save(HIGHLIGHT_COLOR_KEY, Value::from(name));
+    }
+    if let Some(drawer) = drawer.and_then(Drawer::parse) {
+        env.services
+            .settings
+            .save(HIGHLIGHT_DRAWER_KEY, Value::from(drawer.as_str()));
+    }
+    save_settings(env);
+    let mut c = rc.borrow_mut();
+    let Some(word) = c.selection.as_ref().map(|s| s.text.clone()) else {
+        return Outcome::Handled;
+    };
+    let (drawer, color) = highlight_style(env.services, c.color_panel);
+    let window = panels::selection_popover(
+        env.services,
+        env.screen,
+        &word,
+        c.moving_sticker.is_some(),
+        (drawer.as_str(), &color),
+    );
+    show_panel(rc, &mut c, env.ctx, window, true)
+}
+
+/// Changes the color or the drawer of a highlight, then shows its sheet again. The
+/// page is drawn again, so the marks follow the new choice.
+fn annotation_style(
+    rc: &Rc<RefCell<Core>>,
+    env: &mut SurfaceEnv<'_>,
+    id: &str,
+    drawer: Option<&str>,
+    color: Option<&str>,
+) -> Outcome {
+    let Ok(id) = id.parse::<u64>() else {
+        return Outcome::Handled;
+    };
+    let drawer = match drawer {
+        Some(name) => match Drawer::parse(name) {
+            Some(parsed) => Some(parsed),
+            None => return Outcome::Handled,
+        },
+        None => None,
+    };
+    if color.is_some_and(|name| kaia_book::highlight_rgb(name).is_none()) {
+        return Outcome::Handled;
+    }
+    let mut c = rc.borrow_mut();
+    let Some(session) = c.session.as_mut() else {
+        return Outcome::Handled;
+    };
+    let Some(current) = session.annotation(id) else {
+        return Outcome::Handled;
+    };
+    let drawer = drawer
+        .or_else(|| current.drawer.as_deref().and_then(Drawer::parse))
+        .unwrap_or(Drawer::Lighten);
+    let color = color
+        .map(str::to_string)
+        .or(current.color.clone())
+        .unwrap_or_else(|| "yellow".to_string());
+    if let Err(e) = session.set_highlight_style(id, drawer, &color) {
+        env.toast(
+            tr_format(&tr("Cannot change this highlight: %1"), &[&e.to_string()]),
+            3.0,
+        );
+        return Outcome::Handled;
+    }
+    let Some(updated) = session.annotation(id) else {
+        return Outcome::Handled;
+    };
+    c.repaint_page(env.ctx, PaintHint::Ui);
+    let window = panels::highlight_sheet(env.services, env.screen, &updated);
+    show_panel(rc, &mut c, env.ctx, window, true)
+}
+
+/// The dictionaries this book tries first. Empty without a book.
+fn preferred_dictionaries(c: &Core) -> Vec<String> {
+    c.session
+        .as_ref()
+        .map(|s| s.preferred_dictionaries().to_vec())
+        .unwrap_or_default()
+}
+
+/// Looks `word` up and shows the dictionary sheet. `context` is the sentence around
+/// the word, when the reader has it, and `preferred` is the book's dictionaries that
+/// go first. The word stays with the sheet, so its actions can use it.
+fn open_dictionary(
+    rc: &Rc<RefCell<Core>>,
+    c: &mut Core,
+    env: &mut SurfaceEnv<'_>,
+    word: &str,
+    context: Option<String>,
+    preferred: Vec<String>,
+) -> Outcome {
+    let answer = dict::lookup(word, env.services, &preferred);
+    #[cfg(feature = "lua")]
+    env.services
+        .plugins
+        .requests
+        .push(crate::plugins::Request::Dictionary(
+            word.into(),
+            answer.text.clone(),
+        ));
+    let preferred_now = answer
+        .first
+        .as_ref()
+        .is_some_and(|first| preferred.contains(first));
+    let window = panels::dictionary_sheet(
+        env.services,
+        env.screen,
+        word,
+        &answer.text,
+        Some(panels::DictActions {
+            first: answer.first.as_deref(),
+            preferred: preferred_now,
+        }),
+    );
+    c.lookup = Some(LookupState {
+        word: word.to_string(),
+        context,
+        dictionary: answer.first,
+        book_title: c.title.clone(),
+    });
+    show_panel(rc, c, env.ctx, window, true)
+}
+
+/// Makes the lookup's dictionary the first one for this book, or stops doing so. The
+/// word is looked up again, so the sheet shows the new order.
+fn prefer_dictionary(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>) -> Outcome {
+    let mut c = rc.borrow_mut();
+    let Some(lookup) = c.lookup.clone() else {
+        return Outcome::Handled;
+    };
+    let Some(name) = lookup.dictionary.clone() else {
+        return Outcome::Handled;
+    };
+    let Some(session) = c.session.as_mut() else {
+        return Outcome::Handled;
+    };
+    let mut names = session.preferred_dictionaries().to_vec();
+    let added = !names.contains(&name);
+    if added {
+        names.insert(0, name.clone());
+    } else {
+        names.retain(|n| n != &name);
+    }
+    if let Err(e) = session.set_preferred_dictionaries(names) {
+        env.toast(
+            tr_format(&tr("Cannot save this book: %1"), &[&e.to_string()]),
+            5.0,
+        );
+        return Outcome::Handled;
+    }
+    let preferred = session.preferred_dictionaries().to_vec();
+    let answer = dict::lookup(&lookup.word, env.services, &preferred);
+    let preferred_now = answer
+        .first
+        .as_ref()
+        .is_some_and(|first| preferred.contains(first));
+    let window = panels::dictionary_sheet(
+        env.services,
+        env.screen,
+        &lookup.word,
+        &answer.text,
+        Some(panels::DictActions {
+            first: answer.first.as_deref(),
+            preferred: preferred_now,
+        }),
+    );
+    let message = if added {
+        tr_format(
+            &tr("%1 is now the preferred dictionary for this document."),
+            &[&name],
+        )
+    } else {
+        tr_format(
+            &tr("%1 is no longer a preferred dictionary for this document."),
+            &[&name],
+        )
+    };
+    env.toast(message, 2.0);
+    c.lookup = Some(LookupState {
+        word: lookup.word,
+        context: lookup.context,
+        dictionary: answer.first,
+        book_title: lookup.book_title,
+    });
+    show_panel(rc, &mut c, env.ctx, window, true)
+}
+
+/// Saves the word of the dictionary sheet to the word list, with its book and sentence.
+fn add_word(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>) -> Outcome {
+    let Some(lookup) = rc.borrow().lookup.clone() else {
+        return Outcome::Handled;
+    };
+    if lookup.word.chars().count() > kaia_storage::WORD_MAX_CHARS {
+        env.toast(tr("Select a single word to add it to the word list."), 3.0);
+        return Outcome::Handled;
+    }
+    let now = crate::sync::now_unix();
+    let saved = dict::word_store(env.services).and_then(|mut store| {
+        store.add_word(
+            &lookup.word,
+            Some(&lookup.book_title),
+            lookup.context.as_deref(),
+            now,
+        )
+    });
+    match saved {
+        Ok(_) => {
+            env.toast(tr("Added to word list"), 2.0);
+        }
+        Err(e) => env.notice(tr_format(&tr("Cannot save the word list: %1"), &[&e.to_string()])),
+    }
+    Outcome::Handled
+}
+
+/// The book and the sentence of a saved word, as one line of the word list.
+fn detail_text(book: Option<&str>, context: Option<&str>) -> String {
+    let context = context.map(|c| panels::shorten(c, 160));
+    match (book, context) {
+        (Some(book), Some(context)) => tr_format(&tr("%1: %2"), &[book, context.as_str()]),
+        (Some(book), None) => book.to_string(),
+        (None, Some(context)) => context,
+        (None, None) => String::new(),
+    }
+}
+
+/// The saved words, newest first, as rows of the word list.
+fn word_rows(services: &Services) -> Result<Vec<panels::WordRow>, String> {
+    let store = dict::word_store(services).map_err(|e| e.to_string())?;
+    let words = store.list_words().map_err(|e| e.to_string())?;
+    Ok(words
+        .into_iter()
+        .map(|w| panels::WordRow {
+            id: w.id,
+            detail: detail_text(w.book_title.as_deref(), w.context.as_deref()),
+            date: kaia_book::local_date(w.created_at),
+            word: w.word,
+        })
+        .collect())
+}
+
+/// Shows the word list in place of the panel that opened it.
+fn open_words(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>) -> Outcome {
+    match word_rows(env.services) {
+        Ok(rows) => {
+            let window = panels::words(env.services, env.screen, rows);
+            let mut c = rc.borrow_mut();
+            show_panel(rc, &mut c, env.ctx, window, true)
+        }
+        Err(e) => {
+            env.notice(tr_format(&tr("Cannot open the word list: %1"), &[&e]));
+            Outcome::Handled
+        }
+    }
+}
+
+/// Removes a saved word, then shows the word list again.
+fn delete_word(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>, id: &str) -> Outcome {
+    let Ok(id) = id.parse::<i64>() else {
+        return Outcome::Handled;
+    };
+    let removed = dict::word_store(env.services).and_then(|mut store| store.delete_word(id));
+    if let Err(e) = removed {
+        env.notice(tr_format(&tr("Cannot save the word list: %1"), &[&e.to_string()]));
+        return Outcome::Handled;
+    }
+    env.toast(tr("Removed from word list"), 2.0);
+    open_words(rc, env)
+}
+
+/// The rows of the Dictionary settings screen, in lookup order. Call `dict::load` first.
+fn dict_rows(services: &Services) -> Vec<panels::DictRow> {
+    let off = dict::disabled(services);
+    dict::ordered(services)
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| panels::DictRow {
+            index,
+            enabled: !off.contains(&name),
+            name,
+        })
+        .collect()
+}
+
+/// Shows the Dictionary settings screen in place of the dictionary sheet.
+fn open_dictionary_settings(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>) -> Outcome {
+    dict::load(env.services);
+    let rows = dict_rows(env.services);
+    let hint = dict::install_hint(&env.services.paths.data_dir);
+    let window = panels::dictionary_settings(env.services, env.screen, rows, &hint);
+    let mut c = rc.borrow_mut();
+    show_panel(rc, &mut c, env.ctx, window, true)
+}
+
+/// Turns a dictionary on or off, or moves it up or down the lookup order, then shows
+/// the screen again. `index` is the row's place in the lookup order.
+fn move_dictionary(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>, action: &str, index: &str) -> Outcome {
+    let change = match action {
+        "toggle" => dict::Change::Toggle,
+        "up" => dict::Change::Up,
+        "down" => dict::Change::Down,
+        _ => return Outcome::Handled,
+    };
+    let Ok(index) = index.parse::<usize>() else {
+        return Outcome::Handled;
+    };
+    if !dict::apply(env.services, index, change) {
+        return Outcome::Handled;
+    }
+    save_settings(env);
+    open_dictionary_settings(rc, env)
 }
 
 fn search_status(c: &Core) -> String {

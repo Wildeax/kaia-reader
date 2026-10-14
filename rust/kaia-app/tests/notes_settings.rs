@@ -402,7 +402,10 @@ fn sync_test_calls_the_server_only_when_tapped() {
         settings.save(keys::SYNC_ENABLED, Value::Bool(true));
         settings.save(keys::SYNC_SERVER, Value::from(url.as_str()));
         settings.save(keys::SYNC_USERNAME, Value::from("reader"));
-        settings.save(keys::SYNC_PASSWORD, Value::from("secret"));
+        settings.save(
+            keys::SYNC_USERKEY,
+            Value::from(kaia_sync::userkey_for("secret").unwrap()),
+        );
     }
 
     tap_key(&mut app, "nav-settings");

@@ -415,6 +415,7 @@ impl BookSession {
                         st.status = imported.status.clone();
                         st.rating = imported.rating;
                         st.summary_note = imported.summary_note.clone();
+                        st.preferred_dictionaries = imported.preferred_dictionaries.clone();
                         st.imported_from = Some(source.display().to_string());
                         for mut a in imported.annotations {
                             a.id = st.assign_id();
@@ -1278,6 +1279,49 @@ impl BookSession {
         self.state.rating = (rating > 0).then_some(rating);
         self.dirty = true;
         self.save()
+    }
+
+    /// True when the book has a highlight. Bookmarks do not count. This reads the
+    /// stored list and makes no engine call, so a caller can skip work for a book
+    /// with no highlights.
+    pub fn has_highlights(&self) -> bool {
+        self.state.annotations.iter().any(|a| !a.is_bookmark())
+    }
+
+    /// The dictionaries this book tries first, in order. KOReader keeps the same
+    /// list as `preferred_dictionaries`.
+    pub fn preferred_dictionaries(&self) -> &[String] {
+        &self.state.preferred_dictionaries
+    }
+
+    /// Sets the dictionaries this book tries first. Blank names and repeats are
+    /// dropped. A name keeps the place of its first occurrence.
+    pub fn set_preferred_dictionaries(&mut self, names: Vec<String>) -> Result<()> {
+        let mut list: Vec<String> = Vec::new();
+        for name in names {
+            let name = name.trim();
+            if !name.is_empty() && !list.iter().any(|n| n == name) {
+                list.push(name.to_string());
+            }
+        }
+        self.state.preferred_dictionaries = list;
+        self.dirty = true;
+        self.save()
+    }
+
+    /// The sentence around a selection, read from the page text. None when the
+    /// text is not on the page. The page text is cached by the engine.
+    pub fn selection_sentence(&mut self, selection: &Selection) -> Result<Option<String>> {
+        self.ensure_idle()?;
+        let page = selection.page;
+        let text = self
+            .engine
+            .call(move |w| w.page_text(page).map(|t| (*t).clone()))?;
+        Ok(crate::text::sentence_around(
+            &text,
+            &selection.text,
+            selection.page_rects.first().copied(),
+        ))
     }
 
     /// The time spent on pages, one entry per visit, oldest first.

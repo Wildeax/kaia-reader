@@ -17,7 +17,8 @@
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
 //! | `sync.username` | string | empty | Progress sync account name. |
-//! | `sync.password` | string | empty | Progress sync password, stored as typed. |
+//! | `sync.userkey` | string | empty | MD5 hex of the progress sync password, the key KOReader stores. The password itself is never stored. |
+//! | `sync.password` | string | unset | Old plain password. The startup migration replaces it with `sync.userkey` and removes it. |
 //! | `opds.catalogs` | array of tables | empty | User OPDS catalogs: `{ title = ..., url = ... }`. |
 //! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
@@ -28,8 +29,9 @@
 //! `sync.enabled` defaults to false. `sync.accept_invalid_certs` defaults to false.
 //! `sync.forward` defaults to `prompt`; `sync.backward` defaults to `never`.
 //!
-//! Keys with a text value that the user types (`sync.*`) are saved as the
-//! user types. The Settings surface flushes the file when the section closes.
+//! Text fields save as the user types, and the Settings surface flushes the file
+//! when the section closes. The password field is the exception: typing into it
+//! stores `sync.userkey`, never the text (see `sync::store_password`).
 
 use kaia_events::Settings;
 
@@ -58,7 +60,11 @@ pub const SYNC_FORWARD: &str = "sync.forward";
 pub const SYNC_BACKWARD: &str = "sync.backward";
 pub const SYNC_SERVER: &str = "sync.server";
 pub const SYNC_USERNAME: &str = "sync.username";
+/// The password field's id. Typed text is stored under `SYNC_USERKEY`, not here.
+/// This key is also the old plain password that the startup migration removes.
 pub const SYNC_PASSWORD: &str = "sync.password";
+/// MD5 hex of the sync password, the value KOReader stores as `userkey`.
+pub const SYNC_USERKEY: &str = "sync.userkey";
 pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";

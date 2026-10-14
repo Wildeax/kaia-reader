@@ -26,15 +26,14 @@ impl Credentials {
     pub fn new(username: &str, password: &str) -> Result<Self, Error> {
         let username = username.trim();
         let user_ok = !username.is_empty();
-        let pass_ok = password.chars().any(|c| !c.is_whitespace());
-        match (user_ok, pass_ok) {
-            (true, true) => Ok(Self {
+        match (user_ok, userkey_for(password)) {
+            (true, Some(userkey)) => Ok(Self {
                 username: username.to_owned(),
-                userkey: md5_hex(password.as_bytes()),
+                userkey,
             }),
-            (false, false) => Err(Error::InvalidCredentials(InvalidField::Both)),
-            (false, true) => Err(Error::InvalidCredentials(InvalidField::Username)),
-            (true, false) => Err(Error::InvalidCredentials(InvalidField::Password)),
+            (false, None) => Err(Error::InvalidCredentials(InvalidField::Both)),
+            (false, Some(_)) => Err(Error::InvalidCredentials(InvalidField::Username)),
+            (true, None) => Err(Error::InvalidCredentials(InvalidField::Password)),
         }
     }
 
@@ -62,6 +61,14 @@ impl Credentials {
     pub fn userkey(&self) -> &str {
         &self.userkey
     }
+}
+
+/// The user key for a password as typed: its MD5 hex digest. KOReader stores this
+/// value as `userkey` (`doLogin` in `main.lua`). None for a blank password, which
+/// `validateUser` rejects. Store the key, never the password.
+pub fn userkey_for(password: &str) -> Option<String> {
+    let filled = password.chars().any(|c| !c.is_whitespace());
+    filled.then(|| md5_hex(password.as_bytes()))
 }
 
 impl fmt::Debug for Credentials {

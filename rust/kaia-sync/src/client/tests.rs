@@ -70,6 +70,45 @@ fn stored_login_restores_without_password() {
     assert!(Credentials::from_stored("", "abc").is_err());
 }
 
+// KOReader's `doLogin` stores md5(password). The vector is md5("password").
+#[test]
+fn userkey_matches_koreader_for_a_known_password() {
+    assert_eq!(
+        crate::userkey_for("password").as_deref(),
+        Some("5f4dcc3b5aa765d61d8327deb882cf99")
+    );
+    assert_eq!(crate::userkey_for("   "), None);
+    assert_eq!(crate::userkey_for(""), None);
+}
+
+// A stored key logs in without the password. The request carries the digest
+// that KOReader sends in x-auth-key, and the server compares it with the digest
+// stored at registration.
+#[test]
+fn stored_key_is_the_x_auth_key_koreader_sends() {
+    let server = TestServer::start();
+    client(&server.url, "reader", "password").register().unwrap();
+    assert_eq!(
+        server
+            .state
+            .lock()
+            .unwrap()
+            .users
+            .get("reader")
+            .map(String::as_str),
+        Some("5f4dcc3b5aa765d61d8327deb882cf99")
+    );
+
+    let key = crate::userkey_for("password").unwrap();
+    let stored = Credentials::from_stored("reader", &key).unwrap();
+    let c = SyncClient::new(&server.url, stored, DEVICE, DEVICE_ID, Timeouts::default()).unwrap();
+    c.authorize().expect("the stored key logs in");
+
+    let wrong = Credentials::from_stored("reader", &crate::userkey_for("pass").unwrap()).unwrap();
+    let c = SyncClient::new(&server.url, wrong, DEVICE, DEVICE_ID, Timeouts::default()).unwrap();
+    assert!(matches!(c.authorize(), Err(Error::Unauthorized { .. })));
+}
+
 #[test]
 fn default_timeouts_match_the_plugin() {
     let t = Timeouts::default();

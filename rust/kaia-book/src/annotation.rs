@@ -49,6 +49,36 @@ pub const HIGHLIGHT_COLORS: [&str; 9] = [
     "red", "orange", "yellow", "green", "olive", "cyan", "blue", "purple", "gray",
 ];
 
+/// The drawer styles of KOReader, in its menu order.
+pub const HIGHLIGHT_DRAWERS: [Drawer; 4] = [
+    Drawer::Lighten,
+    Drawer::Underscore,
+    Drawer::Strikeout,
+    Drawer::Invert,
+];
+
+/// The RGB value of a highlight color, as KOReader's `Blitbuffer.HIGHLIGHT_COLORS`
+/// gives it. `gray` is KOReader's `Blitbuffer.gray(0.2)`, which is level 204. Returns
+/// None for a name KOReader does not know.
+///
+/// A lighten highlight multiplies the page by this value, so `gray` darkens the
+/// page by 20 percent, as KOReader's grayscale highlight does. On a grayscale panel
+/// the luminance of the value is what shows.
+pub fn highlight_rgb(name: &str) -> Option<[u8; 3]> {
+    Some(match name {
+        "red" => [0xFF, 0x33, 0x00],
+        "orange" => [0xFF, 0x88, 0x00],
+        "yellow" => [0xFF, 0xFF, 0x33],
+        "green" => [0x00, 0xAA, 0x66],
+        "olive" => [0x88, 0xFF, 0x77],
+        "cyan" => [0x00, 0xFF, 0xEE],
+        "blue" => [0x00, 0x66, 0xFF],
+        "purple" => [0xEE, 0x00, 0xFF],
+        "gray" => [204, 204, 204],
+        _ => return None,
+    })
+}
+
 /// A highlight, note or bookmark.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annotation {
@@ -260,5 +290,25 @@ mod tests {
         assert_eq!(Drawer::parse("strikeout"), Some(Drawer::Strikeout));
         assert_eq!(Drawer::Invert.as_str(), "invert");
         assert_eq!(Drawer::parse("wavy"), None);
+    }
+
+    #[test]
+    fn every_listed_color_has_a_value_and_gray_is_level_204() {
+        for name in HIGHLIGHT_COLORS {
+            assert!(highlight_rgb(name).is_some(), "{name} has no RGB value");
+        }
+        assert_eq!(highlight_rgb("gray"), Some([204, 204, 204]));
+        assert_eq!(highlight_rgb("yellow"), Some([0xFF, 0xFF, 0x33]));
+        assert_eq!(highlight_rgb("teal"), None, "KOReader has no teal");
+        assert_eq!(highlight_rgb("Yellow"), None, "names are stored in lower case");
+    }
+
+    #[test]
+    fn drawers_are_in_koreader_order() {
+        let names: Vec<&str> = HIGHLIGHT_DRAWERS.iter().map(|d| d.as_str()).collect();
+        assert_eq!(names, ["lighten", "underscore", "strikeout", "invert"]);
+        for drawer in HIGHLIGHT_DRAWERS {
+            assert_eq!(Drawer::parse(drawer.as_str()), Some(drawer));
+        }
     }
 }

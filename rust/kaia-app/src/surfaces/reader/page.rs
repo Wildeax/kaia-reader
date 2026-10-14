@@ -5,8 +5,9 @@
 use std::sync::Arc;
 
 use kaia_events::Value;
-use kaia_gfx::{Pixmap, Point, Rect};
-use kaia_input::{Direction, Gesture};
+use kaia_gfx::{Color, Pixmap, Point, Rect};
+use kaia_i18n::{format as tr_format, tr};
+use kaia_input::{Direction, Gesture, Key};
 use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, UiEvent};
 use kaia_ui::{Tone, Widget};
@@ -14,18 +15,20 @@ use kaia_ui::{Tone, Widget};
 /// The key of the page widget. The reader surface finds it with `Window::update`.
 pub const PAGE_KEY: &str = "reader-page";
 
-/// Edge width, in device-independent units, where a swipe belongs to the app (Back).
-const EDGE_DP: u32 = 40;
-
-/// How a highlight is drawn. Grayscale panels get no color; the shape carries the style.
+/// How a highlight is drawn. On a color panel, a mark with a color takes that color.
+/// Grayscale panels and marks without a color draw the shape alone. A box is dimmed
+/// and a line is ink.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkStyle {
-    /// A dimmed box behind the text (KOReader's lighten).
+    /// A box behind the text (KOReader's lighten). Tinted by its color on a color
+    /// panel, dimmed otherwise.
     Box,
     /// A line under the text (underscore).
     Underline,
     /// A line through the middle of the text (strikeout).
     Strike,
+    /// The box with its pixels inverted (KOReader's invert). It ignores the color.
+    Invert,
 }
 
 /// A highlight box on the page, in screen pixels.
@@ -33,6 +36,8 @@ pub enum MarkStyle {
 pub struct Mark {
     pub rect: Rect,
     pub style: MarkStyle,
+    /// The highlight color. None when the annotation has no color or an unknown one.
+    pub color: Option<Color>,
 }
 
 /// The reader's page. The reader sets the image, the marks and the message;
@@ -53,6 +58,13 @@ pub struct PageView {
     pub message: Option<String>,
     /// The page shown (0-based) and the page count. Tests read the position here.
     pub position: Option<(u32, usize)>,
+    pub brightness: Option<u8>,
+    pub flipping: bool,
+    light_drag: Option<bool>,
+    light_start: Point,
+    touch_flip: bool,
+    held_key: Option<bool>,
+    repeats: u32,
 }
 
 impl PageView {
@@ -67,7 +79,35 @@ impl PageView {
             hits: Vec::new(),
             message: None,
             position: None,
+            brightness: None,
+            flipping: false,
+            light_drag: None,
+            light_start: Point::new(0, 0),
+            touch_flip: false,
+            held_key: None,
+            repeats: 0,
         }
+    }
+
+    pub(super) fn cancel_gestures(&mut self) {
+        self.light_drag = None;
+        self.touch_flip = false;
+        self.held_key = None;
+        self.repeats = 0;
+    }
+
+    fn brightness_action(&self, cx: &mut EventCx, start: Point, end: Point, release: bool) {
+        let delta = f64::from(start.y - end.y) * 100.0 / f64::from(cx.bounds().h.max(1));
+        cx.action(action(
+            "reader:brightness",
+            vec![Value::Number(delta), Value::Bool(release)],
+        ));
+    }
+
+    fn flip_action(&self, cx: &mut EventCx, pos: Point) {
+        let bounds = cx.bounds();
+        let zone = ((i64::from(pos.x - bounds.x) * 5) / i64::from(bounds.w.max(1))).clamp(0, 4);
+        cx.action(action("reader:flip", vec![Value::Number(zone as f64)]));
     }
 }
 
@@ -127,8 +167,14 @@ impl Widget for PageView {
         let ink = cx.color(Tone::Ink);
         for mark in &self.marks {
             let r = mark.rect;
+            // Only a color panel shows the highlight color. A grayscale panel draws the shape alone.
+            let color = if cx.theme.color_panel { mark.color } else { None };
             match mark.style {
-                MarkStyle::Box => cx.dim(r, 40),
+                MarkStyle::Box => match color {
+                    Some(tint) => cx.multiply_rect(r, tint),
+                    None => cx.dim(r, 40),
+                },
+                MarkStyle::Invert => cx.invert_rect(r),
                 MarkStyle::Underline => cx.fill_rect(
                     Rect {
                         x: r.x,
@@ -136,7 +182,7 @@ impl Widget for PageView {
                         w: r.w,
                         h: 3,
                     },
-                    ink,
+                    color.unwrap_or(ink),
                 ),
                 MarkStyle::Strike => cx.fill_rect(
                     Rect {
@@ -145,7 +191,7 @@ impl Widget for PageView {
                         w: r.w,
                         h: 2,
                     },
-                    ink,
+                    color.unwrap_or(ink),
                 ),
             }
         }
@@ -179,28 +225,141 @@ impl Widget for PageView {
                 });
             }
         }
+        let header = self
+            .brightness
+            .map(|level| tr_format(&tr("Brightness: %1%"), &[&level.to_string()]));
+        let indicator = if self.flipping {
+            self.position.map(|(page, count)| {
+                tr_format(
+                    &tr("Page %1 of %2"),
+                    &[&(page + 1).to_string(), &count.to_string()],
+                )
+            })
+        } else {
+            None
+        };
+        for (text, bottom) in [(header, false), (indicator, true)] {
+            if let Some(text) = text {
+                let pad = cx.theme.space.sm;
+                let style = cx.theme.style(&cx.theme.font.body, Tone::Ink);
+                let text = cx
+                    .fonts
+                    .layout(&text, &style, bounds.w.saturating_sub(4 * pad), Some(1), true);
+                let h = cx.theme.touch_target.min(bounds.h);
+                let rect = Rect {
+                    x: bounds.x,
+                    y: if bottom {
+                        bounds.y + bounds.h as i32 - h as i32
+                    } else {
+                        bounds.y
+                    },
+                    w: bounds.w,
+                    h,
+                };
+                cx.fill_rect(rect, surface);
+                cx.text(
+                    &text,
+                    Point::new(
+                        bounds.x + pad as i32,
+                        rect.y + h.saturating_sub(text.height) as i32 / 2,
+                    ),
+                );
+            }
+        }
     }
 
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         let bounds = cx.bounds();
         match ev {
-            UiEvent::Named(e) if e.name == "PageForward" => {
-                cx.action(action("reader:next", Vec::new()));
+            UiEvent::Named(e) if matches!(e.name.as_str(), "PageForward" | "PageBack") => {
+                let forward = e.name == "PageForward";
+                cx.action(action(
+                    if forward { "reader:next" } else { "reader:prev" },
+                    Vec::new(),
+                ));
                 Handled::Yes
             }
-            UiEvent::Named(e) if e.name == "PageBack" => {
-                cx.action(action("reader:prev", Vec::new()));
+            UiEvent::Named(e) if e.name == "ReaderPageKey" => {
+                let (Some(forward), Some(pressed)) = (
+                    e.args.first().and_then(Value::as_bool),
+                    e.args.get(1).and_then(Value::as_bool),
+                ) else {
+                    return Handled::No;
+                };
+                self.event(
+                    cx,
+                    &UiEvent::Key(kaia_input::KeyEvent {
+                        key: if forward { Key::RPgFwd } else { Key::RPgBack },
+                        pressed,
+                        time_us: 0,
+                    }),
+                )
+            }
+            UiEvent::Key(key)
+                if matches!(key.key, Key::LPgFwd | Key::RPgFwd | Key::LPgBack | Key::RPgBack) =>
+            {
+                let forward = matches!(key.key, Key::LPgFwd | Key::RPgFwd);
+                if !key.pressed {
+                    if self.held_key == Some(forward) {
+                        self.held_key = None;
+                        self.repeats = 0;
+                        cx.action(action("reader:flip:stop", Vec::new()));
+                    }
+                } else if self.held_key == Some(forward) {
+                    self.repeats = self.repeats.saturating_add(1);
+                    if self.repeats == 1 {
+                        cx.action(action(
+                            if forward { "reader:next" } else { "reader:prev" },
+                            Vec::new(),
+                        ));
+                    } else if self.repeats == 5 {
+                        cx.action(action(
+                            "reader:flip",
+                            vec![Value::Number(if forward { 4.0 } else { 0.0 })],
+                        ));
+                    }
+                } else {
+                    self.held_key = Some(forward);
+                    self.repeats = 0;
+                    cx.action(action("reader:flip:stop", Vec::new()));
+                    cx.action(action(
+                        if forward { "reader:next" } else { "reader:prev" },
+                        Vec::new(),
+                    ));
+                }
                 Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Touch { .. }) => {
+                self.light_drag = None;
+                self.touch_flip = false;
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Pan { pos, start_pos, .. }) => {
+                let vertical = (pos.y - start_pos.y).abs() >= (pos.x - start_pos.x).abs();
+                let edge = start_pos.x >= bounds.x
+                    && i64::from(start_pos.x - bounds.x) * 100 < i64::from(bounds.w) * 13;
+                if *self.light_drag.get_or_insert(edge && vertical) {
+                    self.light_start = *start_pos;
+                    self.brightness_action(cx, *start_pos, *pos, false);
+                    Handled::Yes
+                } else {
+                    Handled::No
+                }
             }
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
                 cx.action(action("reader:tap", point_args(*pos, bounds)));
                 Handled::Yes
             }
-            UiEvent::Gesture(Gesture::Swipe { pos, direction, .. }) => {
-                let edge = cx.theme().scale.dp(EDGE_DP) as i32;
-                if pos.x - bounds.x < edge {
-                    // A swipe from the left edge is Back. The app handles it.
-                    return Handled::No;
+            UiEvent::Gesture(Gesture::Swipe {
+                pos,
+                end_pos,
+                direction,
+                ..
+            }) => {
+                if self.light_drag == Some(true) {
+                    self.brightness_action(cx, *pos, *end_pos, true);
+                    self.light_drag = None;
+                    return Handled::Yes;
                 }
                 match direction {
                     Some(Direction::West) | Some(Direction::NorthWest) | Some(Direction::SouthWest) => {
@@ -215,15 +374,39 @@ impl Widget for PageView {
                 }
             }
             UiEvent::Gesture(Gesture::Hold { pos, .. }) => {
+                if i64::from(pos.y - bounds.y) * 10 >= i64::from(bounds.h) * 9 {
+                    self.touch_flip = true;
+                    self.flip_action(cx, *pos);
+                    return Handled::Yes;
+                }
                 cx.action(action("reader:hold", point_args(*pos, bounds)));
                 Handled::Yes
             }
             UiEvent::Gesture(Gesture::HoldPan { pos, .. }) => {
+                if self.touch_flip {
+                    self.flip_action(cx, *pos);
+                    return Handled::Yes;
+                }
                 cx.action(action("reader:drag", point_args(*pos, bounds)));
                 Handled::Yes
             }
             UiEvent::Gesture(Gesture::HoldRelease { .. }) => {
+                if self.touch_flip {
+                    self.touch_flip = false;
+                    cx.action(action("reader:flip:stop", Vec::new()));
+                    return Handled::Yes;
+                }
                 cx.action(action("reader:release", Vec::new()));
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::PanRelease { pos, .. }) if self.light_drag == Some(true) => {
+                self.brightness_action(cx, self.light_start, *pos, true);
+                self.light_drag = None;
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Multiswipe { pos, end_pos, .. }) if self.light_drag == Some(true) => {
+                self.brightness_action(cx, *pos, *end_pos, true);
+                self.light_drag = None;
                 Handled::Yes
             }
             _ => Handled::No,

@@ -1,8 +1,7 @@
 //! Facts the Settings sections show that come from outside `settings.json`:
-//! reading statistics, the KOReader folder, dictionaries, the library folders
+//! reading statistics, the KOReader folder, the library folders
 //! and the user's OPDS catalogs.
 
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use kaia_events::{Settings, Value};
@@ -126,18 +125,6 @@ fn collections_file(koreader: &Path) -> PathBuf {
     }
 }
 
-/// The number of StarDict dictionaries (`*.ifo`) in `<data>/dict`.
-pub fn dictionary_count(data_dir: &Path) -> usize {
-    fs::read_dir(data_dir.join("dict"))
-        .map(|entries| {
-            entries
-                .flatten()
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "ifo"))
-                .count()
-        })
-        .unwrap_or(0)
-}
-
 /// The last two parts of `path`, such as `.kaia/dict`, with `…/` in front when
 /// the path has more parts. The full path starts with the host's own folders
 /// (the home folder, or the temp folder that a test uses), so a row that
@@ -191,6 +178,7 @@ pub fn user_catalogs(settings: &Settings) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn durations_read_in_hours_and_minutes() {

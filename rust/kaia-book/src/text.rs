@@ -258,6 +258,116 @@ impl Flat {
     }
 }
 
+/// Characters kept on each side of a word when its sentence is looked up.
+const SENTENCE_WINDOW: usize = 200;
+
+/// The sentence that holds `needle` on a page. Matching ignores case and line
+/// breaks, as [`Flat::find_all`] does. When the text occurs more than once, the
+/// occurrence whose first character is nearest `near` wins. A sentence ends at
+/// `.`, `!` or `?` followed by a space. When the window of text around the word
+/// has no sentence end, the sentence is cut at the edge of the window.
+pub fn sentence_around(page: &PageText, needle: &str, near: Option<RectF>) -> Option<String> {
+    let flat = Flat::new(page);
+    let hits = flat.find_all(needle);
+    let hit = match near {
+        Some(target) => hits
+            .into_iter()
+            .filter_map(|range| {
+                let (first, _) = flat.span(&range)?;
+                let distance = center_distance(page.chars.get(first)?.bbox, target);
+                Some((distance, range))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, range)| range)?,
+        None => hits.into_iter().next()?,
+    };
+    let (window, found) = flat.snippet(&hit, SENTENCE_WINDOW);
+    let chars: Vec<char> = window.chars().collect();
+    let found = found.start.min(chars.len())..found.end.min(chars.len());
+    let ends_sentence =
+        |i: usize| matches!(chars[i], '.' | '!' | '?') && chars.get(i + 1).is_none_or(|c| c.is_whitespace());
+    let start = (0..found.start)
+        .rev()
+        .find(|&i| ends_sentence(i))
+        .map_or(0, |i| i + 1);
+    let end = (found.end..chars.len())
+        .find(|&i| ends_sentence(i))
+        .map_or(chars.len(), |i| i + 1);
+    let sentence = chars[start..end]
+        .iter()
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!sentence.is_empty()).then_some(sentence)
+}
+
+/// The distance between the centres of two boxes, in page points.
+fn center_distance(a: RectF, b: RectF) -> f32 {
+    let (ax, ay) = ((a.x0 + a.x1) / 2.0, (a.y0 + a.y1) / 2.0);
+    let (bx, by) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt()
+}
+
+#[cfg(test)]
+mod sentence_tests {
+    use super::*;
+
+    /// One line of characters per string. Each character is 10 points wide and
+    /// each line is 20 points tall.
+    fn page_of(lines: &[&str]) -> PageText {
+        let mut boxes = Vec::new();
+        for (row, line) in lines.iter().enumerate() {
+            for (col, ch) in line.chars().enumerate() {
+                let x = col as f32 * 10.0;
+                let y = row as f32 * 20.0;
+                boxes.push((ch, RectF::new(x, y, x + 10.0, y + 20.0), row as i32));
+            }
+        }
+        page_text_from_boxes(&boxes)
+    }
+
+    #[test]
+    fn the_sentence_holds_the_word_and_ignores_case() {
+        let page = page_of(&["The quarrel is over. Their men fight. Then peace."]);
+        assert_eq!(
+            sentence_around(&page, "Their", None).as_deref(),
+            Some("Their men fight.")
+        );
+        assert_eq!(
+            sentence_around(&page, "their", None).as_deref(),
+            Some("Their men fight.")
+        );
+    }
+
+    #[test]
+    fn a_sentence_can_cross_a_line_break() {
+        let page = page_of(&["It was late. Their men", "fight in the street. Then"]);
+        assert_eq!(
+            sentence_around(&page, "men fight", None).as_deref(),
+            Some("Their men fight in the street.")
+        );
+    }
+
+    #[test]
+    fn the_occurrence_nearest_the_selection_wins() {
+        let page = page_of(&["Cat sat. Cat ran."]);
+        let near = RectF::new(90.0, 0.0, 100.0, 20.0);
+        assert_eq!(
+            sentence_around(&page, "Cat", Some(near)).as_deref(),
+            Some("Cat ran.")
+        );
+        assert_eq!(sentence_around(&page, "Cat", None).as_deref(), Some("Cat sat."));
+    }
+
+    #[test]
+    fn text_not_on_the_page_has_no_sentence() {
+        let page = page_of(&["Nothing here."]);
+        assert_eq!(sentence_around(&page, "absent", None), None);
+        assert_eq!(sentence_around(&page, "   ", None), None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
