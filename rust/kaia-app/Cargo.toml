@@ -20,6 +20,7 @@ desktop = ["kaia-display/desktop"]
 kobo = ["kaia-display/kobo"]
 
 [dependencies]
+kaia-luadata = { path = "../kaia-luadata" }
 kaia-calibre = { path = "../kaia-calibre" }
 # Local time of day, for the natural light schedule.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

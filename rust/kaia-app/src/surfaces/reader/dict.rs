@@ -41,9 +41,12 @@ pub fn load(services: &mut Services) {
 }
 
 /// The folders searched for dictionaries, in order: Kaia's, then KOReader's.
-fn folders(services: &Services) -> [PathBuf; 2] {
+fn folders(services: &Services) -> [PathBuf; 3] {
     [
         services.paths.data_dir.join("dict"),
+        crate::lua_import::find(&services.paths)
+            .unwrap_or_else(|| services.paths.data_dir.clone())
+            .join("data/dict"),
         services.paths.books_dir.join(".adds/koreader/data/dict"),
     ]
 }
@@ -51,15 +54,14 @@ fn folders(services: &Services) -> [PathBuf; 2] {
 /// The folder the loaded dictionaries come from, or Kaia's folder when none are
 /// loaded. Call [`load`] first.
 pub fn folder(services: &Services) -> PathBuf {
-    let [kaia, koreader] = folders(services);
+    let folders = folders(services);
     let first = services
         .dictionary
         .as_ref()
         .and_then(|lib| lib.dictionaries().first().map(|d| d.path().to_path_buf()));
-    match first {
-        Some(path) if path.starts_with(&koreader) => koreader,
-        _ => kaia,
-    }
+    first
+        .and_then(|path| folders.iter().find(|folder| path.starts_with(folder)).cloned())
+        .unwrap_or_else(|| folders[0].clone())
 }
 
 /// The names of the installed dictionaries, in the order the settings give.

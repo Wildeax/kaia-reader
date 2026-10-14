@@ -136,6 +136,9 @@ impl Services {
                 )
             })
             .collect();
+        if let Some(intensity) = settings.read("display.frontlight").as_i64() {
+            let _ = platform.frontlight.set_intensity(intensity.clamp(0, 100) as u8);
+        }
         if let Some(warmth) = settings.read("display.warmth").as_i64() {
             let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
         }

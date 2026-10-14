@@ -895,6 +895,7 @@ dependencies = [
  "kaia-input",
  "kaia-library",
  "kaia-lua",
+ "kaia-luadata",
  "kaia-mupdf-sys",
  "kaia-opds",
  "kaia-platform",

@@ -591,6 +591,13 @@ fn data(services: &Services) -> Vec<Entry> {
             });
         }
     }
+    if crate::lua_import::find(&services.paths).is_some() {
+        out.push(Entry::Button {
+            key: "settings-import-lua",
+            label: tr("Import from Kaia (Lua app)"),
+            action: "settings:data:lua".into(),
+        });
+    }
     if facts::kobo_database(&services.paths).is_some() {
         out.push(Entry::Button {
             key: "settings-import-kobo",

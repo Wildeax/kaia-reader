@@ -91,6 +91,169 @@ Mail and contacts caches are not read. The importer never writes Nickel files
 or KOReader sidecars. Scratch copies, which can contain those tables as raw
 SQLite pages, are removed when planning ends.
 
+## Import from the Kaia Lua app
+
+Settings, Data offers "Import from Kaia (Lua app)" when it finds Lua data.
+The first screen shows counts. Import applies that preview, Cancel discards it,
+and the report lists imported and skipped counts for each kind. Unsupported
+annotation shapes appear as skipped "Other annotations" when present.
+
+### Source paths
+
+`frontend/kaia/identity.lua` names the Lua profile `kaia`.
+`datastorage.lua` chooses its root in this order:
+
+- `KO_HOME`, when set, overrides the platform paths.
+- On Kobo, the launcher starts in `/mnt/onboard/.adds/kaia`, so the default
+  data root `.` is the install folder.
+- Desktop multiuser, AppImage and Flatpak builds use `$XDG_CONFIG_HOME/kaia`,
+  or `~/.config/kaia` on Linux, or `~/Library/Application Support/kaia` on
+  macOS. A desktop emulator without those modes uses its working directory.
+
+The importer searches the override, the Kobo install under the books folder,
+the desktop profile folders, the Rust install folder and the working directory.
+A Lua profile in another emulator folder can be selected with `KO_HOME` when
+starting Rust. It does not search stock KOReader folders for Kaia data.
+
+| Lua data | Path relative to the Lua data root | Rust owner and destination |
+|---|---|---|
+| App settings | `settings.reader.lua` | Selected keys in `settings.json` |
+| History | `history.lua` | `kaia-library`, `library.sqlite3` |
+| Collections | `settings/collection.lua` | `kaia-library`, `library.sqlite3` |
+| Position, layout, highlights, notes, bookmarks, status and rating | `docsettings/<absolute book path without its leading slash or extension>.sdr/metadata.<ext>.lua` | `kaia-book`, `kaia/books/<partial_md5>.json` |
+| Hash sidecars, when selected | `hashdocsettings/<first two hash characters>/<hash>.sdr/metadata.<ext>.lua` | Same book state owner |
+| Legacy book sidecars | `history/[<directory with slashes replaced by #>] <filename>.lua` | Same book state owner |
+| Reading statistics | `settings/statistics.sqlite3` | `kaia-stats`, `statistics.sqlite3` |
+| Stickers and saved dictionary words | `kaia/kaia.sqlite3` | `kaia-storage`, `kaia/kaia.sqlite3` |
+| Sticker images | `kaia/assets/<sha256>.<ext>` | `kaia-storage`, `kaia/assets/` |
+| Supported plugin settings | Selected tables in `settings.reader.lua` and files in `settings/` | Rust's Lua host data folder, as listed below |
+
+`frontend/kaia/defaults.lua` sets `document_metadata_folder = "dir"`.
+The import uses the Lua profile's docsettings, hashdocsettings and legacy history
+folders. It does not fall back to a stock KOReader sidecar beside a book.
+Paths from history, collections, the current library and the docsettings tree
+identify books. Hash and legacy sidecars need a book in history, collections or
+the library. Book files must still exist at their stored paths.
+
+The Kobo stores are separate. Lua's store is
+`/mnt/onboard/.adds/kaia/kaia/kaia.sqlite3`; Rust's store is
+`/mnt/onboard/.kaia/kaia/kaia.sqlite3`. On desktop, Rust uses
+`$XDG_DATA_HOME/kaia`, `~/.local/share/kaia` on Linux, or
+`~/Library/Application Support/kaia` on macOS. The macOS profiles can therefore
+share a store. When canonical database paths match, the importer reports the
+stickers, assets and words as skipped and never opens that source store for writing.
+
+### Settings mapping
+
+Existing Rust keys win. Only valid values with a Rust consumer import.
+Numeric values clamp to the bounds below. Sidecar layout continues to use the
+existing `kaia-book` mapping and takes priority for that book.
+
+| Lua key | Rust key | Conversion |
+|---|---|---|
+| `cre_font` | `reading.font_family` | Nonempty family name |
+| `copt_font_size` | `reading.font_size` | 12 to 40 KOReader units |
+| `copt_h_page_margins[1]` | `reading.margin_left` | 0 to 140 KOReader units |
+| `copt_h_page_margins[2]` | `reading.margin_right` | 0 to 140 KOReader units |
+| `copt_t_page_margin` | `reading.margin_top` | 0 to 140 KOReader units |
+| `copt_b_page_margin` | `reading.margin_bottom` | 0 to 140 KOReader units |
+| `copt_line_spacing` | `reading.line_spacing` | Clamp to 50 to 300, divide by 100 |
+| `full_refresh_count` | `reading.full_refresh_pages` | 0 to 10, zero uses Rust's chapter refresh rule |
+| `frontlight_intensity` | `display.frontlight` | 0 to 100, restored at startup |
+| `frontlight_warmth` | `display.warmth` | 0 to 100, restored at startup |
+| `input_invert_page_turn_keys` | `reading.invert_page_buttons` | Boolean |
+| `highlight_drawing_style` | `reading.highlight_drawer` | `lighten`, `underscore`, `strikeout` or `invert` |
+| `highlight_color` | `reading.highlight_color` | A color in `kaia-book::HIGHLIGHT_COLORS` |
+| `dicts_order` | `dictionary.order` | Sort by numeric rank, resolve `.ifo` paths to StarDict book names |
+
+The reader scales imported font and margin units to the screen width. Dictionary
+order resolves dictionaries present under the Lua root's `data/dict`. Rust can
+read that dictionary folder without copying or writing it. Unknown settings,
+invalid values and dictionary entries without installed files do not become Rust
+keys. The preview counts the mapped values, not every Lua setting.
+
+### Supported plugin data
+
+The Lua host receives these keys in its own `settings.reader.lua`. They retain
+their Lua names and do not enter the native `settings.json` mapping:
+
+- `statistics`, `readtimer`, `exporter`, `vocabulary_builder`, `httpinspector`
+- `autoturn_timeout_seconds`, `autoturn_distance`, `profiles_autoexec`
+- `calibre_wireless_url`, `calibre_wireless_password`,
+  `calibre_wireless_default_format`, `inbox_dir`
+- `language_japanese_text_scan_length`, `language_japanese_text_conversions`
+
+Missing keys are added; existing keys win. A shared source settings file is left
+alone. The importer also copies these files when the destination has no file:
+
+- `calibre-extensions.lua`
+- `settings/battery_stats.lua`, `settings/bookshortcuts.lua`
+- `settings/cloudstorage.lua`, `settings/directory_defaults.lua`
+- `settings/gestures.lua`, `settings/multiswipes.lua`
+- `settings/kosync.lua`, `settings/kosync_queue.lua`
+- `settings/move_to_archive_settings.lua`, `settings/news_settings.lua`
+- `settings/opds.lua`, `settings/perception_expander.lua`
+- `settings/profiles.lua`, `settings/text_editor.lua`
+- `settings/vocabulary_builder.sqlite3`
+- `settings/wallabag.lua`
+
+Lua files must parse as data tables before confirmation. Statistics page records
+use the native statistics importer. Saved dictionary words keep their spelling,
+book, context, time and dictionary suffix in `kaia-storage`. Plugin data counts
+one per settings key or file. Plugin code, arbitrary plugin files, caches and
+credentials outside those supported settings are not copied. Imported plugin
+settings take effect after a restart; the import does not enable plugins. The
+legacy append log `settings/lookup_history.lua` is not a Lua-table file and is
+not imported. Opening it in the Lua app first migrates its words into the
+supported vocabulary database.
+
+### Read and duplicate rules
+
+Planning copies source data to a private temporary directory. SQLite databases
+include adjacent WAL and SHM files. Only the copies are opened and checkpointed.
+The plan runs the existing importers against temporary empty owners to count
+records, then retains the same source snapshot until Import or Cancel. Neither
+planning nor confirmation opens a source database with SQLite. Close the Lua app
+before planning so multiple copied files describe the same saved session.
+
+History and collections reuse `kaia-library`'s KOReader import. Statistics reuse
+`Stats::import_koreader`. Book state reuses the sidecar candidate lookup, parser,
+annotation mapping and atomic state writer in `kaia-book`. Stickers and assets
+use the existing `Store::export` on the private copy and `Store::import` on the
+destination, including hash and image checks.
+
+- History matches a canonical book path and open timestamp. Missing files and
+  unsupported formats are skipped. Existing last-opened times only move forward.
+- Collections match names without case and add missing book memberships. Counts
+  describe memberships, not collection names. Empty named collections still import.
+- Book state imports only when neither its JSON file nor its backup exists.
+  Repeats preserve later progress, annotation edits and annotation deletions.
+  Import holds the normal closed-book lease and checks the file identity again.
+  A new state also updates derived library status and progress without a new visit.
+- Statistics match books by title, author and MD5, and page records by book, page
+  and start time. Existing page durations win.
+- Stickers match their UUIDs. Assets match their content hashes. Existing stickers
+  and assets win, following the sticker transfer format's rules.
+- Saved words match the SQLite case-insensitive spelling key. Existing context,
+  timestamps and dictionary suffixes win.
+- Settings fill missing Rust keys and keep a `lua_import.<key>` marker. Deleting
+  an imported setting does not make the next import restore it.
+- Plugin keys and files fill missing destinations only. Repeating the same
+  import adds no keys or files. Existing plugin edits win.
+
+The import refuses target symbolic links and shares the library scan lock with
+the Kobo importer. Each owner commits independently. A failure can leave some
+owners imported; retry fills the rest under these duplicate rules. No source
+file is removed or renamed. Source-file bytes and modification times, including
+live WAL files, are covered by the fixture tests. Shared desktop stores and the
+headless preview, cancel and report screens have separate tests.
+
+Device checks still need to confirm source discovery in the shipped Kobo package,
+CREngine positions and annotation anchors from real Lua sidecars, font availability,
+frontlight and warmth values, page key inversion, dictionary order, and plugin
+settings after restart. The preview copies assets and uses temporary databases;
+measure free-space needs and import time on a device-sized library.
+
 ## Location
 
 The store lives in `<DataStorage:getDataDir()>/kaia/`:
