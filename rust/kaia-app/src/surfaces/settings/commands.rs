@@ -234,6 +234,7 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::DEVICE_PAGE_BUTTON_WAKE
                 | keys::DEVICE_POWER_OFF_MINUTES
                 | keys::SYNC_ENABLED
+                | keys::SYNC_AUTO
                 | keys::SYNC_INVALID_CERTS
                 | keys::SYNC_FORWARD
                 | keys::SYNC_BACKWARD

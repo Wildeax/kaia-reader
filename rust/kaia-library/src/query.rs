@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rusqlite::functions::FunctionFlags;
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row, TransactionBehavior};
 use unicode_normalization::char::is_combining_mark;
@@ -220,27 +221,25 @@ impl Library {
             return Ok(Vec::new());
         }
         let phrase = normalize(query);
-        // Same text as `phrase` without the accent folding, which SQLite cannot do.
-        let sql_phrase = collapse(query).to_ascii_lowercase();
         let expr = words
             .iter()
             .map(|w| format!("{{title authors series}} : \"{w}\"*"))
             .collect::<Vec<_>>()
             .join(" ");
-        // The SQL order only picks the candidates. Its prefix test uses SQLite
-        // lower(), which ignores accents, so an accented prefix can miss the cut
-        // when more than SUGGEST_CANDIDATES books match.
+        // The SQL order only picks the candidates. Its prefix test folds each
+        // field with `kaia_normalize`, the SQL form of `normalize`, so an
+        // accented prefix is a candidate like any other.
         let sql = format!(
             "SELECT {} FROM book_fts JOIN books ON books.id = book_fts.rowid
              WHERE book_fts MATCH ?1 AND books.missing_since IS NULL
-             ORDER BY (substr(lower(COALESCE(books.title, '')), 1, length(?2)) = ?2
-                       OR substr(lower(COALESCE(books.authors, '')), 1, length(?2)) = ?2
-                       OR substr(lower(COALESCE(books.series, '')), 1, length(?2)) = ?2) DESC,
+             ORDER BY (substr(kaia_normalize(COALESCE(books.title, '')), 1, length(?2)) = ?2
+                       OR substr(kaia_normalize(COALESCE(books.authors, '')), 1, length(?2)) = ?2
+                       OR substr(kaia_normalize(COALESCE(books.series, '')), 1, length(?2)) = ?2) DESC,
                       books.last_opened_at DESC, books.id
              LIMIT ?3",
             cols("books.")
         );
-        let books = self.query_books(&sql, params![expr, sql_phrase, SUGGEST_CANDIDATES as i64])?;
+        let books = self.query_books(&sql, params![expr, phrase, SUGGEST_CANDIDATES as i64])?;
         Ok(rank_suggestions(&books, &phrase, &words, limit))
     }
 
@@ -879,6 +878,20 @@ fn normalize(text: &str) -> String {
     fold(&collapse(text))
 }
 
+/// Registers `kaia_normalize` on `conn`, the SQL form of [`normalize`]. The
+/// suggestion query uses it, so SQL and Rust compare the same text.
+pub(crate) fn register_sql_functions(conn: &Connection) -> rusqlite::Result<()> {
+    conn.create_scalar_function(
+        "kaia_normalize",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let text: String = ctx.get(0)?;
+            Ok(normalize(&text))
+        },
+    )
+}
+
 /// Lower case, with the marks of Latin letters removed: "Canción" is "cancion"
 /// and "ñ" is "n". This is the fold of the unicode61 tokenizer behind the index,
 /// which covers Latin letters only. The letters of other scripts keep their
@@ -1017,6 +1030,18 @@ mod tests {
         assert_eq!(fts_query("\" OR * ").as_deref(), Some("\"OR\"*"));
         assert_eq!(fts_query(" -- ** "), None);
         assert_eq!(fts_query(""), None);
+    }
+
+    #[test]
+    fn sql_normalize_is_the_rust_normalize() {
+        let conn = Connection::open_in_memory().unwrap();
+        register_sql_functions(&conn).unwrap();
+        for text in ["Café  crème", " Dune\tMessiah ", "Οδύσσεια", "がっこう", ""] {
+            let sql: String = conn
+                .query_row("SELECT kaia_normalize(?1)", [text], |r| r.get(0))
+                .unwrap();
+            assert_eq!(sql, normalize(text), "for {text:?}");
+        }
     }
 
     #[test]

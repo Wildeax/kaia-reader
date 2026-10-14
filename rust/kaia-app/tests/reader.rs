@@ -1000,6 +1000,7 @@ fn remote_progress_uses_the_selected_strategy_and_waits_for_confirmation() {
     app.services_mut()
         .settings
         .save("sync.enabled", Value::Bool(true));
+    app.services_mut().settings.save("sync.auto", Value::Bool(true));
     let remote = Event::with_args(
         "SyncProgress",
         vec![

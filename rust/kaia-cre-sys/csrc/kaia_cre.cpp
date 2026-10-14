@@ -6,6 +6,7 @@
 
 #include "kaia_cre.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -664,6 +665,81 @@ void kaia_cre_free_link_boxes(kaia_cre_link_box *boxes, size_t count) {
         std::free(boxes[i].note);
     }
     std::free(boxes);
+}
+
+namespace {
+
+// Sums the area of the image elements in a range that lie inside the page box.
+class ImageArea : public ldomNodeCallback {
+public:
+    ImageArea(int top, int bottom, int right) : top_(top), bottom_(bottom), right_(right) {}
+    double area() const { return area_; }
+    void onText(ldomXRange *) override {}
+    bool onElement(ldomXPointerEx *ptr) override {
+        ldomNode *node = ptr->getNode();
+        if (!node) {
+            return true;
+        }
+        // The same element names as CREngine's own image count.
+        lString32 name = node->getNodeName();
+        if (name != "img" && name != "image") {
+            return true;
+        }
+        // The element's own rect. getAbsRect has no box for an image, so the
+        // pointer to its first position gives the drawn box.
+        lvRect rc;
+        if (!ldomXPointer(node, 0).getRectEx(rc)) {
+            return true;
+        }
+        int x0 = std::max(rc.left, 0);
+        int x1 = std::min(rc.right, right_);
+        int y0 = std::max(rc.top, top_);
+        int y1 = std::min(rc.bottom, bottom_);
+        if (x1 > x0 && y1 > y0) {
+            area_ += static_cast<double>(x1 - x0) * static_cast<double>(y1 - y0);
+        }
+        return true;
+    }
+
+private:
+    int top_;
+    int bottom_;
+    int right_;
+    double area_ = 0.0;
+};
+
+}  // namespace
+
+int kaia_cre_page_image_share(kaia_cre_doc *doc, float *out) {
+    return guard([&]() -> int {
+        if (!out) {
+            fail("null output");
+        }
+        *out = 0.0f;
+        LVDocView *view = view_of(doc);
+        view->Render();
+        // The page box is only known in paged mode with one visible page.
+        if (view->getViewMode() != DVM_PAGES || view->getVisiblePageCount() != 1) {
+            return KAIA_CRE_NOT_FOUND;
+        }
+        int width = view->GetWidth();
+        int height = view->GetHeight();
+        int page = view->getCurPage(true);
+        if (width <= 0 || height <= 0 || page < 0) {
+            return KAIA_CRE_NOT_FOUND;
+        }
+        // Document y of the page box. Images are measured in document units.
+        int top = view->getPageStartY(page);
+        int bottom = top + view->getPageHeight(page);
+        ImageArea counter(top, bottom, width);
+        LVRef<ldomXRange> range = view->getPageDocumentRange(-1);
+        if (!range.isNull()) {
+            range->forEach(&counter);
+        }
+        double share = counter.area() / (static_cast<double>(width) * static_cast<double>(height));
+        *out = static_cast<float>(std::min(share, 1.0));
+        return KAIA_CRE_OK;
+    });
 }
 
 int kaia_cre_toc(kaia_cre_doc *doc, kaia_cre_toc_entry **out, size_t *count) {

@@ -307,3 +307,189 @@ fn indexed_books_are_read_and_replaced_and_unindexed_files_are_not() {
     assert_eq!(fs::read(root.join("Loose.dat")).unwrap(), b"not indexed");
     fs::remove_dir_all(dir).unwrap();
 }
+
+/// Waits for the worker to finish. Returns its result, and the session summary
+/// when the worker sent one.
+fn finish_with_summary(worker: &Worker) -> (Result<(), String>, Option<String>) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut summary = None;
+    loop {
+        assert!(Instant::now() < deadline, "worker did not finish");
+        match worker.next() {
+            Some(Reply::Summary(text)) => summary = Some(text),
+            Some(Reply::Finished(result)) => return (result, summary),
+            Some(_) => {}
+            None => thread::sleep(Duration::from_millis(10)),
+        }
+    }
+}
+
+/// A delete batch with one file that is already gone. The others are removed
+/// from the library, and so is the row of the missing file. The cache loses every
+/// name, so none of the three comes back in the next session.
+#[test]
+fn delete_batch_with_a_missing_file_removes_the_library_rows() {
+    let dir = scratch("calibre-policy-delete-missing");
+    // The library stores canonical paths. A temporary folder under a link would not match.
+    let root = fs::canonicalize(&dir).unwrap().join("downloads");
+    fs::create_dir_all(root.join("Author")).unwrap();
+    let database = dir.join("library.sqlite3");
+    let juliet = fs::read(repo_root().join("test/juliet.epub")).unwrap();
+    for name in ["A", "B", "C"] {
+        fs::write(root.join(format!("Author/{name}.epub")), &juliet).unwrap();
+    }
+    fs::write(
+        root.join("metadata.calibre"),
+        r#"[{"uuid":"a","lpath":"Author/A.epub"},{"uuid":"b","lpath":"Author/B.epub"},{"uuid":"c","lpath":"Author/C.epub"}]"#,
+    )
+    .unwrap();
+    let mut library = Library::open(&database).unwrap();
+    library
+        .scan(std::slice::from_ref(&root), |_| {}, &AtomicBool::new(false))
+        .unwrap();
+    drop(library);
+    let library = Library::open(&database).unwrap();
+    for name in ["A", "B", "C"] {
+        let path = fs::canonicalize(root.join(format!("Author/{name}.epub"))).unwrap();
+        assert!(
+            library.book_by_path(&path).unwrap().is_some(),
+            "{name} is indexed"
+        );
+    }
+    drop(library);
+    // B is gone before the server asks for it.
+    fs::remove_file(root.join("Author/B.epub")).unwrap();
+
+    let (worker, peer) = calibre_server(&root, &database, |stream| {
+        send(
+            stream,
+            13,
+            r#"{"lpaths":["Author/A.epub","Author/B.epub","Author/C.epub"]}"#,
+        );
+        assert_eq!(reply(stream).0, 0, "the batch is acknowledged");
+        for uuid in ["a", "b", "c"] {
+            let (op, text) = reply(stream);
+            assert_eq!(op, 0, "{uuid} gets an OK");
+            assert!(text.contains(&format!("\"uuid\":\"{uuid}\"")), "{text}");
+        }
+        send(stream, 12, r#"{"ejecting":true}"#);
+        assert_eq!(reply(stream).0, 0);
+    });
+    let (result, summary) = finish_with_summary(&worker);
+    assert!(result.is_ok(), "the session went on: {result:?}");
+    assert_eq!(summary, None, "nothing failed, so there is no summary");
+    peer.join().unwrap();
+
+    assert!(!root.join("Author/A.epub").exists());
+    assert!(!root.join("Author/C.epub").exists());
+    let library = Library::open(&database).unwrap();
+    for name in ["A", "B", "C"] {
+        let path = root.join(format!("Author/{name}.epub"));
+        assert!(
+            library.book_by_path(&path).unwrap().is_none(),
+            "{name} has no library row"
+        );
+    }
+    assert!(kaia_calibre::read_metadata_cache(&root).unwrap().is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+/// A received book that the library cannot index is kept on disk, and the session
+/// goes on to the next book. The problem is the session summary, and the next
+/// book is indexed.
+#[test]
+fn an_index_failure_keeps_the_calibre_session_going() {
+    let dir = scratch("calibre-policy-index-failure");
+    let root = fs::canonicalize(&dir).unwrap().join("downloads");
+    let database = dir.join("library.sqlite3");
+    let juliet = fs::read(repo_root().join("test/juliet.epub")).unwrap();
+    let book_length = juliet.len();
+    let (worker, peer) = calibre_server(&root, &database, move |stream| {
+        // An empty text file is a book that the library does not index.
+        send(
+            stream,
+            8,
+            r#"{"lpath":"Odd/Empty.txt","length":0,"metadata":{"lpath":"Odd/Empty.txt","uuid":"empty"}}"#,
+        );
+        assert_eq!(reply(stream).0, 0, "the empty book is acknowledged");
+        send(
+            stream,
+            8,
+            &format!(
+                r#"{{"lpath":"Author/Juliet.epub","length":{book_length},"metadata":{{"lpath":"Author/Juliet.epub","uuid":"juliet"}}}}"#
+            ),
+        );
+        assert_eq!(reply(stream).0, 0, "the next book is acknowledged");
+        stream.write_all(&juliet).unwrap();
+        send(stream, 12, r#"{"ejecting":true}"#);
+        assert_eq!(reply(stream).0, 0);
+    });
+    let (result, summary) = finish_with_summary(&worker);
+    assert!(result.is_ok(), "the session went on: {result:?}");
+    assert_eq!(
+        summary.as_deref(),
+        Some("The book format is not supported."),
+        "the index problem is the session summary"
+    );
+    peer.join().unwrap();
+
+    assert_eq!(
+        fs::read(root.join("Odd/Empty.txt")).unwrap(),
+        b"",
+        "the file stays"
+    );
+    let library = Library::open(&database).unwrap();
+    assert!(library
+        .book_by_path(&fs::canonicalize(root.join("Author/Juliet.epub")).unwrap())
+        .unwrap()
+        .is_some());
+    assert_eq!(kaia_calibre::read_metadata_cache(&root).unwrap().len(), 2);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+/// A listed book that the app cannot delete keeps its place in the list, the other
+/// book in the batch is still deleted, and the session summary says what failed.
+/// The listed name here is a folder, which the delete rules refuse.
+#[test]
+fn a_book_that_cannot_be_deleted_stays_and_the_summary_says_so() {
+    let dir = scratch("calibre-policy-delete-refused");
+    let root = fs::canonicalize(&dir).unwrap().join("downloads");
+    fs::create_dir_all(root.join("Author/Folder.epub")).unwrap();
+    fs::write(root.join("Author/Gone.epub"), b"book").unwrap();
+    let database = dir.join("library.sqlite3");
+    fs::write(
+        root.join("metadata.calibre"),
+        r#"[{"uuid":"folder","lpath":"Author/Folder.epub"},{"uuid":"gone","lpath":"Author/Gone.epub"}]"#,
+    )
+    .unwrap();
+    let (worker, peer) = calibre_server(&root, &database, |stream| {
+        send(
+            stream,
+            13,
+            r#"{"lpaths":["Author/Folder.epub","Author/Gone.epub"]}"#,
+        );
+        assert_eq!(reply(stream).0, 0, "the batch is acknowledged");
+        // Both names get an OK with their uuid, as KOReader sends them. No ERROR.
+        for uuid in ["folder", "gone"] {
+            let (op, text) = reply(stream);
+            assert_eq!(op, 0, "{uuid} gets an OK, not an error");
+            assert!(text.contains(&format!("\"uuid\":\"{uuid}\"")), "{text}");
+        }
+        send(stream, 12, r#"{"ejecting":true}"#);
+        assert_eq!(reply(stream).0, 0);
+    });
+    let (result, summary) = finish_with_summary(&worker);
+    assert!(result.is_ok(), "the session went on: {result:?}");
+    assert_eq!(
+        summary.as_deref(),
+        Some("Cannot delete this book. It stays on the device.")
+    );
+    peer.join().unwrap();
+
+    assert!(!root.join("Author/Gone.epub").exists());
+    assert!(root.join("Author/Folder.epub").is_dir(), "the folder stays");
+    let listed = kaia_calibre::read_metadata_cache(&root).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0]["lpath"], "Author/Folder.epub");
+    fs::remove_dir_all(dir).unwrap();
+}

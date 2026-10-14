@@ -3,8 +3,11 @@
 mod support;
 
 use std::fs;
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use kaia_opds::{parse_feed, Acquisition, Catalog, Client, Error, FeedKind};
@@ -279,7 +282,7 @@ fn a_feed_without_search_says_so() {
 }
 
 #[test]
-fn download_writes_the_suggested_name_and_removes_the_partial_file() {
+fn download_writes_the_suggested_name() {
     let payload: &'static [u8] = b"EPUB-BYTES";
     let server = Server::start(vec![(
         "/files/book.epub",
@@ -313,6 +316,85 @@ fn download_writes_the_suggested_name_and_removes_the_partial_file() {
     assert_eq!(
         calls.last(),
         Some(&(payload.len() as u64, Some(payload.len() as u64)))
+    );
+}
+
+/// Serves `head`, then `body`, then closes the connection. A `Content-Length` in
+/// `head` that is larger than `body` makes the body end early.
+fn cut_off_server(head: &'static str, body: &'static [u8]) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+    let base = format!("http://{}", listener.local_addr().expect("local address"));
+    thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        // Read the request head, so the client has finished sending before the reply.
+        let mut request = Vec::new();
+        let mut byte = [0u8; 1];
+        while !request.ends_with(b"\r\n\r\n") {
+            if stream.read(&mut byte).unwrap_or(0) == 0 {
+                return;
+            }
+            request.push(byte[0]);
+        }
+        let _ = stream.write_all(head.as_bytes());
+        let _ = stream.write_all(body);
+    });
+    base
+}
+
+fn epub_at(url: String) -> Acquisition {
+    Acquisition {
+        url,
+        mime: Some("application/epub+zip".to_owned()),
+        title: None,
+        size: None,
+        indirect: false,
+        book_name: "Book".to_owned(),
+    }
+}
+
+#[test]
+fn a_failed_body_leaves_no_partial_file() {
+    let scratch = Scratch::new("partial");
+    let cancel = AtomicBool::new(false);
+    let client = Client::anonymous().with_max_download(100);
+
+    // The server promises 1000 bytes, sends 9 and closes. The download is an error.
+    let short = cut_off_server(
+        "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n",
+        b"EPUB-PART",
+    );
+    let result = client.download_as(
+        &epub_at(format!("{short}/short.epub")),
+        scratch.path(),
+        Some("short.epub"),
+        |_, _| {},
+        &cancel,
+    );
+    assert!(result.is_err(), "a short body is not saved as a book");
+    assert!(
+        scratch.file_names().is_empty(),
+        "no partial file after a short body: {:?}",
+        scratch.file_names()
+    );
+
+    // No length is given, so the 100 byte limit is passed in the middle of the body.
+    let long = cut_off_server("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n", &[7u8; 200]);
+    assert_eq!(
+        client.download_as(
+            &epub_at(format!("{long}/long.epub")),
+            scratch.path(),
+            Some("long.epub"),
+            |_, _| {},
+            &cancel,
+        ),
+        Err(Error::TooLarge { limit: 100 })
+    );
+    assert!(
+        scratch.file_names().is_empty(),
+        "no partial file after the limit: {:?}",
+        scratch.file_names()
     );
 }
 

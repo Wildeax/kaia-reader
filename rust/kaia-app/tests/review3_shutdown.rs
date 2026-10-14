@@ -127,6 +127,8 @@ fn open_with_pending_update(app: &mut App<Scripted>) -> String {
     app.services_mut()
         .settings
         .save("sync.enabled", Value::Bool(true));
+    // Pushes follow the automatic sync switch, as KOReader's do.
+    app.services_mut().settings.save("sync.auto", Value::Bool(true));
     app.broadcast_app(Event::new("SaveState"));
     let md5 = app.services().library.book(id).unwrap().unwrap().partial_md5;
     assert!(

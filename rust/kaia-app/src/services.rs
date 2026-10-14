@@ -190,6 +190,8 @@ impl Services {
             .shared();
 
         let paths = platform.paths.clone();
+        // Sync sends the device model, as KOReader does, so other devices can tell this one apart.
+        let sync = crate::sync::ProgressSync::for_device(&platform.kind, &platform.device);
         let mut services = Services {
             _lease: lease,
             #[cfg(feature = "lua")]
@@ -197,7 +199,7 @@ impl Services {
             startup_notices,
             platform,
             clipboard: None,
-            sync: crate::sync::ProgressSync::default(),
+            sync,
             dictionary: None,
             settings,
             library,

@@ -373,6 +373,15 @@ impl CreDocument {
         doc.char_boxes(start, end).map_err(engine_err)
     }
 
+    /// The share of a page covered by images, from 0 to 1, measured against the
+    /// view of the current layout. None when CREngine cannot measure it.
+    pub fn image_share(&self, page: u32) -> Result<Option<f32>> {
+        self.check_page(page)?;
+        let mut doc = self.doc_mut()?;
+        doc.goto_page(page).map_err(engine_err)?;
+        doc.page_image_share().map_err(engine_err)
+    }
+
     /// The cover image bytes as stored in the book, or None when it has none.
     pub fn cover_bytes(&self) -> Result<Option<Vec<u8>>> {
         self.doc_mut()?.cover_bytes().map_err(engine_err)

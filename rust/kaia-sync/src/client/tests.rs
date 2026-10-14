@@ -119,7 +119,7 @@ fn default_timeouts_match_the_plugin() {
 }
 
 #[test]
-fn options_verify_certificates_and_keep_koreader_status_handling() {
+fn sync_options_default_to_verified_certificates_and_no_202() {
     let options = SyncOptions::default();
     assert!(!options.accept_invalid_certs);
     assert!(!options.accept_202);

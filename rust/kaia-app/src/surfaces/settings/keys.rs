@@ -33,6 +33,7 @@
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `library.layout` | string | `covers` | Layout of the Books tab: `covers` or `list`. Kept between runs, also while another tab is open. |
+//! | `sync.auto` | bool | false | Automatic sync: a book pulls the remote position when it opens and when reading resumes. Off means no pull on open or resume. KOReader's "Automatically keep documents in sync". |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
 //! | `sync.username` | string | empty | Progress sync account name. |
 //! | `sync.userkey` | string | empty | MD5 hex of the progress sync password, the key KOReader stores. The password itself is never stored. |
@@ -49,7 +50,7 @@
 //!
 //! `display.warmth` stores the last warmth value and restores it at startup.
 //! The platform holds the current frontlight intensity and Wi-Fi state.
-//! `sync.enabled` defaults to false. `sync.accept_invalid_certs` defaults to false.
+//! `sync.enabled` defaults to false. `sync.auto` defaults to false. `sync.accept_invalid_certs` defaults to false.
 //! `sync.forward` defaults to `prompt`; `sync.backward` defaults to `never`.
 //!
 //! Text fields save as the user types, and the Settings surface flushes the file
@@ -102,6 +103,8 @@ pub const DISPLAY_ROTATION_LOCK: &str = "display.rotation_lock";
 pub const LIBRARY_FOLDERS: &str = "library.folders";
 pub const LIBRARY_SHOW_FINISHED: &str = "library.show_finished";
 pub const SYNC_ENABLED: &str = "sync.enabled";
+/// Pull on open and resume. See the table above.
+pub const SYNC_AUTO: &str = "sync.auto";
 pub const SYNC_INVALID_CERTS: &str = "sync.accept_invalid_certs";
 pub const SYNC_FORWARD: &str = "sync.forward";
 pub const SYNC_BACKWARD: &str = "sync.backward";

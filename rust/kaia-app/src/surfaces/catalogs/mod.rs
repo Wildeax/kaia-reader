@@ -77,6 +77,8 @@ pub struct CatalogSurface {
     /// The folder that holds the metadata file: the downloads folder.
     cache_root: PathBuf,
     calibre_query: String,
+    /// The last problem in the Calibre session, shown when the session ends.
+    summary: Option<String>,
 }
 
 impl Default for CatalogSurface {
@@ -107,6 +109,7 @@ impl CatalogSurface {
             cache: Cache::default(),
             cache_root: PathBuf::new(),
             calibre_query: String::new(),
+            summary: None,
         }
     }
     pub fn calibre() -> Self {
@@ -141,6 +144,7 @@ impl CatalogSurface {
 
     fn start(&mut self, request: Request, wifi: bool, env: &mut SurfaceEnv<'_>) {
         self.status = tr("Starting...");
+        self.summary = None;
         self.connection = matches!(request, Request::Connect { .. });
         self.worker = Some(Worker::start(
             request,
@@ -273,23 +277,26 @@ impl Surface for CatalogSurface {
                     self.book = Some(id);
                     changed = true;
                 }
+                Reply::Summary(problem) => self.summary = Some(problem),
                 Reply::Finished(result) => {
                     self.worker = None;
                     // A transfer may have rewritten the metadata file.
                     if matches!(self.view, View::Calibre) {
                         self.reload_cache();
                     }
-                    self.status = match result {
-                        Err(message) => worker_text(&message),
-                        Ok(()) if self.book.is_some() => tr("Book saved to the library."),
-                        Ok(()) if matches!(self.view, View::Calibre) => {
+                    self.status = match (result, self.summary.take()) {
+                        (Err(message), _) => worker_text(&message),
+                        // A session that went on past a problem ends by showing it.
+                        (Ok(()), Some(problem)) => worker_text(&problem),
+                        (Ok(()), None) if self.book.is_some() => tr("Book saved to the library."),
+                        (Ok(()), None) if matches!(self.view, View::Calibre) => {
                             if self.servers.is_empty() {
                                 tr("No active connection. Use a manual address or discover servers.")
                             } else {
                                 tr("Choose a server to connect.")
                             }
                         }
-                        Ok(()) => String::new(),
+                        (Ok(()), None) => String::new(),
                     };
                     self.pending = None;
                     changed = true;

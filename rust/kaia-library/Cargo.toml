@@ -20,7 +20,7 @@ kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 md-5 = "0.11"
 roxmltree = "0.21"
-rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup", "functions"] }
 thiserror = "2"
 # Folds Latin accents for suggestions, as the FTS5 unicode61 tokenizer does.
 unicode-normalization = "0.1"

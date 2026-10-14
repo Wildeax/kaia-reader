@@ -197,9 +197,23 @@ impl Default for DeviceInfo {
 
 #[derive(Debug, PartialEq)]
 pub enum Event {
-    BookReceived { path: PathBuf, metadata: Value },
-    BookDeleted { path: PathBuf },
-    Message { text: String, kind: Option<u64> },
+    BookReceived {
+        path: PathBuf,
+        metadata: Value,
+    },
+    BookDeleted {
+        path: PathBuf,
+    },
+    /// The server asked to delete a book, and its file could not be removed. The
+    /// book stays in the list and in the library. Sent after the batch's deletes.
+    DeleteFailed {
+        lpath: String,
+        error: io::ErrorKind,
+    },
+    Message {
+        text: String,
+        kind: Option<u64>,
+    },
     Disconnected,
     None,
 }
@@ -387,6 +401,11 @@ impl<S: Storage> Connection<S> {
         Ok(Event::BookReceived { path, metadata })
     }
 
+    /// Deletes the books that the server names, and the batch goes on past a failure.
+    /// A book whose file is already gone counts as deleted. A file that cannot be
+    /// removed stays in the list and is reported after the other deletes. As in
+    /// KOReader's `deleteBook`, every name gets an OK with its uuid, so a failed
+    /// delete does not send an error to the server.
     fn delete_books(&mut self, arg: &Value) -> io::Result<Event> {
         self.send(opcode::OK, json!({}))?;
         let paths = arg
@@ -394,9 +413,9 @@ impl<S: Storage> Connection<S> {
             .and_then(Value::as_array)
             .ok_or_else(|| invalid("missing lpaths"))?;
         let mut deleted = Vec::new();
+        let mut failed = Vec::new();
         for lpath in paths {
             let lpath = lpath.as_str().ok_or_else(|| invalid("invalid lpath"))?;
-            let path = safe_path(&self.root, lpath)?;
             let uuid = self
                 .books
                 .iter()
@@ -405,16 +424,36 @@ impl<S: Storage> Connection<S> {
                 .unwrap_or("none")
                 .to_owned();
             if uuid != "none" {
-                self.storage.delete(&path)?;
-                self.books.retain(|book| book["lpath"] != lpath);
-                deleted.push(path);
+                match self.remove_listed(lpath) {
+                    Ok(path) => deleted.push(path),
+                    Err(err) => failed.push((lpath.to_owned(), err.kind())),
+                }
             }
             self.send(opcode::OK, json!({"uuid":uuid}))?;
         }
         write_metadata_cache(&self.root, &self.books)?;
         self.events
             .extend(deleted.into_iter().map(|path| Event::BookDeleted { path }));
+        self.events.extend(
+            failed
+                .into_iter()
+                .map(|(lpath, error)| Event::DeleteFailed { lpath, error }),
+        );
         Ok(self.events.pop_front().unwrap_or(Event::None))
+    }
+
+    /// Removes the file of one listed book and drops it from the list. A file that
+    /// is already gone is removed from the list, as a deleted file is. Any other
+    /// error leaves the book in the list.
+    fn remove_listed(&mut self, lpath: &str) -> io::Result<PathBuf> {
+        let path = safe_path(&self.root, lpath)?;
+        match self.storage.delete(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err),
+        }
+        self.books.retain(|book| book["lpath"] != lpath);
+        Ok(path)
     }
 
     fn upsert_book(&mut self, book: &Value) {
@@ -812,6 +851,26 @@ mod tests {
         }
     }
 
+    /// Stores books as `TestStorage` does, and refuses to delete one named file.
+    struct Stubborn(&'static str);
+    impl Storage for Stubborn {
+        fn free_space(&self, root: &Path) -> io::Result<u64> {
+            TestStorage.free_space(root)
+        }
+        fn total_space(&self, root: &Path) -> io::Result<u64> {
+            TestStorage.total_space(root)
+        }
+        fn write_file_atomically(&self, path: &Path, source: &mut dyn Read, length: u64) -> io::Result<()> {
+            TestStorage.write_file_atomically(path, source, length)
+        }
+        fn delete(&self, path: &Path) -> io::Result<()> {
+            if path.ends_with(self.0) {
+                return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+            }
+            fs::remove_file(path)
+        }
+    }
+
     /// Sends the handshake that Calibre sends first and reads the reply.
     fn initialize<S: Storage>(client: &mut Connection<S>, peer: &mut TcpStream, arg: Value) {
         send(peer, opcode::GET_INITIALIZATION_INFO, arg);
@@ -944,6 +1003,153 @@ mod tests {
         assert_eq!(recv(&mut peer).1["uuid"], "id-1");
         assert!(!root.join("Author/Book.epub").exists());
         assert!(read_metadata_cache(&root).unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Receives a four-byte book named `lpath`, so the connection's list names it.
+    fn receive_book<S: Storage>(client: &mut Connection<S>, peer: &mut TcpStream, lpath: &str) {
+        let uuid = format!("id-{lpath}");
+        send(
+            peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":lpath,"length":4,"metadata":{"uuid":uuid,"lpath":lpath,"title":lpath}}),
+        );
+        peer.write_all(b"book").unwrap();
+        assert!(matches!(client.run_once().unwrap(), Event::BookReceived { .. }));
+        assert_eq!(recv(peer).0, opcode::OK);
+    }
+
+    /// Reads the OK that starts a delete batch, then the OK with the uuid of each name.
+    fn recv_batch_replies(peer: &mut TcpStream, uuids: &[&str]) {
+        assert_eq!(recv(peer).0, opcode::OK, "the batch is acknowledged");
+        for uuid in uuids {
+            let (op, reply) = recv(peer);
+            assert_eq!(op, opcode::OK);
+            assert_eq!(reply["uuid"], *uuid);
+        }
+    }
+
+    /// Deletes a batch through the wire, with one name whose file is already gone.
+    /// The missing file counts as deleted: the others go, each gets its event, the
+    /// list and the cache lose every name, and the session stays open.
+    #[test]
+    fn delete_batch_with_a_missing_file_removes_the_others() {
+        let (mut client, mut peer, root) = pair();
+        for lpath in ["A.epub", "B.epub", "C.epub"] {
+            receive_book(&mut client, &mut peer, lpath);
+        }
+        fs::remove_file(root.join("B.epub")).unwrap();
+
+        send(
+            &mut peer,
+            opcode::DELETE_BOOK,
+            json!({"lpaths":["A.epub","B.epub","C.epub"]}),
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("A.epub")
+            }
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("B.epub")
+            }
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("C.epub")
+            }
+        );
+        recv_batch_replies(&mut peer, &["id-A.epub", "id-B.epub", "id-C.epub"]);
+
+        assert!(!root.join("A.epub").exists());
+        assert!(!root.join("C.epub").exists());
+        assert!(
+            read_metadata_cache(&root).unwrap().is_empty(),
+            "the cache loses every name"
+        );
+        send(&mut peer, opcode::FREE_SPACE, json!({}));
+        assert_eq!(client.run_once().unwrap(), Event::None);
+        assert_eq!(recv(&mut peer).1["free_space_on_device"], 1_000_000);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A file that cannot be removed stays listed and keeps its file. The batch goes
+    /// on past it: the other books are deleted first, the failure is reported at the
+    /// end, every name still gets an OK with its uuid, and the session stays open.
+    #[test]
+    fn delete_batch_with_a_permission_error_keeps_the_file_and_goes_on() {
+        let (mut client, mut peer, root) = pair_with(Stubborn("B.epub"));
+        for lpath in ["A.epub", "B.epub", "C.epub"] {
+            receive_book(&mut client, &mut peer, lpath);
+        }
+
+        send(
+            &mut peer,
+            opcode::DELETE_BOOK,
+            json!({"lpaths":["A.epub","B.epub","C.epub"]}),
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("A.epub")
+            }
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("C.epub")
+            }
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::DeleteFailed {
+                lpath: "B.epub".into(),
+                error: io::ErrorKind::PermissionDenied,
+            }
+        );
+        recv_batch_replies(&mut peer, &["id-A.epub", "id-B.epub", "id-C.epub"]);
+
+        assert!(!root.join("A.epub").exists());
+        assert!(!root.join("C.epub").exists());
+        assert!(root.join("B.epub").exists(), "the refused file stays");
+        let listed: Vec<Value> = read_metadata_cache(&root).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["lpath"], "B.epub", "the refused book stays listed");
+
+        send(&mut peer, opcode::FREE_SPACE, json!({}));
+        assert_eq!(client.run_once().unwrap(), Event::None);
+        assert_eq!(recv(&mut peer).1["free_space_on_device"], 1_000_000);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// KOReader's `deleteBook` never sends ERROR for a failed delete, only OK with
+    /// the uuid. A name the list does not hold also gets an OK, with no file touched.
+    #[test]
+    fn a_name_the_list_does_not_hold_gets_an_ok_and_no_file_is_touched() {
+        let (mut client, mut peer, root) = pair();
+        receive_book(&mut client, &mut peer, "A.epub");
+        fs::create_dir_all(root.join("Other")).unwrap();
+        fs::write(root.join("Other/Keep.epub"), b"keep").unwrap();
+
+        send(
+            &mut peer,
+            opcode::DELETE_BOOK,
+            json!({"lpaths":["Other/Keep.epub", "A.epub"]}),
+        );
+        assert_eq!(
+            client.run_once().unwrap(),
+            Event::BookDeleted {
+                path: root.join("A.epub")
+            }
+        );
+        assert_eq!(recv(&mut peer).0, opcode::OK);
+        assert_eq!(recv(&mut peer).0, opcode::OK, "the unlisted name gets an OK");
+        assert_eq!(recv(&mut peer).0, opcode::OK, "the listed name gets an OK");
+        assert_eq!(fs::read(root.join("Other/Keep.epub")).unwrap(), b"keep");
         fs::remove_dir_all(root).unwrap();
     }
 

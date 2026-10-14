@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use kaia_gfx::png::{self, PngError};
-use kaia_gfx::{PixelFormat, Pixmap, Size};
+use kaia_gfx::{draw, PixelFormat, Pixmap, Point, Rect, Size};
 use kaia_input::{parse_script, ScriptError, Step};
 
 use crate::display::{check_present, Display, DisplayError, PanelSpec};
@@ -14,14 +14,21 @@ use crate::input::{InputEvent, InputSource};
 use crate::rotation::Rotation;
 use crate::waveform::Refresh;
 
-/// A display with no hardware. It keeps the last presented frame and records every
+/// A display with no hardware. It keeps what the panel shows and records every
 /// [`Refresh`], so tests can check what was drawn and which regions and waveforms
 /// were requested.
+///
+/// The panel keeps its pixels outside a refresh region, as an E Ink panel does. A
+/// present copies only its region into the panel. A full-screen present, and the first
+/// present after a rotation, copy the whole frame. A widget that forgets to mark its
+/// region dirty therefore leaves stale pixels here, as it would on the device.
 #[derive(Debug, Clone)]
 pub struct HeadlessDisplay {
     panel: PanelSpec,
     rotation: Rotation,
     frame: Pixmap,
+    /// Set by a rotation and cleared by the next present, which copies the whole frame.
+    rotated: bool,
     refreshes: Vec<Refresh>,
 }
 
@@ -32,12 +39,14 @@ impl HeadlessDisplay {
             panel,
             rotation: Rotation::Deg0,
             frame: Pixmap::new(panel.size.w, panel.size.h, panel.format),
+            rotated: false,
             refreshes: Vec::new(),
         }
     }
 
-    /// The last frame presented, in logical orientation. When the rotation changes
-    /// the snapshot is reset to white at the new size.
+    /// What the panel shows, in logical orientation. Each present replaces its refresh
+    /// region and leaves the rest as it was. A rotation resets the snapshot to white at
+    /// the new size.
     pub fn snapshot(&self) -> &Pixmap {
         &self.frame
     }
@@ -71,14 +80,25 @@ impl Display for HeadlessDisplay {
     }
 
     fn present(&mut self, frame: &Pixmap, refresh: &Refresh) -> Result<(), DisplayError> {
-        check_present(self.size(), frame, refresh)?;
-        self.frame = frame.clone();
+        let screen = self.size();
+        check_present(screen, frame, refresh)?;
+        let region = refresh.region;
+        if self.rotated || region == Rect::from_size(screen) {
+            self.frame = frame.clone();
+            self.rotated = false;
+        } else if !region.is_empty() {
+            let at = Point::new(region.x, region.y);
+            draw::blit(&mut self.frame, frame, region, at);
+        }
         self.refreshes.push(*refresh);
         Ok(())
     }
 
     fn set_rotation(&mut self, rotation: Rotation) -> Result<(), DisplayError> {
         let before = self.size();
+        if rotation != self.rotation {
+            self.rotated = true;
+        }
         self.rotation = rotation;
         if self.size() != before {
             let size = self.size();

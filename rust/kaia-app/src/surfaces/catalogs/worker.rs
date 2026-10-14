@@ -36,8 +36,14 @@ pub enum Reply {
     Cover(Pixmap),
     Servers(Vec<Server>),
     Book(i64),
+    /// The last problem in a Calibre session that went on past it. Sent once,
+    /// before `Finished`, and shown as the session summary.
+    Summary(String),
     Finished(Result<(), String>),
 }
+
+/// Shown when the server asks to delete a book and its file cannot be removed.
+const DELETE_FAILED: &str = "Cannot delete this book. It stays on the device.";
 
 /// A line of status text. A line with numbers keeps the numbers, so the UI thread can
 /// write it in the language in use.
@@ -256,13 +262,29 @@ fn run(
                 .map_err(|_| "Cannot connect to Calibre.")?
                 .with_cancellation(stop.clone());
             progress(tx, "Connected. Send books from Calibre.");
+            // The last problem that did not end the session. It is the session summary.
+            let mut problem: Option<String> = None;
             loop {
                 match connection.run_once().map_err(calibre_error)? {
                     kaia_calibre::Event::BookReceived { path, .. } => {
                         progress(tx, "Adding book to the library...");
-                        let id = index_file(database, &path)?;
-                        let _ = tx.send(Reply::Book(id));
-                        progress(tx, "Book received. Connected to Calibre.");
+                        match index_file(database, &path) {
+                            Ok(id) => {
+                                let _ = tx.send(Reply::Book(id));
+                                progress(tx, "Book received. Connected to Calibre.");
+                            }
+                            // The file stays in the downloads folder, and the session goes on.
+                            Err(message) => {
+                                eprintln!("kaia: calibre: cannot index {}: {message}", path.display());
+                                progress(tx, &message);
+                                problem = Some(message);
+                            }
+                        }
+                    }
+                    kaia_calibre::Event::DeleteFailed { lpath, error } => {
+                        eprintln!("kaia: calibre: cannot delete {lpath}: {error:?}");
+                        progress(tx, DELETE_FAILED);
+                        problem = Some(DELETE_FAILED.into());
                     }
                     kaia_calibre::Event::BookDeleted { path } => {
                         let mut library = Library::open(database).map_err(|_| "Cannot open the library.")?;
@@ -280,6 +302,9 @@ fn run(
                     kaia_calibre::Event::Disconnected => break,
                     kaia_calibre::Event::None => {}
                 }
+            }
+            if let Some(message) = problem {
+                let _ = tx.send(Reply::Summary(message));
             }
         }
     }
@@ -466,6 +491,9 @@ pub fn worker_text(english: &str) -> String {
         }
         "Calibre sent a file this app does not accept." => {
             tr("Calibre sent a file this app does not accept.")
+        }
+        "Cannot delete this book. It stays on the device." => {
+            tr("Cannot delete this book. It stays on the device.")
         }
         "Cannot open the library." => tr("Cannot open the library."),
         "Cannot find the book." => tr("Cannot find the book."),

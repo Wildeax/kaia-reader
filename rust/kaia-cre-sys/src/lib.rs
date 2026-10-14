@@ -163,6 +163,7 @@ pub mod ffi {
             count: *mut usize,
         ) -> c_int;
         pub fn kaia_cre_free_link_boxes(boxes: *mut kaia_cre_link_box, count: usize);
+        pub fn kaia_cre_page_image_share(doc: *mut kaia_cre_doc, out: *mut f32) -> c_int;
         pub fn kaia_cre_toc(
             doc: *mut kaia_cre_doc,
             out: *mut *mut kaia_cre_toc_entry,
@@ -647,6 +648,20 @@ impl Doc {
                 // SAFETY: the shim set `out` to a malloc'd string on success.
                 Ok(Some(unsafe { take_string(out) }))
             }
+            ffi::KAIA_CRE_NOT_FOUND => Ok(None),
+            _ => Err(Error::Engine(last_error())),
+        }
+    }
+
+    /// The share of the page on screen that image elements cover, from 0 to 1.
+    /// None when CREngine cannot measure the page, for example in scroll mode.
+    /// Call [`goto_page`](Self::goto_page) for the page first.
+    pub fn page_image_share(&mut self) -> Result<Option<f32>> {
+        let mut share: f32 = 0.0;
+        // SAFETY: live handle; `share` is a valid out pointer.
+        let code = unsafe { ffi::kaia_cre_page_image_share(self.raw(), &mut share) };
+        match code {
+            ffi::KAIA_CRE_OK => Ok(Some(share)),
             ffi::KAIA_CRE_NOT_FOUND => Ok(None),
             _ => Err(Error::Engine(last_error())),
         }

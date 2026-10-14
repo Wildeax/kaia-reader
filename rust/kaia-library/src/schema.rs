@@ -11,6 +11,7 @@ use rusqlite::{params, Connection, OpenFlags, Transaction, TransactionBehavior};
 
 use crate::error::{LibraryError, Result};
 use crate::extract::reencode_png;
+use crate::query::register_sql_functions;
 
 pub(crate) const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -263,6 +264,7 @@ pub(crate) fn open_with_migrations(path: &Path, migrations: &[Migration]) -> Res
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
     conn.busy_timeout(BUSY_TIMEOUT)?;
+    register_sql_functions(&conn)?;
 
     // Read the version before any write, so a newer file is never touched.
     let found: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;

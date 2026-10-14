@@ -253,6 +253,8 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         return Outcome::Handled;
     };
     if key == keys::SYNC_PASSWORD {
+        // Typing a password may fix a refused login, so the next request runs again.
+        env.services.sync.forget_refusal();
         // The typed text never reaches settings.json. Only its user key is stored.
         crate::sync::store_password(&mut env.services.settings, value.as_str().unwrap_or(""));
         return Outcome::Handled;

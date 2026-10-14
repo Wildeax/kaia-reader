@@ -220,6 +220,8 @@ fn jump_replaces_pending_sync_position() {
     app.services_mut()
         .settings
         .save("sync.enabled", Value::Bool(true));
+    // Pushes follow the automatic sync switch, as KOReader's do.
+    app.services_mut().settings.save("sync.auto", Value::Bool(true));
     for page in 1..=10 {
         app.command("reader:next", &[]);
         wait_page(&mut app, page);

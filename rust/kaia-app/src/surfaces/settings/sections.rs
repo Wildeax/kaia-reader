@@ -357,6 +357,11 @@ fn network(services: &Services) -> Vec<Entry> {
             on: s.is_true(keys::SYNC_ENABLED),
         },
         Entry::Toggle {
+            key: keys::SYNC_AUTO,
+            label: tr("Automatically keep documents in sync"),
+            on: s.is_true(keys::SYNC_AUTO),
+        },
+        Entry::Toggle {
             key: keys::SYNC_INVALID_CERTS,
             label: tr("Accept self-signed certificates"),
             on: s.is_true(keys::SYNC_INVALID_CERTS),
@@ -404,7 +409,7 @@ fn network(services: &Services) -> Vec<Entry> {
             action: "settings:sync:test".into(),
         },
         Entry::Text(tr(
-            "Turn on sync to send progress on close and sleep, and read progress from other devices.",
+            "Turn on sync to send progress on close and sleep. With automatic sync on, a book also reads progress from other devices when it opens.",
         )),
     ];
     out.splice(

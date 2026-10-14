@@ -2,6 +2,8 @@
 
 #![allow(dead_code)]
 
+pub mod epub;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Once;

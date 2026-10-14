@@ -315,6 +315,8 @@ pub struct BookSession {
     stale: bool,
     import: Option<ImportReport>,
     page: u32,
+    /// The image share of the page last rendered, with the page it belongs to.
+    image_share: Option<(u32, f32)>,
     page_count: usize,
     layout_gen: u64,
     layout_pending: bool,
@@ -554,6 +556,7 @@ impl BookSession {
             stale,
             import,
             page,
+            image_share: None,
             page_count,
             layout_gen,
             layout_pending: false,
@@ -889,6 +892,7 @@ impl BookSession {
     /// only matters for fixed-layout books.
     pub fn render_current(&mut self, viewport: Size) -> Result<Arc<Pixmap>> {
         self.ensure_idle()?;
+        self.measure_image_share();
         let key = self.render_key(viewport);
         if let Some(hit) = self.lock_cache().get(&key) {
             return Ok(hit);
@@ -896,6 +900,29 @@ impl BookSession {
         let (page, zoom, format) = (self.page, self.state.zoom, self.format);
         self.engine
             .call(move |w| w.render_and_prefetch(page, viewport, zoom, format))
+    }
+
+    /// The share of the current page covered by images, from 0 to 1. None when
+    /// the engine cannot tell. Only [`BookSession::render_current`] measures a
+    /// page, so the result is None until a render of the current page has run.
+    pub fn page_image_share(&self) -> Option<f32> {
+        match self.image_share {
+            Some((page, share)) if page == self.page => Some(share),
+            _ => None,
+        }
+    }
+
+    /// Asks the engine for the image share of the current page. A failed
+    /// measurement leaves the page without a share, so its refresh falls back
+    /// to the other rules.
+    fn measure_image_share(&mut self) {
+        let page = self.page;
+        self.image_share = self
+            .engine
+            .call(move |w| w.image_share(page))
+            .ok()
+            .flatten()
+            .map(|share| (page, share));
     }
 
     /// The current page if it is cached. Never waits for the engine. Returns

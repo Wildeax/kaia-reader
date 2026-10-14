@@ -29,6 +29,13 @@ use kaia_ui::composite::PagedList;
 /// Seconds between pump ticks while the engine has work.
 const PUMP_SECONDS: f64 = 0.02;
 
+/// The image share from which a page is an image page. The reader takes a full
+/// refresh on a turn to such a page and on the turn after it, so the ghosting from
+/// the picture clears. Half the page area is "mostly an image" (B-7). KOReader's
+/// clearing check uses 0.075 (`frontend/apps/reader/modules/readerview.lua`), and
+/// the Nickel parity notes give no number (`docs/kaia/nickel/PARITY.md` T3-6).
+pub const IMAGE_PAGE_SHARE: f32 = 0.5;
+
 /// A window the reader updates, with the serial its surface uses to clear it.
 #[derive(Clone)]
 pub struct Layer {
@@ -114,6 +121,9 @@ pub struct Core {
     /// True while reader plugins wait for their document thread. The pump keeps
     /// ticking then, so the reader sees the answer without input.
     pub(super) plugin_waiting: bool,
+    /// The page of the last frame, and whether that page is an image page. The
+    /// image rule compares the next frame with it.
+    shown: Option<(u32, bool)>,
     /// Set by the open job: true when the book had no saved or imported state.
     fresh: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
@@ -143,6 +153,7 @@ impl Core {
             next_serial: 0,
             pages_since_full: 0,
             refresh_every: 0,
+            shown: None,
             selecting: false,
             selection: None,
             sticker_anchor: None,
@@ -274,6 +285,20 @@ impl Core {
             .as_ref()
             .is_some_and(|ink| ink.strokes.iter().any(|d| d.stroke.color != "black"));
         let info = frame.session.current();
+        let image_page = frame
+            .session
+            .page_image_share()
+            .is_some_and(|share| share >= IMAGE_PAGE_SHARE);
+        // The share of the new page is known only now, so the image rule runs
+        // here. A turn to an image page, or away from one, becomes a full refresh.
+        // A quick turn keeps its fast frames, and a repaint of the same page keeps its hint.
+        if let Some((shown, was_image)) = self.shown {
+            if shown != info.page && self.pending_hint == PaintHint::Partial && (image_page || was_image) {
+                self.pending_hint = PaintHint::Full;
+                self.pages_since_full = 0;
+            }
+        }
+        self.shown = Some((info.page, image_page));
         self.session = Some(frame.session);
         self.selection = frame.selection;
         self.sticker_anchor = frame.sticker_anchor;
@@ -405,7 +430,9 @@ impl Core {
 
     /// Turns one page. The refresh is full on a chapter start, on every
     /// `refresh_every`th turn when that is set, and on every page of a fixed-layout
-    /// book (PDF, comic). Other turns are partial.
+    /// book (PDF, comic). A turn to an image page, or away from one, is also full,
+    /// but that rule runs in `receive_frame`, once the new page is measured.
+    /// Other turns are partial.
     pub fn turn(&mut self, ctx: &mut Ctx, forward: bool) -> Turn {
         let Some(mut session) = self.session.take() else {
             return Turn::Blocked;
@@ -426,8 +453,6 @@ impl Core {
         };
         let chapter_start = session.toc().iter().any(|t| t.page == Some(page));
         // A fixed-layout page is a picture, and stock clears the screen for it.
-        // A reflowable book has no cheap test for an image page, so it takes no
-        // rule here.
         let picture = !session.is_reflowable();
         self.pending_hint = if chapter_start
             || picture

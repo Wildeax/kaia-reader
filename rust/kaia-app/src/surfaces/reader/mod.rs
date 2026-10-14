@@ -329,7 +329,7 @@ impl ReaderSurface {
         let local = LocalState {
             progress: crate::sync::position(session),
             percentage: session.current().percent,
-            device: "Kaia Reader".into(),
+            device: env.services.sync.device_name().to_owned(),
             device_id: env
                 .services
                 .settings
@@ -346,7 +346,10 @@ impl ReaderSurface {
             _ => default,
         };
         let policy = Policy {
-            auto_sync: true,
+            auto_sync: env
+                .services
+                .settings
+                .is_true(crate::surfaces::settings::keys::SYNC_AUTO),
             sync_forward: strategy("sync.forward", Strategy::Prompt),
             sync_backward: strategy("sync.backward", Strategy::Never),
         };

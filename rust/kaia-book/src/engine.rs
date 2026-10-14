@@ -165,6 +165,18 @@ impl Worker {
         self.doc.doc().page_count()
     }
 
+    /// The share of a page covered by images, from 0 to 1, or None when the engine
+    /// cannot tell. CREngine measures the page. A fixed-layout page is a picture,
+    /// so it reports 1. MuPDF reflow has no cheap image test and reports None.
+    pub fn image_share(&self, page: u32) -> std::result::Result<Option<f32>, DocError> {
+        match &self.doc {
+            #[cfg(feature = "cre")]
+            EngineDoc::Cre(d) => d.image_share(page),
+            EngineDoc::Mupdf(_) if self.doc.doc().is_reflowable() => Ok(None),
+            EngineDoc::Mupdf(_) => Ok(Some(1.0)),
+        }
+    }
+
     /// The location that names a page: an xpointer for CREngine, a page for the rest.
     pub fn location_of_page(&self, page: u32) -> std::result::Result<Location, DocError> {
         Ok(match self.doc.page_xpointer(page)? {

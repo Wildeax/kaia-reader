@@ -126,6 +126,12 @@ int kaia_cre_xpointer_at(kaia_cre_doc *doc, int32_t x, int32_t y, char **out);
 int kaia_cre_page_links(kaia_cre_doc *doc, kaia_cre_link_box **out, size_t *count);
 void kaia_cre_free_link_boxes(kaia_cre_link_box *boxes, size_t count);
 
+/* Share of the page on screen that image elements cover, from 0 to 1. The view
+ * must show one page in paged mode. Otherwise the call returns
+ * KAIA_CRE_NOT_FOUND, and the caller treats the share as unknown. Call
+ * kaia_cre_goto_page first. Images that overlap count twice before the cap. */
+int kaia_cre_page_image_share(kaia_cre_doc *doc, float *out);
+
 int kaia_cre_toc(kaia_cre_doc *doc, kaia_cre_toc_entry **out, size_t *count);
 void kaia_cre_free_toc(kaia_cre_toc_entry *entries, size_t count);
 

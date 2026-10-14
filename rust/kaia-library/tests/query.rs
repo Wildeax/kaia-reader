@@ -892,6 +892,24 @@ fn books_titled_finds_the_books_with_one_title() {
     assert!(ids("Gone").is_empty(), "a missing book is left out");
 }
 
+#[test]
+fn suggestions_find_an_accented_prefix_past_the_candidate_limit() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    // More books match than one query reads. The accented title has the
+    // highest id and no opens, so only the SQL prefix test can keep it.
+    for i in 0..300 {
+        add_book(&raw, &format!("Cafe {i:03}"), None, None, None);
+    }
+    add_book(&raw, "Café crème", None, None, None);
+    assert_eq!(
+        suggestion_texts(&lib, "cafe c", 5).first(),
+        Some(&("Café crème".to_string(), "title")),
+        "the accented title is a candidate and ranks first"
+    );
+}
+
 /// Keystrokes on a library of 2,000 books each take under 50 ms. The test
 /// prints the time of each query.
 #[test]
