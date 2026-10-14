@@ -67,6 +67,8 @@ check 'UI font is present' test -s "${APP}/resources/fonts/noto/NotoSans-Regular
 check 'UI font license is present' test -s "${APP}/resources/fonts/noto/LICENSE"
 check 'UI icons match the source' diff -qr "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/mdlight"
 check 'Lua shims match the source' diff -qr "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
+check 'libarchive license matches the source' cmp -s "${ROOT}/rust/kaia-archive-sys/COPYING.libarchive" "${APP}/COPYING.libarchive"
+check 'libarchive for CBR is present' test -s "${APP}/libs/libarchive.so.13"
 check 'LuaJIT compatibility filename is present' test -s "${APP}/libs/libluajit-5.1.so.2"
 check 'LuaJIT is present' test -s "${APP}/libs/libluajit.so"
 check 'KOReader bootstrap is present' test -s "${APP}/setupkoenv.lua"

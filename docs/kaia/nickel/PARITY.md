@@ -54,7 +54,7 @@ Each row is one feature. Duplicates across the four reports are merged. Kobo-onl
 | In-book search | Search with recent searches and suggestions. Hits are counted and highlighted. | Yes | Partly. Search and hits. No recent searches or suggestions. | Low | Confirmed |
 | Go to page | Page number entry, chapter marks on the slider, and a back-to-page button after a jump. | Yes | Partly. Page entry and a back button after a jump. Percent slider and start and end jumps. | High | Confirmed |
 | Fit and zoom for images | Fit width, height, page or half width. A zoom slider, panning and a magnifier. | Yes | Partly. Fit page, fit width and a zoom sheet. No half width. | Medium | Confirmed |
-| Comic archives | Opens CBZ and CBR as comics. Full-screen image pages are detected. | Partly. CBZ through MuPDF. CBR not tested. | Partly. CBZ only. | Medium | Likely |
+| Comic archives | Opens CBZ and CBR as comics. Full-screen image pages are detected. | Partly. CBZ through MuPDF. CBR not tested. | CBZ and CBR. CBR supports PNG/JPEG pages with size limits; Kobo CI and device tests pending. | Medium | Likely |
 | PDF | Renders PDF with a separate engine. Annotations sit on their own layer. | Yes. Crop too. | Partly. Fixed pages with fit zoom. No crop. | Medium | Confirmed |
 | Stylus ink and notebooks | Pen and eraser tools with color and size. Handwriting converts to text and math. Notebooks use templates. | No | Partly. Page ink with pen, eraser, colors, widths and undo. No recognition or notebooks. | Medium | Confirmed |
 | Audiobooks and read-aloud | Plays audiobooks inside the reader. Read-aloud is an early-access item, and no speech engine turns up in the firmware. | No | No | Low | Confirmed |
@@ -284,7 +284,7 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 | T3-12 | Airplane mode switch. | `rust/kaia-platform/src/network.rs`, `wpa.rs`, `rust/kaia-app/src/surfaces/settings/quick.rs` | S | Built. |
 | T3-13 | Time zone picker and network time. | `rust/kaia-platform/src/device.rs`, a time zone list, settings | M | Partly built. The time zone picker is in. Network time is not built, and it needs an opt-in switch. |
 | T3-14 | Bluetooth page turner and audio. | A new Bluetooth module in `rust/kaia-platform` (BlueZ over D-Bus), `rust/kaia-input` (remote keys) | L | Device check of `mtkbtd` and the remote key codes. |
-| T3-15 | CBR comics and plain text files. | `rust/kaia-doc/src/format.rs` (add CBR and text), `rust/kaia-library/src/scan.rs` (format gate) | M | Partly built. Text files are in. CBR waits on the decoder decision. |
+| T3-15 | CBR comics and plain text files. | `rust/kaia-doc/src/format.rs` (add CBR and text), `rust/kaia-library/src/scan.rs` (format gate) | M | Implemented. Text files and CBR are in. CBR uses libarchive with bounded PNG/JPEG decoding. Both Kobo CI builds and device checks pending. |
 | T3-16 | Notebook export to Word, PDF and image archives. | `rust/kaia-app/src/surfaces/notes/export.rs` | M | Decision: the formats and the PDF writer. |
 | T3-17 | Calibre browse and search. | `rust/kaia-app/src/surfaces/catalogs` (Calibre view), `rust/kaia-calibre` | M | Built. Search and browse work on the Calibre metadata file the device downloads. |
 | T3-18 | Factory reset path. | `rust/kaia-platform` (data wipe), `rust/kaia-app/src/surfaces/settings` | M | Decision: warning text, scope and recovery steps. `ENGINEERING_PLAN.md` safe mode rules apply. |

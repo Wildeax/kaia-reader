@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 /// the library indexes through `Format::from_extension` in kaia-doc. This
 /// includes plain text, which the library now indexes and CREngine opens.
 pub const BOOK_EXTENSIONS: &[&str] = &[
-    "epub", "pdf", "cbz", "xps", "fb2", "mobi", "azw", "azw3", "prc", "htm", "html", "xhtml", "djvu", "djv",
-    "txt",
+    "epub", "pdf", "cbz", "cbr", "xps", "fb2", "mobi", "azw", "azw3", "prc", "htm", "html", "xhtml", "djvu",
+    "djv", "txt",
 ];
 
 /// The files that the driver writes for itself. KOReader's Calibre plugin uses
@@ -160,6 +160,7 @@ mod tests {
             ("Author/Book.kepub.epub", Ok(())),
             ("Upper/CASE.EPUB", Ok(())),
             ("Comics/Issue 1.cbz", Ok(())),
+            ("Comics/Issue 2.CBR", Ok(())),
             ("Manual.pdf", Ok(())),
             ("Old/Scan.djvu", Ok(())),
             ("Web/index.html", Ok(())),

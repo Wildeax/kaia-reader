@@ -183,8 +183,8 @@ impl Default for DeviceInfo {
         // Calibre converts a book to the first format of this list when the book has none of them.
         // The test `advertised_formats_are_the_accepted_book_formats` keeps the two lists equal.
         let formats = [
-            "epub", "fb2", "mobi", "azw", "azw3", "xps", "djv", "djvu", "pdf", "cbz", "htm", "html", "xhtml",
-            "prc", "txt",
+            "epub", "fb2", "mobi", "azw", "azw3", "xps", "djv", "djvu", "pdf", "cbz", "cbr", "htm", "html",
+            "xhtml", "prc", "txt",
         ];
         Self {
             model: "Kobo".into(),

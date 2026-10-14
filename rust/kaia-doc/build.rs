@@ -11,6 +11,12 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DEP_KAIA_MUPDF_RPATH_DIRS");
     println!("cargo:rerun-if-env-changed=DEP_KAIA_MUPDF_FONTS_DIR");
 
+    println!("cargo:rerun-if-env-changed=DEP_KAIA_ARCHIVE_RPATH_DIRS");
+    if let Some(list) = env::var_os("DEP_KAIA_ARCHIVE_RPATH_DIRS") {
+        for dir in env::split_paths(&list).filter(|d| !d.as_os_str().is_empty()) {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+        }
+    }
     if let Some(list) = env::var_os("DEP_KAIA_MUPDF_RPATH_DIRS") {
         for dir in env::split_paths(&list).filter(|d| !d.as_os_str().is_empty()) {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());

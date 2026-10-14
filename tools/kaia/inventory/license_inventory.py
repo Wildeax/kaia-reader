@@ -137,6 +137,17 @@ UPSTREAM_TO_VERIFY = {
     "zstd": "BSD-3-Clause (also offered under GPL-2.0)",
     "zsync2": "Artistic License",
 }
+# Unmodified license summaries copied from the pinned source archives. The
+# archive ref and license hash must both match before the inventory uses them.
+NATIVE_LICENSE_COPIES = {
+    "libarchive": {
+        "ref": "81a6d70daf20671ea2c5cd4bb1d371ae",
+        "path": "rust/kaia-archive-sys/COPYING.libarchive",
+        "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229",
+        "license": "BSD-2-Clause; COPYING also lists BSD-3-Clause, public-domain and CC0/OpenSSL/Apache-2.0 files",
+    },
+}
+
 UPSTREAM_TEST_ROCKS = {
     "busted": "MIT", "cluacov": "MIT", "lua-term": "MIT", "lua_cliargs": "MIT",
     "luacov": "MIT", "luafilesystem": "MIT", "luassert": "MIT", "luasystem": "MIT",
@@ -481,6 +492,15 @@ def thirdparty_entry(root, all_files, rel_dir, name, group):
         version = meta["version"] + " (from __meta.lua)"
 
     license_text, status, reason = license_status(root, licenses_top, licenses_sub, meta, group)
+
+    evidence = NATIVE_LICENSE_COPIES.get(name) if group == "thirdparty" else None
+    if (evidence and downloads and downloads[0]["declared_ref"] == evidence["ref"]
+            and os.path.isfile(os.path.join(root, evidence["path"]))
+            and sha256_of(root, evidence["path"]) == evidence["sha256"]):
+        licenses_top = [evidence["path"]]
+        license_text = evidence["license"]
+        status = "pinned source COPYING copied to " + evidence["path"]
+        reason = None
 
     if group == "test_rock":
         upstream = UPSTREAM_TEST_ROCKS.get(name)

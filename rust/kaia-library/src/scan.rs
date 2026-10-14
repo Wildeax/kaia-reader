@@ -538,8 +538,8 @@ pub(crate) fn book_file(path: &Path) -> Result<(fs::Metadata, String)> {
     Ok((meta, format))
 }
 
-/// Adds `path` if its name has a book extension. Symlinked files are stored
-/// under their real path, so every path in the index is canonical.
+/// Adds `path` if its name has a book extension, including CBR via `Format`.
+/// Symlinked files use their real path, so every indexed path is canonical.
 fn add_file(path: &Path, size: u64, mtime: i64, found: &mut BTreeMap<PathBuf, Found>) {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return;
@@ -645,8 +645,20 @@ fn file_stem(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{mtime_equivalent, text_file_allowed};
+    use super::{add_file, book_file, mtime_equivalent, text_file_allowed};
+    use std::collections::BTreeMap;
     use std::path::Path;
+
+    #[test]
+    fn cbr_passes_both_scanner_format_gates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("comic.CBR");
+        std::fs::write(&path, b"Rar!\x1a\x07\x00").unwrap();
+        assert_eq!(book_file(&path).unwrap().1, "cbr");
+        let mut found = BTreeMap::new();
+        add_file(&path, 7, 0, &mut found);
+        assert_eq!(found.get(&path).unwrap().format, "cbr");
+    }
 
     #[test]
     fn text_size_bounds_are_inclusive() {

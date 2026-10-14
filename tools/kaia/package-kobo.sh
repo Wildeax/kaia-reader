@@ -130,6 +130,7 @@ chmod 644 "${WORK}/stage/.adds/nm/kaia"
 # RuntimeOptions finds CREngine data/ and fonts/ beside kaia. Keep the upstream
 # copies unchanged. UI assets have their own resources/ folder.
 cp "${RUST_BIN}" "${APP}/kaia"
+cp "${ROOT}/rust/kaia-archive-sys/COPYING.libarchive" "${APP}/COPYING.libarchive"
 cp -R "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
 cp -R "${ROOT}/frontend/." "${APP}/frontend/"
 cp -R "${ROOT}/plugins/." "${APP}/plugins/"
