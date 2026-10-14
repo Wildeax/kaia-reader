@@ -1,10 +1,13 @@
 mod common;
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use common::*;
-use kaia_library::{Book, Filter, LibraryError, Sort, SortKey, Status};
+use kaia_library::{Book, Filter, Library, LibraryError, Sort, SortKey, Status};
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipWriter};
 
 fn setup() -> (tempfile::TempDir, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
@@ -537,4 +540,74 @@ fn cover_is_none_without_a_cover_row() {
     let id = lib.book_by_path(&files[0]).unwrap().unwrap().id;
     assert!(lib.cover(id, kaia_library::CoverSize::Large).unwrap().is_some());
     assert!(lib.cover(4242, kaia_library::CoverSize::Large).unwrap().is_none());
+}
+
+/// Writes a one-chapter EPUB whose package lists each of `creators` as a
+/// `dc:creator`, so the engine reads several authors for one book.
+fn write_epub_with_creators(path: &Path, creators: &[&str]) {
+    const CONTAINER: &str = r#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>"#;
+    const CHAPTER: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title></head>
+<body><h1>Chapter one</h1><p>It was a dark and stormy night.</p></body></html>"#;
+    let names: String = creators
+        .iter()
+        .map(|c| format!("<dc:creator>{c}</dc:creator>"))
+        .collect();
+    let opf = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="id">urn:test:creators</dc:identifier>
+    <dc:title>Two authors</dc:title>
+    <dc:language>en</dc:language>
+    {names}
+  </metadata>
+  <manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="chapter"/></spine>
+</package>"#
+    );
+    let mut writer = ZipWriter::new(File::create(path).unwrap());
+    for (name, bytes) in [
+        ("mimetype", &b"application/epub+zip"[..]),
+        ("META-INF/container.xml", CONTAINER.as_bytes()),
+        ("OEBPS/content.opf", opf.as_bytes()),
+        ("OEBPS/chapter.xhtml", CHAPTER.as_bytes()),
+    ] {
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        writer.start_file(name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    writer.finish().unwrap();
+}
+
+#[test]
+fn the_engine_joins_several_creators_with_a_line_feed_that_authors_split_on() {
+    let (tmp, root) = setup();
+    write_epub_with_creators(&root.join("pair.epub"), &["Ada Lovelace", "Charles Babbage"]);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+
+    let books = all(&lib, Sort::new(SortKey::Title, false), &Filter::default());
+    assert_eq!(books.len(), 1);
+    assert_eq!(
+        books[0].authors.as_deref(),
+        Some("Ada Lovelace\nCharles Babbage"),
+        "the scanner stores the engine's field as written"
+    );
+    assert_eq!(
+        Library::split_authors(books[0].authors.as_deref().unwrap()),
+        vec!["Ada Lovelace", "Charles Babbage"]
+    );
+    assert_eq!(
+        Library::author_index(&books),
+        vec![
+            ("Ada Lovelace".to_string(), 1),
+            ("Charles Babbage".to_string(), 1)
+        ]
+    );
+    let by_babbage = Library::books_by_author(&books, "charles babbage");
+    assert_eq!(by_babbage.len(), 1, "the second author finds the book too");
 }

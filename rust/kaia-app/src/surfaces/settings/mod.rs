@@ -6,10 +6,12 @@
 //! Module map: `keys` (the settings keys), `commands` (action ids), `facts`
 //! (statistics, the KOReader folder, the library folders), `sections` (the rows
 //! of each section), `entries` (the row widgets), `section` (the section
-//! surface), `quick` (the quick settings sheet) and `sleep` (the sleep screen).
+//! surface), `quick` (the quick settings sheet), `sleep` (the sleep screen)
+//! and `experiments` (the experimental feature flags).
 
 pub mod commands;
 pub mod entries;
+pub mod experiments;
 pub mod facts;
 pub mod keys;
 pub mod quick;
@@ -121,6 +123,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("display", "Warmth"),
     ("display", "Night mode"),
     ("display", "Color rendering"),
+    ("display", "Large print"),
     ("display", "Screen rotation"),
     ("display", "Language"),
     ("library", "Book folders"),
@@ -148,6 +151,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Auto suspend"),
     ("advanced", "Backup and safe mode"),
     ("advanced", "Date and time"),
+    ("advanced", "Experimental features"),
 ];
 
 /// The items whose title, in the language in use, contains `query` (case-insensitive),
@@ -174,6 +178,7 @@ fn item_title(english: &str) -> String {
         "Warmth" => tr("Warmth"),
         "Night mode" => tr("Night mode"),
         "Color rendering" => tr("Color rendering"),
+        "Large print" => tr("Large print"),
         "Screen rotation" => tr("Screen rotation"),
         "Language" => tr("Language"),
         "Book folders" => tr("Book folders"),
@@ -201,6 +206,7 @@ fn item_title(english: &str) -> String {
         "Auto suspend" => tr("Auto suspend"),
         "Backup and safe mode" => tr("Backup and safe mode"),
         "Date and time" => tr("Date and time"),
+        "Experimental features" => tr("Experimental features"),
         other => other.to_string(),
     }
 }

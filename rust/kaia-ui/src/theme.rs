@@ -88,6 +88,26 @@ pub struct Fonts {
     pub label: FontSpec,
 }
 
+impl Fonts {
+    /// Every size times `factor`, rounded to whole pixels. Faces and weights stay.
+    fn scaled(&self, factor: f32) -> Self {
+        let size = |font: &FontSpec| FontSpec {
+            size: (font.size * factor).round(),
+            ..font.clone()
+        };
+        Fonts {
+            display: size(&self.display),
+            title: size(&self.title),
+            book_title: size(&self.book_title),
+            body: size(&self.body),
+            body_bold: size(&self.body_bold),
+            shelf_title: size(&self.shelf_title),
+            caption: size(&self.caption),
+            label: size(&self.label),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
     pub ink: Color,
@@ -101,6 +121,9 @@ pub struct Palette {
 
 /// The accent green from DESIGN.md.
 const ACCENT_RGB: Color = Color::rgb(0x1F, 0x6F, 0x5C);
+
+/// The text scale of large print mode. Every font size becomes 1.25 times its size.
+pub const LARGE_PRINT_SCALE: f32 = 1.25;
 
 /// The smallest tappable size: 9 mm, which is `scaleBySize(50)` when the scale
 /// follows the screen (106 px on the Libra Colour). A DPI override changes the
@@ -135,6 +158,9 @@ pub struct Theme {
     /// True when the UI runs right to left. Composite components mirror
     /// their layout (back chevrons, action order) when this is set.
     pub rtl: bool,
+    /// The factor the font sizes were multiplied by. 1.0 is the normal size.
+    /// Set by [`Theme::with_text_scale`].
+    pub text_scale: f32,
 }
 
 impl Theme {
@@ -182,6 +208,7 @@ impl Theme {
             nav_bar: dp(60),
             row_height: dp(83),
             rtl: false,
+            text_scale: 1.0,
             palette: Palette {
                 ink,
                 ink_secondary: Color::gray(0x55),
@@ -199,6 +226,19 @@ impl Theme {
     pub fn with_rtl(mut self, rtl: bool) -> Self {
         self.rtl = rtl;
         self
+    }
+
+    /// The same tokens with every font size times `factor`, rounded to whole
+    /// pixels. Spacing, lines and touch targets keep their size. The sizes come
+    /// from [`Theme::new`] each time, so applying a factor twice does not compound.
+    /// A factor of 1.0 gives the sizes of [`Theme::new`].
+    pub fn with_text_scale(&self, factor: f32) -> Self {
+        let base = Theme::new(self.scale, self.color_panel);
+        Theme {
+            font: base.font.scaled(factor),
+            text_scale: factor,
+            ..self.clone()
+        }
     }
 
     /// The pixel format the panel frame uses.
@@ -259,6 +299,58 @@ mod tests {
             dpi: None,
         };
         assert_eq!(fractional.dp(2), 3, "ceil(2 * 1.5)");
+    }
+
+    #[test]
+    fn large_print_scales_every_font_size_and_nothing_else() {
+        // At 600 by 600 without an override, `dp` is the identity, so the sizes are the tokens.
+        let unit = Scale {
+            width: 600,
+            height: 600,
+            dpi: None,
+        };
+        let normal = Theme::new(unit, true);
+        let large = normal.with_text_scale(LARGE_PRINT_SCALE);
+        assert_eq!(normal.font.body.size, 20.0);
+        assert_eq!(large.font.body.size, 25.0, "20 times 1.25");
+        assert_eq!(
+            large.font.label.size, 19.0,
+            "15 times 1.25 is 18.75, which rounds to 19"
+        );
+        assert_eq!(
+            large.font.display.size, 43.0,
+            "34 times 1.25 is 42.5, which rounds to 43"
+        );
+        assert_eq!(large.font.body.weight, normal.font.body.weight);
+        assert_eq!(large.font.body.family, normal.font.body.family);
+        assert_eq!(large.space, normal.space);
+        assert_eq!(large.touch_target, normal.touch_target);
+        assert_eq!(large.line, normal.line);
+        assert_eq!(large.text_scale, LARGE_PRINT_SCALE);
+        assert_eq!(normal.text_scale, 1.0);
+    }
+
+    #[test]
+    fn a_factor_of_one_keeps_the_theme_of_new() {
+        let libra = Scale {
+            width: 1264,
+            height: 1680,
+            dpi: Some(300),
+        };
+        let normal = Theme::new(libra, true);
+        assert_eq!(normal.with_text_scale(1.0), normal);
+    }
+
+    #[test]
+    fn applying_the_large_print_factor_twice_does_not_compound() {
+        let libra = Scale {
+            width: 1264,
+            height: 1680,
+            dpi: Some(300),
+        };
+        let once = Theme::new(libra, true).with_text_scale(LARGE_PRINT_SCALE);
+        let twice = once.with_text_scale(LARGE_PRINT_SCALE);
+        assert_eq!(once, twice);
     }
 
     #[test]

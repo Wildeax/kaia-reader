@@ -12,11 +12,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 /// Extensions of the books that Kaia accepts from Calibre. They are the formats
-/// the library indexes (`Format::from_extension` in kaia-doc). `txt` is left out.
-/// CREngine can open text files, but the library scanner does not index them, so
-/// a text book sent from Calibre would never appear in the library.
+/// the library indexes through `Format::from_extension` in kaia-doc. This
+/// includes plain text, which the library now indexes and CREngine opens.
 pub const BOOK_EXTENSIONS: &[&str] = &[
     "epub", "pdf", "cbz", "xps", "fb2", "mobi", "azw", "azw3", "prc", "htm", "html", "xhtml", "djvu", "djv",
+    "txt",
 ];
 
 /// The files that the driver writes for itself. KOReader's Calibre plugin uses
@@ -165,6 +165,9 @@ mod tests {
             ("Web/index.html", Ok(())),
             ("Reader/Story.fb2", Ok(())),
             ("Pocket/Novel.mobi", Ok(())),
+            // The library now indexes text books.
+            ("Notes/Read me.txt", Ok(())),
+            ("Books/Novel.TXT", Ok(())),
             // Empty, absolute and escaping names.
             ("", Err(NotRelative)),
             ("/etc/Book.epub", Err(NotRelative)),
@@ -206,8 +209,6 @@ mod tests {
             ("Old.docx", Err(NotBook)),
             ("Archive.zip", Err(NotBook)),
             ("Vector.svg", Err(NotBook)),
-            // Text files: CREngine opens them, but the library does not index them.
-            ("Notes/Read me.txt", Err(NotBook)),
             ("Pictures/cover.jpg", Err(NotBook)),
             ("metadata.calibre", Err(NotBook)),
             ("driveinfo.calibre", Err(NotBook)),

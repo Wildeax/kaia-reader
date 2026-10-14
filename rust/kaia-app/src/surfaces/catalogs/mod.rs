@@ -10,6 +10,7 @@ use kaia_opds::{Catalog, Entry, Feed};
 use kaia_ui::Window;
 
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
+use crate::surfaces::settings::keys;
 use crate::surfaces::Route;
 use worker::{worker_text, Reply, Request, Worker};
 
@@ -98,6 +99,11 @@ impl CatalogSurface {
         if matches!(env.services.platform.kind, kaia_platform::platform::Kind::Kobo(_))
             && !env.services.platform.network.is_wifi_on()
         {
+            // Airplane mode: Kaia does not offer to turn Wi-Fi on. Calibre takes this path too.
+            if keys::airplane_mode(&env.services.settings) {
+                env.notice(tr("Airplane mode is on. Turn it off to use Wi-Fi."));
+                return;
+            }
             self.pending = Some(request);
             self.status = tr("Wi-Fi is off. Turn it on to continue?");
         } else {
@@ -290,7 +296,12 @@ impl Surface for CatalogSurface {
             return Outcome::Rebuild;
         }
         if action == "wifi" {
-            if let Some(request) = self.pending.take() {
+            // A prompt from before airplane mode was turned on must not start Wi-Fi.
+            if keys::airplane_mode(&env.services.settings) {
+                self.pending = None;
+                self.status.clear();
+                env.notice(tr("Airplane mode is on. Turn it off to use Wi-Fi."));
+            } else if let Some(request) = self.pending.take() {
                 self.start(request, true, env);
             }
             return Outcome::Rebuild;

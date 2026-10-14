@@ -24,6 +24,9 @@ pub(crate) const MAX_ATTEMPTS: u32 = 3;
 
 /// Deepest folder the walk enters.
 const MAX_DEPTH: usize = 32;
+/// Exclude empty text files and cap CREngine's eager text import at 32 MiB.
+/// KOReader's file chooser and the parity plan specify no text size bounds.
+const TEXT_BYTES: std::ops::RangeInclusive<u64> = 1..=32 * 1024 * 1024;
 const MISSING_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
 
 #[derive(Debug)]
@@ -231,7 +234,7 @@ impl Library {
                         params![path, f.size as i64, f.mtime, m.id],
                     )?;
                     report.moved += 1;
-                    if m.settled() {
+                    if m.settled() && f.format != "txt" {
                         seen.insert(m.id);
                         return Ok(Some(m.id));
                     }
@@ -538,6 +541,11 @@ pub(crate) fn book_file(path: &Path) -> Result<(fs::Metadata, String)> {
     if path.to_str().is_none() {
         return Err(LibraryError::InvalidArgument("the path is not UTF-8".into()));
     }
+    if format == "txt" && !text_file_allowed(path, meta.len()) {
+        return Err(LibraryError::InvalidArgument(
+            "text books must be 1 byte to 32 MiB and outside hidden or reader data folders".into(),
+        ));
+    }
     Ok((meta, format))
 }
 
@@ -551,6 +559,9 @@ fn add_file(path: &Path, size: u64, mtime: i64, found: &mut BTreeMap<PathBuf, Fo
     if Format::from_extension(&ext).is_none() || path.to_str().is_none() {
         return;
     }
+    if ext == "txt" && !text_file_allowed(path, size) {
+        return;
+    }
     found.insert(
         path.to_path_buf(),
         Found {
@@ -560,6 +571,21 @@ fn add_file(path: &Path, size: u64, mtime: i64, found: &mut BTreeMap<PathBuf, Fo
             format: ext,
         },
     );
+}
+
+/// Check the full canonical path so explicit roots and symlink targets cannot
+/// include text from hidden folders or sidecars. Kaia and KOReader keep their
+/// data in hidden folders on the Kobo (`.kaia`, `.adds/koreader`), so the hidden
+/// rule covers them. A visible folder named KOReader is the reader's own books.
+fn text_file_allowed(path: &Path, size: u64) -> bool {
+    TEXT_BYTES.contains(&size)
+        && !path.components().any(|part| {
+            let std::path::Component::Normal(name) = part else {
+                return false;
+            };
+            let name = name.to_string_lossy().to_ascii_lowercase();
+            name.starts_with('.') || name.ends_with(".sdr")
+        })
 }
 
 /// Adds the book files under `dir`. Returns false when any part of the tree
@@ -630,7 +656,17 @@ fn file_stem(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::mtime_equivalent;
+    use super::{mtime_equivalent, text_file_allowed};
+    use std::path::Path;
+
+    #[test]
+    fn text_size_bounds_are_inclusive() {
+        let path = Path::new("Books/Story.txt");
+        assert!(!text_file_allowed(path, 0));
+        assert!(text_file_allowed(path, 1));
+        assert!(text_file_allowed(path, 32 * 1024 * 1024));
+        assert!(!text_file_allowed(path, 32 * 1024 * 1024 + 1));
+    }
 
     #[test]
     fn fat_mtime_tolerance_has_two_second_and_fourteen_hour_limits() {

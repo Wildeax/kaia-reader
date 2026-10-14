@@ -255,7 +255,8 @@ fn indexed_books_are_read_and_replaced_and_unindexed_files_are_not() {
     let juliet = fs::read(repo_root().join("test/juliet.epub")).unwrap();
     let leaves = fs::read(repo_root().join("test/leaves.epub")).unwrap();
     fs::write(root.join("Manual.epub"), &juliet).unwrap();
-    fs::write(root.join("Loose.txt"), b"not indexed").unwrap();
+    // Not a book format, so the scan leaves it out. A .txt file would be indexed.
+    fs::write(root.join("Loose.dat"), b"not indexed").unwrap();
     // The library scan indexes Manual.epub. The driver list stays empty.
     let mut library = Library::open(&database).unwrap();
     library
@@ -288,7 +289,7 @@ fn indexed_books_are_read_and_replaced_and_unindexed_files_are_not() {
         assert_eq!(reply(stream).0, 0, "the indexed book may be replaced");
         stream.write_all(&replacement).unwrap();
 
-        send(stream, 14, r#"{"lpath":"Loose.txt"}"#);
+        send(stream, 14, r#"{"lpath":"Loose.dat"}"#);
         assert_eq!(reply(stream).0, 12, "an unindexed file is not served");
         send(stream, 12, r#"{"ejecting":true}"#);
         assert_eq!(reply(stream).0, 0);
@@ -296,13 +297,13 @@ fn indexed_books_are_read_and_replaced_and_unindexed_files_are_not() {
     assert!(finish(&worker).is_ok());
     peer.join().unwrap();
     assert_eq!(fs::read(root.join("Manual.epub")).unwrap(), leaves);
-    assert_eq!(fs::read(root.join("Loose.txt")).unwrap(), b"not indexed");
+    assert_eq!(fs::read(root.join("Loose.dat")).unwrap(), b"not indexed");
 
     let (worker, peer) = calibre_server(&root, &database, |stream| {
-        refused_upload(stream, "Loose.txt");
+        refused_upload(stream, "Loose.dat");
     });
     assert_eq!(finish(&worker).unwrap_err(), REFUSED);
     peer.join().unwrap();
-    assert_eq!(fs::read(root.join("Loose.txt")).unwrap(), b"not indexed");
+    assert_eq!(fs::read(root.join("Loose.dat")).unwrap(), b"not indexed");
     fs::remove_dir_all(dir).unwrap();
 }

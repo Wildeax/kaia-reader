@@ -13,8 +13,10 @@ use kaia_i18n::{format as tr_format, tr};
 use kaia_library::{Library, LibraryError};
 use kaia_platform::{Paths, Platform};
 use kaia_ui::assets::{AssetError, Assets, SharedAssets};
-use kaia_ui::theme::Scale;
+use kaia_ui::theme::{Scale, LARGE_PRINT_SCALE};
 use kaia_ui::Theme;
+
+use crate::surfaces::settings::keys;
 
 /// Environment variable that points at the `resources` folder. Desktop builds
 /// default to the copy in this repository.
@@ -120,7 +122,7 @@ impl Services {
         let on_offer = crate::i18n::available(&catalog_root);
         let language = crate::i18n::resolve(settings.read(crate::i18n::SETTING).as_str(), &on_offer);
         crate::i18n::activate(&catalog_root, &language);
-        let startup_notices: Vec<String> = kept
+        let mut startup_notices: Vec<String> = kept
             .iter()
             .map(|name| {
                 tr_format(
@@ -159,12 +161,23 @@ impl Services {
         }
         let library = Library::open(&data_dir.join("library.sqlite3")).map_err(ServicesError::Library)?;
 
+        // Airplane mode keeps Wi-Fi off across restarts. Turn it off if the radio came up on its own.
+        if keys::airplane_mode(&settings) && platform.network.is_wifi_on() {
+            if let Err(error) = platform.network.disable_wifi() {
+                startup_notices.push(tr_format(
+                    &tr("Cannot turn off Wi-Fi for airplane mode: %1"),
+                    &[&error.to_string()],
+                ));
+            }
+        }
+
         let scale = Scale {
             width: panel.size.w,
             height: panel.size.h,
             dpi: Some(panel.dpi),
         };
-        let theme = Theme::new(scale, panel.format == PixelFormat::Rgb24);
+        let theme = Theme::new(scale, panel.format == PixelFormat::Rgb24)
+            .with_text_scale(large_print_factor(&settings));
 
         let resources = resources_dir(&platform);
         let assets = Assets::load(&resources.join("fonts/noto"), &resources.join("icons/mdlight"))
@@ -209,12 +222,28 @@ impl Services {
         self.paths.data_dir.join("library.sqlite3")
     }
 
+    /// Applies the large print setting to the theme. The screens built before
+    /// this call keep their old sizes until they are built again.
+    pub fn apply_large_print(&mut self) {
+        self.theme = self.theme.with_text_scale(large_print_factor(&self.settings));
+    }
+
     /// Shows the screens in `tag` from now on. `tag` is one of the languages of
     /// [`crate::i18n::available`]. The app rebuilds its screens when the epoch changes.
     pub fn set_language(&mut self, tag: &str) {
         crate::i18n::activate(&self.catalog_root, tag);
         self.language = tag.to_string();
         self.language_epoch += 1;
+    }
+}
+
+/// The text scale that large print mode asks for: [`LARGE_PRINT_SCALE`] when
+/// `display.large_print` is on, 1.0 otherwise.
+pub fn large_print_factor(settings: &Settings) -> f32 {
+    if keys::bool_or(settings, keys::DISPLAY_LARGE_PRINT, false) {
+        LARGE_PRINT_SCALE
+    } else {
+        1.0
     }
 }
 

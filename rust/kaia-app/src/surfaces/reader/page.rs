@@ -20,6 +20,9 @@ pub const PAGE_KEY: &str = "reader-page";
 /// and a line is ink.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkStyle {
+    /// A short bar in the right margin, beside the first line of a highlight that has
+    /// a note. The rect is that first line. KOReader draws the same mark.
+    Note,
     /// A box behind the text (KOReader's lighten). Tinted by its color on a color
     /// panel, dimmed otherwise.
     Box,
@@ -49,6 +52,8 @@ pub struct PageView {
     pub page: Option<Arc<Pixmap>>,
     /// Highlights on the page.
     pub marks: Vec<Mark>,
+    /// True when the page is bookmarked. A bookmarked page shows a dog-ear in its top right corner.
+    pub bookmarked: bool,
     pub stickers: Vec<super::stickers::Drawing>,
     /// The selected word, one box per line.
     pub selection: Vec<Rect>,
@@ -58,6 +63,12 @@ pub struct PageView {
     pub message: Option<String>,
     /// The page shown (0-based) and the page count. Tests read the position here.
     pub position: Option<(u32, usize)>,
+    /// The persistent footer, rebuilt from the current page on every frame.
+    pub footer: String,
+    footer_content: Option<(super::footer::Footer, kaia_book::PageInfo, f64)>,
+    pub(crate) footer_battery: Option<u8>,
+    /// The strip reserved by the book layout, including its vertical space.
+    pub footer_height: u32,
     pub brightness: Option<u8>,
     pub flipping: bool,
     light_drag: Option<bool>,
@@ -74,11 +85,16 @@ impl PageView {
             #[cfg(feature = "lua")]
             plugins: None,
             marks: Vec::new(),
+            bookmarked: false,
             stickers: Vec::new(),
             selection: Vec::new(),
             hits: Vec::new(),
             message: None,
             position: None,
+            footer: String::new(),
+            footer_content: None,
+            footer_battery: None,
+            footer_height: 0,
             brightness: None,
             flipping: false,
             light_drag: None,
@@ -89,11 +105,40 @@ impl PageView {
         }
     }
 
+    pub(super) fn set_footer(&mut self, footer: super::footer::Footer, info: kaia_book::PageInfo, pace: f64) {
+        if !footer.is_visible() {
+            self.footer.clear();
+        }
+        self.footer_content = Some((footer, info, pace));
+    }
+
     pub(super) fn cancel_gestures(&mut self) {
         self.light_drag = None;
         self.touch_flip = false;
         self.held_key = None;
         self.repeats = 0;
+    }
+
+    /// The page image centred above the footer, as `paint` draws it.
+    /// The book area when no page is shown.
+    fn placed(&self, bounds: Rect) -> Rect {
+        let bounds = self.content_bounds(bounds);
+        match &self.page {
+            Some(page) => Rect {
+                x: bounds.x + (bounds.w as i32 - page.width() as i32) / 2,
+                y: bounds.y + (bounds.h as i32 - page.height() as i32) / 2,
+                w: page.width(),
+                h: page.height(),
+            },
+            None => bounds,
+        }
+    }
+
+    fn content_bounds(&self, bounds: Rect) -> Rect {
+        Rect {
+            h: bounds.h.saturating_sub(self.footer_height),
+            ..bounds
+        }
     }
 
     fn brightness_action(&self, cx: &mut EventCx, start: Point, end: Point, release: bool) {
@@ -155,11 +200,11 @@ impl Widget for PageView {
         let surface = cx.color(Tone::Surface);
         cx.fill_rect(bounds, surface);
 
+        let content = self.content_bounds(bounds);
         match &self.page {
             Some(page) => {
-                let x = bounds.x + (bounds.w as i32 - page.width() as i32) / 2;
-                let y = bounds.y + (bounds.h as i32 - page.height() as i32) / 2;
-                cx.blit_pixmap(page, Point::new(x, y));
+                let placed = self.placed(bounds);
+                cx.clipped(content, |cx| cx.blit_pixmap(page, Point::new(placed.x, placed.y)));
             }
             None => {
                 if let Some(message) = &self.message {
@@ -177,11 +222,27 @@ impl Widget for PageView {
         }
 
         let ink = cx.color(Tone::Ink);
+        let page_rect = self.placed(bounds);
         for mark in &self.marks {
             let r = mark.rect;
             // Only a color panel shows the highlight color. A grayscale panel draws the shape alone.
             let color = if cx.theme.color_panel { mark.color } else { None };
             match mark.style {
+                MarkStyle::Note => {
+                    // The bar sits a gap inside the page edge, so it stays in the margin.
+                    let bar = cx.theme.line.focus.max(1);
+                    let gap = cx.theme.space.xs;
+                    let x = page_rect.x + page_rect.w as i32 - (gap + bar) as i32;
+                    cx.fill_rect(
+                        Rect {
+                            x,
+                            y: r.y,
+                            w: bar,
+                            h: r.h,
+                        },
+                        ink,
+                    );
+                }
                 MarkStyle::Box => match color {
                     Some(tint) => cx.multiply_rect(r, tint),
                     None => cx.dim(r, 40),
@@ -207,12 +268,68 @@ impl Widget for PageView {
                 ),
             }
         }
+        if self.bookmarked {
+            // KOReader's dog-ear is 1/40 of the shorter screen side, rounded up.
+            let size = bounds.w.min(bounds.h).div_ceil(40);
+            // A right triangle in the top right corner of the page: each row is one pixel high,
+            // and the rows get shorter going down.
+            for row in 0..size {
+                let width = size - row;
+                let x = page_rect.x + page_rect.w as i32 - width as i32;
+                cx.fill_rect(
+                    Rect {
+                        x,
+                        y: page_rect.y + row as i32,
+                        w: width,
+                        h: 1,
+                    },
+                    ink,
+                );
+            }
+        }
         for rect in &self.hits {
             cx.border(*rect, 0, 3, ink);
         }
         for rect in &self.selection {
             cx.dim(*rect, 80);
             cx.border(*rect, 0, 2, ink);
+        }
+        // Kaia's footer goes under stickers and plugin overlays, so a plugin can draw
+        // in the footer strip as it does in KOReader.
+        if self.footer_height > 0 {
+            if let Some((footer, info, pace)) = &self.footer_content {
+                self.footer = super::footer::page_line(
+                    footer,
+                    info,
+                    *pace,
+                    &super::footer::Status::now(self.footer_battery),
+                );
+            }
+            let rect = Rect::new(
+                bounds.x,
+                content.y + content.h as i32,
+                bounds.w,
+                self.footer_height,
+            );
+            cx.fill_rect(rect, surface);
+            let style = cx.theme.style(&cx.theme.font.caption, Tone::InkSecondary);
+            let margin = cx.theme.space.lg;
+            let text = cx.fonts.layout(
+                &self.footer,
+                &style,
+                bounds.w.saturating_sub(2 * margin),
+                Some(1),
+                true,
+            );
+            cx.clipped(rect, |cx| {
+                cx.text(
+                    &text,
+                    Point::new(
+                        bounds.x + bounds.w.saturating_sub(text.width) as i32 / 2,
+                        rect.y + rect.h.saturating_sub(text.height) as i32 / 2,
+                    ),
+                );
+            });
         }
         for sticker in &self.stickers {
             sticker.paint(cx);

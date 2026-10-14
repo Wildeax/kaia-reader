@@ -15,6 +15,7 @@
 
 mod commands;
 pub(crate) mod dict;
+mod footer;
 mod navigation;
 mod overlay;
 pub mod page;
@@ -456,7 +457,8 @@ impl Surface for ReaderSurface {
         };
         let screen = env.screen;
         let mut opts = OpenOptions::new(env.services.paths.data_dir.clone());
-        opts.viewport = screen;
+        let footer = footer::Footer::from_settings(&env.services.settings);
+        opts.viewport = footer.viewport(screen, env.theme());
         opts.default_layout = koreader_default_layout(screen, &env.services.settings);
         opts.pixel_format = env.services.theme.pixel_format();
         let color_panel = env.services.theme.color_panel;
@@ -471,7 +473,9 @@ impl Surface for ReaderSurface {
                 &c.title,
                 row.authors.as_deref().unwrap_or("N/A"),
             );
-            c.viewport = screen;
+            c.footer_height = footer.height(env.theme());
+            c.viewport = opts.viewport;
+            c.footer = footer;
             c.color_panel = color_panel;
             c.refresh_every = env
                 .services
@@ -568,6 +572,8 @@ impl Surface for ReaderSurface {
             let dimension = |i: usize| ev.args.get(i).and_then(Value::as_i64).unwrap_or(0).max(0) as u32;
             let size = kaia_gfx::Size::new(dimension(0), dimension(1));
             let mut c = self.core.borrow_mut();
+            let size = c.footer.viewport(size, env.theme());
+            c.footer_height = c.footer.height(env.theme());
             c.viewport = size;
             let result = c
                 .session
@@ -861,6 +867,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
                 let w = f64::from(env.screen.w);
                 let h = f64::from(env.screen.h);
+                // The top right corner is the dog-ear. It bookmarks the page, as KOReader's does.
+                let corner = f64::from(env.theme().touch_target);
+                if x >= w - corner && y < corner {
+                    return bookmark(&mut c, env);
+                }
                 let centre = x >= w / 3.0 && x < 2.0 * w / 3.0 && y >= h / 3.0 && y < 2.0 * h / 3.0;
                 let preset = env
                     .services
@@ -938,24 +949,29 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 Outcome::Handled
             }
             Command::Overlay => open_overlay(rc, &mut c, env),
-            Command::Bookmark => {
-                let result = c.session.as_mut().map(|s| s.toggle_bookmark());
-                match result {
-                    Some(Ok(added)) => {
-                        let message = if added {
-                            tr("Bookmark added")
-                        } else {
-                            tr("Bookmark removed")
-                        };
-                        env.toast(message, 2.0);
-                        c.refresh_overlay(env.ctx);
+            Command::Bookmark => bookmark(&mut c, env),
+            Command::Footer(item, on) => {
+                let was_visible = c.footer.is_visible();
+                c.footer.set(item, on);
+                if c.footer.is_visible() != was_visible {
+                    let viewport = c.footer.viewport(env.screen, env.theme());
+                    if let Some(session) = c.session.as_mut() {
+                        match session.set_viewport(viewport) {
+                            Ok(()) => c.layout_pending |= session.is_reflowable(),
+                            Err(e) => {
+                                c.footer.set(item, !on);
+                                env.notice(tr_format(&tr("Cannot resize the page. %1"), &[&e.to_string()]));
+                                return Outcome::Handled;
+                            }
+                        }
                     }
-                    Some(Err(e)) => env.notice(tr_format(
-                        &tr("cannot change the bookmark: %1"),
-                        &[&e.to_string()],
-                    )),
-                    None => {}
+                    c.viewport = viewport;
+                    c.footer_height = c.footer.height(env.theme());
                 }
+                env.services.settings.save(item.key(), Value::Bool(on));
+                save_settings(env);
+                c.refresh_overlay(env.ctx);
+                c.repaint_page(env.ctx, PaintHint::Full);
                 Outcome::Handled
             }
             Command::Slider(value) => {
@@ -1012,7 +1028,10 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
             }
             Command::Panel(name) => {
-                if c.panel.is_some() {
+                // The Footer sheet replaces the open panel, More, as the word list does.
+                // Other panels wait until the open one closes.
+                let replace = name == PanelName::Footer;
+                if c.panel.is_some() && !replace {
                     return Outcome::Handled;
                 }
                 let window = match name {
@@ -1022,8 +1041,9 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     }
                     PanelName::Layout => layout_window(&c, env),
                     PanelName::More => panels::more(env.services, env.screen),
+                    PanelName::Footer => panels::footer_sheet(env.services, env.screen, &c.footer),
                 };
-                push_panel(rc, &mut c, env.ctx, window)
+                show_panel(rc, &mut c, env.ctx, window, replace)
             }
             Command::PanelClose => Outcome::Navigate(Nav::Pop),
             Command::FontList => {
@@ -1302,6 +1322,8 @@ fn open_overlay(rc: &Rc<RefCell<Core>>, c: &mut Core, env: &mut SurfaceEnv<'_>) 
     if c.overlay.is_some() || c.panel.is_some() {
         return Outcome::Handled;
     }
+    // The clock and battery are read when the bars open. They do not redraw on their own.
+    c.status = footer::Status::now(env.services.platform.battery.capacity());
     let Some(model) = c.overlay_model() else {
         return Outcome::Handled;
     };
@@ -1312,6 +1334,30 @@ fn open_overlay(rc: &Rc<RefCell<Core>>, c: &mut Core, env: &mut SurfaceEnv<'_>) 
         window: window.clone(),
     });
     Outcome::Navigate(Nav::Push(Box::new(Overlay::new(window, serial, rc.clone()))))
+}
+
+/// Adds the bookmark on the current page, or removes it. The overlay shows the new
+/// state at once, and the page repaints so its dog-ear follows.
+fn bookmark(c: &mut Core, env: &mut SurfaceEnv<'_>) -> Outcome {
+    let result = c.session.as_mut().map(|s| s.toggle_bookmark());
+    match result {
+        Some(Ok(added)) => {
+            let message = if added {
+                tr("Bookmark added")
+            } else {
+                tr("Bookmark removed")
+            };
+            env.toast(message, 2.0);
+            c.refresh_overlay(env.ctx);
+            c.repaint_page(env.ctx, PaintHint::Partial);
+        }
+        Some(Err(e)) => env.notice(tr_format(
+            &tr("cannot change the bookmark: %1"),
+            &[&e.to_string()],
+        )),
+        None => {}
+    }
+    Outcome::Handled
 }
 
 /// Pushes a panel above the top screen and records its window.

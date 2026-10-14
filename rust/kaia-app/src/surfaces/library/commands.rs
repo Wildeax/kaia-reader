@@ -15,6 +15,7 @@ pub enum View {
     Folders,
     Collections,
     Series,
+    Authors,
 }
 
 /// Sort choices shown in the sort panel.
@@ -76,6 +77,8 @@ pub enum Command {
     Folder(FolderStep),
     /// `library:series:<n>` opens a series, and `library:series:up` closes it.
     Series(SeriesStep),
+    /// `library:author:<n>` opens an author, and `library:author:up` closes it.
+    Author(AuthorStep),
     /// `library:open:<id>`: open the book in the reader.
     Open(i64),
     /// `library:details:<id>`: show the details of a book (hold).
@@ -138,6 +141,12 @@ pub enum SeriesStep {
     Into(usize),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthorStep {
+    Up,
+    Into(usize),
+}
+
 /// Parses a library action id. `args` carries the value a control sent, such as
 /// the book id of a tile or the text of a field. None for ids that are not the
 /// library's.
@@ -174,6 +183,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             "folders" => View::Folders,
             "collections" => View::Collections,
             "series" => View::Series,
+            "authors" => View::Authors,
             _ => return None,
         }),
         ("sort", None) => Command::OpenSort,
@@ -205,6 +215,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ("folder", Some(n)) => Command::Folder(FolderStep::Into(n.parse().ok()?)),
         ("series", Some("up")) => Command::Series(SeriesStep::Up),
         ("series", Some(n)) => Command::Series(SeriesStep::Into(n.parse().ok()?)),
+        ("author", Some("up")) => Command::Author(AuthorStep::Up),
+        ("author", Some(n)) => Command::Author(AuthorStep::Into(n.parse().ok()?)),
         ("open", _) => Command::Open(tail_id.or(arg_id)?),
         ("details", _) => Command::Details(tail_id.or(arg_id)?),
         ("book", Some(t)) => {
@@ -272,6 +284,10 @@ mod tests {
         assert_eq!(
             parse("library:view:series", &none()),
             Some(Command::View(View::Series))
+        );
+        assert_eq!(
+            parse("library:view:authors", &none()),
+            Some(Command::View(View::Authors))
         );
         assert_eq!(parse("library:sort", &none()), Some(Command::OpenSort));
         assert_eq!(
@@ -352,6 +368,15 @@ mod tests {
             parse("library:series:up", &none()),
             Some(Command::Series(SeriesStep::Up))
         );
+        assert_eq!(
+            parse("library:author:4", &none()),
+            Some(Command::Author(AuthorStep::Into(4)))
+        );
+        assert_eq!(
+            parse("library:author:up", &none()),
+            Some(Command::Author(AuthorStep::Up))
+        );
+        assert_eq!(parse("library:author:x", &none()), None);
     }
 
     #[test]

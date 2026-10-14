@@ -6,16 +6,20 @@ use std::path::{Component, Path, PathBuf};
 
 use kaia_events::{Settings, Value};
 use kaia_i18n::{format as tr_format, tr, tr_n};
+use kaia_library::{Filter, Library, Sort, SortKey, Status};
 use kaia_platform::Paths;
 use kaia_stats::{BookSummary, DayTotal, Stats, Totals, Weekday};
 
 use super::keys;
+use crate::surfaces::library::data;
 
 /// Reading figures for the Statistics section.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatsView {
     pub today: Totals,
     pub week: Totals,
+    /// Every recorded stay, from the first day on.
+    pub all: Totals,
     /// The last seven days, oldest first.
     pub days: Vec<DayTotal>,
     /// Books by time read, longest first.
@@ -38,6 +42,7 @@ pub fn stats_view(data_dir: &Path, now: i64) -> Option<StatsView> {
     Some(StatsView {
         today: stats.today(now).ok()?,
         week: stats.this_week(now, Weekday::Monday).ok()?,
+        all: stats.all_time().ok()?,
         days: stats.daily(now, 7).ok()?,
         books: {
             let mut books = stats.books().ok()?;
@@ -45,6 +50,27 @@ pub fn stats_view(data_dir: &Path, now: i64) -> Option<StatsView> {
             books
         },
     })
+}
+
+/// The number of books whose status is finished in the library index.
+///
+/// This is the count the Home screen shows as "Finished" and the Library
+/// "Finished" filter lists. A book counts when its index row says complete,
+/// whatever set the status: the reader at the end of a book, or Mark as
+/// finished. The reading statistics do not decide it. Q39 in the parity
+/// notes asks for a rule that uses events; until it is decided, the index rules.
+pub fn finished_books(library: &Library) -> usize {
+    library
+        .books(
+            Sort::new(SortKey::Title, false),
+            &Filter {
+                status: Some(Status::Complete),
+                ..Filter::default()
+            },
+            0,
+            data::ALL,
+        )
+        .map_or(0, |books| books.len())
 }
 
 /// A duration as `1 h 5 min` or `40 min`.

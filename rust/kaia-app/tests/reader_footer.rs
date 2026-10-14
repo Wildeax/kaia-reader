@@ -1,0 +1,285 @@
+//! The footer: the Footer sheet, opened from More, turns items on and off. The
+//! choices reach settings.json, and the footer line on the bars follows them.
+
+use std::path::Path;
+use std::time::Duration;
+
+use kaia_app::surfaces::reader::page::{PageView, PAGE_KEY};
+use kaia_app::{App, HeadlessBackend, Route};
+use kaia_events::{Settings, Value};
+use kaia_gfx::golden::assert_matches_golden;
+use kaia_gfx::Point;
+use kaia_input::Key;
+use kaia_ui::components::Label;
+
+mod common;
+
+use common::*;
+
+/// Opens the reader on `name` and waits for the library scan.
+fn open_reader(name: &str, dir: &Path) -> App<HeadlessBackend> {
+    let lib = library_with_books(dir);
+    let mut app = make_app(dir, vec![lib]);
+    app.start().unwrap();
+    wait_for(&mut app, "the library scan", |a| !a.scan_running());
+    app.iterate(Some(Duration::from_millis(10))).unwrap();
+    open_from_library(&mut app, name);
+    app
+}
+
+/// Turns to a page of juliet with text. Page 0 is the cover.
+fn turn_to_text(app: &mut App<HeadlessBackend>) {
+    for _ in 0..8 {
+        app.key(Key::RPgFwd).unwrap();
+        wait_reader(app);
+    }
+}
+
+fn open_overlay(app: &mut App<HeadlessBackend>) {
+    let p = Point::new(app.screen().w as i32 / 2, app.screen().h as i32 / 2);
+    app.tap(p).unwrap();
+    wait_reader(app);
+    assert_eq!(app.top_route(), Some(&Route::Overlay));
+}
+
+/// The footer line on the bars. The overlay must be the top window.
+fn footer_line(app: &mut App<HeadlessBackend>) -> String {
+    let mut text = None;
+    app.update_top::<Label, _>("overlay-footer", |label, _| text = Some(label.text().to_string()));
+    text.expect("the overlay shows the footer line")
+}
+
+/// Closes panels until the overlay is the top window again.
+fn close_panels(app: &mut App<HeadlessBackend>) {
+    while app.top_route() == Some(&Route::ReaderPanel) {
+        tap_key(app, "panel-close");
+    }
+}
+
+/// The settings file on disk, as the reader saved it.
+fn saved_settings(dir: &Path) -> Settings {
+    Settings::read_exact(&dir.join("data/settings.json"))
+        .unwrap()
+        .expect("settings.json")
+}
+
+#[test]
+fn the_footer_sheet_turns_items_on_and_the_line_follows() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("footer-sheet");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    open_overlay(&mut app);
+    let default_line = footer_line(&mut app);
+    assert!(
+        default_line.starts_with("Page "),
+        "the default line: {default_line:?}"
+    );
+    assert!(
+        !default_line.contains(" · "),
+        "only the page count is on by default: {default_line:?}"
+    );
+
+    // More, then Footer. The sheet stays open while items change.
+    tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-footer");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::ReaderPanel),
+        "the Footer sheet is up"
+    );
+    tap_key(&mut app, "footer-time_chapter");
+    tap_key(&mut app, "footer-percent");
+    assert_eq!(
+        app.services()
+            .settings
+            .read("reading.footer_time_chapter")
+            .as_bool(),
+        Some(true),
+        "the choice is kept in memory"
+    );
+    let saved = saved_settings(&dir);
+    assert_eq!(
+        saved.read("reading.footer_time_chapter").as_bool(),
+        Some(true),
+        "and saved"
+    );
+    assert_eq!(saved.read("reading.footer_percent").as_bool(), Some(true));
+
+    // Turning an item off again removes it from the line.
+    tap_key(&mut app, "footer-percent");
+    assert_eq!(
+        saved_settings(&dir).read("reading.footer_percent").as_bool(),
+        Some(false)
+    );
+
+    close_panels(&mut app);
+    assert_eq!(app.top_route(), Some(&Route::Overlay), "back on the bars");
+    let line = footer_line(&mut app);
+    assert!(line.starts_with("Page "), "the page number leads: {line:?}");
+    assert!(line.contains(" of "), "page of total: {line:?}");
+    assert!(line.contains(" · "), "two items are joined: {line:?}");
+    assert!(line.contains("left in"), "the time is still on: {line:?}");
+    assert!(!line.contains('%'), "the percent is off: {line:?}");
+}
+
+#[test]
+fn the_clock_shows_the_local_time_when_the_bars_open() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("footer-clock");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+
+    open_overlay(&mut app);
+    tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-footer");
+    tap_key(&mut app, "footer-clock");
+    close_panels(&mut app);
+
+    let line = footer_line(&mut app);
+    let clock = line
+        .split(" · ")
+        .find(|part| part.len() == 5 && part.as_bytes()[2] == b':')
+        .unwrap_or_else(|| panic!("a HH:MM part in {line:?}"));
+    assert!(clock[..2].parse::<u32>().is_ok_and(|h| h < 24), "hours: {clock}");
+    assert!(
+        clock[3..].parse::<u32>().is_ok_and(|m| m < 60),
+        "minutes: {clock}"
+    );
+}
+
+fn set_item(app: &mut App<HeadlessBackend>, item: &str, on: bool) {
+    app.command(&format!("reader:footer:{item}"), &[Value::Bool(on)]);
+    wait_reader(app);
+}
+
+fn page_state(app: &mut App<HeadlessBackend>) -> (String, u32, std::sync::Arc<kaia_gfx::Pixmap>) {
+    let mut state = None;
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| {
+        state = Some((
+            view.footer.clone(),
+            view.footer_height,
+            view.page.clone().unwrap(),
+        ));
+    });
+    state.expect("the reading page")
+}
+
+#[test]
+fn the_persistent_footer_reserves_space_and_updates_after_a_page_turn() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("persistent-footer");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    let (before, strip, page) = page_state(&mut app);
+    let theme = &app.services().theme;
+    let caption = theme.style(&theme.font.caption, kaia_ui::Tone::InkSecondary);
+    assert_eq!(strip, caption.line_height.ceil() as u32 + theme.space.sm);
+    assert_eq!(page.height(), app.screen().h - strip);
+    assert!(before.starts_with("Page 9 of "), "{before}");
+    app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
+    let (after, next_strip, _) = page_state(&mut app);
+    assert!(after.starts_with("Page 10 of "), "{after}");
+    assert_ne!(before, after);
+    assert_eq!(strip, next_strip);
+}
+
+#[test]
+fn changing_items_keeps_the_layout_and_all_off_restores_full_height() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("footer-layout-toggle");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    let (_, strip, page) = page_state(&mut app);
+    set_item(&mut app, "percent", true);
+    let (text, same_strip, same_page) = page_state(&mut app);
+    assert!(text.contains(" | "), "{text}");
+    assert_eq!(same_strip, strip);
+    assert!(
+        std::sync::Arc::ptr_eq(&page, &same_page),
+        "an item change reuses the rendered page"
+    );
+    set_item(&mut app, "page", false);
+    set_item(&mut app, "percent", false);
+    let (text, no_strip, full_page) = page_state(&mut app);
+    assert_eq!(no_strip, 0);
+    assert!(text.is_empty());
+    assert_eq!(full_page.height(), app.screen().h);
+    set_item(&mut app, "page", true);
+    let (_, restored_strip, reduced_page) = page_state(&mut app);
+    assert_eq!(restored_strip, strip);
+    assert_eq!(reduced_page.height(), app.screen().h - strip);
+}
+
+#[test]
+fn fixed_pages_fit_above_the_footer() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("footer-pdf");
+    let mut app = open_reader("2col.pdf", &dir);
+    let (_, strip, page) = page_state(&mut app);
+    assert!(strip > 0);
+    assert!(page.height() <= app.screen().h - strip);
+    assert!(page.width() <= app.screen().w);
+    set_item(&mut app, "page", false);
+    let (text, no_strip, full_page) = page_state(&mut app);
+    assert_eq!(no_strip, 0);
+    assert!(text.is_empty());
+    assert!(full_page.height() > page.height());
+}
+
+#[test]
+fn persistent_footer_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("golden-persistent-footer");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    set_item(&mut app, "time_chapter", true);
+    let path = golden("reader-footer.png");
+    // Keep the first render available for inspection before accepting a new golden.
+    if !path.exists() {
+        kaia_gfx::png::write_pixmap(app.frame(), &golden("reader-footer.actual.png")).unwrap();
+    }
+    assert_matches_golden(app.frame(), &path, 14);
+}
+
+#[test]
+fn clock_and_battery_follow_a_page_redraw_without_a_page_turn() {
+    struct Battery(std::rc::Rc<std::cell::Cell<u8>>);
+    impl kaia_platform::Battery for Battery {
+        fn capacity(&self) -> Option<u8> {
+            Some(self.0.get())
+        }
+        fn is_charging(&self) -> Option<bool> {
+            Some(false)
+        }
+        fn is_charged(&self) -> Option<bool> {
+            Some(false)
+        }
+    }
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("footer-status-redraw");
+    let mut app = open_reader("juliet.epub", &dir);
+    let level = std::rc::Rc::new(std::cell::Cell::new(64));
+    app.services_mut().platform.battery = Box::new(Battery(level.clone()));
+    set_item(&mut app, "clock", true);
+    set_item(&mut app, "battery", true);
+    let (before, _, page) = page_state(&mut app);
+    assert!(before.contains("Battery 64%"), "{before}");
+    level.set(63);
+    app.update_top::<PageView, _>(PAGE_KEY, |view, cx| {
+        view.footer.clear();
+        cx.request_paint();
+    });
+    let clock_before = chrono::Local::now().format("%H:%M").to_string();
+    app.process(Vec::new()).unwrap();
+    let clock_after = chrono::Local::now().format("%H:%M").to_string();
+    let (after, _, same_page) = page_state(&mut app);
+    assert!(after.contains("Battery 63%"), "{after}");
+    assert!(
+        after.contains(&clock_before) || after.contains(&clock_after),
+        "{after}"
+    );
+    assert!(std::sync::Arc::ptr_eq(&page, &same_page));
+    assert!(!app.reader_busy());
+}

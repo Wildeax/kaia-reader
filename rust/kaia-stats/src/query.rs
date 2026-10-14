@@ -270,6 +270,12 @@ impl Stats {
         self.totals_since(start)
     }
 
+    /// Time read in all recorded history.
+    pub fn all_time(&mut self) -> Result<Totals> {
+        self.flush()?;
+        self.totals_since(i64::MIN)
+    }
+
     /// Time read since the current reading session started (book opened or device resumed).
     pub fn session(&mut self) -> Result<Totals> {
         self.flush()?;

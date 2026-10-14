@@ -6,6 +6,8 @@ use kaia_events::Value;
 use kaia_gfx::Size;
 use kaia_input::Axis;
 
+use super::footer::Item;
+
 /// Gesture updates bypass the reader's queued document commands.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum GestureCommand {
@@ -54,6 +56,8 @@ pub enum PanelName {
     Contents,
     Layout,
     More,
+    /// The Footer sheet, where the footer items are turned on or off.
+    Footer,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,6 +78,8 @@ pub enum Command {
     Overlay,
     /// Adds or removes the bookmark on the current page.
     Bookmark,
+    /// Turns a footer item on or off. The flag is the new state.
+    Footer(Item, bool),
     /// The page slider moved to a page number (1-based).
     Slider(f64),
     /// Opens the search panel.
@@ -239,6 +245,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["panel", "contents"] => Command::Panel(PanelName::Contents),
         ["panel", "layout"] => Command::Panel(PanelName::Layout),
         ["panel", "more"] => Command::Panel(PanelName::More),
+        ["panel", "footer"] => Command::Panel(PanelName::Footer),
+        ["footer", id] => Command::Footer(Item::from_id(id)?, flag(args)),
         ["panel", "close"] => Command::PanelClose,
         ["contents", "tab", n] => Command::ContentsTab(n.parse().ok()?),
         ["contents", "goto", n] => Command::ContentsGoto(n.parse().ok()?),
@@ -309,6 +317,23 @@ mod tests {
             Some(Command::ContentsAnnotation(7))
         );
         assert_eq!(parse("reader:search:hit:x", &[]), None);
+    }
+
+    #[test]
+    fn parses_footer_items() {
+        assert_eq!(
+            parse("reader:footer:clock", &[Value::Bool(true)]),
+            Some(Command::Footer(Item::Clock, true))
+        );
+        assert_eq!(
+            parse("reader:footer:page", &[Value::Bool(false)]),
+            Some(Command::Footer(Item::Page, false))
+        );
+        assert_eq!(parse("reader:footer:nope", &[]), None);
+        assert_eq!(
+            parse("reader:panel:footer", &[]),
+            Some(Command::Panel(PanelName::Footer))
+        );
     }
 
     #[test]

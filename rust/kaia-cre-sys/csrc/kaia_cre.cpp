@@ -255,6 +255,8 @@ int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
             CRPropRef props = LVCreatePropsContainer();
             props->setInt("font.hinting.mode", 2);
             props->setInt("font.kerning.mode", 3);
+            // Match KOReader's txt_preformatted default before loading text.
+            props->setInt("crengine.file.txt.preformatted", 1);
             view->propsApply(props);
             doc = new kaia_cre_doc{view};
         } catch (...) {

@@ -924,6 +924,14 @@ impl<B: Backend> App<B> {
             self.pending_navigation = Some((id.to_string(), args.to_vec()));
             return;
         }
+        // Airplane mode turns Wi-Fi off on the script worker. The quick settings
+        // surface still gets the id and saves the switch.
+        if id == "settings:quick:airplane"
+            && args.first().and_then(Value::as_bool) == Some(true)
+            && self.services.platform.network.is_wifi_on()
+        {
+            self.wifi(false);
+        }
         if self.device_command(id, args) {
             return;
         }
@@ -934,7 +942,13 @@ impl<B: Backend> App<B> {
             }
             "settings:quick:wifi" => {
                 if let Some(on) = args.first().and_then(Value::as_bool) {
-                    self.wifi(on);
+                    // A sheet built before airplane mode went on still sends this id.
+                    if on && crate::surfaces::settings::keys::airplane_mode(&self.services.settings) {
+                        self.notices
+                            .push(tr("Airplane mode is on. Turn it off to use Wi-Fi."));
+                    } else {
+                        self.wifi(on);
+                    }
                 }
                 return;
             }
@@ -1373,6 +1387,15 @@ impl<B: Backend> App<B> {
                 for window in &windows {
                     window.invalidate();
                 }
+            }
+            // Footer status follows an existing redraw and never schedules one.
+            let battery = self.services.platform.battery.capacity();
+            for window in &windows {
+                window.update::<crate::surfaces::reader::page::PageView, _>(
+                    &mut self.ctx,
+                    crate::surfaces::reader::page::PAGE_KEY,
+                    |view, _| view.footer_battery = battery,
+                );
             }
             Window::paint_stack(&windows, &mut self.frame, &mut self.ctx.dirty)
         };

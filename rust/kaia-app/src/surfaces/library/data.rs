@@ -44,6 +44,7 @@ impl Prefs {
             Some("folders") => View::Folders,
             Some("collections") => View::Collections,
             Some("series") => View::Series,
+            Some("authors") => View::Authors,
             _ => View::Covers,
         };
         let sort = match text("library.sort").as_deref() {
@@ -76,6 +77,7 @@ impl Prefs {
             View::Folders => "folders",
             View::Collections => "collections",
             View::Series => "series",
+            View::Authors => "authors",
         };
         let sort = match self.sort {
             SortChoice::Title => "title",
@@ -135,6 +137,14 @@ pub struct SeriesGroup {
     pub books: usize,
 }
 
+/// An author in the Authors view: the name as the library spells it, and how many
+/// of its books the lists show.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorGroup {
+    pub name: String,
+    pub books: usize,
+}
+
 /// True when the lists show the book: its file is still there, and finished
 /// books are shown.
 fn visible(book: &Book, prefs: &Prefs) -> bool {
@@ -175,6 +185,31 @@ pub fn series_books(library: &Library, prefs: &Prefs, name: &str) -> Vec<Book> {
         .into_iter()
         .filter(|b| visible(b, prefs))
         .collect()
+}
+
+/// The visible books of the library, by title. The author lists start from them.
+fn visible_books(library: &Library, prefs: &Prefs) -> Vec<Book> {
+    library
+        .books(Sort::new(SortKey::Title, false), &Filter::default(), 0, ALL)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|b| visible(b, prefs))
+        .collect()
+}
+
+/// The authors of the visible books, in the order the Authors view shows them.
+/// The rules for splitting and sorting names are in
+/// [`Library::author_index`](kaia_library::Library::author_index).
+pub fn author_groups(library: &Library, prefs: &Prefs) -> Vec<AuthorGroup> {
+    Library::author_index(&visible_books(library, prefs))
+        .into_iter()
+        .map(|(name, books)| AuthorGroup { name, books })
+        .collect()
+}
+
+/// The visible books of one author, in series order.
+pub fn author_books(library: &Library, prefs: &Prefs, name: &str) -> Vec<Book> {
+    Library::books_by_author(&visible_books(library, prefs), name)
 }
 
 /// True when the book is in the collection with id `collection`.
@@ -226,10 +261,11 @@ pub fn info(library: &Library, book: &Book) -> BookInfo {
 }
 
 pub fn info_without_cover(book: &Book) -> BookInfo {
+    let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
     BookInfo {
         id: book.id.to_string(),
         title: crate::surfaces::common::display_title(book),
-        author: book.authors.clone().filter(|a| !a.trim().is_empty()),
+        author: (!authors.is_empty()).then_some(authors),
         cover: None,
         progress: book.percent as f32,
     }

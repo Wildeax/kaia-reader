@@ -1,6 +1,6 @@
-//! The quick settings sheet: frontlight and warmth sliders, a Wi-Fi switch, a
-//! manual orientation picker and a Sleep button. The app opens it from a swipe down
-//! with `env.sheet(quick_settings(env.services))`.
+//! The quick settings sheet: frontlight and warmth sliders, a Wi-Fi switch, an
+//! airplane mode switch, a manual orientation picker and a Sleep button. The app
+//! opens it from a swipe down with `env.sheet(quick_settings(env.services))`.
 //!
 //! The sheet's controls send `settings:quick:<name>` ids. The top surface does
 //! not own them, so the app passes them to [`command`] before global routing
@@ -26,6 +26,7 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     let frontlight = f64::from(services.platform.frontlight.intensity());
     let warmth = f64::from(services.platform.frontlight.warmth());
     let wifi_on = services.platform.network.is_wifi_on();
+    let airplane = keys::airplane_mode(&services.settings);
 
     let sliders = vec![
         slider(
@@ -57,25 +58,36 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
             Tone::InkSecondary,
         )));
     }
+    // While airplane mode is on, the Wi-Fi switch only shows a notice.
+    let wifi_action = if airplane {
+        "settings:quick:wifi-blocked"
+    } else {
+        "settings:quick:wifi"
+    };
     rows.push(equal_row(
         vec![
+            WidgetPod::new(ListRow::new(tr("Wi-Fi")).toggle(wifi_on).on_action(wifi_action))
+                .with_key("quick-wifi"),
             WidgetPod::new(
-                ListRow::new(tr("Wi-Fi"))
-                    .toggle(wifi_on)
-                    .on_action("settings:quick:wifi"),
+                ListRow::new(tr("Airplane mode"))
+                    .toggle(airplane)
+                    .on_action("settings:quick:airplane"),
             )
-            .with_key("quick-wifi"),
-            WidgetPod::new(
-                ListRow::new(tr("Lock orientation"))
-                    .toggle(keys::bool_or(
-                        &services.settings,
-                        keys::DISPLAY_ROTATION_LOCK,
-                        false,
-                    ))
-                    .on_action("settings:quick:rotation-lock"),
-            )
-            .with_key("quick-rotation"),
+            .with_key("quick-airplane"),
         ],
+        t,
+    ));
+    rows.push(equal_row(
+        vec![WidgetPod::new(
+            ListRow::new(tr("Lock orientation"))
+                .toggle(keys::bool_or(
+                    &services.settings,
+                    keys::DISPLAY_ROTATION_LOCK,
+                    false,
+                ))
+                .on_action("settings:quick:rotation-lock"),
+        )
+        .with_key("quick-rotation")],
         t,
     ));
     rows.push(WidgetPod::new(
@@ -154,6 +166,23 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         "frontlight:release" => Outcome::Handled,
         "warmth:release" => {
             super::save(env);
+            Outcome::Handled
+        }
+        "wifi-blocked" => {
+            env.notice(tr("Airplane mode is on. Turn it off to use Wi-Fi."));
+            Outcome::Handled
+        }
+        "airplane" => {
+            let Some(on) = args.first().and_then(Value::as_bool) else {
+                return Outcome::NotMine;
+            };
+            env.services
+                .settings
+                .save(keys::NETWORK_AIRPLANE_MODE, Value::Bool(on));
+            super::save(env);
+            // `App::command` turns Wi-Fi off when airplane mode goes on, on the script
+            // worker like the Wi-Fi switch. It stays off until the switch is turned
+            // off and the Wi-Fi switch is used again.
             Outcome::Handled
         }
         "frontlight" | "warmth" => {

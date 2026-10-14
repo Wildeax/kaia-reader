@@ -23,7 +23,7 @@
 
 use kaia_events::Value;
 
-use super::keys;
+use super::{experiments, keys};
 use crate::surfaces::reader::dict::Change;
 
 /// The sections, in the order the root lists them.
@@ -76,6 +76,8 @@ pub enum Command {
 pub fn parse(id: &str) -> Option<Command> {
     let rest = id.strip_prefix("settings:")?;
     match rest {
+        // A page of Advanced. It is not in the root list.
+        "experimental" => return Some(Command::Section("experimental".into())),
         "search" => return Some(Command::Search),
         "search:open" => return Some(Command::SearchOpen),
         "fields:open" => return Some(Command::FieldsOpen),
@@ -211,34 +213,43 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
 
 /// The keys a `settings:set:` id may write. Other keys are not stored.
 pub fn is_known_key(key: &str) -> bool {
-    matches!(
-        key,
-        keys::READING_INVERT_PAGE_BUTTONS
-            | keys::DEVICE_SLEEP_COVER
-            | keys::DEVICE_PAGE_BUTTON_WAKE
-            | keys::DEVICE_POWER_OFF_MINUTES
-            | keys::SYNC_ENABLED
-            | keys::SYNC_INVALID_CERTS
-            | keys::SYNC_FORWARD
-            | keys::SYNC_BACKWARD
-            | keys::READING_FONT_SIZE
-            | keys::READING_FULL_REFRESH_PAGES
-            | keys::DISPLAY_NIGHT_MODE
-            | keys::DISPLAY_COLOR_RENDERING
-            | keys::DISPLAY_ROTATION_LOCK
-            | keys::DISPLAY_NATURAL_LIGHT_ENABLED
-            | keys::DISPLAY_NATURAL_LIGHT_BEDTIME
-            | keys::DISPLAY_NATURAL_LIGHT_DAY_WARMTH
-            | keys::DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH
-            | keys::LIBRARY_SHOW_FINISHED
-            | keys::SYNC_SERVER
-            | keys::SYNC_USERNAME
-            | keys::SYNC_PASSWORD
-            | keys::DEVICE_SLEEP_MINUTES
-            | keys::READING_FONT_FAMILY
-            | keys::READING_TAP_ZONES
-            | keys::DEVICE_SLEEP_SCREEN
-    )
+    keys::EXPERIMENTAL_ENABLED == key
+        || experiments::is_flag_key(experiments::FLAGS, key)
+        || matches!(
+            key,
+            keys::DISPLAY_LARGE_PRINT
+                | keys::READING_INVERT_PAGE_BUTTONS
+                | keys::DEVICE_SLEEP_COVER
+                | keys::DEVICE_PAGE_BUTTON_WAKE
+                | keys::DEVICE_POWER_OFF_MINUTES
+                | keys::SYNC_ENABLED
+                | keys::SYNC_INVALID_CERTS
+                | keys::SYNC_FORWARD
+                | keys::SYNC_BACKWARD
+                | keys::READING_FONT_SIZE
+                | keys::READING_FULL_REFRESH_PAGES
+                | keys::DISPLAY_NIGHT_MODE
+                | keys::DISPLAY_COLOR_RENDERING
+                | keys::DISPLAY_ROTATION_LOCK
+                | keys::DISPLAY_NATURAL_LIGHT_ENABLED
+                | keys::DISPLAY_NATURAL_LIGHT_BEDTIME
+                | keys::DISPLAY_NATURAL_LIGHT_DAY_WARMTH
+                | keys::DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH
+                | keys::LIBRARY_SHOW_FINISHED
+                | keys::SYNC_SERVER
+                | keys::SYNC_USERNAME
+                | keys::SYNC_PASSWORD
+                | keys::DEVICE_SLEEP_MINUTES
+                | keys::READING_FONT_FAMILY
+                | keys::READING_TAP_ZONES
+                | keys::READING_FOOTER_PAGE
+                | keys::READING_FOOTER_PERCENT
+                | keys::READING_FOOTER_TIME_CHAPTER
+                | keys::READING_FOOTER_TIME_BOOK
+                | keys::READING_FOOTER_CLOCK
+                | keys::READING_FOOTER_BATTERY
+                | keys::DEVICE_SLEEP_SCREEN
+        )
 }
 
 #[cfg(test)]

@@ -536,7 +536,7 @@ fn hidden_files_and_other_types_are_not_books() {
     fixture_set(&root);
     fs::write(root.join(".hidden.epub"), b"x").unwrap();
     fs::write(root.join("._resource.pdf"), b"x").unwrap();
-    fs::write(root.join("notes.txt"), b"plain text").unwrap();
+    fs::write(root.join("notes.md"), b"plain text").unwrap();
     fs::write(root.join("cover.jpg"), b"x").unwrap();
     let mut lib = open_library(tmp.path());
     let report = scan(&mut lib, std::slice::from_ref(&root));

@@ -6,7 +6,7 @@
 use kaia_events::Value;
 use kaia_gfx::{Pixmap, Size};
 use kaia_i18n::{format as tr_format, tr, tr_n};
-use kaia_library::{Book, Collection};
+use kaia_library::{Book, Collection, Library};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Paragraph, ProgressBar, Row, SizedBox, Spacer,
 };
@@ -18,7 +18,7 @@ use kaia_ui::{Theme, Tone, WidgetPod};
 
 use crate::surfaces::common::short;
 use crate::surfaces::library::commands::{Chip, SortChoice, View};
-use crate::surfaces::library::data::{self, SeriesGroup};
+use crate::surfaces::library::data::{self, AuthorGroup, SeriesGroup};
 use crate::surfaces::library::press::Pressable;
 
 /// One row of a list: a title, a line of detail, an optional cover, and the
@@ -108,10 +108,11 @@ pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: boo
     crate::surfaces::common::status_header(h).with_key("library-header")
 }
 
-/// The tab row: four text tabs and the Covers and List choice for the Books tab.
-/// The selected tab has an accent underline, as the nav bar marks its item. A tab
+/// The tab row: the five text tabs. Large print wraps them to two rows. The
+/// selected tab has an accent underline, as the nav bar marks its item. A tab
 /// takes a share of the row that fits its label, and a label that is too wide
-/// ends with an ellipsis.
+/// ends with an ellipsis. The Covers and List choice is in [`books_controls`],
+/// because it only changes the Books tab.
 pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
     let books = matches!(active, View::Covers | View::List);
     let tab = |weight: u32, selected: bool, label: &str, action: &str| {
@@ -133,44 +134,52 @@ pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
             weight,
         ))
     };
-    let choice = |weight: u32, view: View, label: &str| {
-        let style = if active == view {
+    let mut tabs = vec![
+        tab(9, books, &tr("Books"), "library:view:books"),
+        tab(9, active == View::Folders, &tr("Folders"), "library:view:folders"),
+        tab(
+            13,
+            active == View::Collections,
+            &tr("Collections"),
+            "library:view:collections",
+        ),
+        tab(8, active == View::Series, &tr("Series"), "library:view:series"),
+        tab(8, active == View::Authors, &tr("Authors"), "library:view:authors"),
+    ];
+    if t.text_scale <= 1.0 {
+        return WidgetPod::new(Row::new(tabs).gap(t.space.sm));
+    }
+    // Large print: at 1.25 the five labels do not fit one row, so the tabs wrap
+    // to two rows, three and then two. Normal text keeps one row.
+    let second = tabs.split_off(3);
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Row::new(tabs).gap(t.space.sm)),
+            WidgetPod::new(Row::new(second).gap(t.space.sm)),
+        ])
+        .gap(t.space.sm)
+        .cross_align(CrossAlign::Stretch)
+        .shrink(),
+    )
+}
+
+/// The controls of the Books tab, in one row: the filter and the sort, each a
+/// button that names the current choice and opens its panel, then the Covers and
+/// List choice of the layout. `layout` is the layout on show, which is primary.
+pub fn books_controls(t: &Theme, filter: &str, sort: &str, layout: View) -> WidgetPod {
+    let choice = |weight: u32, view: View, label: &str, action: &str| {
+        let style = if layout == view {
             ButtonStyle::Primary
         } else {
             ButtonStyle::Secondary
-        };
-        let action = match view {
-            View::List => "library:view:list",
-            _ => "library:view:covers",
         };
         WidgetPod::new(Expanded::new(button(style, label, action), weight))
     };
     WidgetPod::new(
         Row::new(vec![
-            tab(9, books, &tr("Books"), "library:view:books"),
-            tab(9, active == View::Folders, &tr("Folders"), "library:view:folders"),
-            tab(
-                13,
-                active == View::Collections,
-                &tr("Collections"),
-                "library:view:collections",
-            ),
-            tab(8, active == View::Series, &tr("Series"), "library:view:series"),
-            choice(8, View::Covers, &tr("Covers")),
-            choice(6, View::List, &tr("List")),
-        ])
-        .gap(t.space.sm),
-    )
-}
-
-/// The controls of the Books tab: the filter and the sort, each a button that
-/// names the current choice and opens its panel.
-pub fn books_controls(t: &Theme, filter: &str, sort: &str) -> WidgetPod {
-    WidgetPod::new(
-        Row::new(vec![
             WidgetPod::new(Expanded::new(
                 button(ButtonStyle::Secondary, filter, "library:filter"),
-                1,
+                3,
             )),
             WidgetPod::new(Expanded::new(
                 button(
@@ -178,8 +187,10 @@ pub fn books_controls(t: &Theme, filter: &str, sort: &str) -> WidgetPod {
                     &tr_format(&tr("Sort: %1"), &[sort]),
                     "library:sort",
                 ),
-                1,
+                3,
             )),
+            choice(2, View::Covers, &tr("Covers"), "library:view:covers"),
+            choice(2, View::List, &tr("List"), "library:view:list"),
         ])
         .gap(t.space.sm),
     )
@@ -310,6 +321,41 @@ pub fn series_books(t: &Theme, name: &str, books: Vec<Line>, loader: crate::cove
                 WidgetPod::new(list_covers(books, loader)).with_key("series-books"),
                 1,
             )),
+        ])
+        .gap(t.space.sm)
+        .cross_align(CrossAlign::Stretch),
+    )
+}
+
+/// The Authors view: one row per author, with the number of books. A tap opens the
+/// author. The index of a row is the index `library:author:<n>` names.
+pub fn author_list(groups: &[AuthorGroup]) -> WidgetPod {
+    let items: Vec<(usize, AuthorGroup)> = groups.iter().cloned().enumerate().collect();
+    let list = PagedList::new(items, |(n, group): &(usize, AuthorGroup), _t: &Theme| {
+        let row = ListRow::new(group.name.clone())
+            .secondary(tr_format(
+                &tr_n("%1 book", "%1 books", group.books as i64),
+                &[&group.books.to_string()],
+            ))
+            .chevron()
+            .on_action(format!("library:author:{n}"));
+        WidgetPod::new(row).with_key(format!("author-{n}"))
+    });
+    WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("author-list"), 1))
+}
+
+/// The books of an open author: the name, a row to go back to the list of
+/// authors, then `books`, which the caller lays out as covers or as a list.
+pub fn author_books(t: &Theme, name: &str, books: WidgetPod) -> WidgetPod {
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Label::new(
+                name.to_string(),
+                t.font.caption.clone(),
+                Tone::InkSecondary,
+            )),
+            WidgetPod::new(ListRow::new(tr("Up")).on_action("library:author:up")).with_key("author-up"),
+            WidgetPod::new(Expanded::new(books.with_key("author-books"), 1)),
         ])
         .gap(t.space.sm)
         .cross_align(CrossAlign::Stretch),
@@ -718,9 +764,10 @@ pub fn details_panel(
         t.font.book_title.clone(),
         Tone::Ink,
     ))];
-    if let Some(author) = book.authors.as_deref().filter(|a| !a.trim().is_empty()) {
+    let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
+    if !authors.is_empty() {
         facts.push(WidgetPod::new(Label::new(
-            author,
+            authors,
             t.font.body.clone(),
             Tone::InkSecondary,
         )));

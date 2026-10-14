@@ -10,6 +10,12 @@
 //! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.full_refresh_pages` | number | 6 | E Ink full refresh every this many page turns. |
+//! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
+//! | `reading.footer_percent` | bool | false | Reader footer shows the reading percent. |
+//! | `reading.footer_time_chapter` | bool | false | Reader footer shows the time left in the chapter, or in the book before the first chapter. |
+//! | `reading.footer_time_book` | bool | false | Reader footer shows the time left in the book. |
+//! | `reading.footer_clock` | bool | false | Reader footer shows the clock, read when the page redraws or the reader opens its bars. |
+//! | `reading.footer_battery` | bool | false | Reader footer shows the battery level, read when the page redraws or the reader opens its bars. |
 //! | `display.night_mode` | bool | false | Night mode: light text on a dark page. |
 //! | `display.color_rendering` | bool | true | Color rendering on a color panel. |
 //! | `display.rotation_lock` | bool | false | Ignore automatic orientation changes. |
@@ -27,6 +33,10 @@
 //! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
 //! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
+//! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
+//! | `network.airplane_mode` | bool | false | Airplane mode: Wi-Fi stays off and Kaia does not turn it on. Set from quick settings. |
+//! | `experimental.enabled` | bool | false | Master switch of the experimental features. See `experiments`. |
+//! | `experimental.<id>` | bool | false | One experimental flag. It works only when the master switch is on. |
 //!
 //! `display.warmth` stores the last warmth value and restores it at startup.
 //! The platform holds the current frontlight intensity and Wi-Fi state.
@@ -43,6 +53,13 @@ pub const READING_FONT_FAMILY: &str = "reading.font_family";
 pub const READING_FONT_SIZE: &str = "reading.font_size";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
+/// Reader footer items, each on or off. See the Footer sheet of the reader.
+pub const READING_FOOTER_PAGE: &str = "reading.footer_page";
+pub const READING_FOOTER_PERCENT: &str = "reading.footer_percent";
+pub const READING_FOOTER_TIME_CHAPTER: &str = "reading.footer_time_chapter";
+pub const READING_FOOTER_TIME_BOOK: &str = "reading.footer_time_book";
+pub const READING_FOOTER_CLOCK: &str = "reading.footer_clock";
+pub const READING_FOOTER_BATTERY: &str = "reading.footer_battery";
 pub const DISPLAY_NIGHT_MODE: &str = "display.night_mode";
 pub const DISPLAY_COLOR_RENDERING: &str = "display.color_rendering";
 pub const DISPLAY_NATURAL_LIGHT_ENABLED: &str = "display.natural_light_enabled";
@@ -77,6 +94,9 @@ pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
 pub const UI_LANGUAGE: &str = crate::i18n::SETTING;
+pub const DISPLAY_LARGE_PRINT: &str = "display.large_print";
+pub const NETWORK_AIRPLANE_MODE: &str = "network.airplane_mode";
+pub const EXPERIMENTAL_ENABLED: &str = "experimental.enabled";
 
 /// Default reading font size in KOReader units. It becomes 47 px on the Libra Colour.
 pub const DEFAULT_FONT_SIZE: f64 = 22.0;
@@ -100,6 +120,11 @@ pub const IDLE_MINUTES: [u32; 7] = [0, 5, 10, 15, 30, 45, 60];
 
 pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
     settings.read(key).as_bool().unwrap_or(default)
+}
+
+/// Whether airplane mode is on. Kaia must not turn Wi-Fi on while it is.
+pub fn airplane_mode(settings: &Settings) -> bool {
+    bool_or(settings, NETWORK_AIRPLANE_MODE, false)
 }
 
 pub fn number_or(settings: &Settings, key: &str, default: f64) -> f64 {

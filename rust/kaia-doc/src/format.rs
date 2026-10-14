@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::error::{DocError, Result};
 
-/// Formats that MuPDF opens. The magic string is the handler name MuPDF uses.
+/// Known document formats. Plain text opens with CREngine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     Pdf,
@@ -22,10 +22,11 @@ pub enum Format {
     Html,
     Svg,
     Djvu,
+    Txt,
 }
 
 impl Format {
-    /// The handler name passed to MuPDF, such as `.epub`.
+    /// The format extension, such as `.epub`. MuPDF cannot open plain text.
     pub fn magic(self) -> &'static str {
         match self {
             Format::Pdf => ".pdf",
@@ -37,6 +38,7 @@ impl Format {
             Format::Html => ".html",
             Format::Svg => ".svg",
             Format::Djvu => ".djvu",
+            Format::Txt => ".txt",
         }
     }
 
@@ -52,6 +54,7 @@ impl Format {
             "htm" | "html" | "xhtml" => Some(Format::Html),
             "svg" => Some(Format::Svg),
             "djvu" | "djv" => Some(Format::Djvu),
+            "txt" => Some(Format::Txt),
             _ => None,
         }
     }
@@ -150,7 +153,8 @@ mod tests {
     fn zip_needs_the_extension() {
         assert_eq!(sniff(b"PK\x03\x04rest"), None);
         assert_eq!(Format::from_extension("EPUB"), Some(Format::Epub));
-        assert_eq!(Format::from_extension("txt"), None);
+        assert_eq!(Format::from_extension("txt"), Some(Format::Txt));
+        assert_eq!(Format::from_extension("TXT"), Some(Format::Txt));
     }
 
     #[test]

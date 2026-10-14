@@ -1,4 +1,4 @@
-//! Library: the books in five views (covers, list, folders, collections, series),
+//! Library: the books in six views (covers, list, folders, collections, series, authors),
 //! the search page, select mode, and the panels for sort, filter, collections,
 //! naming, delete and book details. Panels replace the list in the same window, so their
 //! buttons are part of this surface and its commands. A hold on a book opens its
@@ -31,7 +31,7 @@ use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common;
 use crate::surfaces::common::root_window as window;
 use crate::surfaces::Route;
-use commands::{parse, Command, FolderStep, SeriesStep, View};
+use commands::{parse, AuthorStep, Command, FolderStep, SeriesStep, View};
 use data::Prefs;
 use folders::Entry;
 use views::Line;
@@ -106,6 +106,10 @@ pub struct LibrarySurface {
     series: Option<String>,
     /// The series rows of the last build. The series actions index into them.
     series_names: Vec<String>,
+    /// The author the Authors view shows, when the user opened one.
+    author: Option<String>,
+    /// The author rows of the last build. The author actions index into them.
+    author_names: Vec<String>,
     /// True in select mode, where a tap checks a book.
     selecting: bool,
     /// The books checked in select mode.
@@ -138,6 +142,8 @@ impl LibrarySurface {
             books: View::Covers,
             series: None,
             series_names: Vec::new(),
+            author: None,
+            author_names: Vec::new(),
             selecting: false,
             selected: BTreeSet::new(),
             marking: Rc::new(Cell::new(false)),
@@ -159,6 +165,7 @@ impl LibrarySurface {
         self.panel = None;
         self.search = false;
         self.series = None;
+        self.author = None;
         self.save_prefs(env);
     }
 
@@ -401,6 +408,16 @@ impl LibrarySurface {
             }
             Command::Series(SeriesStep::Up) => {
                 self.series = None;
+                Outcome::Rebuild
+            }
+            Command::Author(AuthorStep::Into(n)) => {
+                if let Some(name) = self.author_names.get(n) {
+                    self.author = Some(name.clone());
+                }
+                Outcome::Rebuild
+            }
+            Command::Author(AuthorStep::Up) => {
+                self.author = None;
                 Outcome::Rebuild
             }
             Command::Open(id) => {
@@ -723,6 +740,36 @@ impl LibrarySurface {
         vec![views::series_list(&groups)]
     }
 
+    /// The Authors view: the list of authors, or the books of the author that is open.
+    /// The books use the layout of the Books tab, covers or list.
+    fn authors_view(&mut self, env: &SurfaceEnv<'_>, t: &Theme) -> Vec<WidgetPod> {
+        if let Some(name) = self.author.clone() {
+            let books = data::author_books(&env.services.library, &self.prefs, &name);
+            if !books.is_empty() {
+                let loader = self.covers.as_ref().unwrap().clone();
+                let body = if self.books == View::List {
+                    let lines: Vec<Line> = books
+                        .iter()
+                        .map(|b| Line::book(&data::info_without_cover(b)))
+                        .collect();
+                    WidgetPod::new(views::list_covers(lines, loader))
+                } else {
+                    let infos: Vec<BookInfo> = books.iter().map(data::info_without_cover).collect();
+                    views::covers(t, env.screen, infos, loader)
+                };
+                return vec![views::author_books(t, &name, body)];
+            }
+            // The author has no books left to show, so the list comes back.
+            self.author = None;
+        }
+        let groups = data::author_groups(&env.services.library, &self.prefs);
+        self.author_names = groups.iter().map(|g| g.name.clone()).collect();
+        if groups.is_empty() {
+            return vec![views::body_text(t, &tr("No authors yet."))];
+        }
+        vec![views::author_list(&groups)]
+    }
+
     /// Select mode: the books of the view as rows with check boxes. A tap checks a book.
     fn select_content(&self, env: &SurfaceEnv<'_>, t: &Theme) -> Vec<WidgetPod> {
         let books = data::list(&env.services.library, &self.prefs);
@@ -767,6 +814,7 @@ impl LibrarySurface {
         match self.prefs.view {
             View::Folders => self.folder_view(env, &t),
             View::Series => self.series_view(env, &t),
+            View::Authors => self.authors_view(env, &t),
             View::Collections => {
                 let collections = env.services.library.collections().unwrap_or_default();
                 vec![views::collections(&t, &collections)]
@@ -851,7 +899,7 @@ impl LibrarySurface {
                 let collection = collection_name(&env.services.library, self.prefs.collection);
                 let filter = views::filter_name(self.prefs.chip, collection.as_deref());
                 let sort = views::sort_name(self.prefs.sort);
-                head.push(views::books_controls(&t, &filter, &sort));
+                head.push(views::books_controls(&t, &filter, &sort, self.prefs.view));
             }
         }
         // The header rows sit `space.sm` apart. The content starts `space.md` below

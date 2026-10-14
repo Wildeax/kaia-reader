@@ -254,6 +254,11 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     if !key.starts_with("sync.") {
         save(env);
     }
+    if key == keys::DISPLAY_LARGE_PRINT {
+        // Switching the root replaces the stack, so no screen keeps the old sizes.
+        env.services.apply_large_print();
+        return Outcome::Navigate(Nav::SwitchRoot(Route::Settings));
+    }
     if key == keys::READING_FONT_SIZE {
         Outcome::Rebuild
     } else {

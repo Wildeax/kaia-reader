@@ -439,14 +439,17 @@ fn rotation_lays_out_an_open_book_for_the_new_screen() {
     };
     let portrait = app.screen();
     let (size, (_, pages)) = shown(&mut app);
-    assert_eq!(size, portrait);
+    // The page fills the screen above the footer strip.
+    assert_eq!(size.w, portrait.w);
+    let strip = portrait.h - size.h;
+    assert!(strip > 0 && strip < 100, "footer strip {strip} px");
     // The settings picker rotates without closing a sheet, so the reader stays on top.
     app.command("settings:pick:display.rotation", &[Value::Number(1.0)]);
     app.process(vec![]).unwrap();
     let landscape = kaia_gfx::Size::new(portrait.h, portrait.w);
     assert_eq!(app.screen(), landscape);
     let (size, (_, rotated_pages)) = shown(&mut app);
-    assert_eq!(size, landscape);
+    assert_eq!(size, kaia_gfx::Size::new(landscape.w, landscape.h - strip));
     // Wider, shorter pages hold different text, so the count changes.
     assert_ne!(rotated_pages, pages);
 }

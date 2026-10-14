@@ -1,6 +1,6 @@
 //! The reader overlay: a top bar with Home, the title, search, the bookmark and
-//! More, and a bottom bar with the page slider, the time left in the chapter and
-//! the Contents, Notes, Text and layout and Light buttons. Every bar item is an
+//! More, and a bottom bar with the page slider, the footer line and the Contents,
+//! Notes, Text and layout and Light buttons. Every bar item is an
 //! icon with its label, the same style as the nav bar. The page stays visible
 //! between the bars. A tap the bars do not use closes the overlay.
 
@@ -29,9 +29,9 @@ pub struct OverlayModel {
     /// The page shown, 0-based.
     pub page: u32,
     pub page_count: usize,
-    /// The time left in the chapter, or in the book before the first chapter, as
-    /// one line such as `12 min left in chapter`. Empty when the book has no pages.
-    pub time_left: String,
+    /// The footer line: the items the Footer sheet turned on, such as
+    /// `Page 3 of 200 · 12 min left in chapter`. Empty when none is on.
+    pub footer: String,
     pub bookmarked: bool,
     pub can_go_back: bool,
 }
@@ -150,12 +150,12 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
             .on_action("reader:slider"),
     )
     .with_key("overlay-slider");
-    let time_left = WidgetPod::new(Label::new(
-        model.time_left.clone(),
+    let footer = WidgetPod::new(Label::new(
+        model.footer.clone(),
         t.font.caption.clone(),
         Tone::InkSecondary,
     ))
-    .with_key("overlay-chapter");
+    .with_key("overlay-footer");
     let tools = WidgetPod::new(
         Row::new(vec![
             WidgetPod::new(Expanded::new(
@@ -193,7 +193,7 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         .gap(t.space.sm),
     );
     let bottom = WidgetPod::new(
-        Column::new(vec![slider, time_left, tools])
+        Column::new(vec![slider, footer, tools])
             .gap(sp)
             .cross_align(CrossAlign::Stretch)
             .shrink(),

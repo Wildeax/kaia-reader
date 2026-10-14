@@ -9,6 +9,8 @@ pub(super) struct Frame {
     pub session: BookSession,
     pub page: Option<Arc<Pixmap>>,
     pub marks: Vec<Mark>,
+    /// True when the page has a bookmark. The page draws its dog-ear.
+    pub bookmarked: bool,
     pub hits: Vec<Rect>,
     pub links: Vec<(Rect, kaia_book::Link)>,
     pub selection: Option<Selection>,
@@ -79,8 +81,24 @@ pub(super) fn spawn(
                         style,
                         color,
                     }));
+                    // KOReader draws one note mark, beside the first line of the highlight.
+                    if item
+                        .annotation
+                        .note
+                        .as_deref()
+                        .is_some_and(|note| !note.is_empty())
+                    {
+                        if let Some(first) = item.rects.iter().min_by_key(|rect| rect.y) {
+                            marks.push(Mark {
+                                rect: *first,
+                                style: MarkStyle::Note,
+                                color: None,
+                            });
+                        }
+                    }
                 }
             }
+            let bookmarked = session.is_bookmarked().unwrap_or(false);
             let mut hits = Vec::new();
             let mut links = Vec::new();
             let page = session.current().page;
@@ -119,6 +137,7 @@ pub(super) fn spawn(
                 session,
                 page: rendered.ok(),
                 marks,
+                bookmarked,
                 hits,
                 links,
                 selection,

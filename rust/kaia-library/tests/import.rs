@@ -24,7 +24,7 @@ fn history_lua(dir: &Path) -> String {
     }},
     [4] = {{
         ["time"] = 1700000200,
-        ["file"] = "{d}/notes.txt",
+        ["file"] = "{d}/notes.md",
     }},
     [5] = {{
         ["file"] = "{d}/leaves.epub",
@@ -79,7 +79,7 @@ fn setup() -> (tempfile::TempDir, PathBuf) {
 fn history_import_adds_entries_and_skips_bad_ones() {
     let (tmp, root) = setup();
     fixture_set(&root);
-    fs::write(root.join("notes.txt"), b"plain").unwrap();
+    fs::write(root.join("notes.md"), b"plain").unwrap();
     let lua = tmp.path().join("history.lua");
     fs::write(&lua, history_lua(&root)).unwrap();
 

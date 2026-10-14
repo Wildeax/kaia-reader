@@ -11,9 +11,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::slider::Slider;
-use kaia_book::{
-    BookEvent, BookSession, OpenOptions, PageInfo, Point, Selection, Size, TextLayout, ZoomMode,
-};
+use kaia_book::{BookEvent, BookSession, OpenOptions, Point, Selection, Size, TextLayout, ZoomMode};
 use kaia_events::Ctx;
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::Label;
@@ -21,6 +19,7 @@ use kaia_ui::controls::{TextField, ToolButton};
 use kaia_ui::widget::PaintHint;
 use kaia_ui::Window;
 
+use super::footer::{self, Footer, Status};
 use super::overlay::{bookmark_label, OverlayModel};
 use super::page::{PageView, PAGE_KEY};
 use super::panels::{search_rows, SearchRow, FONT_CHOICES};
@@ -75,7 +74,9 @@ pub struct Core {
     pub(super) opened: bool,
     pub(super) events: std::collections::VecDeque<kaia_events::Event>,
     pending_hint: PaintHint,
+    /// The book area, excluding the persistent footer strip.
     pub viewport: Size,
+    pub footer_height: u32,
     /// Why the book cannot be read, shown on the page.
     pub error: Option<String>,
     pub page_window: Option<Window>,
@@ -101,6 +102,10 @@ pub struct Core {
     pub color_panel: bool,
     /// Seconds of reading per page, for the time-left line. Set when the book opens.
     pub seconds_per_page: f64,
+    /// The items of the reader footer that are on.
+    pub footer: Footer,
+    /// The clock and battery for the overlay, read when the bars open.
+    pub status: Status,
     pub pump_due: bool,
     pub layout_pending: bool,
     pub closed: bool,
@@ -126,6 +131,7 @@ impl Core {
             events: std::collections::VecDeque::new(),
             pending_hint: PaintHint::Full,
             viewport: Size { w: 1, h: 1 },
+            footer_height: 0,
             error: None,
             page_window: None,
             overlay: None,
@@ -150,6 +156,8 @@ impl Core {
             pump_due: false,
             layout_pending: false,
             seconds_per_page: 60.0,
+            footer: Footer::default(),
+            status: Status::default(),
             closed: false,
             plugin_waiting: false,
             fresh: Default::default(),
@@ -273,12 +281,18 @@ impl Core {
             .unwrap_or_default();
         let hint = self.pending_hint;
         let error = self.error.clone();
+        let footer = self.footer.clone();
+        let pace = self.seconds_per_page;
+        let footer_height = self.footer_height;
         window.update::<PageView, _>(ctx, PAGE_KEY, move |view, cx| {
             if frame.page.is_some() {
                 view.page = frame.page;
             }
             view.message = error;
+            view.set_footer(footer, info.clone(), pace);
+            view.footer_height = footer_height;
             view.marks = frame.marks;
+            view.bookmarked = frame.bookmarked;
             view.stickers = frame.stickers;
             view.hits = frame.hits;
             view.selection = selection;
@@ -297,7 +311,7 @@ impl Core {
             title: self.title.clone(),
             page: info.page,
             page_count: info.page_count,
-            time_left: time_line(&info, self.seconds_per_page),
+            footer: footer::line(&self.footer, &info, self.seconds_per_page, &self.status),
             bookmarked,
             can_go_back: session.can_go_back(),
         })
@@ -341,11 +355,11 @@ impl Core {
                     cx.request_paint();
                 }
             });
-        let time_left = model.time_left.clone();
+        let footer = model.footer.clone();
         layer
             .window
-            .update::<Label, _>(ctx, "overlay-chapter", move |label, cx| {
-                label.set_text(time_left);
+            .update::<Label, _>(ctx, "overlay-footer", move |label, cx| {
+                label.set_text(footer);
                 cx.request_layout();
                 cx.request_paint_with(hint);
             });
@@ -623,35 +637,6 @@ impl Core {
                 cx.request_layout();
                 cx.request_paint();
             });
-    }
-}
-
-/// The time-left line of the overlay, such as `12 min left in chapter`. The
-/// pages left in the chapter are timed at `seconds_per_page`. A page before the
-/// first chapter counts the rest of the book instead. On the last page it says so.
-pub fn time_line(info: &PageInfo, seconds_per_page: f64) -> String {
-    if info.page_count == 0 {
-        return String::new();
-    }
-    let (pages, in_chapter) = match (&info.chapter, info.pages_left_in_chapter) {
-        (Some(_), Some(n)) => (u64::from(n), true),
-        _ => (
-            info.page_count.saturating_sub(info.page as usize + 1) as u64,
-            false,
-        ),
-    };
-    if pages == 0 {
-        return if in_chapter {
-            tr("Last page of the chapter")
-        } else {
-            tr("Last page of the book")
-        };
-    }
-    let minutes = (pages as f64 * seconds_per_page / 60.0).round().max(1.0) as u64;
-    if in_chapter {
-        tr_format(&tr("%1 min left in chapter"), &[&minutes.to_string()])
-    } else {
-        tr_format(&tr("%1 min left in book"), &[&minutes.to_string()])
     }
 }
 

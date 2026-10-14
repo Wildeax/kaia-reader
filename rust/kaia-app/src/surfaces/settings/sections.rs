@@ -9,6 +9,7 @@ use kaia_stats::DayTotal;
 
 use super::commands::{font_options, options_for, rescan_user_fonts, Light};
 use super::entries::{Entry, StepUnit};
+use super::experiments;
 use super::facts::{self, duration, KoreaderFolder, StatsView};
 use super::keys;
 use crate::services::Services;
@@ -56,6 +57,7 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "data" => data(services),
         "about" => about(),
         "advanced" => advanced(),
+        "experimental" => experimental(services),
         _ if name.starts_with("plugin:") => plugin_entries(&name[7..], services),
         _ => Vec::new(),
     }
@@ -220,6 +222,16 @@ fn display(services: &Services) -> Vec<Entry> {
     }
     out.push(Entry::Heading(tr("Screen")));
     out.push(Entry::Toggle {
+        key: keys::DISPLAY_LARGE_PRINT,
+        label: tr("Large print"),
+        on: keys::bool_or(s, keys::DISPLAY_LARGE_PRINT, false),
+    });
+    let percent = ((kaia_ui::theme::LARGE_PRINT_SCALE - 1.0) * 100.0).round();
+    out.push(Entry::Text(tr_format(
+        &tr("Makes the text on every screen %1% larger."),
+        &[&percent.to_string()],
+    )));
+    out.push(Entry::Toggle {
         key: keys::DISPLAY_NIGHT_MODE,
         label: tr("Night mode"),
         on: keys::bool_or(s, keys::DISPLAY_NIGHT_MODE, false),
@@ -379,15 +391,30 @@ fn network(services: &Services) -> Vec<Entry> {
 }
 
 fn statistics(services: &Services, now: i64) -> Vec<Entry> {
+    let finished = facts::finished_books(&services.library);
     match facts::stats_view(&services.paths.data_dir, now) {
-        None => vec![Entry::Text(tr(
-            "No reading recorded yet. Statistics appear after the first book is read.",
-        ))],
-        Some(view) => statistics_rows(&view),
+        None => vec![
+            Entry::Text(tr(
+                "No reading recorded yet. Statistics appear after the first book is read.",
+            )),
+            Entry::Heading(tr("Books")),
+            finished_row(finished),
+        ],
+        Some(view) => statistics_rows(&view, finished),
     }
 }
 
-fn statistics_rows(view: &StatsView) -> Vec<Entry> {
+/// The count of finished books, from the library index. See `facts::finished_books`.
+fn finished_row(finished: usize) -> Entry {
+    Entry::Row {
+        primary: tr("Books finished"),
+        secondary: None,
+        value: Some(finished.to_string()),
+        action: None,
+    }
+}
+
+fn statistics_rows(view: &StatsView, finished: usize) -> Vec<Entry> {
     let mut out = vec![
         Entry::Heading(tr("Reading time")),
         Entry::Row {
@@ -402,6 +429,12 @@ fn statistics_rows(view: &StatsView) -> Vec<Entry> {
             value: Some(duration(view.week.seconds)),
             action: None,
         },
+        Entry::Row {
+            primary: tr("All time"),
+            secondary: Some(facts::page_count(view.all.pages)),
+            value: Some(duration(view.all.seconds)),
+            action: None,
+        },
         Entry::Heading(tr("Last seven days")),
     ];
     let longest = view.days.iter().map(|d| d.seconds).max().unwrap_or(0).max(1);
@@ -409,6 +442,7 @@ fn statistics_rows(view: &StatsView) -> Vec<Entry> {
         out.push(day_bar(day, longest));
     }
     out.push(Entry::Heading(tr("Books")));
+    out.push(finished_row(finished));
     for book in &view.books {
         let title = if book.title.trim().is_empty() {
             tr("Untitled")
@@ -581,11 +615,28 @@ fn about() -> Vec<Entry> {
     ]
 }
 
+/// The Experimental features page. See `experiments` for the flags.
+fn experimental(services: &Services) -> Vec<Entry> {
+    let s = &services.settings;
+    let mut out = vec![
+        Entry::Toggle {
+            key: keys::EXPERIMENTAL_ENABLED,
+            label: tr("Experimental features"),
+            on: keys::bool_or(s, keys::EXPERIMENTAL_ENABLED, false),
+        },
+        Entry::Text(tr(
+            "Experimental features can change or break. A flag works only while this switch is on.",
+        )),
+    ];
+    out.extend(experiments::entries(experiments::FLAGS, s));
+    out
+}
+
 fn advanced() -> Vec<Entry> {
     let items = [
         (
             tr("Gesture zones"),
-            tr("Custom zone layouts and gesture bindings. Choose a preset in Reading."),
+            tr("Zones and gestures. Choose a preset in Reading."),
         ),
         (
             tr("Hardware keys"),
@@ -593,17 +644,25 @@ fn advanced() -> Vec<Entry> {
         ),
         (
             tr("Auto suspend"),
-            tr("Suspend after a set time with no input. The sleep timeout is in Device."),
+            tr("Suspend after no input. The timeout is in Device."),
         ),
         (tr("Backup"), tr("Copy the data folder to keep a backup.")),
         (
             tr("Date and time"),
-            tr("Kaia uses the clock of the device. Set it in the device settings."),
+            tr("Uses the device clock. Set it on the device."),
         ),
     ];
-    let mut out = vec![Entry::Text(tr(
-        "These KOReader options have no Kaia control yet. Each line says what the option does.",
-    ))];
+    let mut out = vec![
+        Entry::Row {
+            primary: tr("Experimental features"),
+            secondary: Some(tr("Off by default. Flags for features that are not ready.")),
+            value: None,
+            action: Some("settings:experimental".into()),
+        },
+        Entry::Text(tr(
+            "These KOReader options have no Kaia control yet. Each line says what the option does.",
+        )),
+    ];
     for (primary, secondary) in items {
         out.push(Entry::Row {
             primary,

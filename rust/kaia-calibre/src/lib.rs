@@ -183,7 +183,7 @@ impl Default for DeviceInfo {
         // The test `advertised_formats_are_the_accepted_book_formats` keeps the two lists equal.
         let formats = [
             "epub", "fb2", "mobi", "azw", "azw3", "xps", "djv", "djvu", "pdf", "cbz", "htm", "html", "xhtml",
-            "prc",
+            "prc", "txt",
         ];
         Self {
             model: "Kobo".into(),
@@ -1244,6 +1244,23 @@ mod tests {
             )
         );
         assert_eq!(fs::read(root.join("Loose.epub")).unwrap(), b"loose");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn plain_text_upload_preserves_utf8_bytes() {
+        let (mut client, mut peer, root) = pair();
+        let body = "A café beside the sea.\n";
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"Books/Story.txt","length":body.len(),"metadata":{"lpath":"Books/Story.txt","uuid":"text-1","title":"Story"}}),
+        );
+        peer.write_all(body.as_bytes()).unwrap();
+        assert!(matches!(client.run_once().unwrap(), Event::BookReceived { .. }));
+        assert_eq!(recv(&mut peer).0, opcode::OK);
+        assert_eq!(fs::read(root.join("Books/Story.txt")).unwrap(), body.as_bytes());
+        assert_eq!(read_metadata_cache(&root).unwrap().len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

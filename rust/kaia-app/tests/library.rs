@@ -4,6 +4,7 @@
 use std::fs;
 use std::time::{Duration, Instant};
 
+use kaia_app::surfaces::settings::keys;
 use kaia_app::{App, HeadlessBackend, Route};
 use kaia_display::InputEvent;
 use kaia_events::RefreshMode;
@@ -11,6 +12,7 @@ use kaia_gfx::golden::assert_matches_golden;
 use kaia_gfx::Rect;
 use kaia_input::{Key, Phase, TouchEvent};
 use kaia_library::Status;
+use kaia_ui::theme::LARGE_PRINT_SCALE;
 
 mod common;
 
@@ -454,6 +456,7 @@ fn library_views_keep_the_route_and_the_frame() {
     let (mut app, _dir) = indexed("routes");
     open_library(&mut app);
     tap_key(&mut app, &key("library:view:folders"));
+    tap_key(&mut app, "library-view-books");
     tap_key(&mut app, &key("library:view:covers"));
     assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));
     assert!(
@@ -478,7 +481,7 @@ fn removing_history_keeps_reading_progress() {
 }
 
 #[test]
-fn the_books_controls_sit_under_one_tab_row_with_a_gap_before_the_covers() {
+fn the_tabs_share_one_row_and_the_books_controls_sit_below_with_a_gap() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _dir) = indexed("header-layout");
     let (juliet, _, _) = ids(&app);
@@ -486,29 +489,34 @@ fn the_books_controls_sit_under_one_tab_row_with_a_gap_before_the_covers() {
 
     let touch = app.services().theme.touch_target;
     let gap = app.services().theme.space.md as i32;
-    let tabs = [
+    let tab_keys = [
         "library-view-books",
         "library-view-folders",
         "library-view-collections",
-    ]
-    .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
-    let segment = ["library-view-covers", "library-view-list"]
-        .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
+        "library-view-series",
+        "library-view-authors",
+    ];
+    let tabs = tab_keys.map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
     let row_y = tabs[0].y;
-    for r in tabs.iter().chain(segment.iter()) {
-        assert_eq!(r.y, row_y, "the tabs and the choice share one row");
+    for (i, r) in tabs.iter().enumerate() {
+        assert_eq!(r.y, row_y, "the five tabs share one row");
         assert!(r.h >= touch, "a tab is at least the touch target high");
+        if let Some(next) = tabs.get(i + 1) {
+            assert!(r.x + r.w as i32 <= next.x, "tab {i} does not overlap the next");
+        }
     }
+
     let filter = app.find_rect("library-filter").expect("the filter button");
     let sort = app.find_rect("library-sort").expect("the sort button");
-    assert_eq!(filter.y, sort.y, "the controls share one row");
-    assert!(
-        filter.h >= touch && sort.h >= touch,
-        "the controls are touch targets"
-    );
+    let choice = ["library-view-covers", "library-view-list"]
+        .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
+    for r in [&sort, &choice[0], &choice[1]] {
+        assert_eq!(r.y, filter.y, "the controls share one row");
+        assert!(r.h >= touch, "a control is a touch target");
+    }
     assert!(
         filter.y >= tabs[0].y + tabs[0].h as i32,
-        "no overlap with the tabs"
+        "the controls sit below the tabs"
     );
 
     let cover = app.find_rect(&format!("book-{juliet}")).expect("a cover");
@@ -526,6 +534,10 @@ fn the_controls_are_for_the_books_tab_only() {
     assert!(app.find_rect("library-filter").is_some());
 
     tap_key(&mut app, &key("library:view:folders"));
+    assert!(
+        app.find_rect("library-view-covers").is_none(),
+        "the Covers and List choice belongs to the Books tab"
+    );
     assert!(app.find_rect("library-filter").is_none(), "Folders has no filter");
     assert!(app.find_rect("library-sort").is_none(), "Folders has no sort");
     assert!(
@@ -568,4 +580,40 @@ fn library_filter_golden() {
     open_library(&mut app);
     tap_key(&mut app, "library-filter");
     assert_matches_golden(app.frame(), &golden("library_filter.png"), 14);
+}
+
+#[test]
+fn library_large_print_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("golden-large-print");
+    let data = dir.join("data");
+    fs::create_dir_all(&data).unwrap();
+    let path = data.join("settings.json");
+    let mut settings = kaia_events::Settings::open(&path);
+    settings.save(keys::DISPLAY_LARGE_PRINT, kaia_events::Value::Bool(true));
+    settings.flush(&path).unwrap();
+
+    let lib = library_with_books(&dir);
+    let mut app = make_app(&dir, vec![lib]);
+    app.start().unwrap();
+    wait_for(&mut app, "the library scan", |a| !a.scan_running());
+    app.iterate(Some(Duration::from_millis(10))).unwrap();
+    assert_eq!(app.services().theme.text_scale, LARGE_PRINT_SCALE);
+    open_library(&mut app);
+    wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    // The tabs wrap to two rows: three on the first, then Series and Authors.
+    let tab = |k: &str| app.find_rect(k).unwrap_or_else(|| panic!("no {k}"));
+    let first = tab("library-view-books").y;
+    for k in ["library-view-folders", "library-view-collections"] {
+        assert_eq!(tab(k).y, first, "{k} is on the first row");
+    }
+    let second = tab("library-view-series").y;
+    assert!(second > first, "Series is on the second row");
+    assert_eq!(
+        tab("library-view-authors").y,
+        second,
+        "Authors is on the second row"
+    );
+    assert_matches_golden(app.frame(), &golden("library_large_print.png"), 14);
+    let _ = fs::remove_dir_all(dir);
 }

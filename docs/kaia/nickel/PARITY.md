@@ -284,7 +284,7 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 | T3-12 | Airplane mode switch. | `rust/kaia-platform/src/network.rs`, `wpa.rs`, `rust/kaia-app/src/surfaces/settings/quick.rs` | S | None |
 | T3-13 | Time zone picker and network time. | `rust/kaia-platform/src/device.rs`, a time zone list, settings | M | None. Network time needs an opt-in switch. |
 | T3-14 | Bluetooth page turner and audio. | A new Bluetooth module in `rust/kaia-platform` (BlueZ over D-Bus), `rust/kaia-input` (remote keys) | L | Device check of `mtkbtd` and the remote key codes. |
-| T3-15 | CBR comics and plain text files. | `rust/kaia-doc/src/format.rs` (add CBR and text), `rust/kaia-library/src/scan.rs` (format gate) | M | Decision: the RAR decoder and its license, for CBR. None for text. |
+| T3-15 | CBR comics and plain text files. | `rust/kaia-doc/src/format.rs` (add CBR and text), `rust/kaia-library/src/scan.rs` (format gate) | M | Text part done; CBR waits on the decoder decision. Text files must be 1 byte to 32 MiB, outside hidden paths, `kaia`, `koreader`, and `.sdr` folders. CREngine detects the encoding and preserves lines by default. |
 | T3-16 | Notebook export to Word, PDF and image archives. | `rust/kaia-app/src/surfaces/notes/export.rs` | M | Decision: the formats and the PDF writer. |
 | T3-17 | Calibre browse and search. | `rust/kaia-app/src/surfaces/catalogs` (Calibre view), `rust/kaia-calibre` | M | None |
 | T3-18 | Factory reset path. | `rust/kaia-platform` (data wipe), `rust/kaia-app/src/surfaces/settings` | M | Decision: warning text, scope and recovery steps. `ENGINEERING_PLAN.md` safe mode rules apply. |

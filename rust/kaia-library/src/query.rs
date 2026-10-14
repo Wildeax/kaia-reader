@@ -1,6 +1,8 @@
 //! Reads and small writes: book lists, recent books, search, collections,
 //! reading progress, status and covers.
 
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -199,6 +201,85 @@ impl Library {
             cols("books.")
         );
         Ok(self.conn.query_row(&sql, [book_id], book_from_row).optional()?)
+    }
+
+    /// Splits an author field into names. The engine joins the authors of an EPUB
+    /// with a line feed, so the field is split on line feeds only. A name is
+    /// trimmed, and an empty one is dropped. A comma stays inside a name, so
+    /// "Shakespeare, William" is one author. A PDF field that joins names with
+    /// "and" or a semicolon is one author too.
+    pub fn split_authors(field: &str) -> Vec<&str> {
+        field
+            .split('\n')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect()
+    }
+
+    /// The authors of an author field on one line, with the names joined by ", ".
+    /// Show a book's authors with this, not with the stored field, which keeps
+    /// the line feeds. An empty field gives an empty string.
+    pub fn display_authors(field: &str) -> String {
+        Self::split_authors(field).join(", ")
+    }
+
+    /// The authors of `books` and the number of books each one has, in the order
+    /// the Authors view shows them. A book with two authors counts once for each,
+    /// so the counts can add up to more than the number of books. Names match
+    /// without regard to case and to runs of spaces. Each author has the smallest
+    /// spelling among its variants, so the result does not depend on the order of
+    /// `books`.
+    ///
+    /// Authors sort by name, ignoring case and a leading "The ", so "The Bard"
+    /// sorts under B. A name sorts as written: the surname does not move to the
+    /// front. Names that sort the same come in case-insensitive order.
+    ///
+    /// The caller passes the books it shows, so the counts follow its rules for
+    /// hidden books. The result is a list of (name, books).
+    pub fn author_index(books: &[Book]) -> Vec<(String, usize)> {
+        let mut map: BTreeMap<String, (String, usize)> = BTreeMap::new();
+        for book in books {
+            let Some(field) = book.authors.as_deref() else {
+                continue;
+            };
+            let mut seen = BTreeSet::new();
+            for name in Self::split_authors(field) {
+                let key = author_key(name);
+                if !seen.insert(key.clone()) {
+                    continue;
+                }
+                let entry = map.entry(key).or_insert_with(|| (name.to_string(), 0));
+                if name < entry.0.as_str() {
+                    entry.0 = name.to_string();
+                }
+                entry.1 += 1;
+            }
+        }
+        let mut authors: Vec<(String, usize)> = map.into_values().collect();
+        authors.sort_by_cached_key(|(name, _)| (sort_name(name), author_key(name)));
+        authors
+    }
+
+    /// The books of `books` by `name`, in the order the Authors view shows them:
+    /// by series, then by number in the series, then by title. A book with no
+    /// series comes after the books with one, as in [`SortKey::Series`]. A book
+    /// with two authors belongs to each of them. The name matches as
+    /// [`Library::author_index`] matches names.
+    pub fn books_by_author(books: &[Book], name: &str) -> Vec<Book> {
+        let key = author_key(name);
+        let mut found: Vec<Book> = books
+            .iter()
+            .filter(|book| {
+                book.authors.as_deref().is_some_and(|field| {
+                    Self::split_authors(field)
+                        .into_iter()
+                        .any(|author| author_key(author) == key)
+                })
+            })
+            .cloned()
+            .collect();
+        found.sort_by(series_order);
+        found
     }
 
     /// Records a search. The text is trimmed. A search that matches an earlier
@@ -644,6 +725,48 @@ fn ensure_book(conn: &Connection, book_id: i64) -> Result<()> {
     }
 }
 
+/// The key that matches author names and series names: lower case, with each run
+/// of spaces as one space.
+fn author_key(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// The key that sorts an author: [`author_key`] without a leading "the ".
+fn sort_name(name: &str) -> String {
+    let key = author_key(name);
+    match key.strip_prefix("the ") {
+        Some(rest) if !rest.is_empty() => rest.to_string(),
+        _ => key,
+    }
+}
+
+/// The key that sorts a title. The title is the file path when it has none.
+fn title_key(book: &Book) -> String {
+    match book.title.as_deref() {
+        Some(title) => author_key(title),
+        None => author_key(&book.path.to_string_lossy()),
+    }
+}
+
+/// Series, then number in the series, then title, then id. A book with no series
+/// comes last, and so does a book with no number in its series.
+fn series_order(a: &Book, b: &Book) -> Ordering {
+    let series = |book: &Book| (book.series.is_none(), book.series.as_deref().map(author_key));
+    series(a)
+        .cmp(&series(b))
+        .then_with(|| a.series_index.is_none().cmp(&b.series_index.is_none()))
+        .then_with(|| {
+            a.series_index
+                .unwrap_or(0.0)
+                .total_cmp(&b.series_index.unwrap_or(0.0))
+        })
+        .then_with(|| title_key(a).cmp(&title_key(b)))
+        .then_with(|| a.id.cmp(&b.id))
+}
+
 pub(crate) fn collection_key(name: &str) -> Result<String> {
     if name.is_empty() {
         return Err(LibraryError::InvalidArgument("collection name is empty".into()));
@@ -687,5 +810,121 @@ mod tests {
         // A sibling whose name extends the folder name is outside the range.
         assert!(!inside("/books/sci0/a.epub"));
         assert!(!inside("/books/sci-fi/a.epub"));
+    }
+
+    fn book(id: i64, title: &str, authors: Option<&str>, series: Option<(&str, f64)>) -> Book {
+        Book {
+            id,
+            path: PathBuf::from(format!("/books/{id}.epub")),
+            size: 0,
+            mtime: 0,
+            partial_md5: String::new(),
+            title: Some(title.to_string()),
+            authors: authors.map(str::to_string),
+            series: series.map(|(name, _)| name.to_string()),
+            series_index: series.map(|(_, index)| index),
+            language: None,
+            description: None,
+            pages: None,
+            format: "epub".to_string(),
+            added_at: 0,
+            last_opened_at: None,
+            percent: 0.0,
+            status: Status::New,
+            extracted: true,
+            failure: None,
+        }
+    }
+
+    #[test]
+    fn split_authors_splits_on_line_feeds_and_keeps_commas() {
+        assert_eq!(
+            Library::split_authors("Ada Lovelace\nCharles Babbage "),
+            vec!["Ada Lovelace", "Charles Babbage"]
+        );
+        assert_eq!(
+            Library::split_authors("Shakespeare, William"),
+            vec!["Shakespeare, William"]
+        );
+        assert_eq!(Library::split_authors("Ann and Bo"), vec!["Ann and Bo"]);
+        assert!(Library::split_authors(" \n\r\n ").is_empty());
+    }
+
+    #[test]
+    fn display_authors_joins_names_with_a_comma() {
+        assert_eq!(
+            Library::display_authors("Ada Lovelace\nCharles Babbage "),
+            "Ada Lovelace, Charles Babbage"
+        );
+        assert_eq!(Library::display_authors("Walt Whitman"), "Walt Whitman");
+        assert_eq!(Library::display_authors(" \n "), "");
+    }
+
+    #[test]
+    fn author_index_counts_a_book_once_per_author() {
+        let books = [
+            book(1, "One", Some("Ada\nBabbage"), None),
+            book(2, "Two", Some("ada"), None),
+            book(3, "Three", Some("Ada\nAda"), None),
+            book(4, "Four", None, None),
+        ];
+        assert_eq!(
+            Library::author_index(&books),
+            vec![("Ada".to_string(), 3), ("Babbage".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn author_index_sorts_ignoring_case_and_a_leading_the() {
+        let books = [
+            book(1, "One", Some("Zola"), None),
+            book(2, "Two", Some("the Bard"), None),
+            book(3, "Three", Some("Bronte"), None),
+            book(4, "Four", Some("austen"), None),
+        ];
+        let names: Vec<String> = Library::author_index(&books)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(names, ["austen", "the Bard", "Bronte", "Zola"]);
+    }
+
+    #[test]
+    fn author_index_shows_the_smallest_spelling_in_any_order() {
+        let a = [
+            book(1, "One", Some("ursula k. le guin"), None),
+            book(2, "Two", Some("Ursula K. Le Guin"), None),
+        ];
+        let b = [a[1].clone(), a[0].clone()];
+        assert_eq!(
+            Library::author_index(&a),
+            vec![("Ursula K. Le Guin".to_string(), 2)]
+        );
+        assert_eq!(Library::author_index(&a), Library::author_index(&b));
+    }
+
+    #[test]
+    fn books_by_author_sorts_by_series_then_title_and_matches_each_author() {
+        let books = [
+            book(1, "Zeta", Some("Ada"), None),
+            book(2, "Gamma", Some("Ada\nBabbage"), Some(("Verse", 10.0))),
+            book(3, "Beta", Some("Ada"), Some(("Verse", 2.0))),
+            book(4, "Delta", Some("Ada"), None),
+            book(5, "Alpha", Some("Babbage"), Some(("Verse", 1.0))),
+            book(6, "Eta", Some("Ada"), Some(("Verse", 2.0))),
+        ];
+        let ids: Vec<i64> = Library::books_by_author(&books, "ADA")
+            .iter()
+            .map(|b| b.id)
+            .collect();
+        // Verse 2 by title (Beta, Eta), then Verse 10 (Gamma), then the books with
+        // no series, by title (Delta, Zeta).
+        assert_eq!(ids, [3, 6, 2, 4, 1]);
+        let babbage: Vec<i64> = Library::books_by_author(&books, "Babbage")
+            .iter()
+            .map(|b| b.id)
+            .collect();
+        assert_eq!(babbage, [5, 2]);
+        assert!(Library::books_by_author(&books, "  ").is_empty());
     }
 }

@@ -160,8 +160,15 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
         Some(book) => sections.push(hero_section(env, book)),
         None => sections.push(empty_section(&t)),
     }
-    if let Some(next) = next_in_series(lib, &recent, hero.as_ref()) {
-        sections.push(next_section(env, &next));
+    // The next book in series comes first, so when the page is short it is the
+    // one that stays. Column hides a section that does not fit and the ones after it.
+    let next = next_in_series(lib, &recent, hero.as_ref());
+    if let Some(book) = &next {
+        sections.push(offer_section(env, tr("Next in series"), book, "next-in-series"));
+    }
+    if let Some((name, book)) = more_by_author(lib, hero.as_ref(), next.as_ref()) {
+        let label = tr_format(&tr("More by %1"), &[&name]);
+        sections.push(offer_section(env, label, &book, "more-by-author"));
     }
     if let Some(shelf) = shelf_section(env, &recent, hero.as_ref()) {
         sections.push(shelf);
@@ -227,8 +234,29 @@ fn next_in_series(lib: &Library, recent: &[Book], hero: Option<&Book>) -> Option
         .filter(|b| b.status == Status::New && b.path.exists() && hero.is_none_or(|h| h.id != b.id))
 }
 
-/// The next book in its series: a label, then a card that opens the book.
-fn next_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
+/// The unread book by an author of the book on Home, for the author tile. The
+/// authors are tried in the order the book lists them, and the first one with an
+/// unread book in the library gives the tile. The book on Home and the book
+/// offered as next in series are left out, so the two tiles never open the same
+/// book. Returns the author as the book lists it, and the book.
+fn more_by_author(lib: &Library, hero: Option<&Book>, next: Option<&Book>) -> Option<(String, Book)> {
+    let hero = hero?;
+    let names = Library::split_authors(hero.authors.as_deref()?);
+    if names.is_empty() {
+        return None;
+    }
+    let books = data::all(lib);
+    names.into_iter().find_map(|name| {
+        Library::books_by_author(&books, name)
+            .into_iter()
+            .find(|b| b.status == Status::New && b.id != hero.id && next.is_none_or(|n| n.id != b.id))
+            .map(|book| (name.to_string(), book))
+    })
+}
+
+/// A book offered on Home: a label, then a card that opens the book. `key` names
+/// the card for the tests.
+fn offer_section(env: &SurfaceEnv<'_>, label: String, book: &Book, key: &str) -> WidgetPod {
     let t = &env.services.theme;
     let title = data::title(book);
     let cover = data::cover(&env.services.library, book.id, CoverSize::Small);
@@ -260,14 +288,10 @@ fn next_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
     .gap(t.space.md);
     let card =
         WidgetPod::new(Pressable::new(WidgetPod::new(row)).tap(format!("open_book:{}", book.id), Vec::new()))
-            .with_key("next-in-series");
+            .with_key(key);
     WidgetPod::new(
         Column::new(vec![
-            WidgetPod::new(Label::new(
-                tr("Next in series"),
-                t.font.label.clone(),
-                Tone::InkSecondary,
-            )),
+            WidgetPod::new(Label::new(label, t.font.label.clone(), Tone::InkSecondary)),
             card,
         ])
         .gap(t.space.md)
@@ -399,7 +423,7 @@ fn continue_section(t: &Theme, lib: &Library, hero: Option<&Book>) -> Option<Wid
     ))];
     for book in others {
         let row = ListRow::new(data::title(book))
-            .secondary(book.authors.clone().unwrap_or_default())
+            .secondary(Library::display_authors(book.authors.as_deref().unwrap_or("")))
             .value(format!("{}%", data::percent(book)))
             .on_action(format!("open_book:{}", book.id));
         children.push(WidgetPod::new(row).with_key(format!("continue-{}", book.id)));
@@ -445,9 +469,10 @@ fn hero_card(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
         t.font.book_title.clone(),
         Tone::Ink,
     ))];
-    if let Some(author) = book.authors.as_deref().filter(|a| !a.trim().is_empty()) {
+    let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
+    if !authors.is_empty() {
         details.push(WidgetPod::new(Label::new(
-            author,
+            authors,
             t.font.body.clone(),
             Tone::InkSecondary,
         )));

@@ -2,7 +2,7 @@
 //!
 //! A cover comes from the book's own image when the book carries one (EPUB
 //! and CBZ). Other books, and books whose image is missing or does not
-//! decode, get a render of the first page.
+//! decode, get a render of the first page. Plain text has no cover.
 //!
 //! Every call into the document engine runs on the thread that calls
 //! [`Library::scan`](crate::Library::scan). The document is opened, read and
@@ -104,6 +104,21 @@ fn extract(path: &Path, budget: Duration) -> Result<Extracted, String> {
     check()?;
     if pages == 0 {
         return Err("the document has no pages".to_string());
+    }
+    // Text books use their file name and the library's cover placeholder.
+    // CREngine still imports the text and detects its encoding for pagination.
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+    {
+        return Ok(Extracted {
+            title: path.file_stem().and_then(|stem| stem.to_str()).map(str::to_owned),
+            authors: None,
+            series: None,
+            series_index: None,
+            pages: u32::try_from(pages).unwrap_or(u32::MAX),
+            cover: None,
+        });
     }
     // The image the book carries is sharper than a page render, so it comes first.
     let cover = book_cover_image(path)

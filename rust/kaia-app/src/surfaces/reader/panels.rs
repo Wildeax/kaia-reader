@@ -23,6 +23,7 @@ use kaia_ui::{
     Window,
 };
 
+use super::footer::{Footer, Item};
 use super::state::Core;
 use crate::services::Services;
 use crate::surface::{Surface, SurfaceEnv};
@@ -502,6 +503,12 @@ pub fn more(services: &Services, screen: Size) -> Window {
             ),
             button(
                 ButtonStyle::Secondary,
+                &tr("Footer"),
+                "reader:panel:footer",
+                "more-footer",
+            ),
+            button(
+                ButtonStyle::Secondary,
                 &tr("Word list"),
                 "reader:words:open",
                 "more-words",
@@ -517,6 +524,19 @@ pub fn more(services: &Services, screen: Size) -> Window {
         .cross_align(CrossAlign::Stretch),
     )];
     sheet(services, screen, Some(&tr("More")), children, None)
+}
+
+/// The Footer sheet: one toggle per footer item. A toggle sends the new state, and
+/// the reader saves it and updates the footer line.
+pub fn footer_sheet(services: &Services, screen: Size, footer: &Footer) -> Window {
+    let mut children = vec![group_heading(services, &tr("Show in the footer"))];
+    for item in Item::ALL {
+        let action = format!("reader:footer:{}", item.id());
+        let key = format!("footer-{}", item.id());
+        let toggle = WidgetPod::new(Toggle::pill(footer.is_on(item)).on_action(&action)).with_key(&key);
+        children.push(labelled(services, &item.label(), toggle));
+    }
+    sheet(services, screen, Some(&tr("Footer")), children, None)
 }
 
 /// A highlight color: a square, or a round dot when `round` is set. It is framed.

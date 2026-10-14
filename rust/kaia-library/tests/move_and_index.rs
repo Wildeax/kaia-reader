@@ -313,10 +313,10 @@ fn index_file_returns_the_existing_row_at_its_path() {
 #[test]
 fn index_file_rejects_what_is_not_a_book() {
     let (tmp, root, mut lib, _id) = indexed_juliet();
-    fs::write(root.join("notes.txt"), b"not a book").unwrap();
+    fs::write(root.join("notes.md"), b"not a book").unwrap();
     fs::create_dir_all(root.join("folder.epub")).unwrap();
 
-    let err = lib.index_file(&root.join("notes.txt")).unwrap_err();
+    let err = lib.index_file(&root.join("notes.md")).unwrap_err();
     assert!(matches!(err, LibraryError::InvalidArgument(_)), "{err}");
     let err = lib.index_file(&root.join("folder.epub")).unwrap_err();
     assert!(matches!(err, LibraryError::InvalidArgument(_)), "{err}");

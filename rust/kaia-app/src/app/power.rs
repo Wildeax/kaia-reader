@@ -37,6 +37,8 @@ pub(super) struct State {
     pub(super) scripts: super::network::Scripts,
     /// Wi-Fi jobs in flight. Suspend turns Wi-Fi off when it is on or a job is turning it on.
     wifi_jobs: usize,
+    /// Wi-Fi jobs submitted since start, as (turn on, turn off). Tests read it.
+    wifi_requests: (u64, u64),
     prepare_generation: u64,
     /// The finish plan is running: `sync`, then the suspend write. Power and Resume wait for it.
     finishing: bool,
@@ -77,6 +79,7 @@ impl State {
             flow: SuspendFlow::default(),
             scripts: super::network::Scripts::new(io),
             wifi_jobs: 0,
+            wifi_requests: (0, 0),
             prepare_generation: 0,
             finishing: false,
             resume_queued: false,
@@ -234,7 +237,18 @@ impl<B: Backend> App<B> {
             }
         }
         self.power.wifi_jobs += 1;
+        if on {
+            self.power.wifi_requests.0 += 1;
+        } else {
+            self.power.wifi_requests.1 += 1;
+        }
         self.power.scripts.submit(WIFI_JOB, Plan::new(plan.steps));
+    }
+
+    /// Wi-Fi jobs submitted since start, as (turn on, turn off). The jobs run the
+    /// enable and disable scripts on the script worker.
+    pub fn wifi_requests(&self) -> (u64, u64) {
+        self.power.wifi_requests
     }
 
     pub(super) fn note_activity(&mut self) {
