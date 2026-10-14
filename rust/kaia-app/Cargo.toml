@@ -54,4 +54,5 @@ kaia-ui = { path = "../kaia-ui" }
 rusqlite = { version = "0.40", features = ["bundled", "backup", "hooks"] }
 
 [dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 serde_json = "1"

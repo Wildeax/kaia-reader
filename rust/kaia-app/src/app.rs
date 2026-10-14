@@ -486,6 +486,17 @@ impl<B: Backend> App<B> {
             }
         }
         self.pump_scan();
+        if let Some(result) = self.services.dictionary_downloads.poll(&self.services.settings) {
+            match result {
+                Ok(_) => {
+                    self.services.dictionary = None;
+                    crate::surfaces::reader::dict::load(&mut self.services);
+                    env!(self).notice(tr("Dictionary installed."));
+                }
+                Err(error) => env!(self).notice(tr_format(&tr("Dictionary download failed: %1"), &[&error])),
+            }
+            self.broadcast_app(Event::new("DictionariesChanged"));
+        }
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
         }
@@ -1503,6 +1514,7 @@ impl<B: Backend> App<B> {
         }
         if self.scan.is_some()
             || self.services.sync.busy()
+            || self.services.dictionary_downloads.busy()
             || crate::covers::busy()
             || self.power.scripts.busy()
             || self.pending_navigation.is_some()

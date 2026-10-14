@@ -32,6 +32,7 @@ pub struct Services {
     pub sync: crate::sync::ProgressSync,
     pub clipboard: Option<String>,
     pub dictionary: Option<kaia_dict::Library>,
+    pub dictionary_downloads: crate::dictionary_downloads::Downloads,
     /// Kaia's settings, at `<data>/settings.json`.
     pub settings: Settings,
     /// The library index, at `<data>/library.sqlite3`. The scan thread has its own connection.
@@ -204,6 +205,7 @@ impl Services {
             clipboard: None,
             sync,
             dictionary: None,
+            dictionary_downloads: crate::dictionary_downloads::Downloads::default(),
             settings,
             library,
             library_roots: Vec::new(),

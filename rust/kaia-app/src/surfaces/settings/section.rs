@@ -206,6 +206,27 @@ impl Surface for SettingsSectionSurface {
             Some(Command::Dictionaries) => Outcome::Navigate(Nav::Push(Box::new(
                 SettingsSectionSurface::new("dictionaries".into()),
             ))),
+            Some(Command::DictionaryDownloads) => {
+                if !crate::dictionary_downloads::allowed(&env.services.settings) {
+                    return Outcome::Handled;
+                }
+                Outcome::Navigate(Nav::Push(Box::new(SettingsSectionSurface::new(
+                    "dictionary-downloads".into(),
+                ))))
+            }
+            Some(Command::DictionaryInstall(id)) => {
+                if let Some(entry) = kaia_dict::download::catalog().iter().find(|entry| entry.id == id) {
+                    match env.services.dictionary_downloads.start(
+                        entry.clone(),
+                        env.services.paths.data_dir.join("dict"),
+                        &env.services.settings,
+                    ) {
+                        Ok(()) => env.notice(tr("Downloading dictionary. Files come from the internet.")),
+                        Err(error) => env.notice(error),
+                    }
+                }
+                Outcome::Rebuild
+            }
             Some(Command::Dictionary { index, change }) => dictionary(index, change, env),
             Some(Command::Light(which)) => light(which, args, env),
             Some(Command::SyncTest) => {
@@ -221,6 +242,19 @@ impl Surface for SettingsSectionSurface {
                 Outcome::Handled
             }
             _ => Outcome::NotMine,
+        }
+    }
+
+    fn on_event(&mut self, event: &kaia_events::Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if event.name == "DictionariesChanged"
+            && matches!(
+                self.name.as_str(),
+                "reading" | "dictionaries" | "dictionary-downloads"
+            )
+        {
+            Outcome::Rebuild
+        } else {
+            Outcome::NotMine
         }
     }
 
@@ -321,7 +355,7 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         env.services.apply_large_print();
         return Outcome::Navigate(Nav::SwitchRoot(Route::Settings));
     }
-    if key == keys::READING_FONT_SIZE {
+    if key == keys::READING_FONT_SIZE || key == crate::dictionary_downloads::ALLOW_KEY {
         Outcome::Rebuild
     } else {
         Outcome::Handled
