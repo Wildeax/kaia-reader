@@ -81,9 +81,10 @@ impl KoreaderFolder {
         self.path.join("history.lua")
     }
 
-    /// The file the collections import reads.
+    /// The file the collections import reads. KOReader keeps it in its settings
+    /// folder (`frontend/readcollection.lua`). The top-level copy is a fallback.
     pub fn collections_path(&self) -> PathBuf {
-        self.path.join("collection.lua")
+        collections_file(&self.path)
     }
 
     /// KOReader's statistics database.
@@ -110,10 +111,19 @@ pub fn find_koreader(paths: &Paths, home: Option<&Path>) -> Option<KoreaderFolde
         .find(|dir| dir.is_dir())
         .map(|path| KoreaderFolder {
             history: path.join("history.lua").is_file(),
-            collections: path.join("collection.lua").is_file(),
+            collections: collections_file(&path).is_file(),
             statistics: path.join("settings").join("statistics.sqlite3").is_file(),
             path,
         })
+}
+
+fn collections_file(koreader: &Path) -> PathBuf {
+    let in_settings = koreader.join("settings").join("collection.lua");
+    if in_settings.is_file() {
+        in_settings
+    } else {
+        koreader.join("collection.lua")
+    }
 }
 
 /// The number of StarDict dictionaries (`*.ifo`) in `<data>/dict`.
@@ -187,6 +197,20 @@ mod tests {
         assert_eq!(duration(0), "0 min");
         assert_eq!(duration(40 * 60 + 59), "40 min");
         assert_eq!(duration(3900), "1 h 5 min");
+    }
+
+    #[test]
+    fn collections_come_from_the_koreader_settings_folder() {
+        let dir = std::env::temp_dir().join(format!("kaia-facts-collections-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("settings")).unwrap();
+        // An older layout kept the file at the top. It is the fallback.
+        fs::write(dir.join("collection.lua"), "return {}").unwrap();
+        assert_eq!(collections_file(&dir), dir.join("collection.lua"));
+        // Stock KOReader writes it in settings/, which wins.
+        fs::write(dir.join("settings").join("collection.lua"), "return {}").unwrap();
+        assert_eq!(collections_file(&dir), dir.join("settings").join("collection.lua"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

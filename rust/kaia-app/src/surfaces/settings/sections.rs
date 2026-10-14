@@ -415,7 +415,7 @@ fn found_rows(folder: &KoreaderFolder) -> Vec<Entry> {
         },
         Entry::Row {
             primary: tr("Collections"),
-            secondary: Some("collection.lua".into()),
+            secondary: Some("settings/collection.lua".into()),
             value: Some(yes_no(folder.collections)),
             action: None,
         },
