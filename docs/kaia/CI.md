@@ -44,6 +44,41 @@ The `emulator` job runs these steps in order:
 
 The image is `koreader/kobase@sha256:0751390e1a93b57e4836ceb67b4ffc701b46df675853f7662e3aefb6d6af648f`, the multi-arch index digest of the `1.0.0-22.04` tag. The digest comes from the Docker Hub API. To update the image, look up the new digest, change the `container.image` line and the cache key prefix together.
 
+### CREngine comparison
+
+The `emulator` job in `kaia-lua.yml` runs `tools/kaia/test_cre_compare.py` and `tools/kaia/cre_compare.py` after the emulator build. The comparison step has a 15-minute timeout; its subprocess deadline is 14 minutes, including the Rust example build. This budget excludes the existing emulator build. Changes to the comparison scripts, corpus manifest, native backend, Cargo lockfile, or the `base`, `test` and font submodule pins trigger the workflow.
+
+Run locally from the repository root after building the emulator:
+
+```sh
+source tools/kaia/env.sh
+export CARGO_TARGET_DIR=$HOME/kaia-wt-cre-target
+python3 tools/kaia/test_cre_compare.py
+python3 tools/kaia/cre_compare.py --output "$CARGO_TARGET_DIR/cre-comparison"
+```
+
+Choose a new or empty output directory for each run. The runner rejects reused output so stale snapshots cannot hide missing output. Pass `--emulator /path/to/koreader` if several emulator builds exist. The runner uses the emulator's LuaJIT and `libs/libkoreader-cre` through `rust/kaia-doc/tests/koreader_layout.lua`. The `cre_snapshot` example uses `CreDocument`, linked to the pinned native build through `kaia-cre-sys`. Both processes read the emulator's exact font files, `epub.css` and hyphenation data. Neither process writes into the emulator tree or downloads books. The runner uses `$HOME/kaia-wt-cre-target` for Cargo outputs on both desktop and CI.
+
+`tools/kaia/cre-corpus/manifest.json` pins the existing `test/juliet.epub` and `test/leaves.epub` bytes by size and SHA-256. It records their source and rights evidence without adding EPUB copies. Missing or changed files fail the run. These English verse books cover cover images and long pagination. They do not complete the broader corpus in `device/MEASUREMENT_METHOD.md`; B-12 and KR-007 still own its selection and license review. The CSS conformance fixtures under `test/epub2-conform` are outside this initial manifest.
+
+Every profile uses a 1264x1680 page, one page per view, no engine header or frontend footer, CSS DPI 96, autohinting mode 2, HarfBuzz kerning mode 3, embedded fonts enabled and no added justification CSS. Settings are engine pixels, with no further UI scaling.
+
+| Profile | Font and size | Margins, left/right and top/bottom | Line spacing | Hyphenation | Embedded styles | Base weight |
+|---|---|---|---|---|---|---|
+| `reader` | Noto Serif, 47 px | 22 px and 32 px | 100% | English_US.pattern | on | 400 |
+| `no-hyphenation` | Noto Serif, 47 px | 22 px and 32 px | 100% | off | on | 400 |
+| `sans-large` | Noto Sans, 55 px | 48 px and 40 px | 120% | English_US.pattern | off | 500 |
+
+The reader profile uses `ceil(units * 1264 / 600)` for KOReader's 22-unit font and 10/15-unit margins. The comparison exercises kaia-doc's layout mapping directly; it does not drive the frontend settings UI.
+
+The samples use zero-based pages 0, 1, 2, one quarter, one half, three quarters, and the penultimate page. Duplicates are removed. Each page ends at the next page's start anchor, exclusively. Text uses CREngine's DOM range extraction with newlines between blocks, matching KOReader's `getTextFromXPointers`; it is not the visual-line representation returned by `Document::page_text`. The last page is not sampled because the reference API has no next-page anchor. Manifest books must render at least two pages.
+
+Page count, text and both anchors must match exactly, with no whitespace or Unicode normalization. Images compare raw Gray8 pixels. A run fails if any pixel differs by more than one gray level or the mean absolute error exceeds 0.01 on the 0..255 scale. This permits at most a one-level rounding change over 1% of a page. It does not permit a displaced glyph edge. Both sides use the same engine and dependency build, so a wider cross-platform image tolerance is unnecessary. Each platform compares its own two processes rather than a golden from another platform.
+
+The `cre-comparison` artifact uploads on success or failure and stays for 14 days. It includes `report.json`, `summary.txt`, resource hashes, settings, process logs, both snapshots and page PNGs, raw pixels, and a diff PNG for each shared sample. Diff images show equal pixels in white and amplify differences sixteen times. Text and anchor mismatches also produce unified diffs. Comparator tests inject page, anchor, text and image changes to check the failure paths. A process failure or missing output fails the gate and remains in the report.
+
+Local macOS arm64 result on 2026-10-14: six cases and 42 sampled pages matched exactly, including pixels. Page counts were 236, 236 and 407 for Juliet, and 1085, 1085 and 1780 for Leaves, in profile order. The final comparison took 16.15 seconds with the binary already built and workspace tests running concurrently. No settings mapping discrepancy was found in this corpus, so the existing layout mapping remains unchanged. Linux CI execution and the on-device B-75 comparison remain unverified by this local run.
+
 ### `kaia-shell.yml`
 
 Runs on pushes to `main` and on pull requests that touch `tools/kaia/**`, `platform/kobo/kaia/**`, `.shellcheckrc` or the workflow file.

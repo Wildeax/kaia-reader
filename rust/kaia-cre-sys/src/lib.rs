@@ -150,6 +150,12 @@ pub mod ffi {
         pub fn kaia_cre_page_count(doc: *mut kaia_cre_doc, out: *mut i32) -> c_int;
         pub fn kaia_cre_goto_page(doc: *mut kaia_cre_doc, page: i32) -> c_int;
         pub fn kaia_cre_current_page(doc: *mut kaia_cre_doc, out: *mut i32) -> c_int;
+        pub fn kaia_cre_range_text(
+            doc: *mut kaia_cre_doc,
+            start: *const c_char,
+            end: *const c_char,
+            out: *mut *mut c_char,
+        ) -> c_int;
         pub fn kaia_cre_page_xpointer(doc: *mut kaia_cre_doc, page: i32, out: *mut *mut c_char) -> c_int;
         pub fn kaia_cre_xpointer_page(
             doc: *mut kaia_cre_doc,
@@ -596,6 +602,21 @@ impl Doc {
         // SAFETY: live handle; `n` is a valid out pointer.
         check(unsafe { ffi::kaia_cre_current_page(self.raw(), &mut n) })?;
         Ok(n.max(0) as u32)
+    }
+
+    /// DOM text between two anchors, with newlines between blocks, as in KOReader.
+    pub fn range_text(&mut self, start: &str, end: &str) -> Result<String> {
+        let start = cstring(start)?;
+        let end = cstring(end)?;
+        let mut out = ptr::null_mut();
+        // SAFETY: the live handle, strings and output pointer outlive the call.
+        let code = unsafe { ffi::kaia_cre_range_text(self.raw(), start.as_ptr(), end.as_ptr(), &mut out) };
+        if code == ffi::KAIA_CRE_NOT_FOUND {
+            return Err(Error::Engine("invalid text range anchor".into()));
+        }
+        check(code)?;
+        // SAFETY: a successful call returns a malloc'd string, freed by take_string.
+        Ok(unsafe { take_string(out) })
     }
 
     /// The xpointer at the top of a page.

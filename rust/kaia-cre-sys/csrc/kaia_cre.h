@@ -113,6 +113,8 @@ int kaia_cre_render(kaia_cre_doc *doc, int width, int height, int color, uint8_t
 int kaia_cre_page_count(kaia_cre_doc *doc, int32_t *out);
 int kaia_cre_goto_page(kaia_cre_doc *doc, int32_t page);
 int kaia_cre_current_page(kaia_cre_doc *doc, int32_t *out);
+/* DOM text between page boundary anchors, with block separators as newlines. */
+int kaia_cre_range_text(kaia_cre_doc *doc, const char *start, const char *end, char **out);
 int kaia_cre_page_xpointer(kaia_cre_doc *doc, int32_t page, char **out);
 /* Returns KAIA_CRE_NOT_FOUND when the xpointer is not in the document. */
 int kaia_cre_xpointer_page(kaia_cre_doc *doc, const char *xpointer, int32_t *out);

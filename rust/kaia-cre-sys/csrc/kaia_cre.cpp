@@ -494,6 +494,27 @@ int kaia_cre_current_page(kaia_cre_doc *doc, int32_t *out) {
     });
 }
 
+int kaia_cre_range_text(kaia_cre_doc *doc, const char *start, const char *end, char **out) {
+    return guard([&]() -> int {
+        if (!start || !end || !out) fail("null argument");
+        *out = nullptr;
+        view_of(doc)->Render();
+        ldomXPointer a = parse_xpointer(doc, start);
+        ldomXPointer b = parse_xpointer(doc, end);
+        if (a.isNull() || b.isNull()) return KAIA_CRE_NOT_FOUND;
+        ldomXRange range(a, b);
+        range.sort();
+        // Match KOReader's getTextFromXPointers, including its single-char case.
+        if (range.getStart() == range.getEnd() && range.getStart().isText()) {
+            int offset = range.getEnd().getOffset();
+            if (offset < range.getStart().getNode()->getText().length() - 1)
+                range.getEnd().setOffset(offset + 1);
+        }
+        *out = dup_utf8(range.getRangeText('\n'));
+        return KAIA_CRE_OK;
+    });
+}
+
 int kaia_cre_page_xpointer(kaia_cre_doc *doc, int32_t page, char **out) {
     return guard([&]() -> int {
         if (!out) {

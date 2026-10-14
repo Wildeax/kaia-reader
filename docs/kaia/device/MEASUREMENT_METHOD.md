@@ -1,6 +1,6 @@
 # Measurement method (KR-006)
 
-Status: method only. Nothing in this document is a measured result. The thresholds in the table at the end are proposed and not measured. The rig, the workload scripts and the corpus do not exist yet. Build them with the baseline before any comparison is reported.
+Status: method only. Nothing in this document is a measured result. The thresholds in the table at the end are proposed and not measured. The device rig, workload scripts and full approved corpus do not exist yet. The desktop CREngine comparison uses a two-book subset of existing repository fixtures, described below. Build the device rig and full corpus with the baseline before reporting device measurements.
 
 Owner: QA and performance engineer. Depends on the hardware profile (KR-002) and the test scripts and corpus (KR-004 and KR-006).
 
@@ -133,6 +133,8 @@ The corpus must cover the cases below. Use only files with a clear license, and 
 | CBZ | A short comic and a long image set | Comic with a stated license (CC BY or CC0), or project-generated images |
 | DjVu | Only if the target build supports it | As for PDF |
 | Large library | 500 or more files for library scan cost | Copies of a few clean files under different names. Each copy keeps its original license. Record this in the manifest. |
+
+The desktop rendering comparison in `tools/kaia/cre_compare.py` currently uses `test/juliet.epub` and `test/leaves.epub`. Their manifest is `tools/kaia/cre-corpus/manifest.json`, with hashes, sizes, source URLs and rights evidence from the existing files. It adds no book files or downloads. This subset covers English verse, cover images and long pagination, but it does not satisfy the full corpus table or replace KR-007 review. RTL, CJK, embedded fonts, footnotes and deliberately malformed EPUBs still need approved fixtures. See `docs/kaia/CI.md` for the matched settings, page sampling and image thresholds. These desktop checks report rendering parity, not device latency or energy.
 
 ### License rules
 

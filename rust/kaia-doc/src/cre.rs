@@ -17,9 +17,9 @@
 //! gives 47 px text and 22/32 px margins at 1264x1680, before footer space.
 //!
 //! The stock constructor alone uses Arial, DejaVu Sans and an engine header.
-//! It gives juliet.epub 97 pages; Noto Serif gives 115, and disabling the header
-//! gives 114, matching this backend. tests/koreader_layout.lua reproduces those
-//! counts. The 97-page control is not the frontend's default reading layout.
+//! The automated comparison in tools/kaia/cre_compare.py applies matched
+//! reading layouts to this backend and KOReader's Lua wrapper. It records
+//! page counts, DOM text between page anchors and grayscale renders.
 //!
 //! Threads: CREngine keeps the hyphenation dictionary and the preferred font
 //! in process-wide state, and the shim's lock covers only one call. Two
@@ -337,6 +337,12 @@ impl CreDocument {
     /// Turns the book's own CSS on or off. Off ignores the book's styles.
     pub fn set_embedded_styles(&mut self, enabled: bool) -> Result<()> {
         self.doc_mut()?.set_embedded_styles(enabled).map_err(engine_err)
+    }
+
+    /// DOM text between anchors, with block separators as newlines. This follows
+    /// KOReader's getTextFromXPointers; page_text instead returns visual lines.
+    pub fn range_text(&self, start: &str, end: &str) -> Result<String> {
+        self.doc_mut()?.range_text(start, end).map_err(engine_err)
     }
 
     /// The xpointer at the top of a page.
