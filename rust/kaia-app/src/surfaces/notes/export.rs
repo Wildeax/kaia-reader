@@ -20,7 +20,7 @@ pub const EXPORTS_DIR: &str = "exports";
 pub struct Exported {
     pub markdown: PathBuf,
     pub json: PathBuf,
-    /// Annotations written, across all books.
+    /// Entries written, including one ink count per page.
     pub count: usize,
 }
 
@@ -34,7 +34,7 @@ pub fn export(data_dir: &Path, books: &[BookNotes], now: i64) -> io::Result<Expo
     let json = dir.join(format!("kaia-notes-{stamp}.json"));
     crate::durable::atomic_write(&markdown, markdown_text(books, now).as_bytes())?;
     crate::durable::atomic_write(&json, json_text(books, now).as_bytes())?;
-    let count = books.iter().map(|b| b.notes.len()).sum();
+    let count = books.iter().map(|b| b.notes.len() + b.ink_counts.len()).sum();
     Ok(Exported {
         markdown,
         json,
@@ -58,6 +58,16 @@ pub fn markdown_text(books: &[BookNotes], now: i64) -> String {
                 let _ = writeln!(out, "  {}", one_line(text));
             }
         }
+        for (page, count) in &book.ink_counts {
+            let _ = writeln!(
+                out,
+                "- {}",
+                tr_format(
+                    &tr("Page %1: %2 ink strokes"),
+                    &[&page.to_string(), &count.to_string()]
+                )
+            );
+        }
         out.push('\n');
     }
     out
@@ -78,6 +88,13 @@ pub fn json_text(books: &[BookNotes], now: i64) -> String {
             }
             None => out.push_str("      \"library_id\": null,\n"),
         }
+        let ink = book
+            .ink_counts
+            .iter()
+            .map(|(page, count)| format!("{{\"page\": {page}, \"count\": {count}}}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "      \"ink_counts\": [{ink}],");
         out.push_str("      \"annotations\": [\n");
         for (j, note) in book.notes.iter().enumerate() {
             out.push_str(&json_note(note));

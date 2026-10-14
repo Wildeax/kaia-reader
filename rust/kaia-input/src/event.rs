@@ -93,7 +93,7 @@ pub struct KeyEvent {
     pub time_us: u64,
 }
 
-/// A stylus sample. Pen input is not routed to the gesture recognizer yet.
+/// A stylus sample. Routed separately from finger gestures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PenEvent {
     pub phase: Phase,

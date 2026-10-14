@@ -46,6 +46,11 @@ pub struct Mark {
 /// The reader's page. The reader sets the image, the marks and the message;
 /// the widget only paints them and reports input.
 pub struct PageView {
+    pub ink: Option<super::ink::PageInk>,
+    pub ink_on: bool,
+    pub ink_width: f32,
+    pub ink_color: String,
+    pub ink_eraser: bool,
     #[cfg(feature = "lua")]
     pub plugins: Option<std::rc::Weak<std::cell::RefCell<kaia_lua::LuaUi>>>,
     /// The rendered page, or None when the page cannot be drawn.
@@ -81,6 +86,11 @@ pub struct PageView {
 impl PageView {
     pub fn new() -> Self {
         Self {
+            ink: None,
+            ink_on: false,
+            ink_width: 3.0,
+            ink_color: "black".into(),
+            ink_eraser: false,
             page: None,
             #[cfg(feature = "lua")]
             plugins: None,
@@ -331,6 +341,9 @@ impl Widget for PageView {
                 );
             });
         }
+        if let Some(ink) = &self.ink {
+            ink.paint(cx);
+        }
         for sticker in &self.stickers {
             sticker.paint(cx);
         }
@@ -400,6 +413,23 @@ impl Widget for PageView {
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         let bounds = cx.bounds();
         match ev {
+            UiEvent::Pen(pen) => {
+                if self.ink_on
+                    && (pen.phase != kaia_input::Phase::Down || pen.pos.y >= cx.theme().touch_target as i32)
+                {
+                    if let Some(ink) = &mut self.ink {
+                        match ink.pen(*pen, self.ink_width, &self.ink_color, self.ink_eraser) {
+                            Ok(Some((rect, hint))) => cx.request_paint_rect(rect, hint),
+                            Err(e) => {
+                                cx.request_paint();
+                                cx.action(action("reader:ink:error", vec![Value::Str(e)]));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Handled::Yes
+            }
             UiEvent::Named(e) if matches!(e.name.as_str(), "PageForward" | "PageBack") => {
                 let forward = e.name == "PageForward";
                 cx.action(action(

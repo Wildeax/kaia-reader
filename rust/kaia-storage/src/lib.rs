@@ -8,6 +8,8 @@
 mod assets;
 mod error;
 mod image;
+mod ink;
+pub use ink::{InkPoint, InkStroke};
 mod store;
 mod transfer;
 mod words;

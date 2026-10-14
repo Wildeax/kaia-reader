@@ -88,6 +88,7 @@ pub enum PaintHint {
     Ui,
     Partial,
     Fast,
+    A2,
     Full,
     Flash,
 }
@@ -98,6 +99,7 @@ impl PaintHint {
             PaintHint::Ui => RefreshMode::Ui,
             PaintHint::Partial => RefreshMode::Partial,
             PaintHint::Fast => RefreshMode::Fast,
+            PaintHint::A2 => RefreshMode::A2,
             PaintHint::Full => RefreshMode::Full,
             PaintHint::Flash => RefreshMode::FlashUi,
         }
@@ -113,6 +115,8 @@ pub enum UiEvent {
     Key(KeyEvent),
     /// Routed to every widget in paint order until one handles it.
     Named(Event),
+    /// Stylus samples bypass finger gesture recognition.
+    Pen(kaia_input::PenEvent),
     /// Sent to a widget when it gains focus.
     FocusGained,
     /// Sent to a widget when it loses focus.

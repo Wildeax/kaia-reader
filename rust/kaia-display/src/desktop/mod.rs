@@ -75,6 +75,7 @@ pub struct DesktopDisplay {
     pointer: DesktopPointer,
     /// Logical position of the pointer at the last check, for move detection.
     pointer_pos: Option<Point>,
+    pen: crate::input::DesktopPen,
     started: Instant,
     quit_sent: bool,
 }
@@ -111,6 +112,7 @@ impl DesktopDisplay {
             pending: VecDeque::new(),
             pointer: DesktopPointer::new(centre(rotation.logical_size(panel.size))),
             pointer_pos: None,
+            pen: crate::input::DesktopPen::default(),
             started: Instant::now(),
             quit_sent: false,
         })
@@ -165,6 +167,17 @@ impl DesktopDisplay {
         } else {
             None
         };
+        let alt = self.window.is_key_down(WinKey::LeftAlt) || self.window.is_key_down(WinKey::RightAlt);
+        if self.pen.active() || (alt && button.is_some() && !self.pointer.is_pressed()) {
+            if let Some(pen) =
+                self.pen
+                    .sample(pos, button.is_some(), button == Some(MouseButton::Right), time_us)
+            {
+                self.pending.push_back(InputEvent::Pen(pen));
+            }
+            self.pointer_pos = Some(pos);
+            return;
+        }
         let ctrl = self.window.is_key_down(WinKey::LeftCtrl) || self.window.is_key_down(WinKey::RightCtrl);
         let touches = match button {
             Some(b) if !self.pointer.is_pressed() => self.pointer.press(pos, time_us, b, ctrl),

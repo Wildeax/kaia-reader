@@ -137,7 +137,7 @@ impl ForeignRenderer for Renderer {
             UiEvent::Gesture(g) => input::gesture_event(&lua, g),
             UiEvent::Key(k) => input::key_event(&lua, k.key, k.pressed),
             UiEvent::Named(e) => input::named_event(&lua, &e.name, &e.args),
-            UiEvent::FocusGained | UiEvent::FocusLost => return Handled::No,
+            UiEvent::FocusGained | UiEvent::FocusLost | UiEvent::Pen(_) => return Handled::No,
         };
         match event {
             Ok(event) => {

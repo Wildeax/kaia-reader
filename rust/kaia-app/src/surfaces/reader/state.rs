@@ -100,6 +100,7 @@ pub struct Core {
     /// The word of the open dictionary sheet. None when no sheet has looked up a word.
     pub lookup: Option<LookupState>,
     pub color_panel: bool,
+    pub ink_color_content: bool,
     /// Seconds of reading per page, for the time-left line. Set when the book opens.
     pub seconds_per_page: f64,
     /// The items of the reader footer that are on.
@@ -153,6 +154,7 @@ impl Core {
             contents_tab: 0,
             lookup: None,
             color_panel: false,
+            ink_color_content: false,
             pump_due: false,
             layout_pending: false,
             seconds_per_page: 60.0,
@@ -264,6 +266,10 @@ impl Core {
                 return;
             }
         };
+        self.ink_color_content = frame
+            .ink
+            .as_ref()
+            .is_some_and(|ink| ink.strokes.iter().any(|d| d.stroke.color != "black"));
         let info = frame.session.current();
         self.session = Some(frame.session);
         self.selection = frame.selection;
@@ -284,6 +290,7 @@ impl Core {
         let footer = self.footer.clone();
         let pace = self.seconds_per_page;
         let footer_height = self.footer_height;
+        let ink_color_content = &mut self.ink_color_content;
         window.update::<PageView, _>(ctx, PAGE_KEY, move |view, cx| {
             if frame.page.is_some() {
                 view.page = frame.page;
@@ -291,6 +298,8 @@ impl Core {
             view.message = error;
             view.set_footer(footer, info.clone(), pace);
             view.footer_height = footer_height;
+            *ink_color_content |= view.ink_color != "black";
+            view.ink = frame.ink;
             view.marks = frame.marks;
             view.bookmarked = frame.bookmarked;
             view.stickers = frame.stickers;

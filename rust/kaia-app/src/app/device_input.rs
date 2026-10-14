@@ -57,7 +57,7 @@ impl<B: Backend> App<B> {
             return false;
         }
         match event {
-            InputEvent::Touch(_) | InputEvent::Light => true,
+            InputEvent::Touch(_) | InputEvent::Pen(_) | InputEvent::Light => true,
             InputEvent::TouchFrame(frame) => !frame.is_empty(),
             InputEvent::Key(k) if matches!(k.key, Key::SleepCoverClosed | Key::SleepCoverOpened) => {
                 !self.usb_mass_storage

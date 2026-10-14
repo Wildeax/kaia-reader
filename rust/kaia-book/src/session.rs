@@ -846,6 +846,23 @@ impl BookSession {
         self.engine.call(move |w| w.transform(page, viewport, zoom))
     }
 
+    /// Resolves a page text anchor without changing the reading position.
+    pub fn ink_anchor(&mut self, locator: &str) -> Result<Option<(u32, kaia_doc::PointF)>> {
+        self.ensure_idle()?;
+        let locator = locator.to_string();
+        self.engine.call(move |w| {
+            let Some(page) = w.doc.xpointer_page(&locator)? else {
+                return Ok(None);
+            };
+            let origin = w
+                .doc
+                .char_boxes(page, &locator, None)?
+                .and_then(|boxes| boxes.first().map(|b| kaia_doc::PointF { x: b.1.x0, y: b.1.y0 }))
+                .unwrap_or(kaia_doc::PointF { x: 0.0, y: 0.0 });
+            Ok(Some((page, origin)))
+        })
+    }
+
     /// The current page as an image. It waits for the engine when the page is not
     /// cached, and then prerenders the next page. A reflowable page has the size
     /// of the layout, which [`BookSession::set_viewport`] sets, so the viewport

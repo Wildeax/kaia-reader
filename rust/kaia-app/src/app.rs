@@ -529,6 +529,11 @@ impl<B: Backend> App<B> {
                 }
             }
             match event {
+                InputEvent::Pen(pen) => {
+                    if !self.sleeping() && !self.reader_busy() {
+                        self.dispatch_input(UiEvent::Pen(pen));
+                    }
+                }
                 InputEvent::Touch(t) => self.touch(t),
                 InputEvent::TouchFrame(frame) => self.touch_frame(frame),
                 InputEvent::Key(k) => self.key_event(k),
@@ -976,6 +981,7 @@ impl<B: Backend> App<B> {
         }
         if id == "reader:acknowledge-change"
             || id == "reader:sync:accept"
+            || id == "reader:ink:delete-confirm"
             || id.starts_with("library:collections:delete-confirm:")
             || id == "library:history:clear-confirm"
         {

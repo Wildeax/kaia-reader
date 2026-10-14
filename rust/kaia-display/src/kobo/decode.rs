@@ -29,7 +29,7 @@
 //! The light button emits a separate event on release.
 
 use kaia_gfx::{Point, Size};
-use kaia_input::{Key, KeyEvent, Phase, TouchEvent};
+use kaia_input::{Key, KeyEvent, PenEvent, Phase, TouchEvent};
 
 use crate::input::InputEvent;
 use crate::rotation::Rotation;
@@ -40,6 +40,12 @@ pub mod code {
     pub const EV_KEY: u16 = 0x01;
     pub const EV_ABS: u16 = 0x03;
     pub const SYN_REPORT: u16 = 0x00;
+    pub const ABS_PRESSURE: u16 = 0x18;
+    pub const BTN_TOOL_PEN: u16 = 0x140;
+    pub const BTN_TOOL_RUBBER: u16 = 0x141;
+    pub const BTN_TOUCH: u16 = 0x14a;
+    pub const BTN_STYLUS: u16 = 0x14b;
+    pub const BTN_STYLUS2: u16 = 0x14c;
     pub const ABS_X: u16 = 0x00;
     pub const ABS_Y: u16 = 0x01;
     pub const ABS_MT_SLOT: u16 = 0x2f;
@@ -87,6 +93,7 @@ pub struct RawEvent {
 pub enum DecodedEvent {
     Light,
     Key(KeyEvent),
+    Pen(PenEvent),
     TouchFrame(Vec<TouchEvent>),
 }
 
@@ -165,10 +172,57 @@ struct Slot {
     moved: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+struct PenState {
+    x: i32,
+    y: i32,
+    pressure: u32,
+    tool: bool,
+    down: bool,
+    reported: bool,
+    eraser: bool,
+    button: bool,
+    changed: bool,
+    last_eraser: bool,
+}
+
+impl PenState {
+    fn report(&mut self, cal: Calibration, time_us: u64) -> Option<PenEvent> {
+        let down = self.down && (self.tool || self.eraser);
+        let phase = match (self.reported, down, self.changed) {
+            (false, true, _) => Phase::Down,
+            (true, false, _) => Phase::Up,
+            (true, true, true) => Phase::Move,
+            _ => {
+                self.changed = false;
+                return None;
+            }
+        };
+        let eraser = if phase == Phase::Up {
+            self.last_eraser
+        } else {
+            self.eraser
+        };
+        self.reported = down;
+        self.last_eraser = eraser;
+        self.changed = false;
+        Some(PenEvent {
+            phase,
+            pos: cal.map(self.x, self.y),
+            pressure: self.pressure,
+            eraser,
+            button: self.button,
+            time_us,
+        })
+    }
+}
+
 /// Turns raw evdev events into touch and key events.
 #[derive(Debug, Clone)]
 pub struct EvdevDecoder {
     cal: Calibration,
+    pen_cal: Calibration,
+    pen: PenState,
     slots: [Slot; MAX_SLOTS],
     /// The slot that the next position and tracking events apply to. A value of
     /// [`MAX_SLOTS`] means an out-of-range slot, and those events are dropped.
@@ -180,15 +234,23 @@ impl EvdevDecoder {
     pub fn new(cal: Calibration) -> Self {
         Self {
             cal,
+            pen_cal: cal,
+            pen: PenState::default(),
             slots: [Slot::default(); MAX_SLOTS],
             current: 0,
             frame_order: Vec::new(),
         }
     }
 
+    /// A separate pen node may report different axis ranges from the touch panel.
+    pub fn set_pen_calibration(&mut self, calibration: Calibration) {
+        self.pen_cal = calibration;
+    }
+
     /// Changes the rotation that later touch positions use.
     pub fn set_rotation(&mut self, rotation: Rotation) {
         self.cal.rotation = rotation;
+        self.pen_cal.rotation = rotation;
     }
 
     /// Consumes a batch of raw events and returns the input events they produce, in
@@ -199,6 +261,7 @@ impl EvdevDecoder {
             .into_iter()
             .flat_map(|event| match event {
                 DecodedEvent::Light => vec![InputEvent::Light],
+                DecodedEvent::Pen(pen) => vec![InputEvent::Pen(pen)],
                 DecodedEvent::Key(key) => vec![InputEvent::Key(key)],
                 DecodedEvent::TouchFrame(frame) => frame.into_iter().map(InputEvent::Touch).collect(),
             })
@@ -209,6 +272,41 @@ impl EvdevDecoder {
     pub fn feed_frames(&mut self, events: &[RawEvent]) -> Vec<DecodedEvent> {
         let mut out = Vec::new();
         for ev in events {
+            if ev.kind == code::EV_KEY
+                && matches!(
+                    ev.code,
+                    code::BTN_TOOL_PEN
+                        | code::BTN_TOOL_RUBBER
+                        | code::BTN_TOUCH
+                        | code::BTN_STYLUS
+                        | code::BTN_STYLUS2
+                )
+            {
+                match ev.code {
+                    code::BTN_TOOL_PEN => self.pen.tool = ev.value != 0,
+                    code::BTN_TOOL_RUBBER => {
+                        self.pen.eraser = ev.value != 0;
+                    }
+                    code::BTN_TOUCH => self.pen.down = ev.value != 0,
+                    _ => self.pen.button = ev.value != 0,
+                }
+                self.pen.changed = true;
+                continue;
+            }
+            if ev.kind == code::EV_ABS {
+                match ev.code {
+                    code::ABS_X => self.pen.x = ev.value,
+                    code::ABS_Y => self.pen.y = ev.value,
+                    code::ABS_PRESSURE => self.pen.pressure = ev.value.max(0) as u32,
+                    _ => {}
+                }
+                if matches!(ev.code, code::ABS_X | code::ABS_Y | code::ABS_PRESSURE) {
+                    self.pen.changed = true;
+                    if self.pen.tool || self.pen.eraser || self.pen.reported {
+                        continue;
+                    }
+                }
+            }
             match ev.kind {
                 code::EV_ABS => self.abs(ev),
                 code::EV_KEY => {
@@ -219,6 +317,9 @@ impl EvdevDecoder {
                     }
                 }
                 code::EV_SYN if ev.code == code::SYN_REPORT => {
+                    if let Some(pen) = self.pen.report(self.pen_cal, ev.time_us) {
+                        out.push(DecodedEvent::Pen(pen));
+                    }
                     out.push(DecodedEvent::TouchFrame(self.report(ev.time_us)));
                 }
                 _ => {}
@@ -856,5 +957,65 @@ mod tests {
         ]);
         // Deg180 maps (0, 0) to the bottom right corner of the panel.
         assert_eq!(out, vec![touch(0, Phase::Down, 1263, 1679, 1)]);
+    }
+    #[test]
+    fn pen_contact_move_lift_and_eraser_never_emit_touch() {
+        for eraser in [false, true] {
+            let mut decoder = EvdevDecoder::new(libra());
+            let tool = if eraser {
+                code::BTN_TOOL_RUBBER
+            } else {
+                code::BTN_TOOL_PEN
+            };
+            let events = decoder.feed(&[
+                key(tool, 1, 1),
+                abs(code::ABS_X, 400, 1),
+                abs(code::ABS_Y, 300, 1),
+                abs(code::ABS_PRESSURE, 500, 1),
+                key(code::BTN_TOUCH, 1, 1),
+                syn(1),
+                abs(code::ABS_X, 500, 2),
+                abs(code::ABS_PRESSURE, 700, 2),
+                syn(2),
+                key(code::BTN_TOUCH, 0, 3),
+                abs(code::ABS_PRESSURE, 0, 3),
+                key(tool, 0, 3),
+                syn(3),
+            ]);
+            assert_eq!(events.len(), 3, "pen input must not become finger input");
+            for (event, phase) in events.iter().zip([Phase::Down, Phase::Move, Phase::Up]) {
+                let InputEvent::Pen(pen) = event else {
+                    panic!("expected pen")
+                };
+                assert_eq!(pen.phase, phase);
+                assert_eq!(pen.eraser, eraser);
+            }
+            let InputEvent::Pen(moved) = events[1] else {
+                unreachable!()
+            };
+            assert_eq!(moved.pressure, 700);
+            assert_eq!(moved.pos, libra().map(500, 300));
+        }
+    }
+
+    #[test]
+    fn pen_hover_button_and_separate_axis_calibration() {
+        let mut decoder = EvdevDecoder::new(libra());
+        let cal = Calibration::libra_colour((0, 10000), (0, 10000), Rotation::Deg90);
+        decoder.set_pen_calibration(cal);
+        assert!(decoder
+            .feed(&[key(code::BTN_TOOL_PEN, 1, 1), abs(code::ABS_X, 5000, 1), syn(1)])
+            .is_empty());
+        let events = decoder.feed(&[
+            abs(code::ABS_Y, 5000, 2),
+            key(code::BTN_STYLUS, 1, 2),
+            key(code::BTN_TOUCH, 1, 2),
+            syn(2),
+        ]);
+        let InputEvent::Pen(pen) = events[0] else {
+            panic!("expected pen")
+        };
+        assert!(pen.button);
+        assert_eq!(pen.pos, cal.map(5000, 5000));
     }
 }

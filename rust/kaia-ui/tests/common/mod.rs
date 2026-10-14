@@ -145,6 +145,7 @@ impl Widget for Tapper {
         let label = match ev {
             UiEvent::Gesture(g) => format!("{} {}", self.name, g.name()),
             UiEvent::Key(k) => format!("{} key {}", self.name, k.key.name()),
+            UiEvent::Pen(_) => return Handled::No,
             UiEvent::Named(e) => format!("{} named {}", self.name, e.name),
             UiEvent::FocusGained => format!("{} gained", self.name),
             UiEvent::FocusLost => format!("{} lost", self.name),
@@ -189,6 +190,7 @@ impl Widget for Holder {
         let label = match ev {
             UiEvent::Gesture(g) => format!("{} {}", self.name, g.name()),
             UiEvent::Key(k) => format!("{} key {}", self.name, k.key.name()),
+            UiEvent::Pen(_) => return Handled::No,
             UiEvent::Named(e) => format!("{} named {}", self.name, e.name),
             UiEvent::FocusGained | UiEvent::FocusLost => return Handled::No,
         };
