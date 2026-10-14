@@ -980,6 +980,7 @@ dependencies = [
  "kaia-djvu-sys",
  "kaia-gfx",
  "kaia-mupdf-sys",
+ "serde_json",
 ]
 
 [[package]]

@@ -103,3 +103,18 @@ fn font_face_rejects_null_in_the_shim() {
         ffi::kaia_cre_doc_free(raw);
     }
 }
+
+#[test]
+fn range_text_rejects_invalid_anchors_and_extracts_a_page() {
+    start();
+    let mut doc = Doc::new(300, 400).expect("doc");
+    assert!(doc.load(&sample_txt()).expect("load"));
+    assert!(doc.page_count().expect("pages") > 1);
+    let start = doc.page_xpointer(0).expect("start");
+    let end = doc.page_xpointer(1).expect("end");
+    let text = doc.range_text(&start, &end).expect("range text");
+    assert!(!text.is_empty());
+    assert_eq!(doc.range_text(&end, &start).expect("reversed range"), text);
+    assert!(doc.range_text("/does-not-exist", &end).is_err());
+    assert!(doc.range_text(&start, "bad\0anchor").is_err());
+}

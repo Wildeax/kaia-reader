@@ -20,6 +20,13 @@ on:
       - 'rust/kaia-mupdf-sys/**'
       - 'rust/kaia-cre-sys/**'
       - 'rust/kaia-doc/**'
+      - 'tools/kaia/cre*'
+      - 'tools/kaia/test_cre_compare.py'
+      - 'tools/kaia/cre-corpus/**'
+      - 'base'
+      - 'test'
+      - 'resources/fonts'
+      - 'rust/Cargo.lock'
       - 'rust/kaia-library/**'
       - 'rust/kaia-book/**'
       - 'rust/kaia-djvu-sys/**'
@@ -37,6 +44,13 @@ on:
       - 'rust/kaia-mupdf-sys/**'
       - 'rust/kaia-cre-sys/**'
       - 'rust/kaia-doc/**'
+      - 'tools/kaia/cre*'
+      - 'tools/kaia/test_cre_compare.py'
+      - 'tools/kaia/cre-corpus/**'
+      - 'base'
+      - 'test'
+      - 'resources/fonts'
+      - 'rust/Cargo.lock'
       - 'rust/kaia-library/**'
       - 'rust/kaia-book/**'
       - 'rust/kaia-djvu-sys/**'
@@ -151,6 +165,23 @@ jobs:
           test "${#names[@]}" -gt 0
           printf 'Kaia specs: %s\n' "${names[*]}"
           ./kodev test front "${names[@]}"
+
+      - name: Compare CREngine with KOReader
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          export CARGO_TARGET_DIR="$HOME/kaia-wt-cre-target"
+          python3 tools/kaia/test_cre_compare.py
+          python3 tools/kaia/cre_compare.py --output cre-comparison
+
+      - name: Upload CREngine comparison
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cre-comparison
+          path: cre-comparison/
+          if-no-files-found: warn
+          retention-days: 14
 
       # These crates read the emulator tree built above from base/build. The
       # kaia-app tests also read the fonts in resources/fonts, which the

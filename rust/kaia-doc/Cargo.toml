@@ -19,3 +19,10 @@ kaia-gfx = { path = "../kaia-gfx" }
 kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 kaia-cre-sys = { path = "../kaia-cre-sys", optional = true }
 kaia-djvu-sys = { path = "../kaia-djvu-sys", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+[[example]]
+name = "cre_snapshot"
+required-features = ["cre"]
