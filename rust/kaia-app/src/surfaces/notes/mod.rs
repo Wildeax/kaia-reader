@@ -129,6 +129,24 @@ fn handle(state: &NotesView, cmd: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
             book: None,
         }),
         Some(Command::Export) => {
+            use kaia_ui::composite::{Dialog, DialogButton};
+            env.dialog(Dialog::new(
+                env.theme(),
+                tr("Export all notes"),
+                tr("Choose a format. PDF creates one file per book."),
+                vec![
+                    DialogButton::new(tr("Cancel"), "dialog:dismiss"),
+                    DialogButton::new(tr("Markdown and JSON"), "notes:export:text"),
+                    DialogButton::new(tr("PDF"), "notes:export:pdf"),
+                ],
+            ));
+            Outcome::Handled
+        }
+        Some(Command::ExportPdf) => {
+            export_pdfs(env);
+            Outcome::Handled
+        }
+        Some(Command::ExportText) => {
             export_all(env);
             Outcome::Handled
         }
@@ -164,6 +182,37 @@ pub fn export_all(env: &mut SurfaceEnv<'_>) {
             env.toast(tr_format(&tr("Export failed: %1"), &[&e.to_string()]), 6.0);
         }
     }
+}
+
+fn export_pdfs(env: &mut SurfaceEnv<'_>) {
+    let books = load_books(env.services);
+    if books.is_empty() {
+        env.toast(tr("There are no notes to export."), 3.0);
+        return;
+    }
+    let fonts = crate::services::resources_dir(&env.services.platform).join("fonts");
+    match export::export_pdf(&env.services.paths.data_dir, &books, &fonts) {
+        Ok(paths) => env.toast(
+            tr_format(
+                &tr_n(
+                    "Exported %1 PDF file to %2",
+                    "Exported %1 PDF files to %2",
+                    paths.len() as i64,
+                ),
+                &[
+                    &paths.len().to_string(),
+                    &env.services
+                        .paths
+                        .data_dir
+                        .join(export::EXPORTS_DIR)
+                        .display()
+                        .to_string(),
+                ],
+            ),
+            6.0,
+        ),
+        Err(error) => env.toast(tr_format(&tr("Export failed: %1"), &[&error.to_string()]), 6.0),
+    };
 }
 
 fn now_unix() -> i64 {

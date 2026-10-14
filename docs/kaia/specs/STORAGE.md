@@ -556,3 +556,19 @@ The test suite must cover each of these with a fixture:
 5. Opening a database with a newer `user_version` fails without writing.
 6. Export followed by import into an empty store reproduces the same stickers and assets.
 7. Re-anchoring finds the quote after text is inserted before it, and orphans the sticker when the quote is removed.
+
+## Rust notes exports
+
+The Notes surface offers Markdown and JSON, or PDF. All formats use the app's
+`<data>/exports/` directory. Markdown and JSON keep their timestamped names.
+PDF export writes `kaia-notes-<key>.pdf` for each book, where `key` is the
+hexadecimal encoding of the partial MD5 string's UTF-8 bytes. This encoding
+keeps imported identifiers inside the export directory. A later PDF export
+replaces the same book's file after the writer closes and syncs a temporary
+file. An error before replacement leaves the previous file intact. If a later
+book fails, PDFs already completed in that export remain available.
+
+Each PDF has the title, the author when the library knows it, chapter headings,
+highlights, notes, positions and dates. Ink entries include their stroke counts.
+The pages are A5 with numbered footers. MuPDF embeds the bundled Noto Sans
+fonts and uses Noto Sans CJK when that face is present.

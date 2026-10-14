@@ -59,6 +59,7 @@ pub struct BookNotes {
     /// Partial MD5 of the book file. Names the state file.
     pub md5: String,
     pub title: String,
+    pub author: Option<String>,
     /// The library row of this book, when the library has the file.
     pub library_id: Option<i64>,
     /// Newest annotation time, `YYYY-MM-DD HH:MM:SS`. Used for the newest-first order.
@@ -218,6 +219,7 @@ pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> 
                                     .or(doc.title)
                                     .unwrap_or_else(|| doc.partial_md5.clone()),
                                 md5: doc.partial_md5,
+                                author: row.and_then(|b| b.authors.clone()),
                                 library_id: row.map(|b| b.id),
                                 latest: String::new(),
                                 notes: Vec::new(),
@@ -239,6 +241,7 @@ pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> 
                                 .and_then(|b| b.title.clone())
                                 .or(sticker.doc.title.clone())
                                 .unwrap_or_else(|| md5.clone()),
+                            author: row.and_then(|b| b.authors.clone()),
                             library_id: row.map(|b| b.id),
                             latest: String::new(),
                             notes: Vec::new(),
@@ -315,6 +318,7 @@ pub fn read_book(path: &Path, library: &HashMap<String, Book>) -> Option<BookNot
     Some(BookNotes {
         md5,
         title,
+        author: library_book.and_then(|b| b.authors.clone()),
         library_id: library_book.map(|b| b.id),
         latest,
         notes,

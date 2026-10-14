@@ -410,6 +410,30 @@ impl Document {
     }
 }
 
+/// Writes trusted local HTML to A5 PDF pages with margins and numbered footers.
+/// `fonts` is the root directory for relative font URLs in `css`.
+/// The caller owns the output path and must remove a partial file on failure.
+pub fn write_story_pdf(path: &Path, html: &str, css: &str, fonts: &Path) -> Result<()> {
+    let handle = Document::new_handle()?;
+    let path = path_to_cstring(path)?;
+    let html = to_cstring(html)?;
+    let css = to_cstring(css)?;
+    let fonts = path_to_cstring(fonts)?;
+    // SAFETY: the handle owns a live context. All strings are NUL-terminated
+    // and live through the call. The shim catches every MuPDF exception and
+    // releases its writer, stories, buffers and archive before returning.
+    let status = unsafe {
+        kaia_write_story_pdf(
+            handle.raw.as_ptr(),
+            path.as_ptr(),
+            html.as_ptr(),
+            css.as_ptr(),
+            fonts.as_ptr(),
+        )
+    };
+    handle.check(status)
+}
+
 impl Drop for Document {
     fn drop(&mut self) {
         // SAFETY: `self.raw` came from `kaia_doc_new` and has not been freed.

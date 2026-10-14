@@ -96,6 +96,10 @@ typedef struct {
 
 /* Creates a handle with its own fz_context. Registers the document handlers and
  * the external font functions the way KOReader does. */
+/* Trusted local HTML and CSS; fonts is a directory archive. Exceptions stay in C. */
+int kaia_write_story_pdf(kaia_doc *d, const char *path, const char *html,
+                         const char *css, const char *fonts);
+
 int kaia_doc_new(kaia_doc **out);
 void kaia_doc_free(kaia_doc *d);
 

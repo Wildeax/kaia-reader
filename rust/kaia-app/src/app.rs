@@ -1000,7 +1000,9 @@ impl<B: Backend> App<B> {
             self.quitting = true;
             return;
         }
-        if id == "reader:acknowledge-change"
+        if id == "notes:export:text"
+            || id == "notes:export:pdf"
+            || id == "reader:acknowledge-change"
             || id == "reader:sync:accept"
             || id == "reader:ink:delete-confirm"
             || id.starts_with("library:collections:delete-confirm:")

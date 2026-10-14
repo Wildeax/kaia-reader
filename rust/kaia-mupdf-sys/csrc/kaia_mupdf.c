@@ -949,3 +949,73 @@ void kaia_free(void *p)
 {
     free(p);
 }
+
+/* Writes trusted, locally generated HTML. All handles belong to d's context. */
+int kaia_write_story_pdf(kaia_doc *d, const char *path, const char *html,
+                         const char *css, const char *fonts)
+{
+    fz_context *ctx;
+    fz_buffer *buffer = NULL;
+    fz_archive *archive = NULL;
+    fz_story *story = NULL;
+    fz_story *footer = NULL;
+    fz_buffer *footer_buffer = NULL;
+    fz_document_writer *writer = NULL;
+    int status = KAIA_OK;
+    const fz_rect page = { 0, 0, 420, 595 };
+    const fz_rect body = { 36, 36, 384, 547 };
+    const fz_rect foot = { 36, 560, 384, 585 };
+    if (!d || !path || !html || !css || !fonts)
+        return KAIA_ERR_ARG;
+    ctx = d->ctx;
+    fz_var(buffer);
+    fz_var(archive);
+    fz_var(story);
+    fz_var(footer);
+    fz_var(footer_buffer);
+    fz_var(writer);
+    fz_try(ctx) {
+        archive = fz_open_directory(ctx, fonts);
+        buffer = fz_new_buffer_from_copied_data(ctx, (const unsigned char *)html, strlen(html));
+        story = fz_new_story(ctx, buffer, css, 11, archive);
+        writer = fz_new_pdf_writer(ctx, path, "compress=yes");
+        int more = 1;
+        int number = 0;
+        while (more) {
+            fz_rect filled;
+            char label[96];
+            /* Bound malformed layouts that never consume their next block. */
+            if (++number > 10000)
+                fz_throw(ctx, FZ_ERROR_GENERIC, "notes export exceeds 10000 pages");
+            more = fz_place_story_flags(ctx, story, body, &filled, FZ_PLACE_STORY_FLAG_NO_OVERFLOW);
+            if (more == FZ_PLACE_STORY_RETURN_OVERFLOW_WIDTH)
+                fz_throw(ctx, FZ_ERROR_GENERIC, "notes export contains text too wide for the page");
+            fz_device *dev = fz_begin_page(ctx, writer, page);
+            fz_draw_story(ctx, story, dev, fz_identity);
+            snprintf(label, sizeof label, "<p style='text-align:center;font-size:9pt'>%d</p>", number);
+            footer_buffer = fz_new_buffer_from_copied_data(ctx, (const unsigned char *)label, strlen(label));
+            footer = fz_new_story(ctx, footer_buffer, css, 9, archive);
+            fz_place_story(ctx, footer, foot, &filled);
+            fz_draw_story(ctx, footer, dev, fz_identity);
+            fz_drop_story(ctx, footer);
+            footer = NULL;
+            fz_drop_buffer(ctx, footer_buffer);
+            footer_buffer = NULL;
+            fz_end_page(ctx, writer);
+        }
+        fz_close_document_writer(ctx, writer);
+    }
+    fz_always(ctx) {
+        fz_drop_document_writer(ctx, writer);
+        fz_drop_story(ctx, footer);
+        fz_drop_buffer(ctx, footer_buffer);
+        fz_drop_story(ctx, story);
+        fz_drop_buffer(ctx, buffer);
+        fz_drop_archive(ctx, archive);
+    }
+    fz_catch(ctx) {
+        set_err(d, fz_caught_message(ctx));
+        status = KAIA_ERR_MUPDF;
+    }
+    return status;
+}

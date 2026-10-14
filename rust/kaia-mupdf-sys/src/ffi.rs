@@ -96,6 +96,13 @@ pub struct kaia_stext {
 }
 
 extern "C" {
+    pub fn kaia_write_story_pdf(
+        doc: *mut kaia_doc,
+        path: *const c_char,
+        html: *const c_char,
+        css: *const c_char,
+        fonts: *const c_char,
+    ) -> c_int;
     pub fn kaia_doc_new(out: *mut *mut kaia_doc) -> c_int;
     pub fn kaia_doc_free(d: *mut kaia_doc);
     pub fn kaia_doc_error(d: *const kaia_doc) -> *const c_char;
