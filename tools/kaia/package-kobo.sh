@@ -133,6 +133,10 @@ cp "${RUST_BIN}" "${APP}/kaia"
 cp -R "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
 cp -R "${ROOT}/frontend/." "${APP}/frontend/"
 cp -R "${ROOT}/plugins/." "${APP}/plugins/"
+# Kaia's reading fonts go into fonts/ next to the upstream CREngine fonts. CREngine
+# reads fonts/ recursively, and so does KOReader's font list (frontend/fontlist.lua).
+mkdir -p "${APP}/fonts"
+cp -R "${ROOT}/resources/kaia-fonts/atkinson-hyperlegible" "${ROOT}/resources/kaia-fonts/opendyslexic" "${APP}/fonts/"
 cp "${ROOT}/dist/rust/${TARGET}/libluajit.so" "${APP}/libs/"
 cp "${ROOT}/dist/rust/${TARGET}/libluajit-5.1.so.2" "${APP}/libs/"
 cp "${ROOT}/platform/kobo/kaia/kaia-rust.sh" "${APP}/kaia-rust.sh"

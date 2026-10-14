@@ -63,7 +63,7 @@ Review 2 (`docs/kaia/reviews/2026-10-13-review-2.md`) covers `kaia-app`. It list
 | KR-004 rebuild unmodified KOReader | Done for desktop and Kobo | Desktop build, all upstream front specs pass; `tools/kaia/build-kobo.sh` builds `kobo` and `kobov5` in the pinned toolchain image | Reading, suspend and exit on the device |
 | KR-005 inventory | Done | `docs/kaia/inventory/plugins.md`, `functions.md` | Applicability of four conditional plugins |
 | KR-006 measurements | Method, workload and desktop baseline done | `tools/kaia/bench/`, `docs/kaia/device/BENCHMARKS.md` | Every number that the plan's gates use |
-| KR-007 licenses | Inventory done, 84 items need review | `docs/kaia/inventory/LICENSES.md`, `RELEASE_SOURCE_CHECKLIST.md` | Nothing; needs a human license review |
+| KR-007 licenses | Inventory done, 86 items need review | `docs/kaia/inventory/LICENSES.md`, `RELEASE_SOURCE_CHECKLIST.md` | Nothing; needs a human license review |
 | KR-008 first Rust service | Done on desktop and armv7 emulation | `rust/kaia-ffi`, `frontend/kaia/rustlib.lua`, `tools/kaia/arm-smoke.sh` | Repeated calls on the device |
 | KR-009 error and lifetime tests | Done | 10,000-cycle allocation test in `rust/kaia-ffi/tests/alloc.rs`, stale handles, panics, size limits, header parity | Device stress run |
 | KR-010 hybrid UI proof | Done on desktop | `spec/unit/kaia_hybrid_ui_spec.lua`, `docs/kaia/specs/KR-010-hybrid-ui.md` | E Ink refresh and ghosting |

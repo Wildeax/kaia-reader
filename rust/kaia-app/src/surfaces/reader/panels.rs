@@ -31,10 +31,12 @@ use crate::surfaces::Route;
 
 /// Font choices of the Text and layout sheet: the label and the face name.
 /// The first choice keeps the book's own font.
-pub const FONT_CHOICES: [(&str, Option<&str>); 3] = [
+pub const FONT_CHOICES: [(&str, Option<&str>); 5] = [
     ("Book's font", None),
     ("Noto Serif", Some("Noto Serif")),
     ("Noto Sans", Some("Noto Sans")),
+    ("Atkinson Hyperlegible", Some("Atkinson Hyperlegible")),
+    ("OpenDyslexic", Some("OpenDyslexic")),
 ];
 
 fn font_label(label: &str) -> String {
@@ -44,6 +46,22 @@ fn font_label(label: &str) -> String {
         "Noto Sans" => tr("Noto Sans"),
         other => other.to_string(),
     }
+}
+
+/// The index in `FONT_CHOICES` of a layout's face. A book with no face, or a face
+/// that is not in the list, gets the first choice, the book's own font.
+pub fn font_index(face: Option<&str>) -> usize {
+    FONT_CHOICES
+        .iter()
+        .position(|(_, name)| *name == face)
+        .unwrap_or(0)
+}
+
+/// The label of font choice `index`, as the Font row and the font list show it.
+pub fn font_choice_label(index: usize) -> String {
+    FONT_CHOICES
+        .get(index)
+        .map_or_else(String::new, |(label, _)| font_label(label))
 }
 
 /// Share of the screen height that a tall sheet takes.
@@ -272,15 +290,15 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
     let mut children = Vec::new();
     match reflow {
         Some(layout) => {
-            let selected = FONT_CHOICES
-                .iter()
-                .position(|(_, face)| *face == layout.font_family.as_deref())
-                .or(Some(0));
-            let options = FONT_CHOICES.iter().map(|(label, _)| font_label(label)).collect();
-            let font = WidgetPod::new(RadioGroup::new(options, selected).on_action("reader:layout:font"))
-                .with_key("layout-font");
-            children.push(group_heading(services, &tr("Font")));
-            children.push(font);
+            // The face shows on the button. Tapping it opens the font list.
+            let face = font_choice_label(font_index(layout.font_family.as_deref()));
+            let font = button(
+                ButtonStyle::Secondary,
+                &face,
+                "reader:layout:fonts",
+                "layout-font",
+            );
+            children.push(labelled(services, &tr("Font"), font));
             let size = WidgetPod::new(
                 Stepper::new(
                     f64::from(layout.font_size),
@@ -350,6 +368,33 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
         tr("Page view")
     };
     sheet(services, screen, Some(&title), children, Some(WRITING_PERCENT))
+}
+
+/// The font list, opened from the Font row of the Text and layout sheet. One row
+/// per face in `FONT_CHOICES` order. The row of face `current` shows "Current".
+/// Tapping a row picks that face.
+pub fn font_list(services: &Services, screen: Size, current: usize) -> Window {
+    let indices: Vec<usize> = (0..FONT_CHOICES.len()).collect();
+    let list = PagedList::new(indices, move |index: &usize, _t: &Theme| {
+        let action = format!("reader:layout:font:{index}");
+        let mut row = ListRow::new(font_choice_label(*index)).on_action(action.clone());
+        if *index == current {
+            row = row.value(tr("Current"));
+        }
+        WidgetPod::new(row).with_key(key_of(&action))
+    })
+    .labels(page_labels());
+    let children = vec![WidgetPod::new(Expanded::new(
+        WidgetPod::new(list).with_key("font-list"),
+        1,
+    ))];
+    sheet(
+        services,
+        screen,
+        Some(&tr("Font")),
+        children,
+        Some(WRITING_PERCENT),
+    )
 }
 
 /// The More panel: go to either end and mark the book as finished.
@@ -1380,4 +1425,24 @@ pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> 
         ))],
         Some(TALL_PERCENT),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FONT_CHOICES;
+    use crate::surfaces::settings::commands::options_for;
+    use crate::surfaces::settings::keys;
+
+    /// The Text sheet and the Settings radio list offer the same faces, in the same order.
+    #[test]
+    fn reader_font_choices_match_the_settings_options() {
+        let settings: Vec<&str> = options_for(keys::READING_FONT_FAMILY)
+            .unwrap()
+            .iter()
+            .map(|(value, _)| *value)
+            .filter(|value| !value.is_empty())
+            .collect();
+        let reader: Vec<&str> = FONT_CHOICES.iter().filter_map(|(_, face)| *face).collect();
+        assert_eq!(reader, settings);
+    }
 }

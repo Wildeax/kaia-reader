@@ -173,6 +173,41 @@ fn display(services: &Services) -> Vec<Entry> {
             value: f64::from(services.platform.frontlight.warmth()),
             enabled: true,
         });
+        out.push(Entry::Toggle {
+            key: keys::DISPLAY_NATURAL_LIGHT_ENABLED,
+            label: tr("Natural light schedule"),
+            on: keys::bool_or(s, keys::DISPLAY_NATURAL_LIGHT_ENABLED, false),
+        });
+        out.push(Entry::Stepper {
+            key: keys::DISPLAY_NATURAL_LIGHT_BEDTIME,
+            label: tr("Bedtime"),
+            value: keys::number_or(s, keys::DISPLAY_NATURAL_LIGHT_BEDTIME, 1380.0),
+            min: 0.0,
+            max: 1410.0,
+            step: 30.0,
+            unit: StepUnit::ClockTime,
+        });
+        for (key, label, default) in [
+            (keys::DISPLAY_NATURAL_LIGHT_DAY_WARMTH, tr("Daytime warmth"), 0.0),
+            (
+                keys::DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH,
+                tr("Bedtime warmth"),
+                92.0,
+            ),
+        ] {
+            out.push(Entry::Stepper {
+                key,
+                label,
+                value: keys::number_or(s, key, default),
+                min: 0.0,
+                max: 100.0,
+                step: 1.0,
+                unit: StepUnit::Percent,
+            });
+        }
+        out.push(Entry::Text(tr(
+            "If you change the warmth by hand, the schedule waits until its next step. A bedtime between 05:00 and 18:00 counts as 23:00.",
+        )));
     } else {
         out.push(Entry::Text(tr(
             "The frontlight and warmth work on the Kobo only. This is a desktop build.",

@@ -201,6 +201,10 @@ pub trait Frontlight {
     fn warmth(&self) -> u8;
     /// Sets warmth. Values above 100 are clamped.
     fn set_warmth(&mut self, value: u8) -> Result<(), PlatformError>;
+    /// Counts successful warmth writes, including writes of the current value.
+    fn warmth_revision(&self) -> u64 {
+        0
+    }
     /// Starts a toggle: a ramp off when the light is on, a ramp up to the saved
     /// intensity when it is off. Returns the ramp for the caller to schedule, or
     /// `None` when nothing is left to do (toggling on at intensity 0, or a light
@@ -244,6 +248,7 @@ pub struct SysfsFrontlight<W: SysfsWriter> {
     ramping: Option<RampDirection>,
     /// Whether intensity goes through the `ntx_io` ioctl.
     use_ioctl: bool,
+    warmth_revision: u64,
 }
 
 impl<W: SysfsWriter> SysfsFrontlight<W> {
@@ -261,6 +266,7 @@ impl<W: SysfsWriter> SysfsFrontlight<W> {
             warmth: warmth.min(100),
             ramping: None,
             use_ioctl: false,
+            warmth_revision: 0,
         }
     }
 
@@ -388,11 +394,16 @@ impl<W: SysfsWriter> Frontlight for SysfsFrontlight<W> {
             .write(&self.cfg.mixer_path, &written.to_string())
             .map_err(|e| PlatformError::io(self.cfg.mixer_path.clone(), e))?;
         self.warmth = value;
+        self.warmth_revision = self.warmth_revision.wrapping_add(1);
         Ok(())
     }
 
     fn warmth(&self) -> u8 {
         self.warmth
+    }
+
+    fn warmth_revision(&self) -> u64 {
+        self.warmth_revision
     }
 
     /// The ramps of `powerd.lua:365-466`. Turning on with intensity 0 does nothing.
@@ -473,6 +484,16 @@ pub fn desktop_frontlight() -> SysfsFrontlight<NullWriter> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn warmth_revision_counts_repeated_writes() {
+        let mut light = desktop_frontlight();
+        assert_eq!(light.warmth_revision(), 0);
+        light.set_warmth(35).unwrap();
+        assert_eq!(light.warmth_revision(), 1);
+        light.set_warmth(35).unwrap();
+        assert_eq!(light.warmth_revision(), 2);
+    }
 
     #[test]
     fn ramp_down_from_100_matches_powerd_lua() {

@@ -136,6 +136,8 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
             ("", "Engine default"),
             ("Noto Serif", "Noto Serif"),
             ("Noto Sans", "Noto Sans"),
+            ("Atkinson Hyperlegible", "Atkinson Hyperlegible"),
+            ("OpenDyslexic", "OpenDyslexic"),
         ]),
         keys::READING_TAP_ZONES => Some(&keys::TAP_ZONE_PRESETS),
         keys::DEVICE_SLEEP_SCREEN => Some(&keys::SLEEP_SCREENS),
@@ -171,6 +173,10 @@ pub fn is_known_key(key: &str) -> bool {
             | keys::DISPLAY_NIGHT_MODE
             | keys::DISPLAY_COLOR_RENDERING
             | keys::DISPLAY_ROTATION_LOCK
+            | keys::DISPLAY_NATURAL_LIGHT_ENABLED
+            | keys::DISPLAY_NATURAL_LIGHT_BEDTIME
+            | keys::DISPLAY_NATURAL_LIGHT_DAY_WARMTH
+            | keys::DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH
             | keys::LIBRARY_SHOW_FINISHED
             | keys::SYNC_SERVER
             | keys::SYNC_USERNAME
@@ -241,5 +247,32 @@ mod tests {
             Some(Value::from("page_only"))
         );
         assert_eq!(value_for_pick(keys::READING_TAP_ZONES, 9), None);
+    }
+
+    #[test]
+    fn reading_font_picks_include_the_kaia_faces() {
+        let faces: Vec<&str> = options_for(keys::READING_FONT_FAMILY)
+            .unwrap()
+            .iter()
+            .map(|(value, _)| *value)
+            .collect();
+        assert_eq!(
+            faces,
+            [
+                "",
+                "Noto Serif",
+                "Noto Sans",
+                "Atkinson Hyperlegible",
+                "OpenDyslexic"
+            ]
+        );
+        assert_eq!(
+            value_for_pick(keys::READING_FONT_FAMILY, 3),
+            Some(Value::from("Atkinson Hyperlegible"))
+        );
+        assert_eq!(
+            value_for_pick(keys::READING_FONT_FAMILY, 4),
+            Some(Value::from("OpenDyslexic"))
+        );
     }
 }

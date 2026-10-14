@@ -28,7 +28,7 @@ pub enum SortChoice {
     Series,
 }
 
-/// Filter chips for the reading status.
+/// The reading status a filter shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chip {
     Reading,
@@ -38,18 +38,28 @@ pub enum Chip {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    /// `library:view:<name>`: switch the tab.
+    /// `library:view:<name>`: switch the tab. `covers` and `list` also set the
+    /// layout of the Books tab.
     View(View),
+    /// `library:view:books`: the Books tab. It shows the layout the Books tab
+    /// last had, covers or list.
+    BooksTab,
     /// `library:sort`: open the sort panel.
     OpenSort,
     /// `library:sort:<key>`: sort by a key and close the panel.
     Sort(SortChoice),
-    /// `library:filter:<chip>`: toggle a status chip.
+    /// `library:filter`: open the filter panel.
+    OpenFilter,
+    /// `library:filter:all`: show every book, with no status and no collection.
+    AllBooks,
+    /// `library:filter:<status>`: show the books with that status. It replaces the
+    /// collection filter.
     Chip(Chip),
-    /// `library:filter:collection`: toggle the collection chip. Opens the picker when it is off.
-    CollectionChip,
+    /// `library:filter:collection`: open the collection picker for the filter.
+    FilterCollection,
     /// `library:collection:<id>` or `library:collection:none`: filter by a collection
-    /// (None clears the filter). The picker uses it too.
+    /// (None clears the collection filter). Picking a collection drops the status
+    /// filter. The picker uses it too.
     PickCollection(Option<i64>),
     /// `library:search:open` and `library:search:close`.
     SearchOpen,
@@ -157,6 +167,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
     Some(match (head, tail) {
         ("history", Some("clear")) => Command::ClearHistory,
         ("history", Some("clear-confirm")) => Command::ConfirmClearHistory,
+        ("view", Some("books")) => Command::BooksTab,
         ("view", Some(v)) => Command::View(match v {
             "covers" => View::Covers,
             "list" => View::List,
@@ -175,10 +186,12 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             "series" => SortChoice::Series,
             _ => return None,
         }),
+        ("filter", None) => Command::OpenFilter,
+        ("filter", Some("all")) => Command::AllBooks,
         ("filter", Some("reading")) => Command::Chip(Chip::Reading),
         ("filter", Some("not-started")) => Command::Chip(Chip::NotStarted),
         ("filter", Some("finished")) => Command::Chip(Chip::Finished),
-        ("filter", Some("collection")) => Command::CollectionChip,
+        ("filter", Some("collection")) => Command::FilterCollection,
         ("collection", Some("none")) => Command::PickCollection(None),
         ("collection", _) => Command::PickCollection(Some(tail_id.or(arg_id)?)),
         ("search", Some("open")) => Command::SearchOpen,
@@ -271,8 +284,11 @@ mod tests {
         );
         assert_eq!(
             parse("library:filter:collection", &none()),
-            Some(Command::CollectionChip)
+            Some(Command::FilterCollection)
         );
+        assert_eq!(parse("library:filter", &none()), Some(Command::OpenFilter));
+        assert_eq!(parse("library:filter:all", &none()), Some(Command::AllBooks));
+        assert_eq!(parse("library:view:books", &none()), Some(Command::BooksTab));
     }
 
     #[test]

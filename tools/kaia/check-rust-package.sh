@@ -28,6 +28,24 @@ check 'EPUB stylesheet is beside the binary' test -s "${APP}/data/epub.css"
 check 'FB2 stylesheet is beside the binary' test -s "${APP}/data/fb2.css"
 check 'English hyphenation data is present' test -s "${APP}/data/hyph/English_US.pattern"
 check 'CREngine font is beside the binary' test -s "${APP}/fonts/noto/NotoSerif-Regular.ttf"
+# Kaia's reading fonts and their licenses, in the fonts/ folder beside the binary.
+KAIA_READING_FONTS=(
+    atkinson-hyperlegible/AtkinsonHyperlegible-Regular.ttf
+    atkinson-hyperlegible/AtkinsonHyperlegible-Bold.ttf
+    atkinson-hyperlegible/AtkinsonHyperlegible-Italic.ttf
+    atkinson-hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf
+    atkinson-hyperlegible/OFL.txt
+    opendyslexic/OpenDyslexic-Regular.otf
+    opendyslexic/OpenDyslexic-Bold.otf
+    opendyslexic/OpenDyslexic-Italic.otf
+    opendyslexic/OpenDyslexic-Bold-Italic.otf
+    opendyslexic/OFL.txt
+)
+for font in "${KAIA_READING_FONTS[@]}"; do
+    check "reading font is present: ${font}" test -s "${APP}/fonts/${font}"
+done
+check 'Atkinson Hyperlegible folder matches the source' diff -qr "${ROOT}/resources/kaia-fonts/atkinson-hyperlegible" "${APP}/fonts/atkinson-hyperlegible"
+check 'OpenDyslexic folder matches the source' diff -qr "${ROOT}/resources/kaia-fonts/opendyslexic" "${APP}/fonts/opendyslexic"
 check 'UI font is present' test -s "${APP}/resources/fonts/noto/NotoSans-Regular.ttf"
 check 'UI font license is present' test -s "${APP}/resources/fonts/noto/LICENSE"
 check 'UI icons match the source' diff -qr "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/mdlight"

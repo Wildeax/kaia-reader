@@ -15,7 +15,7 @@ Rules used:
 - A license is recorded only from a license file in the tree or an explicit declaration (`__meta.lua`). Otherwise the entry reads `unknown, needs review`.
 - Upstream archives are not stored in the repo, so their license text is not inspected. The column `upstream license (to verify)` holds names from memory and is marked unverified.
 - A text hint is a match on well-known license headers. A reviewer still confirms it.
-- Build directories are skipped, so a running build does not change the output.
+- Only files that git tracks are read, so ignored build output and untracked files do not change the output.
 
 ## Summary
 
@@ -26,15 +26,15 @@ Rules used:
 | thirdparty vendored in tree | 4 |
 | test rocks | 11 |
 | submodules | 6 |
-| font families | 5 |
-| font files | 35 |
-| image directories | 5 |
-| image files | 137 |
-| license files in repo | 35 |
-| lua directories outside frontend | 3 |
-| plugins | 37 |
+| font families | 7 |
+| font files | 43 |
+| image directories | 6 |
+| image files | 141 |
+| license files in repo | 46 |
+| lua directories outside frontend | 14 |
+| plugins | 39 |
 | asset flags | 0 |
-| needs review | 84 |
+| needs review | 86 |
 
 The needs-review list is at the end of this file.
 
@@ -51,12 +51,16 @@ The needs-review list is at the end of this file.
   - line 585: `later version.`
   - line 638: `(at your option) any later version.`
 - `README.md` license lines (verbatim):
-  - line 5: `[![AGPL Licence][badge-license]](COPYING)`
-  - line 87: `[badge-license]:https://img.shields.io/github/license/koreader/koreader`
-- Version numbers in the README license lines: none. The README names the license only as AGPL and links to `COPYING`.
-- Per-file notices in 750 scanned source files: 1 name the Affero GPL, 0 carry the 'either version 3 ... or any later version' clause, 0 contain 'any later version'.
+  - line 16: `Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.`
+  - line 24: `[![AGPL Licence][badge-license]](COPYING)`
+  - line 106: `[badge-license]:https://img.shields.io/github/license/koreader/koreader`
+- Version numbers in the README license lines: v3. The README links to `COPYING`.
+- Per-file notices in 1398 scanned source files: 4 name the Affero GPL, 1 carry the 'either version 3 ... or any later version' clause, 1 contain 'any later version'.
 - Kaia UI statements that name the license:
+  - `README.md` line 16: `Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.`
   - `frontend/ui/elements/common_info_menu_table.lua` line 134: `text = T(_("%1\n\nAn offline-first reader for E Ink devices, based on KOReader.\n\nLicensed under Affero GPL v3. All dependencies are free software.\n\nSource: %2\nKOReader: http://koreader.rocks"), B`
+  - `rust/kaia-app/src/surfaces/settings/sections.rs` line 553: `secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),`
+  - `rust/kaia-lua/tests/community/footcream.koplugin/README.md` line 153: `Licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later); full text in [LICENSE](LICENSE). Copyright (C) 2026 Erik Fanki.`
 
 **Open question (not resolved here):** whether KOReader is AGPL-3.0-only or AGPL-3.0-or-later. `docs/kaia/ENGINEERING_PLAN.md` section 11 asks for an exact SPDX expression checked against upstream and per-file notices. Discussion: https://github.com/koreader/koreader/discussions/11652. This inventory asserts no `-only` or `-or-later` suffix.
 
@@ -159,12 +163,12 @@ Scope:
 
 | Item | Count |
 |---|---|
-| Crate versions | 230 |
-| Used by kaia (desktop) | 227 |
-| Used by kaia (kobo) | 184 |
+| Crate versions | 247 |
+| Used by kaia (desktop) | 247 |
+| Used by kaia (kobo) | 205 |
 | Used by libkaia.so | 45 |
 | Not in the macOS, Linux or Kobo builds | 56 |
-| Needs attention | 13 |
+| Needs attention | 14 |
 
 A row needs attention when `rust/deny.toml` does not allow a term in its license expression, when the crate package has no license file at its top level, or when the crate has a NOTICE file. Rows outside the release builds count too. The Note column says what to do. Notes about native code do not count.
 
@@ -178,7 +182,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | base64 | 0.23.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | bitflags | 1.3.2 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | bitflags | 2.13.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
+| block-buffer | 0.10.4 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | block-buffer | 0.12.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
+| bstr | 1.13.1 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | bumpalo | 3.20.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. |
 | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | bytemuck_derive | 1.12.1 | Zlib OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | Proc macro. The compiler runs it, and it does not link into the product. |
@@ -191,19 +197,23 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | core_maths | 0.1.1 | MIT | kaia (desktop), kaia (kobo) |  |
 | cosmic-text | 0.17.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
-| cpufeatures | 0.3.1 | MIT OR Apache-2.0 | libkaia.so |  |
+| cpufeatures | 0.2.17 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| cpufeatures | 0.3.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | crc32fast | 1.5.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| crypto-common | 0.1.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | crypto-common | 0.2.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | data-url | 0.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| digest | 0.10.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | digest | 0.11.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Proc macro. The compiler runs it, and it does not link into the product. |
 | dlib | 0.5.3 | MIT | kaia (desktop) |  |
 | downcast-rs | 1.2.1 | MIT/Apache-2.0 | kaia (desktop) |  |
+| either | 1.19.0 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | equivalent | 1.0.2 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
-| errno | 0.3.14 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
+| errno | 0.3.14 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | fallible-iterator | 0.3.0 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
-| fastrand | 2.5.0 | Apache-2.0 OR MIT | kaia (desktop) |  |
+| fastrand | 2.5.0 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | flate2 | 1.1.10 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | float-cmp | 0.9.0 | MIT | kaia (desktop), kaia (kobo) |  |
@@ -211,6 +221,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | font-types | 0.11.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | fontdb | 0.23.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | form_urlencoded | 1.2.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| fs2 | 0.4.3 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | futures | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | futures-channel | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | futures-core | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
@@ -220,8 +231,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | futures-sink | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | futures-task | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | futures-util | 0.3.34 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
+| generic-array | 0.14.7 | MIT | kaia (desktop), kaia (kobo) |  |
 | getrandom | 0.2.17 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
-| getrandom | 0.4.3 | MIT OR Apache-2.0 | kaia (desktop), libkaia.so |  |
+| getrandom | 0.4.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | harfrust | 0.5.2 | MIT | kaia (desktop), kaia (kobo) | No license file in the crate package. Copy the text from https://github.com/harfbuzz/harfrust before release. |
 | hashbrown | 0.16.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. |
 | hashbrown | 0.17.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
@@ -253,8 +265,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | libredox | 0.1.25 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | libsqlite3-sys | 0.38.2 | MIT | kaia (desktop), kaia (kobo), libkaia.so | Compiles the bundled SQLite source. The crate README says SQLite is in the public domain. |
 | linebender_resource_handle | 0.1.1 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
-| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop) | The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
+| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
 | litemap | 0.8.3 | Unicode-3.0 | kaia (desktop), kaia (kobo) |  |
+| lock_api | 0.4.14 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | log | 0.4.34 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | md-5 | 0.11.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | memchr | 2.8.3 | Unlicense OR MIT | kaia (desktop), kaia (kobo), libkaia.so | The expression offers Unlicense, which rust/deny.toml does not allow. Use MIT. |
@@ -262,11 +275,15 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | minifb | 0.29.0 | MIT OR Apache-2.0 | kaia (desktop) | Its build script compiles native code that links into the product. |
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| mlua | 0.10.5 | MIT | kaia (desktop) |  |
+| mlua-sys | 0.6.8 | MIT | kaia (desktop) | No license file in the crate package. Copy the text from https://github.com/mlua-rs/mlua before release. |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | nix | 0.31.3 | MIT | kaia (desktop), kaia (kobo) |  |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | orbclient | 0.3.55 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
+| parking_lot | 0.12.5 | MIT OR Apache-2.0 | kaia (desktop) |  |
+| parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | pico-args | 0.5.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | pin-project-lite | 0.2.17 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
@@ -278,10 +295,11 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | quick-xml | 0.41.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | quote | 1.0.47 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
-| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | kaia (desktop), libkaia.so | Not in the macOS, Linux or Kobo builds. The expression offers LGPL-2.1-or-later, which rust/deny.toml does not allow. Use MIT or Apache-2.0. No license file in the crate package. Copy the text from https://github.com/r-efi/r-efi before release. |
+| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. The expression offers LGPL-2.1-or-later, which rust/deny.toml does not allow. Use MIT or Apache-2.0. No license file in the crate package. Copy the text from https://github.com/r-efi/r-efi before release. |
 | rangemap | 1.8.0 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | kaia (desktop) |  |
 | read-fonts | 0.37.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| redox_syscall | 0.5.18 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | redox_syscall | 0.9.4 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | resvg | 0.45.1 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | rgb | 0.8.53 | MIT | kaia (desktop), kaia (kobo) |  |
@@ -291,11 +309,13 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | rsqlite-vfs | 0.1.1 | MIT | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. No license file and no repository field in the crate package. Find the upstream license text before release. |
 | rusqlite | 0.40.2 | MIT | kaia (desktop), kaia (kobo), libkaia.so |  |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
-| rustix | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop) | The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
+| rustix | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
 | rustls | 0.23.45 | Apache-2.0 OR ISC OR MIT | kaia (desktop), kaia (kobo) |  |
 | rustls-pki-types | 1.15.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | rustls-webpki | 0.103.15 | ISC | kaia (desktop), kaia (kobo) |  |
+| rustversion | 1.0.23 | MIT OR Apache-2.0 | kaia (desktop) | Proc macro. The compiler runs it, and it does not link into the product. |
 | scoped-tls | 1.0.1 | MIT/Apache-2.0 | kaia (desktop) |  |
+| scopeguard | 1.2.0 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | sdl2 | 0.38.0 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. The graph reaches it only through orbclient, as for sdl2-sys. No target builds it. |
 | sdl2-sys | 0.38.0 | MIT AND Zlib | kaia (desktop) | Not in the macOS, Linux or Kobo builds. No license file in the crate package. Copy the text from https://github.com/rust-sdl2/rust-sdl2 before release. The graph reaches it only through orbclient. minifb uses orbclient only on Redox, and orbclient uses sdl2 only off Redox, so no target builds it. The package bundles SDL2 source under SDL/ (zlib), which is not compiled. |
 | self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | kaia (desktop), kaia (kobo) | The expression offers GPL-2.0-only, which rust/deny.toml does not allow. Use Apache-2.0. |
@@ -303,7 +323,8 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | serde_core | 1.0.229 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Proc macro. The compiler runs it, and it does not link into the product. |
 | serde_json | 1.0.154 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
-| sha2 | 0.11.0 | MIT OR Apache-2.0 | libkaia.so |  |
+| sha1 | 0.10.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| sha2 | 0.11.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | simd-adler32 | 0.3.10 | MIT | kaia (desktop), kaia (kobo) |  |
 | simplecss | 0.2.2 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | siphasher | 1.0.4 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
@@ -322,7 +343,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | syn | 3.0.9 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | synstructure | 0.14.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | sys-locale | 0.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
-| tempfile | 3.27.0 | MIT OR Apache-2.0 | kaia (desktop) |  |
+| tempfile | 3.27.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | thiserror | 2.0.21 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Proc macro. The compiler runs it, and it does not link into the product. |
 | tiny-skia | 0.11.4 | BSD-3-Clause | kaia (desktop), kaia (kobo) |  |
@@ -345,7 +366,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | usvg | 0.45.1 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | utf8-zero | 0.8.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | utf8_iter | 1.0.4 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
-| uuid | 1.28.0 | Apache-2.0 OR MIT | libkaia.so |  |
+| uuid | 1.28.0 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo), libkaia.so |  |
 | wasi | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
 | wasm-bindgen | 0.2.129 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. |
 | wasm-bindgen-futures | 0.4.79 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
@@ -361,9 +382,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | web-sys | 0.3.106 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | web-time | 1.1.0 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | webpki-roots | 1.0.9 | CDLA-Permissive-2.0 | kaia (desktop), kaia (kobo) |  |
-| winapi | 0.3.9 | MIT/Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
-| winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. No license file in the crate package. Copy the text from https://github.com/retep998/winapi-rs before release. |
-| winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. No license file in the crate package. Copy the text from https://github.com/retep998/winapi-rs before release. |
+| winapi | 0.3.9 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
+| winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. No license file in the crate package. Copy the text from https://github.com/retep998/winapi-rs before release. |
+| winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. No license file in the crate package. Copy the text from https://github.com/retep998/winapi-rs before release. |
 | windows-core | 0.62.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows-implement | 0.60.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. Proc macro. The compiler runs it, and it does not link into the product. |
 | windows-interface | 0.59.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. Proc macro. The compiler runs it, and it does not link into the product. |
@@ -371,7 +392,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | windows-result | 0.4.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows-strings | 0.5.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows-sys | 0.52.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
-| windows-sys | 0.61.2 | MIT OR Apache-2.0 | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
+| windows-sys | 0.61.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows-targets | 0.52.6 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | windows_aarch64_msvc | 0.52.6 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
@@ -443,10 +464,21 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | droid | 1 | ttf | license file in family directory (text hint) | Apache-2.0 text | Apache-2.0 (unverified) | no |
 | freefont | 2 | ttf | license file in family directory (text hint) | GPL-3.0 text | GPL-3.0 with font exception (unverified) | no |
 | nerdfonts | 1 | ttf | license file present, not classified | not classified | mixed: MIT for project code, SIL OFL 1.1 for glyphs (unverified) | yes |
-| noto | 17 | otf, ttf | license file present, not classified | not classified | SIL OFL 1.1 (unverified) | yes |
+| noto | 17 | otf, ttf | license file in family directory (text hint) | SIL OFL 1.1 text | SIL OFL 1.1 (unverified) | no |
 | urw | 14 | cff | license file in family directory (text hint) | AGPL-3.0 text (-only or -or-later not determined) | AGPL or GPL with font exception (unverified) | no |
 
 Loose files in `resources/fonts`: `resources/fonts/README.md`, `resources/fonts/freefont-build-tweaks.patch`
+
+## Fonts (`resources/kaia-fonts`)
+
+| Family | Font files | Extensions | License status | License in repo | upstream license (to verify) | Needs review |
+|---|---|---|---|---|---|---|
+| atkinson-hyperlegible | 4 | ttf | license file in family directory (text hint) | SIL OFL 1.1 text | SIL OFL 1.1 (checked against OFL.txt) | no |
+| opendyslexic | 4 | otf | license file in family directory (text hint) | SIL OFL 1.1 text | SIL OFL 1.1 (checked against OFL.txt) | no |
+
+Reading fonts for readers with dyslexia or low vision. OpenDyslexic is a Reserved Font Name, so a modified copy must use another name.
+
+Loose files in `resources/kaia-fonts`: `resources/kaia-fonts/README.md`
 
 ## Icons and images (`resources/`, excluding fonts)
 
@@ -456,6 +488,7 @@ Loose files in `resources/fonts`: `resources/fonts/README.md`, `resources/fonts/
 | resources/icons | 1 | 0 | - | no | yes |
 | resources/icons/mdlight | 102 | 3 | resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt, resources/icons/mdlight/license.txt | yes | yes |
 | resources/icons/src | 26 | 20 | resources/icons/src/license.txt, resources/icons/src/menu-icon-license.txt | yes | no |
+| resources/kaia/stickers | 4 | 0 | - | no | yes |
 | resources/quickstart | 6 | 0 | - | no | yes |
 
 ## Lua code outside frontend
@@ -465,6 +498,17 @@ Loose files in `resources/fonts`: `resources/fonts/README.md`, `resources/fonts/
 | base/thirdparty/lua-ljsqlite3 | 2 | base/thirdparty/lua-ljsqlite3/LICENSE | MIT text | no |
 | platform/android/luajit-launcher | 1 | platform/android/luajit-launcher/LICENSE | MIT text | no |
 | plugins/newsdownloader.koplugin/lib | 3 | plugins/newsdownloader.koplugin/lib/LICENCE_lua-feedparser, plugins/newsdownloader.koplugin/lib/LICENSE_LuaXML | BSD-3-Clause text + MIT text | no |
+| rust/kaia-lua/tests/community/anki.koplugin | 15 | rust/kaia-lua/tests/community/anki.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/bookends.koplugin | 35 | rust/kaia-lua/tests/community/bookends.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/foldermemory.koplugin | 5 | rust/kaia-lua/tests/community/foldermemory.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/footcream.koplugin | 3 | rust/kaia-lua/tests/community/footcream.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/highlightsync.koplugin | 4 | rust/kaia-lua/tests/community/highlightsync.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/pagenotes.koplugin | 2 | rust/kaia-lua/tests/community/pagenotes.koplugin/LICENSE | MIT text | no |
+| rust/kaia-lua/tests/community/pencil.koplugin | 3 | rust/kaia-lua/tests/community/pencil.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/pencil.koplugin/lib | 1 | - | unknown, needs review | yes |
+| rust/kaia-lua/tests/community/readeck.koplugin | 35 | rust/kaia-lua/tests/community/readeck.koplugin/LICENSE | MIT text | no |
+| rust/kaia-lua/tests/community/readingstreak.koplugin | 13 | rust/kaia-lua/tests/community/readingstreak.koplugin/LICENSE | AGPL-3.0 text (-only or -or-later not determined) | no |
+| rust/kaia-lua/tests/community/readingstreak.koplugin/lib | 1 | - | unknown, needs review | yes |
 
 ## License files in the repo
 
@@ -499,14 +543,25 @@ Excludes `build` directories and `.git`. Code-like files such as `license.lua` a
 | resources/fonts/droid/NOTICE | 38751245389e1e23 | Apache-2.0 text |
 | resources/fonts/freefont/COPYING | 8ceb4b9ee5adedde | GPL-3.0 text |
 | resources/fonts/nerdfonts/LICENSE | f0599ba5242a349c | - |
-| resources/fonts/noto/LICENSE | 0dab92d0544f7b23 | - |
+| resources/fonts/noto/LICENSE | 0dab92d0544f7b23 | SIL OFL 1.1 text |
 | resources/fonts/urw/COPYING | 57c8ff33c9c0cfc3 | AGPL-3.0 text (-only or -or-later not determined) |
 | resources/fonts/urw/LICENSE | 772b1b47eead8722 | AGPL-3.0 text (-only or -or-later not determined) |
-| resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md | 670beeddaa23e282 | - |
+| resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md | 670beeddaa23e282 | SIL OFL 1.1 text |
 | resources/icons/mdlight/icons-license.txt | 65cd576ad6c38e52 | - |
 | resources/icons/mdlight/license.txt | fe2c47c29751861c | CC-BY-3.0 (link in file; attribution required) |
 | resources/icons/src/license.txt | 01cf7d72d0a6855a | CC-BY-3.0 (link in file; attribution required) |
 | resources/icons/src/menu-icon-license.txt | bd550b1e172e6894 | CC0-1.0 text |
+| resources/kaia-fonts/atkinson-hyperlegible/OFL.txt | f32d22b3908fcad2 | SIL OFL 1.1 text |
+| resources/kaia-fonts/opendyslexic/OFL.txt | caafcccfb70fc724 | SIL OFL 1.1 text |
+| rust/kaia-lua/tests/community/anki.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/bookends.koplugin/LICENSE | 0d96a4ff68ad6d4b | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/foldermemory.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/footcream.koplugin/LICENSE | 8d56b405468aad11 | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/highlightsync.koplugin/LICENSE | 5bd1e6335efeb357 | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/pagenotes.koplugin/LICENSE | 1b3a88ca1f8ddab3 | MIT text |
+| rust/kaia-lua/tests/community/pencil.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
+| rust/kaia-lua/tests/community/readeck.koplugin/LICENSE | 0a0c8877b029d9b4 | MIT text |
+| rust/kaia-lua/tests/community/readingstreak.koplugin/LICENSE | 91b65277959ec273 | AGPL-3.0 text (-only or -or-later not determined) |
 
 ## Bundled asset scan
 
@@ -517,109 +572,112 @@ Counts of fonts, books, dictionaries, archives and packages by top-level directo
 | base | archive_or_binary | 6 |
 | base | book_or_document | 57 |
 | base | font | 1 |
-| resources | font | 35 |
+| resources | font | 43 |
 | test | book_or_document | 288 |
 
 No flagged paths outside `test/`, fonts and `base/thirdparty`.
 
 ## Plugins
 
-37 `plugins/*.koplugin` directories. Kaia plugins: none. Upstream plugins inherit the repository license from `COPYING`. Community plugin code needs its own provenance record before import.
+39 `plugins/*.koplugin` directories. Kaia plugins: kaiaexample.koplugin, kaiastickers.koplugin. Upstream plugins inherit the repository license from `COPYING`. Community plugin code needs its own provenance record before import.
 
 ## Needs review
 
-84 items.
+86 items.
 
 1. `font:nerdfonts`: license text not classified
-2. `font:noto`: license text not classified
-3. `image:resources`: images with no license or attribution file in this directory or a parent under resources/
-4. `image:resources/icons`: images with no license or attribution file in this directory or a parent under resources/
-5. `image:resources/icons/mdlight`: license file in this directory is not classified: resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt
+2. `image:resources`: images with no license or attribution file in this directory or a parent under resources/
+3. `image:resources/icons`: images with no license or attribution file in this directory or a parent under resources/
+4. `image:resources/icons/mdlight`: license file in this directory is not classified: resources/icons/mdlight/icons-license.txt
+5. `image:resources/kaia/stickers`: images with no license or attribution file in this directory or a parent under resources/
 6. `image:resources/quickstart`: images with no license or attribution file in this directory or a parent under resources/
 7. `koreader:COPYING`: open question: AGPL-3.0-only versus AGPL-3.0-or-later (see docs/kaia/ENGINEERING_PLAN.md section 11)
-8. `submodule:base/thirdparty/kpvcrlib/crengine`: no license file at submodule root; 15 license files below it
-9. `submodule:resources/fonts`: no license file at submodule root; 6 license files below it
-10. `submodule:test`: no license file in submodule
-11. `test_rock:busted`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-12. `test_rock:cluacov`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-13. `test_rock:lua-term`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-14. `test_rock:lua_cliargs`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-15. `test_rock:luacov`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-16. `test_rock:luafilesystem`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-17. `test_rock:luassert`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-18. `test_rock:luasystem`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-19. `test_rock:mediator_lua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-20. `test_rock:penlight`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-21. `test_rock:say`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-22. `thirdparty:android-luajit-launcher`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-23. `thirdparty:brotli`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-24. `thirdparty:certifi`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-25. `thirdparty:cpu_features`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-26. `thirdparty:curl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-27. `thirdparty:czmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-28. `thirdparty:djvulibre`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-29. `thirdparty:dkjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-30. `thirdparty:dropbear`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-31. `thirdparty:fbink`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-32. `thirdparty:freetype2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-33. `thirdparty:fribidi`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-34. `thirdparty:giflib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-35. `thirdparty:glib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-36. `thirdparty:harfbuzz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-37. `thirdparty:inkview`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-38. `thirdparty:kobo-usbms`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-39. `thirdparty:koreader-lfs`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-40. `thirdparty:kpvcrlib`: 15 license files under this directory, not mapped to components
-41. `thirdparty:leptonica`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-42. `thirdparty:libarchive`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-43. `thirdparty:libjpeg-turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-44. `thirdparty:libk2pdfopt`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-45. `thirdparty:libpng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-46. `thirdparty:libressl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-47. `thirdparty:libunibreak`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-48. `thirdparty:libwebp`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-49. `thirdparty:libzmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-50. `thirdparty:lj-wpaclient`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-51. `thirdparty:lodepng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-52. `thirdparty:lpeg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-53. `thirdparty:lua-Spore`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-54. `thirdparty:lua-htmlparser`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-55. `thirdparty:lua-rapidjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-56. `thirdparty:luajit`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-57. `thirdparty:luajson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-58. `thirdparty:luarocks`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-59. `thirdparty:luasec`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-60. `thirdparty:luasocket`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-61. `thirdparty:lunasvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-62. `thirdparty:md4c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-63. `thirdparty:miniconv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-64. `thirdparty:minizip`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-65. `thirdparty:mupdf`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-66. `thirdparty:nanosvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-67. `thirdparty:openlipclua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-68. `thirdparty:openssh`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-69. `thirdparty:popen-noshell`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-70. `thirdparty:proxy-libintl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-71. `thirdparty:sdcv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-72. `thirdparty:sdl3`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-73. `thirdparty:sqlite`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-74. `thirdparty:tar`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-75. `thirdparty:tesseract`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-76. `thirdparty:tree-sitter`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-77. `thirdparty:tree-sitter-c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-78. `thirdparty:turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-79. `thirdparty:utf8proc`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-80. `thirdparty:xxhash`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-81. `thirdparty:xz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-82. `thirdparty:zlib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-83. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-84. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+8. `lua:rust/kaia-lua/tests/community/pencil.koplugin/lib`: vendor-style Lua directory with no license file
+9. `lua:rust/kaia-lua/tests/community/readingstreak.koplugin/lib`: vendor-style Lua directory with no license file
+10. `submodule:base/thirdparty/kpvcrlib/crengine`: no license file at submodule root; 15 license files below it
+11. `submodule:resources/fonts`: no license file at submodule root; 6 license files below it
+12. `submodule:test`: no license file in submodule
+13. `test_rock:busted`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+14. `test_rock:cluacov`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+15. `test_rock:lua-term`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+16. `test_rock:lua_cliargs`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+17. `test_rock:luacov`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+18. `test_rock:luafilesystem`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+19. `test_rock:luassert`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+20. `test_rock:luasystem`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+21. `test_rock:mediator_lua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+22. `test_rock:penlight`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+23. `test_rock:say`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+24. `thirdparty:android-luajit-launcher`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+25. `thirdparty:brotli`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+26. `thirdparty:certifi`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+27. `thirdparty:cpu_features`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+28. `thirdparty:curl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+29. `thirdparty:czmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+30. `thirdparty:djvulibre`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+31. `thirdparty:dkjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+32. `thirdparty:dropbear`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+33. `thirdparty:fbink`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+34. `thirdparty:freetype2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+35. `thirdparty:fribidi`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+36. `thirdparty:giflib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+37. `thirdparty:glib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+38. `thirdparty:harfbuzz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+39. `thirdparty:inkview`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+40. `thirdparty:kobo-usbms`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+41. `thirdparty:koreader-lfs`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+42. `thirdparty:kpvcrlib`: 15 license files under this directory, not mapped to components
+43. `thirdparty:leptonica`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+44. `thirdparty:libarchive`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+45. `thirdparty:libjpeg-turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+46. `thirdparty:libk2pdfopt`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+47. `thirdparty:libpng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+48. `thirdparty:libressl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+49. `thirdparty:libunibreak`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+50. `thirdparty:libwebp`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+51. `thirdparty:libzmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+52. `thirdparty:lj-wpaclient`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+53. `thirdparty:lodepng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+54. `thirdparty:lpeg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+55. `thirdparty:lua-Spore`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+56. `thirdparty:lua-htmlparser`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+57. `thirdparty:lua-rapidjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+58. `thirdparty:luajit`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+59. `thirdparty:luajson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+60. `thirdparty:luarocks`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+61. `thirdparty:luasec`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+62. `thirdparty:luasocket`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+63. `thirdparty:lunasvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+64. `thirdparty:md4c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+65. `thirdparty:miniconv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+66. `thirdparty:minizip`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+67. `thirdparty:mupdf`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+68. `thirdparty:nanosvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+69. `thirdparty:openlipclua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+70. `thirdparty:openssh`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+71. `thirdparty:popen-noshell`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+72. `thirdparty:proxy-libintl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+73. `thirdparty:sdcv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+74. `thirdparty:sdl3`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+75. `thirdparty:sqlite`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+76. `thirdparty:tar`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+77. `thirdparty:tesseract`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+78. `thirdparty:tree-sitter`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+79. `thirdparty:tree-sitter-c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+80. `thirdparty:turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+81. `thirdparty:utf8proc`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+82. `thirdparty:xxhash`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+83. `thirdparty:xz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+84. `thirdparty:zlib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+85. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+86. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 
 
 ## Community plugin fixtures
 
-This supplement is maintained by hand. The generator above does not inventory
-`rust/kaia-lua/tests/community`. Preserve this section when regenerating.
+This supplement is maintained by hand. The generator above lists the license files and
+Lua directories of `rust/kaia-lua/tests/community`, but not their pins or terms.
+Preserve this section when regenerating.
 Pins, selection evidence and limitations are in [COMMUNITY_PLUGINS.md](COMMUNITY_PLUGINS.md).
 Each LICENSE below is the unchanged license from the pinned repository.
 

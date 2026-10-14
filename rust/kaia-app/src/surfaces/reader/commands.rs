@@ -3,6 +3,8 @@
 //! the action args. Taps and holds send their position in the args too.
 
 use kaia_events::Value;
+use kaia_gfx::Size;
+use kaia_input::Axis;
 
 /// Gesture updates bypass the reader's queued document commands.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,7 +34,8 @@ pub(super) fn gesture(id: &str, args: &[Value]) -> Option<GestureCommand> {
 }
 
 /// One change from the Text and layout sheet, with the value the control sent.
-/// `Font` and `Zoom` carry the index of the radio choice.
+/// `Font` carries the index of the face in the font list, and `Zoom` the index of
+/// the radio choice.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayoutChange {
     Font(usize),
@@ -91,6 +94,15 @@ pub enum Command {
     ContentsAnnotation(u64),
     /// A change from the Text and layout sheet.
     Layout(LayoutChange),
+    /// Opens the font list over the Text and layout sheet.
+    FontList,
+    /// A two-finger pinch (`larger` false) or spread (`larger` true). `distance` is
+    /// the sum of both fingers' travel in pixels, as KOReader's `ges.distance`.
+    Pinch {
+        larger: bool,
+        distance: f64,
+        axis: Option<Axis>,
+    },
     /// Highlights the selection.
     SelHighlight,
     /// Opens the note editor for the selection.
@@ -126,12 +138,72 @@ fn position(args: &[Value]) -> (f64, f64) {
     (number(args, 0).unwrap_or(0.0), number(args, 1).unwrap_or(0.0))
 }
 
+/// The axis a pinch or spread sends as its name. An empty name means no axis.
+fn axis(args: &[Value]) -> Option<Axis> {
+    match args.get(1) {
+        Some(Value::Str(name)) => match name.as_str() {
+            "horizontal" => Some(Axis::Horizontal),
+            "vertical" => Some(Axis::Vertical),
+            "diagonal" => Some(Axis::Diagonal),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn pinch(args: &[Value], larger: bool) -> Option<Command> {
+    let distance = number(args, 0).filter(|n| n.is_finite() && *n >= 0.0)?;
+    Some(Command::Pinch {
+        larger,
+        distance,
+        axis: axis(args),
+    })
+}
+
 fn flag(args: &[Value]) -> bool {
     matches!(args.first(), Some(Value::Bool(true)))
 }
 
 fn index(args: &[Value]) -> usize {
     number(args, 0).unwrap_or(0.0).max(0.0) as usize
+}
+
+/// KOReader's `ReaderFont.steps`, in its 1-based order: the size change for each
+/// step of a gesture. Lua indexes from 1, so step `n` is entry `n - 1` here.
+const PINCH_STEPS: [f64; 15] = [
+    0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0, 4.0, 5.0,
+];
+
+/// The size change in KOReader units for a pinch or spread. This copies
+/// `ReaderFont:gesToFontSize`. The step is `ceil(2 * 15 * distance / length)`, where
+/// the length is the screen side for the gesture's axis, or the shorter side when
+/// the axis is unknown. A step outside 1 to 15 gives the last entry, 5, as Lua's
+/// `steps[step] or steps[#steps]` does. So a distance of zero gives 5.
+pub(super) fn pinch_step(distance: f64, axis: Option<Axis>, screen: Size) -> f64 {
+    let (w, h) = (f64::from(screen.w), f64::from(screen.h));
+    let length = match axis {
+        Some(Axis::Vertical) => h,
+        Some(Axis::Horizontal) => w,
+        Some(Axis::Diagonal) => w.hypot(h),
+        None => w.min(h),
+    };
+    let count = PINCH_STEPS.len();
+    let step = (2.0 * count as f64 * distance / length).ceil();
+    if (1.0..=count as f64).contains(&step) {
+        PINCH_STEPS[step as usize - 1]
+    } else {
+        PINCH_STEPS[count - 1]
+    }
+}
+
+/// The whole KOReader units that give `px` pixels, or the exact units when no
+/// whole value does. The steps move in whole units, as KOReader's sizes do.
+pub(super) fn whole_units(screen: Size, px: f32) -> f64 {
+    let exact = f64::from(px) * 600.0 / f64::from(screen.w.min(screen.h).max(1));
+    [exact.round(), exact.floor(), exact.ceil()]
+        .into_iter()
+        .find(|units| super::koreader_px(screen, *units) == px)
+        .unwrap_or(exact)
 }
 
 /// Parses a reader action id. None for every id outside the reader's namespace.
@@ -167,7 +239,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["contents", "tab", n] => Command::ContentsTab(n.parse().ok()?),
         ["contents", "goto", n] => Command::ContentsGoto(n.parse().ok()?),
         ["contents", "annot", n] => Command::ContentsAnnotation(n.parse().ok()?),
-        ["layout", "font"] => Command::Layout(LayoutChange::Font(index(args))),
+        ["layout", "fonts"] => Command::FontList,
+        ["layout", "font", n] => Command::Layout(LayoutChange::Font(n.parse().ok()?)),
         ["layout", "size"] => Command::Layout(LayoutChange::Size(number(args, 0)?)),
         ["layout", "spacing"] => Command::Layout(LayoutChange::Spacing(number(args, 0)?)),
         ["layout", "margins"] => Command::Layout(LayoutChange::Margins(number(args, 0)?)),
@@ -175,6 +248,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["layout", "hyphenation"] => Command::Layout(LayoutChange::Hyphenation(flag(args))),
         ["layout", "styles"] => Command::Layout(LayoutChange::Styles(flag(args))),
         ["layout", "zoom"] => Command::Layout(LayoutChange::Zoom(index(args))),
+        ["size", "smaller"] => pinch(args, false)?,
+        ["size", "larger"] => pinch(args, true)?,
         ["sel", "highlight"] => Command::SelHighlight,
         ["sel", "note"] => Command::SelNote,
         ["sel", "copy"] => Command::SelCopy,
@@ -230,9 +305,64 @@ mod tests {
             Some(Command::Layout(LayoutChange::Justify(true)))
         );
         assert_eq!(
-            parse("reader:layout:font", &[Value::Number(2.0)]),
+            parse("reader:layout:font:2", &[]),
             Some(Command::Layout(LayoutChange::Font(2)))
         );
+        assert_eq!(parse("reader:layout:font:x", &[]), None);
+        assert_eq!(parse("reader:layout:fonts", &[]), Some(Command::FontList));
+    }
+
+    #[test]
+    fn parses_pinch_and_spread() {
+        let args = [Value::Number(42.0), Value::Str("vertical".into())];
+        assert_eq!(
+            parse("reader:size:smaller", &args),
+            Some(Command::Pinch {
+                larger: false,
+                distance: 42.0,
+                axis: Some(Axis::Vertical),
+            })
+        );
+        assert_eq!(
+            parse(
+                "reader:size:larger",
+                &[Value::Number(3.0), Value::Str(String::new())]
+            ),
+            Some(Command::Pinch {
+                larger: true,
+                distance: 3.0,
+                axis: None,
+            })
+        );
+        assert_eq!(parse("reader:size:larger", &[]), None);
+        assert_eq!(parse("reader:size:larger", &[Value::Number(-1.0)]), None);
+    }
+
+    #[test]
+    fn pinch_steps_follow_koreader_table() {
+        let screen = Size::new(1264, 1680);
+        // Vertical uses the height (1680): 30 * 420 / 1680 = 7.5, step 8, entry 2.
+        assert_eq!(pinch_step(420.0, Some(Axis::Vertical), screen), 2.0);
+        // Horizontal uses the width (1264): 30 * 100 / 1264 = 2.37, step 3, entry 1.
+        assert_eq!(pinch_step(100.0, Some(Axis::Horizontal), screen), 1.0);
+        // A distance that is less than one step gives 0.
+        assert_eq!(pinch_step(10.0, Some(Axis::Vertical), screen), 0.0);
+        // Past the table, the last entry (5) applies.
+        assert_eq!(pinch_step(2000.0, Some(Axis::Vertical), screen), 5.0);
+        // No movement: Lua's step 0 is nil, so the last entry applies.
+        assert_eq!(pinch_step(0.0, Some(Axis::Vertical), screen), 5.0);
+        // No axis uses the shorter side, the width here.
+        assert_eq!(
+            pinch_step(420.0, None, screen),
+            pinch_step(420.0, Some(Axis::Horizontal), screen)
+        );
+    }
+
+    #[test]
+    fn whole_units_inverts_koreader_px() {
+        let screen = Size::new(1264, 1680);
+        assert_eq!(whole_units(screen, 47.0), 22.0);
+        assert_eq!(whole_units(screen, super::super::koreader_px(screen, 30.0)), 30.0);
     }
 
     #[test]

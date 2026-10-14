@@ -109,6 +109,8 @@ pub enum StepUnit {
     KoreaderUnits,
     Pages,
     Minutes,
+    ClockTime,
+    Percent,
 }
 
 /// The widest bar, in multiples of the row height.
@@ -327,6 +329,14 @@ fn unit_text(unit: StepUnit, v: f64) -> String {
         StepUnit::KoreaderUnits => tr_format(&tr("%1 KOReader units"), &[&n]),
         StepUnit::Pages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),
         StepUnit::Minutes => tr_format(&tr("%1 min"), &[&n]),
+        StepUnit::ClockTime => {
+            let minutes = (v.round() as u32) % 1440;
+            tr_format(
+                &tr("%1:%2"),
+                &[&format!("{:02}", minutes / 60), &format!("{:02}", minutes % 60)],
+            )
+        }
+        StepUnit::Percent => tr_format(&tr("%1%"), &[&n]),
     }
 }
 
@@ -367,5 +377,12 @@ mod tests {
     fn entries_compare_by_value() {
         let a = Entry::Heading("Text".into());
         assert_eq!(a.clone(), Entry::Heading("Text".into()));
+    }
+
+    #[test]
+    fn natural_light_stepper_values_use_clock_time_and_percent() {
+        assert_eq!(unit_text(StepUnit::ClockTime, 1380.0), "23:00");
+        assert_eq!(unit_text(StepUnit::ClockTime, 30.0), "00:30");
+        assert_eq!(unit_text(StepUnit::Percent, 92.0), "92%");
     }
 }

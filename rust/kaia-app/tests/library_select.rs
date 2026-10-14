@@ -265,6 +265,7 @@ fn details_take_a_book_out_of_the_collection_being_viewed() {
     let mut app = reopen(&dir);
     open_library(&mut app);
 
+    tap_key(&mut app, "library-filter");
     tap_key(&mut app, "library-filter-collection");
     tap_key(&mut app, &format!("collection-{cid}"));
     hold_key(&mut app, &format!("book-{leaves}"), |a| {

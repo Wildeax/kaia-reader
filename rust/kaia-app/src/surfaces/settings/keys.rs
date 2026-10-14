@@ -13,6 +13,10 @@
 //! | `display.night_mode` | bool | false | Night mode: light text on a dark page. |
 //! | `display.color_rendering` | bool | true | Color rendering on a color panel. |
 //! | `display.rotation_lock` | bool | false | Ignore automatic orientation changes. |
+//! | `display.natural_light_enabled` | bool | false | Adjust warmth on the local clock schedule. |
+//! | `display.natural_light_bedtime` | number | 1380 | Bedtime in minutes after midnight, default 23:00. Values from 05:00 through 18:00 use 23:00. |
+//! | `display.natural_light_day_warmth` | number | 0 | Daytime warmth, from 0 to 100. |
+//! | `display.natural_light_bedtime_warmth` | number | 92 | Bedtime warmth, from 0 to 100. |
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
@@ -41,6 +45,10 @@ pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
 pub const DISPLAY_NIGHT_MODE: &str = "display.night_mode";
 pub const DISPLAY_COLOR_RENDERING: &str = "display.color_rendering";
+pub const DISPLAY_NATURAL_LIGHT_ENABLED: &str = "display.natural_light_enabled";
+pub const DISPLAY_NATURAL_LIGHT_BEDTIME: &str = "display.natural_light_bedtime";
+pub const DISPLAY_NATURAL_LIGHT_DAY_WARMTH: &str = "display.natural_light_day_warmth";
+pub const DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH: &str = "display.natural_light_bedtime_warmth";
 /// Manual orientation in degrees, restored at startup.
 pub const DISPLAY_ROTATION: &str = "display.rotation";
 /// Swap the bezel page keys. Default false.

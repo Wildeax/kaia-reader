@@ -29,6 +29,10 @@ pub const DATA_DIR: &str = env!("KAIA_CRE_DATA_DIR");
 /// Desktop fallback for fonts. Runtime options prefer the installed fonts.
 pub const FONTS_DIR: &str = env!("KAIA_CRE_FONTS_DIR");
 
+/// Desktop fallback for Kaia's reading fonts (Atkinson Hyperlegible and
+/// OpenDyslexic). The installed copy sits under `fonts/` beside the binary.
+pub const KAIA_FONTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources/kaia-fonts");
+
 /// Largest width or height that [`Doc::render`] accepts, in pixels.
 pub const MAX_RENDER_SIDE: u32 = 16384;
 

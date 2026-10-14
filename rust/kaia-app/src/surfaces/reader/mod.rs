@@ -36,6 +36,7 @@ use kaia_book::{Drawer, Margins, OpenOptions, Point, TextLayout, ZoomMode};
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, Value};
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::Stack;
+use kaia_ui::controls::Button;
 use kaia_ui::widget::PaintHint;
 use kaia_ui::{WidgetPod, Window};
 
@@ -1023,6 +1024,17 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 push_panel(rc, &mut c, env.ctx, window)
             }
             Command::PanelClose => Outcome::Navigate(Nav::Pop),
+            Command::FontList => {
+                // The list is pushed, not shown in place of the sheet. The sheet stays
+                // the open panel, so picking a face can update its Font button.
+                if c.panel.is_none() {
+                    return Outcome::Handled;
+                }
+                let face = c.session.as_ref().and_then(|s| s.layout().font_family.clone());
+                let window = panels::font_list(env.services, env.screen, panels::font_index(face.as_deref()));
+                let serial = next_serial(&mut c);
+                Outcome::Navigate(Nav::Push(panels::panel_surface(window, serial, rc.clone())))
+            }
             Command::ContentsTab(tab) => {
                 c.contents_tab = tab;
                 let window = contents_window(&mut c, env, tab);
@@ -1059,10 +1071,24 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
             }
             Command::Layout(change) => {
+                let font = matches!(change, LayoutChange::Font(_));
                 let result = match change {
                     LayoutChange::Font(index) => {
                         let face = font_face(index);
-                        c.change_layout(|l| l.font_family = face)
+                        let result = c.change_layout(|l| l.font_family = face);
+                        // The font list closes. The sheet below shows the new face on its button.
+                        if result.is_ok() {
+                            if let Some(layer) = c.panel.clone() {
+                                let name = panels::font_choice_label(index);
+                                layer
+                                    .window
+                                    .update::<Button, _>(env.ctx, "layout-font", |button, cx| {
+                                        button.set_text(name);
+                                        cx.request_layout();
+                                    });
+                            }
+                        }
+                        result
                     }
                     LayoutChange::Size(size) => c.change_layout(|l| l.font_size = size as f32),
                     LayoutChange::Spacing(spacing) => c.change_layout(|l| l.line_spacing = spacing as f32),
@@ -1089,9 +1115,47 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         c.set_zoom(env.ctx, zoom)
                     }
                 };
-                if let Err(message) = result {
-                    env.toast(message, 3.0);
+                match result {
+                    Err(message) => {
+                        env.toast(message, 3.0);
+                        Outcome::Handled
+                    }
+                    Ok(()) if font => Outcome::Navigate(Nav::Pop),
+                    Ok(()) => Outcome::Handled,
                 }
+            }
+            Command::Pinch {
+                larger,
+                distance,
+                axis,
+            } => {
+                // Only a reflowable book has a text size. On a fixed-layout book the
+                // gesture does nothing, as the Text and layout sheet does not open for it.
+                let Some(current) = c
+                    .session
+                    .as_ref()
+                    .filter(|s| s.is_reflowable())
+                    .map(|s| s.layout().font_size)
+                else {
+                    return Outcome::Handled;
+                };
+                // KOReader's limits are 12 to 40 units. A pinch never grows the text and a
+                // spread never shrinks it, so a size above the limit stays where it is.
+                let units = commands::whole_units(env.screen, current);
+                let step = commands::pinch_step(distance, axis, env.screen);
+                let target = if larger {
+                    (units + step).min(40.0).max(units)
+                } else {
+                    (units - step).max(12.0).min(units)
+                };
+                let px = koreader_px(env.screen, target);
+                match c.change_layout(|l| l.font_size = px) {
+                    Ok(()) => env.toast(
+                        tr_format(&tr("Font size set to %1 px."), &[&(px as i64).to_string()]),
+                        2.0,
+                    ),
+                    Err(message) => env.toast(message, 3.0),
+                };
                 Outcome::Handled
             }
             Command::SelHighlight => {

@@ -13,6 +13,7 @@
 //! This file knows no surface. It asks the surfaces in [`crate::surfaces`] for
 //! their windows and applies the [`Outcome`]s they return.
 
+mod natural_light;
 mod network;
 #[cfg(feature = "lua")]
 mod plugins;
@@ -102,6 +103,7 @@ pub struct AppOptions {
 pub struct App<B: Backend> {
     backend: B,
     power: power::State,
+    natural_light: natural_light::State,
     services: Services,
     ctx: Ctx,
     stack: WindowStack,
@@ -172,6 +174,7 @@ impl<B: Backend> App<B> {
         App {
             backend,
             power: power::State::new(services.platform.io_handle(), services.library_path()),
+            natural_light: natural_light::State::new(services.platform.frontlight.warmth_revision()),
             services,
             ctx,
             stack: WindowStack::new(),
@@ -553,6 +556,7 @@ impl<B: Backend> App<B> {
         let now = self.ctx.scheduler.now();
         self.ctx.run_due(now);
         self.power_due();
+        self.natural_light_due();
         self.stack.apply_requests(&mut self.ctx);
         self.settle();
         self.repaint()?;
@@ -1431,6 +1435,7 @@ impl<B: Backend> App<B> {
         }
         let now = self.ctx.scheduler.now();
         let mut budget = min_opt(timeout, self.power_wait());
+        budget = min_opt(budget, self.natural_light.wait(now));
         if let Some(due) = self.ctx.scheduler.next_due() {
             budget = min_opt(budget, due.saturating_sub(now));
         }

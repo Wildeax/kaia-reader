@@ -1,6 +1,6 @@
 //! Library: the books in five views (covers, list, folders, collections, series),
-//! the search page, select mode, and the panels for sort, collections, naming,
-//! delete and book details. Panels replace the list in the same window, so their
+//! the search page, select mode, and the panels for sort, filter, collections,
+//! naming, delete and book details. Panels replace the list in the same window, so their
 //! buttons are part of this surface and its commands. A hold on a book opens its
 //! details.
 
@@ -54,6 +54,8 @@ type Live = Rc<RefCell<Option<Window>>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Panel {
     Sort,
+    /// The filter for the Books tab: a status, a collection, or none.
+    Filter,
     CollectionName {
         id: Option<i64>,
     },
@@ -97,6 +99,9 @@ pub struct LibrarySurface {
     root: PathBuf,
     /// The rows of the folder on screen, from the last build. Folder actions index into them.
     entries: Vec<Entry>,
+    /// The layout the Books tab shows when the user taps it: covers or list. The
+    /// view changes to a tab without a layout, so this keeps the last one.
+    books: View,
     /// The series the Series view shows, when the user opened one.
     series: Option<String>,
     /// The series rows of the last build. The series actions index into them.
@@ -130,6 +135,7 @@ impl LibrarySurface {
             current: PathBuf::new(),
             root: PathBuf::new(),
             entries: Vec::new(),
+            books: View::Covers,
             series: None,
             series_names: Vec::new(),
             selecting: false,
@@ -141,6 +147,19 @@ impl LibrarySurface {
 
     fn save_prefs(&self, env: &mut SurfaceEnv<'_>) {
         self.prefs.save(&mut env.services.settings);
+    }
+
+    /// Shows the tab `view` and closes whatever was open on the others. Covers and
+    /// list also become the layout of the Books tab.
+    fn set_view(&mut self, view: View, env: &mut SurfaceEnv<'_>) {
+        if matches!(view, View::Covers | View::List) {
+            self.books = view;
+        }
+        self.prefs.view = view;
+        self.panel = None;
+        self.search = false;
+        self.series = None;
+        self.save_prefs(env);
     }
 
     /// Sends the search for the current query after the debounce delay. A newer
@@ -265,11 +284,16 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::View(view) => {
-                self.prefs.view = view;
-                self.panel = None;
-                self.search = false;
-                self.series = None;
-                self.save_prefs(env);
+                self.set_view(view, env);
+                Outcome::Rebuild
+            }
+            Command::BooksTab => {
+                let books = if matches!(self.prefs.view, View::Covers | View::List) {
+                    self.prefs.view
+                } else {
+                    self.books
+                };
+                self.set_view(books, env);
                 Outcome::Rebuild
             }
             Command::OpenSort => {
@@ -282,26 +306,33 @@ impl LibrarySurface {
                 self.save_prefs(env);
                 Outcome::Rebuild
             }
-            Command::Chip(chip) => {
-                self.prefs.chip = if self.prefs.chip == Some(chip) {
-                    None
-                } else {
-                    Some(chip)
-                };
+            Command::OpenFilter => {
+                self.panel = Some(Panel::Filter);
+                Outcome::Rebuild
+            }
+            Command::AllBooks => {
+                self.prefs.chip = None;
+                self.prefs.collection = None;
+                self.panel = None;
                 self.save_prefs(env);
                 Outcome::Rebuild
             }
-            Command::CollectionChip => {
-                if self.prefs.collection.is_some() {
-                    self.prefs.collection = None;
-                    self.save_prefs(env);
-                } else {
-                    self.panel = Some(Panel::Collection { book: None });
-                }
+            Command::Chip(chip) => {
+                self.prefs.chip = Some(chip);
+                self.prefs.collection = None;
+                self.panel = None;
+                self.save_prefs(env);
+                Outcome::Rebuild
+            }
+            Command::FilterCollection => {
+                self.panel = Some(Panel::Collection { book: None });
                 Outcome::Rebuild
             }
             Command::PickCollection(id) => {
                 self.prefs.collection = id;
+                if id.is_some() {
+                    self.prefs.chip = None;
+                }
                 if self.prefs.view == View::Collections {
                     self.prefs.view = View::Covers;
                 }
@@ -769,6 +800,10 @@ impl LibrarySurface {
         let lib = &env.services.library;
         match *panel {
             Panel::Sort => views::sort_panel(t, self.prefs.sort),
+            Panel::Filter => {
+                let collection = collection_name(lib, self.prefs.collection);
+                views::filter_panel(t, self.prefs.chip, collection.as_deref())
+            }
             Panel::Collection { book } => {
                 let collections = lib.collections().unwrap_or_default();
                 views::collection_panel(t, &collections, book, self.prefs.collection)
@@ -800,44 +835,71 @@ impl LibrarySurface {
         }
         if !self.loaded {
             self.prefs = Prefs::load(&env.services.settings);
+            if matches!(self.prefs.view, View::Covers | View::List) {
+                self.books = self.prefs.view;
+            }
             self.loaded = true;
         }
         let t = env.services.theme.clone();
         let status = data::status_line(env.services);
-        let mut children = vec![views::header(&t, &tr("Library"), status, self.selecting)];
+        let mut head = vec![views::header(&t, &tr("Library"), status, self.selecting)];
         if self.selecting {
-            children.push(views::select_bar(&t, self.select_label(), self.selected.len()));
+            head.push(views::select_bar(&t, self.select_label(), self.selected.len()));
         } else if !self.search {
-            children.push(views::view_tabs(&t, self.prefs.view));
-            children.push(views::filter_row(&t, &self.prefs));
+            head.push(views::view_tabs(&t, self.prefs.view));
+            if matches!(self.prefs.view, View::Covers | View::List) {
+                let collection = collection_name(&env.services.library, self.prefs.collection);
+                let filter = views::filter_name(self.prefs.chip, collection.as_deref());
+                let sort = views::sort_name(self.prefs.sort);
+                head.push(views::books_controls(&t, &filter, &sort));
+            }
         }
+        // The header rows sit `space.sm` apart. The content starts `space.md` below
+        // the last of them, so the first row of covers never touches the controls.
         let content = self.content(env);
-        children.push(WidgetPod::new(Expanded::new(
+        let body = Padding::new(
             WidgetPod::new(
                 Column::new(content)
                     .gap(t.space.md)
                     .cross_align(CrossAlign::Stretch),
             ),
-            1,
-        )));
-        children.push(
+            Insets {
+                top: t.space.md,
+                bottom: t.space.sm,
+                ..Insets::default()
+            },
+        );
+        let children = vec![
+            WidgetPod::new(
+                Column::new(head)
+                    .gap(t.space.sm)
+                    .cross_align(CrossAlign::Stretch)
+                    .shrink(),
+            ),
+            WidgetPod::new(Expanded::new(WidgetPod::new(body), 1)),
             WidgetPod::new(kaia_ui::composite::NavBar::new(
                 kaia_ui::composite::NavItem::Library,
             ))
             .with_key("nav-bar"),
-        );
+        ];
         let page = Padding::new(
-            WidgetPod::new(
-                Column::new(children)
-                    .gap(t.space.sm)
-                    .cross_align(CrossAlign::Stretch),
-            ),
+            WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch)),
             Insets::all(t.space.lg),
         );
         let win = window(env.services, env.screen, page);
         *self.window.borrow_mut() = Some(win.clone());
         win
     }
+}
+
+/// The name of the collection with id `id`, when it exists.
+fn collection_name(lib: &Library, id: Option<i64>) -> Option<String> {
+    let id = id?;
+    lib.collections()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|c| c.id == id)
+        .map(|c| c.name)
 }
 
 /// The rows the search page shows for `query`. Finished books are left out when

@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CString};
 use std::path::{Path, PathBuf};
 
-use crate::{check, ffi, path_cstring, Result, DATA_DIR, FONTS_DIR};
+use crate::{check, ffi, path_cstring, Result, DATA_DIR, FONTS_DIR, KAIA_FONTS_DIR};
 
 /// CREngine resources chosen at runtime. Relative paths use the current directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,7 +23,8 @@ impl Default for RuntimeOptions {
 
 impl RuntimeOptions {
     /// Uses resources beside the executable when present, otherwise the desktop
-    /// build tree. An explicit options value never falls back to another folder.
+    /// build tree. The desktop tree adds the repository's Kaia reading fonts.
+    /// An explicit options value never falls back to another folder.
     pub fn from_install_dir(install: &Path) -> Self {
         let installed = install.join("data").is_dir() || install.join("fonts").is_dir();
         if installed {
@@ -34,7 +35,7 @@ impl RuntimeOptions {
         } else {
             Self {
                 data_dir: DATA_DIR.into(),
-                font_dirs: vec![FONTS_DIR.into()],
+                font_dirs: vec![FONTS_DIR.into(), KAIA_FONTS_DIR.into()],
             }
         }
     }

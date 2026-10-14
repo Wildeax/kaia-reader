@@ -215,7 +215,7 @@ fn sort_by_progress_puts_the_most_read_book_first() {
 }
 
 #[test]
-fn the_reading_chip_keeps_only_books_in_progress() {
+fn the_reading_filter_keeps_only_books_in_progress() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, dir) = indexed("chip");
     let (juliet, leaves, pdf) = ids(&app);
@@ -224,14 +224,20 @@ fn the_reading_chip_keeps_only_books_in_progress() {
     let mut app = reopen(&dir);
     open_library(&mut app);
 
+    tap_key(&mut app, "library-filter");
+    assert!(
+        app.find_rect("library-filter-reading").is_some(),
+        "the filter panel lists the statuses"
+    );
     tap_key(&mut app, "library-filter-reading");
 
     assert!(app.find_rect(&format!("book-{juliet}")).is_some());
     assert!(app.find_rect(&format!("book-{leaves}")).is_none());
     assert!(app.find_rect(&format!("book-{pdf}")).is_none());
 
-    // A second tap on the chip clears it.
-    tap_key(&mut app, "library-filter-reading");
+    // The filter panel's All books shows every book again.
+    tap_key(&mut app, "library-filter");
+    tap_key(&mut app, "library-filter-all");
     assert!(app.find_rect(&format!("book-{leaves}")).is_some());
 }
 
@@ -317,7 +323,7 @@ fn open_from_details_opens_the_reader() {
 }
 
 #[test]
-fn add_to_collection_creates_it_and_the_chip_filters_by_it() {
+fn add_to_collection_creates_it_and_the_filter_shows_it() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _dir) = indexed("collections");
     let (juliet, leaves, _) = ids(&app);
@@ -350,6 +356,7 @@ fn add_to_collection_creates_it_and_the_chip_filters_by_it() {
     assert_eq!(members, vec![leaves], "the book joins the new collection");
 
     tap_key(&mut app, &key("library:panel:close"));
+    tap_key(&mut app, "library-filter");
     tap_key(&mut app, "library-filter-collection");
     tap_key(&mut app, &format!("collection-{id}"));
 
@@ -468,4 +475,97 @@ fn removing_history_keeps_reading_progress() {
     let row = library_db(&app).book(juliet).unwrap().unwrap();
     assert_eq!(row.percent, 0.35);
     assert!(row.last_opened_at.is_none());
+}
+
+#[test]
+fn the_books_controls_sit_under_one_tab_row_with_a_gap_before_the_covers() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = indexed("header-layout");
+    let (juliet, _, _) = ids(&app);
+    open_library(&mut app);
+
+    let touch = app.services().theme.touch_target;
+    let gap = app.services().theme.space.md as i32;
+    let tabs = [
+        "library-view-books",
+        "library-view-folders",
+        "library-view-collections",
+    ]
+    .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
+    let segment = ["library-view-covers", "library-view-list"]
+        .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
+    let row_y = tabs[0].y;
+    for r in tabs.iter().chain(segment.iter()) {
+        assert_eq!(r.y, row_y, "the tabs and the choice share one row");
+        assert!(r.h >= touch, "a tab is at least the touch target high");
+    }
+    let filter = app.find_rect("library-filter").expect("the filter button");
+    let sort = app.find_rect("library-sort").expect("the sort button");
+    assert_eq!(filter.y, sort.y, "the controls share one row");
+    assert!(
+        filter.h >= touch && sort.h >= touch,
+        "the controls are touch targets"
+    );
+    assert!(
+        filter.y >= tabs[0].y + tabs[0].h as i32,
+        "no overlap with the tabs"
+    );
+
+    let cover = app.find_rect(&format!("book-{juliet}")).expect("a cover");
+    assert!(
+        cover.y >= filter.y + filter.h as i32 + gap,
+        "a standard gap of {gap} px sits between the controls and the covers"
+    );
+}
+
+#[test]
+fn the_controls_are_for_the_books_tab_only() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = indexed("controls-tabs");
+    open_library(&mut app);
+    assert!(app.find_rect("library-filter").is_some());
+
+    tap_key(&mut app, &key("library:view:folders"));
+    assert!(app.find_rect("library-filter").is_none(), "Folders has no filter");
+    assert!(app.find_rect("library-sort").is_none(), "Folders has no sort");
+    assert!(
+        app.find_rect("library-view-folders").is_some(),
+        "the tab row stays"
+    );
+
+    tap_key(&mut app, "library-view-books");
+    assert!(
+        app.find_rect("library-filter").is_some(),
+        "Books has the filter again"
+    );
+}
+
+#[test]
+fn the_books_tab_returns_to_the_layout_it_left() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = indexed("books-tab");
+    let (juliet, _, _) = ids(&app);
+    open_library(&mut app);
+    assert!(app.find_rect("list").is_none(), "Books opens as covers");
+
+    tap_key(&mut app, &key("library:view:list"));
+    tap_key(&mut app, &key("library:view:folders"));
+    tap_key(&mut app, "library-view-books");
+    assert!(app.find_rect("list").is_some(), "Books comes back as the list");
+    assert!(app.find_rect(&format!("book-{juliet}")).is_some());
+
+    tap_key(&mut app, &key("library:view:covers"));
+    tap_key(&mut app, &key("library:view:series"));
+    tap_key(&mut app, "library-view-books");
+    assert!(app.find_rect("list").is_none(), "Books comes back as covers");
+    assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));
+}
+
+#[test]
+fn library_filter_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = indexed("golden-filter");
+    open_library(&mut app);
+    tap_key(&mut app, "library-filter");
+    assert_matches_golden(app.frame(), &golden("library_filter.png"), 14);
 }

@@ -5,7 +5,8 @@ Usage, from the repository root:
 
     python3 -I tools/kaia/inventory/license_inventory.py --root . --out docs/kaia/inventory
 
-The script reads files in the tree and runs `git submodule status`. It writes
+The script reads the files that git tracks, including submodule files, and runs
+`git submodule status`. Outside a git checkout it reads the directory tree. It writes
 licenses.json and LICENSES.md into the output directory. In LICENSES.md it
 renders the sections it owns and copies every other "## " section from the
 existing file, in place. The "Rust crates" section from rust_licenses.py and the
@@ -13,9 +14,9 @@ hand-written community plugin fixtures section survive a rerun this way. A
 heading this script stops rendering stays in the file as a copied section, so
 delete it by hand.
 
-Directories named build, .git and __pycache__ are skipped, and so is rust/target.
-A build that runs in parallel writes only into build directories, so it cannot
-change the result. The output has no timestamps and every list is sorted, so two
+Ignored and untracked files are not read, so build output and local files cannot
+change the result. Directories named build, .git and __pycache__ are skipped, and
+so is rust/target. The output has no timestamps and every list is sorted, so two
 runs on the same commit produce identical bytes.
 
 A license is recorded only when the tree contains a license file or an explicit
@@ -59,12 +60,15 @@ DICT_SUFFIXES = (".dict.dz", ".ifo", ".idx", ".dict", ".syn")
 LICENSE_NAME_RE = re.compile(
     r"^(licen[cs]e|copying|copyright|notice)(\.[a-z0-9]+)?$"
     r"|^(licen[cs]e|copying)[-_.].+"
-    r"|.+[-_.]licen[cs]e(\.[a-z0-9]+)?$",
+    r"|.+[-_.]licen[cs]e(\.[a-z0-9]+)?$"
+    r"|^ofl(-[0-9.]+)?(\.[a-z0-9]+)?$",
     re.IGNORECASE,
 )
 # Version in a file name or URL: dotted numbers, underscore or dash separated, or a 6+ digit serial.
 VERSION_RE = re.compile(r"(?<![A-Za-z0-9])v?(\d+(?:\.\d+)+(?:p\d+)?|\d+(?:_\d+)+|\d+(?:-\d+)+)")
 SERIAL_RE = re.compile(r"(?<!\d)(\d{6,})(?!\d)")
+# A version token in a README license line, such as "v3" or "Version 2.1".
+README_VERSION_RE = re.compile(r"\b[Vv]ersion\s*\d+(?:\.\d+)*|\bv\d+(?:\.\d+)*")
 HEX40_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])")
 CALL_RE = re.compile(r"\b(external_project|spec_rock)\s*\(")
 TOKEN_RE = re.compile(r"[^\s()]+")
@@ -145,11 +149,39 @@ UPSTREAM_FONTS = {
     "noto": "SIL OFL 1.1",
     "urw": "AGPL or GPL with font exception",
 }
+# Directories that hold font families. Each one gets its own section.
+FONT_ROOTS = ("resources/fonts", "resources/kaia-fonts")
+FONT_ROOT_NOTES = {
+    "resources/kaia-fonts": "Reading fonts for readers with dyslexia or low vision. "
+                            "OpenDyslexic is a Reserved Font Name, so a modified copy must use another name.",
+}
 
 
 # ---------------------------------------------------------------- file helpers
 
 def walk(root):
+    """Return sorted relative paths of files that git tracks under root.
+
+    Ignored and untracked files are left out, so the result depends on the commit and
+    not on the local build state. Outside a git checkout the directory tree is read.
+    """
+    listed = git_output(root, "ls-files", "-z", "--recurse-submodules")
+    if listed is None:
+        return walk_tree(root)
+    out = []
+    for rel in listed.split("\0"):
+        if not rel or any(part in PRUNE_NAMES for part in rel.split("/")[:-1]):
+            continue
+        if any(under(rel, p) for p in PRUNE_RELPATHS):
+            continue
+        full = os.path.join(root, rel)
+        if os.path.islink(full) or not os.path.isfile(full):
+            continue
+        out.append(rel)
+    return sorted(out)
+
+
+def walk_tree(root):
     """Return sorted relative paths of regular files under root, skipping pruned dirs."""
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -179,6 +211,10 @@ def under(path, prefix):
 
 def parent(path):
     return path.rsplit("/", 1)[0] if "/" in path else ""
+
+
+def in_font_root(path):
+    return any(under(path, r) for r in FONT_ROOTS)
 
 
 def ext_of(name):
@@ -230,8 +266,9 @@ def license_headers(text):
     if "Apache License" in flat and "Version 2.0" in flat:
         found.append("Apache-2.0 text")
     if "SIL OPEN FONT LICENSE" in flat and "Version 1.1" in flat:
-        found.append("OFL-1.1 text")
-    if "Permission is hereby granted, free of charge" in flat:
+        found.append("SIL OFL 1.1 text")
+    # The SIL OFL text repeats the MIT permission sentence, so MIT is not reported for OFL text.
+    if "Permission is hereby granted, free of charge" in flat and "SIL OPEN FONT LICENSE" not in flat:
         found.append("MIT text")
     if ("This software is provided 'as-is'" in flat
             and "Altered source versions must be plainly marked" in flat):
@@ -589,46 +626,55 @@ def submodule_section(root, all_files):
 
 
 def font_section(root, all_files):
-    fam_root = "resources/fonts"
+    """Font families under each FONT_ROOTS directory, and the loose files directly in those roots."""
     families = []
-    names = sorted({f[len(fam_root) + 1:].split("/", 1)[0] for f in all_files
-                    if under(f, fam_root) and "/" in f[len(fam_root) + 1:]})
-    for name in names:
-        rel = f"{fam_root}/{name}"
-        files = [f for f in all_files if under(f, rel)]
-        font_files = [f for f in files if ext_of(f) in FONT_EXTS]
-        lic = [f for f in files if is_license_file(f)]
-        records = [license_record(root, f) for f in lic]
-        hints = [r["hint"] for r in records]
-        if records and all(hints):
-            status, reason = "license file in family directory (text hint)", None
-            label = " + ".join(sorted(set(hints)))
-        elif records:
-            status, reason = "license file present, not classified", "license text not classified"
-            label = "not classified"
-        else:
-            status, reason = "no license file", "no license file in font family directory"
-            label = "unknown, needs review"
-        families.append({
-            "name": name,
-            "path": rel,
-            "font_files": len(font_files),
-            "font_extensions": sorted({ext_of(f)[1:] for f in font_files}),
-            "license": label,
-            "license_status": status,
-            "upstream_license_to_verify": (UPSTREAM_FONTS.get(name, "not recorded")
-                                           + (" (unverified)" if name in UPSTREAM_FONTS else "")),
-            "license_files": records,
-            "needs_review": reason is not None,
-            "review_reason": reason,
-        })
-    loose = [f for f in all_files if parent(f) == fam_root]
+    loose = []
+    for fam_root in FONT_ROOTS:
+        names = sorted({f[len(fam_root) + 1:].split("/", 1)[0] for f in all_files
+                        if under(f, fam_root) and "/" in f[len(fam_root) + 1:]})
+        for name in names:
+            rel = f"{fam_root}/{name}"
+            files = [f for f in all_files if under(f, rel)]
+            font_files = [f for f in files if ext_of(f) in FONT_EXTS]
+            lic = [f for f in files if is_license_file(f)]
+            records = [license_record(root, f) for f in lic]
+            hints = [r["hint"] for r in records]
+            if records and all(hints):
+                status, reason = "license file in family directory (text hint)", None
+                label = " + ".join(sorted(set(hints)))
+            elif records:
+                status, reason = "license file present, not classified", "license text not classified"
+                label = "not classified"
+            else:
+                status, reason = "no license file", "no license file in font family directory"
+                label = "unknown, needs review"
+            if name in UPSTREAM_FONTS:
+                upstream = UPSTREAM_FONTS[name] + " (unverified)"
+            elif reason is None:
+                # The name comes from the license text in the tree, so it is checked, not from memory.
+                names_in_tree = ", ".join(sorted(os.path.basename(r["path"]) for r in records))
+                upstream = f"{re.sub(r' text$', '', label)} (checked against {names_in_tree})"
+            else:
+                upstream = "not recorded"
+            families.append({
+                "name": name,
+                "path": rel,
+                "font_files": len(font_files),
+                "font_extensions": sorted({ext_of(f)[1:] for f in font_files}),
+                "license": label,
+                "license_status": status,
+                "upstream_license_to_verify": upstream,
+                "license_files": records,
+                "needs_review": reason is not None,
+                "review_reason": reason,
+            })
+        loose += [f for f in all_files if parent(f) == fam_root]
     return families, loose
 
 
 def image_section(root, all_files):
     res = "resources"
-    scope = [f for f in all_files if under(f, res) and not under(f, "resources/fonts")]
+    scope = [f for f in all_files if under(f, res) and not in_font_root(f)]
     by_dir = {}
     for f in scope:
         d = parent(f)
@@ -643,7 +689,7 @@ def image_section(root, all_files):
     rows = []
     unclassified_here = {}
     for f in all_files:
-        if under(f, res) and not under(f, "resources/fonts") and is_license_file(f):
+        if under(f, res) and not in_font_root(f) and is_license_file(f):
             rec = license_record(root, f)
             if rec["hint"] is None:
                 unclassified_here.setdefault(parent(f), []).append(f)
@@ -817,7 +863,8 @@ def koreader_license_section(root, all_files):
     readme = read_text(root, "README.md") or ""
     readme_lines = [{"line": i + 1, "text": ln.strip()} for i, ln in enumerate(readme.splitlines())
                     if re.search(r"licen[cs]e|COPYING|AGPL|GPL", ln, re.IGNORECASE)]
-    version_mentions = [ln["text"] for ln in readme_lines if re.search(r"[Vv]ersion\s*\d|\bv\d", ln["text"])]
+    version_numbers = sorted({m.group(0) for ln in readme_lines
+                              for m in README_VERSION_RE.finditer(ln["text"])})
 
     scanned = 0
     agpl_name = 0
@@ -858,7 +905,7 @@ def koreader_license_section(root, all_files):
         "readme": {
             "path": "README.md",
             "license_lines": readme_lines,
-            "version_numbers_in_license_lines": version_mentions,
+            "version_numbers_in_license_lines": version_numbers,
         },
         "per_file_notices": {
             "files_scanned": scanned,
@@ -1021,7 +1068,7 @@ def render_markdown(inv):
     out.append("- Upstream archives are not stored in the repo, so their license text is not inspected. "
                "The column `upstream license (to verify)` holds names from memory and is marked unverified.")
     out.append("- A text hint is a match on well-known license headers. A reviewer still confirms it.")
-    out.append("- Build directories are skipped, so a running build does not change the output.")
+    out.append("- Only files that git tracks are read, so ignored build output and untracked files do not change the output.")
     out.append("")
 
     out.append("## Summary")
@@ -1043,9 +1090,10 @@ def render_markdown(inv):
     out.append("- `README.md` license lines (verbatim):")
     for ln in k["readme"]["license_lines"]:
         out.append(f"  - line {ln['line']}: `{ln['text']}`")
-    out.append(f"- Version numbers in the README license lines: "
-               f"{', '.join(k['readme']['version_numbers_in_license_lines']) or 'none'}. "
-               "The README names the license only as AGPL and links to `COPYING`.")
+    versions = k["readme"]["version_numbers_in_license_lines"]
+    out.append(f"- Version numbers in the README license lines: {', '.join(versions) or 'none'}. "
+               + ("The README links to `COPYING`." if versions
+                  else "The README names the license only as AGPL and links to `COPYING`."))
     pf = k["per_file_notices"]
     out.append(f"- Per-file notices in {pf['files_scanned']} scanned source files: "
                f"{pf['files_naming_affero_gpl']} name the Affero GPL, "
@@ -1114,18 +1162,24 @@ def render_markdown(inv):
     out.append(md_table(["Path", "Commit", "State", "URL", "Shallow", "License status", "Needs review"], rows))
     out.append("")
 
-    out.append("## Fonts (`resources/fonts`)")
-    out.append("")
-    rows = []
-    for f in inv["fonts"]["families"]:
-        rows.append([f["name"], f["font_files"], f["font_extensions"], f["license_status"], f["license"],
-                     f["upstream_license_to_verify"], f["needs_review"]])
-    out.append(md_table(["Family", "Font files", "Extensions", "License status", "License in repo",
-                         "upstream license (to verify)", "Needs review"], rows))
-    out.append("")
-    if inv["fonts"]["loose_files"]:
-        out.append("Loose files in `resources/fonts`: " + ", ".join(f"`{f}`" for f in inv["fonts"]["loose_files"]))
+    for fam_root in FONT_ROOTS:
+        out.append(f"## Fonts (`{fam_root}`)")
         out.append("")
+        rows = []
+        for f in inv["fonts"]["families"]:
+            if parent(f["path"]) == fam_root:
+                rows.append([f["name"], f["font_files"], f["font_extensions"], f["license_status"], f["license"],
+                             f["upstream_license_to_verify"], f["needs_review"]])
+        out.append(md_table(["Family", "Font files", "Extensions", "License status", "License in repo",
+                             "upstream license (to verify)", "Needs review"], rows))
+        out.append("")
+        if fam_root in FONT_ROOT_NOTES:
+            out.append(FONT_ROOT_NOTES[fam_root])
+            out.append("")
+        loose = [f for f in inv["fonts"]["loose_files"] if parent(f) == fam_root]
+        if loose:
+            out.append(f"Loose files in `{fam_root}`: " + ", ".join(f"`{f}`" for f in loose))
+            out.append("")
 
     out.append("## Icons and images (`resources/`, excluding fonts)")
     out.append("")

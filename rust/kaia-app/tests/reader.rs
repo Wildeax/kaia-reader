@@ -13,7 +13,7 @@ use kaia_app::App;
 use kaia_app::HeadlessBackend;
 use kaia_app::Route;
 use kaia_display::InputEvent;
-use kaia_events::RefreshMode;
+use kaia_events::{Event, RefreshMode, Settings};
 use kaia_gfx::golden::assert_matches_golden;
 use kaia_gfx::Point;
 use kaia_input::{Key, Phase, TouchEvent};
@@ -400,6 +400,120 @@ fn font_size_change_relayouts_and_keeps_the_place() {
         (percent_after - percent_before).abs() < 0.05,
         "the place is kept: {percent_before:.3} became {percent_after:.3}"
     );
+}
+
+/// The font family saved in the book's state file, after a save.
+fn saved_font_family(app: &mut App<HeadlessBackend>, name: &str) -> Option<String> {
+    app.broadcast_app(Event::new("SaveState"));
+    wait_reader(app);
+    let id = book_id(app, name);
+    let md5 = app.services().library.book(id).unwrap().unwrap().partial_md5;
+    let path = app
+        .services()
+        .paths
+        .data_dir
+        .join("kaia/books")
+        .join(format!("{md5}.json"));
+    Settings::open(&path)
+        .read("layout")
+        .get("font_family")
+        .as_str()
+        .map(str::to_owned)
+}
+
+#[test]
+fn font_row_opens_the_font_list_and_picking_a_face_returns_to_the_sheet() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("font-pick");
+    let mut app = open_reader("juliet.epub", &dir);
+    open_overlay(&mut app);
+    tap_key(&mut app, "overlay-layout");
+    assert!(
+        app.find_rect("layout-font").is_some(),
+        "the Font row is on the sheet"
+    );
+
+    tap_key(&mut app, "layout-font");
+    assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
+    assert!(
+        app.find_rect("reader-layout-font-4").is_some(),
+        "the font list shows OpenDyslexic"
+    );
+    assert!(
+        app.find_rect("layout-font").is_none(),
+        "the list is on top of the sheet"
+    );
+
+    tap_key(&mut app, "reader-layout-font-4");
+    assert!(
+        app.find_rect("reader-layout-font-4").is_none(),
+        "picking a face closes the font list"
+    );
+    assert!(
+        app.find_rect("layout-font").is_some(),
+        "the Text and layout sheet is back"
+    );
+    assert_eq!(
+        saved_font_family(&mut app, "juliet.epub").as_deref(),
+        Some("OpenDyslexic")
+    );
+    assert_matches_golden(app.frame(), &golden("reader-layout-opendyslexic.png"), 14);
+}
+
+#[test]
+fn font_list_back_and_close_return_to_the_text_sheet() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("font-back");
+    let mut app = open_reader("juliet.epub", &dir);
+    open_overlay(&mut app);
+    tap_key(&mut app, "overlay-layout");
+
+    tap_key(&mut app, "layout-font");
+    assert!(
+        app.find_rect("reader-layout-font-0").is_some(),
+        "the font list is open"
+    );
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    assert!(
+        app.find_rect("reader-layout-font-0").is_none(),
+        "Back closes the font list"
+    );
+    assert!(
+        app.find_rect("layout-font").is_some(),
+        "Back shows the Text and layout sheet"
+    );
+
+    tap_key(&mut app, "layout-font");
+    assert!(
+        app.find_rect("reader-layout-font-0").is_some(),
+        "the font list is open"
+    );
+    tap_key(&mut app, "panel-close");
+    assert!(
+        app.find_rect("reader-layout-font-0").is_none(),
+        "the close button closes the list"
+    );
+    assert!(
+        app.find_rect("layout-font").is_some(),
+        "the close button shows the sheet"
+    );
+    assert_eq!(
+        saved_font_family(&mut app, "juliet.epub"),
+        None,
+        "no face was picked"
+    );
+}
+
+#[test]
+fn font_list_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("golden-font-list");
+    let mut app = open_reader("juliet.epub", &dir);
+    open_overlay(&mut app);
+    tap_key(&mut app, "overlay-layout");
+    tap_key(&mut app, "layout-font");
+    assert_matches_golden(app.frame(), &golden("reader-font-list.png"), 14);
 }
 
 #[test]

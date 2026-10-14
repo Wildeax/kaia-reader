@@ -881,6 +881,7 @@ dependencies = [
 name = "kaia-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fs2",
  "kaia-book",
  "kaia-calibre",

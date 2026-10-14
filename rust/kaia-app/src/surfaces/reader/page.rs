@@ -7,7 +7,7 @@ use std::sync::Arc;
 use kaia_events::Value;
 use kaia_gfx::{Color, Pixmap, Point, Rect};
 use kaia_i18n::{format as tr_format, tr};
-use kaia_input::{Direction, Gesture, Key};
+use kaia_input::{Axis, Direction, Gesture, Key};
 use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, UiEvent};
 use kaia_ui::{Tone, Widget};
@@ -122,6 +122,18 @@ fn action(id: &str, args: Vec<Value>) -> AppAction {
         id: id.to_string(),
         args,
     }
+}
+
+/// A pinch or spread: its distance, the sum of both fingers' travel, and its axis.
+/// The reader turns them into a size step, as KOReader's `gesToFontSize` does.
+fn size_action(id: &str, distance: f64, axis: Option<Axis>) -> AppAction {
+    action(
+        id,
+        vec![
+            Value::Number(distance),
+            Value::Str(axis.map_or("", Axis::name).to_string()),
+        ],
+    )
 }
 
 fn point_args(pos: kaia_gfx::Point, bounds: Rect) -> Vec<Value> {
@@ -348,6 +360,16 @@ impl Widget for PageView {
             }
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
                 cx.action(action("reader:tap", point_args(*pos, bounds)));
+                Handled::Yes
+            }
+            // Pinch and spread change the text size of a reflowable book. The reader
+            // ignores them on a fixed-layout book.
+            UiEvent::Gesture(Gesture::Pinch { distance, axis, .. }) => {
+                cx.action(size_action("reader:size:smaller", *distance, *axis));
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Spread { distance, axis, .. }) => {
+                cx.action(size_action("reader:size:larger", *distance, *axis));
                 Handled::Yes
             }
             UiEvent::Gesture(Gesture::Swipe {

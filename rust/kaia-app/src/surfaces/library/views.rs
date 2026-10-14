@@ -18,7 +18,7 @@ use kaia_ui::{Theme, Tone, WidgetPod};
 
 use crate::surfaces::common::short;
 use crate::surfaces::library::commands::{Chip, SortChoice, View};
-use crate::surfaces::library::data::{self, Prefs, SeriesGroup};
+use crate::surfaces::library::data::{self, SeriesGroup};
 use crate::surfaces::library::press::Pressable;
 
 /// One row of a list: a title, a line of detail, an optional cover, and the
@@ -108,76 +108,107 @@ pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: boo
     crate::surfaces::common::status_header(h).with_key("library-header")
 }
 
-/// The view tabs and the sort button. The active tab is the primary button.
-/// A button keeps 16 dp of padding on each side, so each tab takes a share of the
-/// row that fits its label. A label that is too wide ends with an ellipsis.
+/// The tab row: four text tabs and the Covers and List choice for the Books tab.
+/// The selected tab has an accent underline, as the nav bar marks its item. A tab
+/// takes a share of the row that fits its label, and a label that is too wide
+/// ends with an ellipsis.
 pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
-    let tab = |weight: u32, view: Option<View>, label: &str, action: &str| {
-        let style = if view == Some(active) {
+    let books = matches!(active, View::Covers | View::List);
+    let tab = |weight: u32, selected: bool, label: &str, action: &str| {
+        let button = WidgetPod::new(Button::new(ButtonStyle::Text).text(label).on_action(action))
+            .with_key(action.replace(':', "-"));
+        let mark = if selected {
+            WidgetPod::new(
+                Frame::new(WidgetPod::new(SizedBox::new(None).height(t.line.focus))).fill(Tone::Accent),
+            )
+        } else {
+            WidgetPod::new(SizedBox::new(None).height(t.line.focus))
+        };
+        WidgetPod::new(Expanded::new(
+            WidgetPod::new(
+                Column::new(vec![button, mark])
+                    .cross_align(CrossAlign::Stretch)
+                    .shrink(),
+            ),
+            weight,
+        ))
+    };
+    let choice = |weight: u32, view: View, label: &str| {
+        let style = if active == view {
             ButtonStyle::Primary
         } else {
             ButtonStyle::Secondary
+        };
+        let action = match view {
+            View::List => "library:view:list",
+            _ => "library:view:covers",
         };
         WidgetPod::new(Expanded::new(button(style, label, action), weight))
     };
     WidgetPod::new(
         Row::new(vec![
-            tab(7, Some(View::Covers), &tr("Covers"), "library:view:covers"),
-            tab(5, Some(View::List), &tr("List"), "library:view:list"),
-            tab(8, Some(View::Folders), &tr("Folders"), "library:view:folders"),
+            tab(9, books, &tr("Books"), "library:view:books"),
+            tab(9, active == View::Folders, &tr("Folders"), "library:view:folders"),
             tab(
-                12,
-                Some(View::Collections),
+                13,
+                active == View::Collections,
                 &tr("Collections"),
                 "library:view:collections",
             ),
-            tab(7, Some(View::Series), &tr("Series"), "library:view:series"),
-            tab(6, None, &tr("Sort"), "library:sort"),
+            tab(8, active == View::Series, &tr("Series"), "library:view:series"),
+            choice(8, View::Covers, &tr("Covers")),
+            choice(6, View::List, &tr("List")),
         ])
-        .gap(t.space.xs),
+        .gap(t.space.sm),
     )
 }
 
-/// The filter chips. The active chip is the primary button. The weights fit the
-/// labels, as for the view tabs.
-pub fn filter_row(t: &Theme, prefs: &Prefs) -> WidgetPod {
-    let chip = |weight: u32, active: bool, label: &str, action: &str| {
-        let style = if active {
-            ButtonStyle::Primary
-        } else {
-            ButtonStyle::Secondary
-        };
-        WidgetPod::new(Expanded::new(button(style, label, action), weight))
-    };
+/// The controls of the Books tab: the filter and the sort, each a button that
+/// names the current choice and opens its panel.
+pub fn books_controls(t: &Theme, filter: &str, sort: &str) -> WidgetPod {
     WidgetPod::new(
         Row::new(vec![
-            chip(
-                9,
-                prefs.chip == Some(Chip::Reading),
-                &tr("Reading"),
-                "library:filter:reading",
-            ),
-            chip(
-                12,
-                prefs.chip == Some(Chip::NotStarted),
-                &tr("Not started"),
-                "library:filter:not-started",
-            ),
-            chip(
-                9,
-                prefs.chip == Some(Chip::Finished),
-                &tr("Finished"),
-                "library:filter:finished",
-            ),
-            chip(
-                11,
-                prefs.collection.is_some(),
-                &tr("Collection"),
-                "library:filter:collection",
-            ),
+            WidgetPod::new(Expanded::new(
+                button(ButtonStyle::Secondary, filter, "library:filter"),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr_format(&tr("Sort: %1"), &[sort]),
+                    "library:sort",
+                ),
+                1,
+            )),
         ])
-        .gap(t.space.xs),
+        .gap(t.space.sm),
     )
+}
+
+/// The name of the filter in force: the status, the collection, or both joined
+/// with a comma. "All books" when neither is set.
+pub fn filter_name(chip: Option<Chip>, collection: Option<&str>) -> String {
+    let mut parts = Vec::new();
+    if let Some(chip) = chip {
+        parts.push(chip_name(chip));
+    }
+    if let Some(name) = collection {
+        parts.push(name.to_string());
+    }
+    if parts.is_empty() {
+        tr("All books")
+    } else {
+        parts.join(", ")
+    }
+}
+
+/// The name of a status filter.
+fn chip_name(chip: Chip) -> String {
+    match chip {
+        Chip::Reading => tr("Reading"),
+        Chip::NotStarted => tr("Not started"),
+        Chip::Finished => tr("Finished"),
+    }
 }
 
 /// The covers view: a grid of tiles, three columns in portrait and four in landscape.
@@ -440,33 +471,32 @@ pub fn sheet(t: &Theme, title: &str, mut children: Vec<WidgetPod>) -> WidgetPod 
     )
 }
 
-/// The label of a row in the sort table of `sort_panel`.
-fn sort_label(label: &str) -> String {
-    match label {
-        "Title" => tr("Title"),
-        "Author" => tr("Author"),
-        "Recently read" => tr("Recently read"),
-        "Recently added" => tr("Recently added"),
-        "Progress" => tr("Progress"),
-        "Series" => tr("Series"),
-        other => other.to_string(),
+/// The name of a sort choice, as the sort panel and the sort button show it.
+pub fn sort_name(choice: SortChoice) -> String {
+    match choice {
+        SortChoice::Title => tr("Title"),
+        SortChoice::Author => tr("Author"),
+        SortChoice::Read => tr("Recently read"),
+        SortChoice::Added => tr("Recently added"),
+        SortChoice::Progress => tr("Progress"),
+        SortChoice::Series => tr("Series"),
     }
 }
 
 /// The sort panel: one row per choice. The current one shows a value.
 pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
     let options = [
-        (SortChoice::Title, "Title", "title", true),
-        (SortChoice::Author, "Author", "author", true),
-        (SortChoice::Read, "Recently read", "read", true),
-        (SortChoice::Added, "Recently added", "added", true),
-        (SortChoice::Progress, "Progress", "progress", true),
-        (SortChoice::Series, "Series", "series", true),
+        (SortChoice::Title, "title", true),
+        (SortChoice::Author, "author", true),
+        (SortChoice::Read, "read", true),
+        (SortChoice::Added, "added", true),
+        (SortChoice::Progress, "progress", true),
+        (SortChoice::Series, "series", true),
     ];
     let rows: Vec<WidgetPod> = options
         .into_iter()
-        .map(|(choice, label, key, enabled)| {
-            let mut row = ListRow::new(sort_label(label))
+        .map(|(choice, key, enabled)| {
+            let mut row = ListRow::new(sort_name(choice))
                 .enabled(enabled)
                 .on_action(format!("library:sort:{key}"));
             if !enabled {
@@ -482,6 +512,74 @@ pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
         &tr("Sort by"),
         vec![
             WidgetPod::new(Column::new(rows).cross_align(CrossAlign::Stretch).shrink()),
+            button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
+        ],
+    )
+}
+
+/// The filter panel: the statuses and the collection as buttons, the choice in
+/// force filled. A button fits the page where a row list would not, so the panel
+/// keeps its Cancel on screen.
+pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> WidgetPod {
+    let choice = |active: bool| {
+        if active {
+            ButtonStyle::Primary
+        } else {
+            ButtonStyle::Secondary
+        }
+    };
+    let pair = |left: WidgetPod, right: WidgetPod| {
+        WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(Expanded::new(left, 1)),
+                WidgetPod::new(Expanded::new(right, 1)),
+            ])
+            .gap(t.space.sm),
+        )
+    };
+    let all = button(
+        choice(chip.is_none() && collection.is_none()),
+        &tr("All books"),
+        "library:filter:all",
+    );
+    let reading = button(
+        choice(chip == Some(Chip::Reading)),
+        &chip_name(Chip::Reading),
+        "library:filter:reading",
+    );
+    let not_started = button(
+        choice(chip == Some(Chip::NotStarted)),
+        &chip_name(Chip::NotStarted),
+        "library:filter:not-started",
+    );
+    let finished = button(
+        choice(chip == Some(Chip::Finished)),
+        &chip_name(Chip::Finished),
+        "library:filter:finished",
+    );
+    let collection_label = collection.map_or_else(|| tr("Collection"), str::to_string);
+    let collection_button = button(
+        choice(collection.is_some()),
+        &collection_label,
+        "library:filter:collection",
+    );
+    sheet(
+        t,
+        &tr("Show books"),
+        vec![
+            WidgetPod::new(
+                Column::new(vec![
+                    pair(all, reading),
+                    pair(not_started, finished),
+                    WidgetPod::new(Row::new(vec![WidgetPod::new(Expanded::new(
+                        collection_button,
+                        1,
+                    ))])),
+                ])
+                .gap(t.space.sm)
+                .cross_align(CrossAlign::Stretch)
+                .shrink(),
+            ),
             button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
         ],
     )
