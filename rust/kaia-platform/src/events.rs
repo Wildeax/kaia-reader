@@ -12,8 +12,8 @@ pub const POWER_KEY_CODE: u16 = 116;
 pub const LIGHT_KEY_CODE: u16 = 90;
 /// Sleep cover keys (`device.lua:828`, keys 35 and 59).
 pub const SLEEP_COVER_KEY_CODES: [u16; 2] = [35, 59];
-/// Seconds the Power key must be held before power off (`device.lua:1667`).
-pub const POWER_OFF_SECS: u32 = 2;
+/// Nickel software power-off hold time.
+pub const POWER_OFF_HOLD: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// Key press or release.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,10 +54,10 @@ pub struct EventState {
 /// What the caller should do after an event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reaction {
-    /// Power off after this many seconds (`device.lua:1667`).
+    /// Power off after the hold delay.
     ArmPowerOff {
-        /// Seconds to wait.
-        after_secs: u32,
+        /// Time to wait.
+        delay: std::time::Duration,
     },
     /// Cancel a pending power off (`device.lua:1671`).
     CancelPowerOff,
@@ -83,7 +83,7 @@ pub fn react(event: &str, st: &EventState) -> Vec<Reaction> {
     let suspend_on_plug = st.screen_saver_mode && !st.screen_saver_lock;
     match event {
         "PowerPress" => vec![Reaction::ArmPowerOff {
-            after_secs: POWER_OFF_SECS,
+            delay: POWER_OFF_HOLD,
         }],
         "PowerRelease" => {
             if st.poweroff_stage {
@@ -206,10 +206,12 @@ mod tests {
     }
 
     #[test]
-    fn power_press_arms_two_second_power_off() {
+    fn power_press_arms_750_ms_power_off() {
         assert_eq!(
             react("PowerPress", &EventState::default()),
-            vec![Reaction::ArmPowerOff { after_secs: 2 }]
+            vec![Reaction::ArmPowerOff {
+                delay: std::time::Duration::from_millis(750)
+            }]
         );
     }
 

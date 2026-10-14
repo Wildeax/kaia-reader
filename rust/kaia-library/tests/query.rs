@@ -99,6 +99,24 @@ fn added_sort_and_offset_limit_paging() {
         .is_empty());
 }
 
+/// Books indexed in the same second have equal added times. Newest first then
+/// lists the book indexed last at the top, so the ties follow the direction.
+#[test]
+fn added_sort_breaks_ties_in_the_same_direction() {
+    let (tmp, root) = setup();
+    fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    scan(&mut lib, std::slice::from_ref(&root));
+    raw_connection(tmp.path())
+        .execute("UPDATE books SET added_at = 100", [])
+        .unwrap();
+    let ascending = all(&lib, Sort::new(SortKey::Added, false), &Filter::default());
+    let descending = all(&lib, Sort::new(SortKey::Added, true), &Filter::default());
+    let mut reversed: Vec<i64> = ascending.iter().map(|b| b.id).collect();
+    reversed.reverse();
+    assert_eq!(descending.iter().map(|b| b.id).collect::<Vec<_>>(), reversed);
+}
+
 #[test]
 fn filters_by_status_format_folder_and_collection() {
     let (tmp, root) = setup();

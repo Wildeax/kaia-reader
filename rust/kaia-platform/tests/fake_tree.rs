@@ -646,3 +646,19 @@ fn prepare_suspend_has_no_sleep_so_the_caller_can_schedule_the_wait() {
     assert!(slept.is_empty());
     assert_eq!(get(dir.path(), STATE_EXTENDED), "1");
 }
+
+#[test]
+fn monza_page_button_wake_stays_disabled_without_a_known_knob() {
+    let dir = tempfile::tempdir().unwrap();
+    put(dir.path(), "/mnt/onboard/.kobo/version", "320");
+    let platform = Platform::detect_in(
+        dir.path(),
+        &Env {
+            product: Some("monza".into()),
+            ..Env::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(platform.kind, Kind::Kobo(Model::LibraColour));
+    assert!(!platform.supports_page_button_wake());
+}

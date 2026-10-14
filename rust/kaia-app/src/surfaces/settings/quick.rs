@@ -1,10 +1,10 @@
 //! The quick settings sheet: frontlight and warmth sliders, a Wi-Fi switch, a
-//! fixed orientation message and a Sleep button. The app opens it from a swipe down
+//! manual orientation picker and a Sleep button. The app opens it from a swipe down
 //! with `env.sheet(quick_settings(env.services))`.
 //!
 //! The sheet's controls send `settings:quick:<name>` ids. The top surface does
 //! not own them, so the app passes them to [`command`] before global routing
-//! (see the report for the exact change). The Sleep button sends the global id
+//! in the app loop. The Sleep button sends the global id
 //! `sleep`, which the app handles.
 
 use crate::slider::Slider;
@@ -15,7 +15,7 @@ use kaia_ui::composite::{ListRow, SheetPanel};
 use kaia_ui::controls::{Button, ButtonStyle};
 use kaia_ui::{Theme, Tone, WidgetPod};
 
-use super::{commands, sections};
+use super::{commands, keys, sections};
 use crate::services::Services;
 use crate::surface::{Outcome, SurfaceEnv};
 
@@ -27,23 +27,29 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     let warmth = f64::from(services.platform.frontlight.warmth());
     let wifi_on = services.platform.network.is_wifi_on();
 
-    let mut rows = Vec::new();
-    rows.push(slider(
-        &tr("Frontlight"),
-        frontlight,
-        kobo,
-        "settings:quick:frontlight",
-        "quick-frontlight",
-        t,
-    ));
-    rows.push(slider(
-        &tr("Warmth"),
-        warmth,
-        kobo,
-        "settings:quick:warmth",
-        "quick-warmth",
-        t,
-    ));
+    let sliders = vec![
+        slider(
+            &tr("Frontlight"),
+            frontlight,
+            kobo,
+            "settings:quick:frontlight",
+            "quick-frontlight",
+            t,
+        ),
+        slider(
+            &tr("Warmth"),
+            warmth,
+            kobo,
+            "settings:quick:warmth",
+            "quick-warmth",
+            t,
+        ),
+    ];
+    let mut rows = if t.scale.width > t.scale.height {
+        vec![equal_row(sliders, t)]
+    } else {
+        sliders
+    };
     if !kobo {
         rows.push(WidgetPod::new(Label::new(
             tr("The light controls work on the Kobo only."),
@@ -51,22 +57,38 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
             Tone::InkSecondary,
         )));
     }
-    rows.push(
-        WidgetPod::new(
-            ListRow::new(tr("Wi-Fi"))
-                .toggle(wifi_on)
-                .on_action("settings:quick:wifi"),
-        )
-        .with_key("quick-wifi"),
-    );
-    rows.push(
-        WidgetPod::new(
-            ListRow::new(tr("Fixed orientation")).secondary(tr("Automatic rotation is not available yet.")),
-        )
-        .with_key("quick-rotation"),
-    );
+    rows.push(equal_row(
+        vec![
+            WidgetPod::new(
+                ListRow::new(tr("Wi-Fi"))
+                    .toggle(wifi_on)
+                    .on_action("settings:quick:wifi"),
+            )
+            .with_key("quick-wifi"),
+            WidgetPod::new(
+                ListRow::new(tr("Lock orientation"))
+                    .toggle(keys::bool_or(
+                        &services.settings,
+                        keys::DISPLAY_ROTATION_LOCK,
+                        false,
+                    ))
+                    .on_action("settings:quick:rotation-lock"),
+            )
+            .with_key("quick-rotation"),
+        ],
+        t,
+    ));
     rows.push(WidgetPod::new(
         Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(
+                    Button::new(ButtonStyle::Secondary)
+                        .text(tr("Orientation"))
+                        .on_action("settings:quick:orientation"),
+                )
+                .with_key("quick-orientation"),
+                1,
+            )),
             WidgetPod::new(Expanded::new(
                 WidgetPod::new(
                     Button::new(ButtonStyle::Secondary)
@@ -92,6 +114,18 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     // The sheet is short, so its rows are spaced by the small gap.
     let content = WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch));
     SheetPanel::new(t, tr("Quick settings"), content)
+}
+
+fn equal_row(children: Vec<WidgetPod>, t: &Theme) -> WidgetPod {
+    WidgetPod::new(
+        Row::new(
+            children
+                .into_iter()
+                .map(|child| WidgetPod::new(Expanded::new(child, 1)))
+                .collect(),
+        )
+        .gap(t.space.md),
+    )
 }
 
 fn slider(label: &str, value: f64, enabled: bool, id: &str, key: &str, t: &Theme) -> WidgetPod {
@@ -145,10 +179,27 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
             }
             Outcome::Handled
         }
-        "rotation" => {
-            env.toast(tr("Automatic rotation is not available yet."), 3.0);
-            Outcome::Handled
-        }
         _ => Outcome::NotMine,
     }
+}
+
+/// The four manual orientations, in clockwise order.
+pub fn orientation_labels() -> Vec<String> {
+    vec![
+        tr("Portrait"),
+        tr("Landscape"),
+        tr("Portrait, upside down"),
+        tr("Landscape, upside down"),
+    ]
+}
+
+pub fn orientation_picker(services: &Services) -> SheetPanel {
+    let degrees = keys::number_or(
+        &services.settings,
+        keys::DISPLAY_ROTATION,
+        f64::from(services.platform.device.startup_rotation_degrees()),
+    );
+    let choices = kaia_ui::controls::RadioGroup::new(orientation_labels(), Some((degrees / 90.0) as usize))
+        .on_action("settings:quick:orientation-pick");
+    SheetPanel::new(&services.theme, tr("Orientation"), WidgetPod::new(choices))
 }

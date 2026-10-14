@@ -73,6 +73,8 @@ pub mod ffi {
         pub y1: f32,
         pub page: i32,
         pub href: *mut c_char,
+        pub xpointer: *mut c_char,
+        pub note: *mut c_char,
     }
 
     #[repr(C)]
@@ -320,6 +322,8 @@ pub struct LinkBox {
     pub page: Option<u32>,
     /// The link target as written in the book.
     pub href: String,
+    pub xpointer: Option<String>,
+    pub note: Option<String>,
 }
 
 /// One flattened table of contents entry.
@@ -582,17 +586,21 @@ impl Doc {
         let mut links = Vec::with_capacity(count);
         if !out.is_null() {
             for i in 0..count {
-                // SAFETY: the shim allocated `count` boxes at `out`. Each href is
-                // detached below, before the array is freed.
+                // SAFETY: the shim allocated `count` boxes at `out`. Each string is
+                // copied and freed below, before the array is freed.
                 let b = unsafe { &*out.add(i) };
                 links.push(LinkBox {
                     rect: [b.x0, b.y0, b.x1, b.y1],
                     page: (b.page >= 0).then_some(b.page as u32),
                     // SAFETY: href is a malloc'd string set by the shim.
                     href: unsafe { take_opt_string(b.href) }.unwrap_or_default(),
+                    // SAFETY: both pointers are null or malloc'd strings from the shim.
+                    xpointer: unsafe { take_opt_string(b.xpointer) },
+                    // SAFETY: note has the same ownership as href.
+                    note: unsafe { take_opt_string(b.note) },
                 });
             }
-            // SAFETY: `out` came from kaia_cre_page_links. Its hrefs were freed
+            // SAFETY: `out` came from kaia_cre_page_links. Its strings were freed
             // above, so only the array is released here.
             unsafe { ffi::kaia_cre_free(out.cast()) };
         }

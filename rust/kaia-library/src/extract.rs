@@ -206,7 +206,18 @@ fn series_from_opf(xml: &str) -> Option<(Option<String>, Option<f64>)> {
         .text()
         .map(str::to_string)
         .and_then(|value| non_empty(Some(value)))?;
-    Some((Some(series), None))
+    // The number is the `group-position` refinement of the collection, as EPUB 3
+    // defines it.
+    let refines = collection_id.map(|id| format!("#{id}"));
+    let index = metas.iter().find_map(|meta| {
+        (meta.attribute("property") == Some("group-position")
+            && refines
+                .as_deref()
+                .is_some_and(|r| meta.attribute("refines") == Some(r)))
+        .then(|| meta.text().and_then(parse_series_index))
+        .flatten()
+    });
+    Some((Some(series), index))
 }
 
 fn parse_series_index(value: &str) -> Option<f64> {
@@ -478,6 +489,17 @@ mod tests {
             <meta refines="#series" property="collection-type">series</meta>
         </metadata></package>"##;
         assert_eq!(series_from_opf(xml), Some((Some("Earthsea".into()), None)));
+    }
+
+    #[test]
+    fn reads_epub_three_group_position_as_the_series_number() {
+        let xml = r##"<package xmlns="http://www.idpf.org/2007/opf"><metadata>
+            <meta id="series" property="belongs-to-collection">Earthsea</meta>
+            <meta refines="#series" property="collection-type">series</meta>
+            <meta refines="#series" property="group-position">2.5</meta>
+            <meta refines="#other" property="group-position">9</meta>
+        </metadata></package>"##;
+        assert_eq!(series_from_opf(xml), Some((Some("Earthsea".into()), Some(2.5))));
     }
 
     #[test]

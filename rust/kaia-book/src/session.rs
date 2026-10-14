@@ -743,14 +743,29 @@ impl BookSession {
     pub fn follow_link(&mut self, link: &Link) -> Result<bool> {
         match &link.target {
             LinkTarget::Page(page) => {
-                self.ensure_idle()?;
-                let here = self.state.position.clone().unwrap_or(Location::Page(self.page));
-                self.go_to(Location::Page(*page))?;
-                self.link_history.push(here);
+                self.jump_to(link.location.clone().unwrap_or(Location::Page(*page)))?;
                 Ok(true)
             }
             LinkTarget::Uri(_) => Ok(false),
         }
+    }
+
+    /// Jumps and saves the previous position only after successful navigation.
+    pub fn jump_to(&mut self, location: Location) -> Result<()> {
+        let here = self.current().location;
+        self.go_to(location)?;
+        if self.current().location != here && self.link_history.last() != Some(&here) {
+            if self.link_history.len() == 5000 {
+                self.link_history.remove(0);
+            }
+            self.link_history.push(here);
+        }
+        Ok(())
+    }
+
+    /// Whether Back has a saved destination. This does not call the engine.
+    pub fn can_go_back(&self) -> bool {
+        !self.link_history.is_empty()
     }
 
     /// Returns to the place before the last followed link. Returns false when there is none.

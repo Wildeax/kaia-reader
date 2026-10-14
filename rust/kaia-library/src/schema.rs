@@ -130,7 +130,25 @@ const SCHEMA_V5: &str = "
 UPDATE books SET extracted = 0, attempts = 0 WHERE extracted = 1;
 ";
 
-pub(crate) const MIGRATIONS: [Migration; 5] = [
+/// Version 6 adds the recent searches. Each distinct search is one row, under
+/// its lower-case key. The newest search has the highest id.
+const SCHEMA_V6: &str = "
+CREATE TABLE recent_searches (
+  id    INTEGER PRIMARY KEY,
+  query TEXT NOT NULL,
+  key   TEXT NOT NULL UNIQUE
+);
+";
+
+/// Version 7 queues the extracted books that have a series but no number. An
+/// EPUB 3 collection can give its number in a `group-position` refinement, which
+/// earlier builds did not read. The next scan extracts these books again.
+const SCHEMA_V7: &str = "
+UPDATE books SET extracted = 0, attempts = 0
+WHERE extracted = 1 AND series IS NOT NULL AND series_index IS NULL;
+";
+
+pub(crate) const MIGRATIONS: [Migration; 7] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -154,6 +172,16 @@ pub(crate) const MIGRATIONS: [Migration; 5] = [
     Migration {
         version: 5,
         sql: SCHEMA_V5,
+        step: None,
+    },
+    Migration {
+        version: 6,
+        sql: SCHEMA_V6,
+        step: None,
+    },
+    Migration {
+        version: 7,
+        sql: SCHEMA_V7,
         step: None,
     },
 ];
@@ -309,7 +337,7 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 5);
+        assert_eq!(v, 7);
         let fts: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name = 'book_fts'",
@@ -334,7 +362,7 @@ mod tests {
             err,
             LibraryError::SchemaTooNew {
                 found: 99,
-                supported: 5
+                supported: 7
             }
         ));
         assert_eq!(fs::read(&path).unwrap(), before, "file is unchanged");
@@ -441,7 +469,7 @@ mod tests {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 5);
+        assert_eq!(v, 7);
         assert_eq!(
             fs::read_dir(dir.path().join("backups")).unwrap().count(),
             1,
@@ -518,6 +546,6 @@ mod tests {
         let version: u32 = raw
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 7);
     }
 }

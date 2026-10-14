@@ -5,13 +5,16 @@
 
 use kaia_events::Value;
 
-/// The four tabs of the Library.
+use crate::book_index::Mark;
+
+/// The tabs of the Library.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Covers,
     List,
     Folders,
     Collections,
+    Series,
 }
 
 /// Sort choices shown in the sort panel.
@@ -53,8 +56,16 @@ pub enum Command {
     SearchClose,
     /// The search field changed. Carries the text.
     SearchChanged(String),
+    /// `library:search:submit`: the Enter key of the search field.
+    SearchSubmit,
+    /// `library:search:recent:<n>`: search for the n-th recent search.
+    RecentSearch(usize),
+    /// `library:search:recent:clear`: forget the recent searches.
+    ClearRecentSearches,
     /// `library:folder:<n>` or `library:folder:up`.
     Folder(FolderStep),
+    /// `library:series:<n>` opens a series, and `library:series:up` closes it.
+    Series(SeriesStep),
     /// `library:open:<id>`: open the book in the reader.
     Open(i64),
     /// `library:details:<id>`: show the details of a book (hold).
@@ -65,6 +76,11 @@ pub enum Command {
     AddToCollection(i64),
     /// `library:add:<book>:<collection>`: add a book to an existing collection.
     AddBookTo {
+        book: i64,
+        collection: i64,
+    },
+    /// `library:remove:<book>:<collection>`: take a book out of a collection.
+    RemoveFromCollection {
         book: i64,
         collection: i64,
     },
@@ -88,10 +104,26 @@ pub enum Command {
     RemoveHistory(i64),
     ClearHistory,
     ConfirmClearHistory,
+    /// `library:select:on` and `library:select:off`: enter or leave select mode.
+    SelectOn,
+    SelectOff,
+    /// `library:select:toggle:<id>`: check or uncheck a book.
+    SelectToggle(i64),
+    /// `library:select:all` and `library:select:none`.
+    SelectAll,
+    SelectNone,
+    /// `library:select:finished` and `library:select:unread`: mark the checked books.
+    MarkSelected(Mark),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FolderStep {
+    Up,
+    Into(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SeriesStep {
     Up,
     Into(usize),
 }
@@ -130,6 +162,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             "list" => View::List,
             "folders" => View::Folders,
             "collections" => View::Collections,
+            "series" => View::Series,
             _ => return None,
         }),
         ("sort", None) => Command::OpenSort,
@@ -150,8 +183,15 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ("collection", _) => Command::PickCollection(Some(tail_id.or(arg_id)?)),
         ("search", Some("open")) => Command::SearchOpen,
         ("search", Some("close")) => Command::SearchClose,
+        ("search", Some("submit")) => Command::SearchSubmit,
+        ("search", Some(t)) if t.starts_with("recent:") => match &t["recent:".len()..] {
+            "clear" => Command::ClearRecentSearches,
+            n => Command::RecentSearch(n.parse().ok()?),
+        },
         ("folder", Some("up")) => Command::Folder(FolderStep::Up),
         ("folder", Some(n)) => Command::Folder(FolderStep::Into(n.parse().ok()?)),
+        ("series", Some("up")) => Command::Series(SeriesStep::Up),
+        ("series", Some(n)) => Command::Series(SeriesStep::Into(n.parse().ok()?)),
         ("open", _) => Command::Open(tail_id.or(arg_id)?),
         ("details", _) => Command::Details(tail_id.or(arg_id)?),
         ("book", Some(t)) => {
@@ -178,6 +218,22 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
                 }
             }
         }
+        ("remove", Some(t)) => {
+            let (book, collection) = t.split_once(':')?;
+            Command::RemoveFromCollection {
+                book: book.parse().ok()?,
+                collection: collection.parse().ok()?,
+            }
+        }
+        ("select", Some("on")) => Command::SelectOn,
+        ("select", Some("off")) => Command::SelectOff,
+        ("select", Some("all")) => Command::SelectAll,
+        ("select", Some("none")) => Command::SelectNone,
+        ("select", Some("finished")) => Command::MarkSelected(Mark::Finished),
+        ("select", Some("unread")) => Command::MarkSelected(Mark::Unread),
+        ("select", Some(t)) if t.starts_with("toggle:") => {
+            Command::SelectToggle(t["toggle:".len()..].parse().ok()?)
+        }
         ("name", Some("save")) => Command::SaveName,
         ("name", None) => Command::NameChanged(arg_text?),
         ("search", None) => Command::SearchChanged(arg_text?),
@@ -199,6 +255,10 @@ mod tests {
         assert_eq!(
             parse("library:view:list", &none()),
             Some(Command::View(View::List))
+        );
+        assert_eq!(
+            parse("library:view:series", &none()),
+            Some(Command::View(View::Series))
         );
         assert_eq!(parse("library:sort", &none()), Some(Command::OpenSort));
         assert_eq!(
@@ -241,6 +301,13 @@ mod tests {
             parse("library:add:3:new", &none()),
             Some(Command::NewCollection(3))
         );
+        assert_eq!(
+            parse("library:remove:3:5", &none()),
+            Some(Command::RemoveFromCollection {
+                book: 3,
+                collection: 5
+            })
+        );
     }
 
     #[test]
@@ -261,6 +328,44 @@ mod tests {
             parse("library:folder:up", &none()),
             Some(Command::Folder(FolderStep::Up))
         );
+        assert_eq!(
+            parse("library:series:3", &none()),
+            Some(Command::Series(SeriesStep::Into(3)))
+        );
+        assert_eq!(
+            parse("library:series:up", &none()),
+            Some(Command::Series(SeriesStep::Up))
+        );
+    }
+
+    #[test]
+    fn parses_recent_searches_and_select_mode() {
+        assert_eq!(
+            parse("library:search:submit", &none()),
+            Some(Command::SearchSubmit)
+        );
+        assert_eq!(
+            parse("library:search:recent:2", &none()),
+            Some(Command::RecentSearch(2))
+        );
+        assert_eq!(
+            parse("library:search:recent:clear", &none()),
+            Some(Command::ClearRecentSearches)
+        );
+        assert_eq!(parse("library:select:on", &none()), Some(Command::SelectOn));
+        assert_eq!(
+            parse("library:select:toggle:12", &[Value::Bool(true)]),
+            Some(Command::SelectToggle(12))
+        );
+        assert_eq!(
+            parse("library:select:unread", &none()),
+            Some(Command::MarkSelected(Mark::Unread))
+        );
+        assert_eq!(
+            parse("library:select:finished", &none()),
+            Some(Command::MarkSelected(Mark::Finished))
+        );
+        assert_eq!(parse("library:select:toggle:x", &none()), None);
     }
 
     #[test]

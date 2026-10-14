@@ -51,6 +51,8 @@ typedef struct {
     float x0, y0, x1, y1;
     int32_t page;
     char *href;
+    char *xpointer;
+    char *note;
 } kaia_cre_link_box;
 
 const char *kaia_cre_last_error(void);

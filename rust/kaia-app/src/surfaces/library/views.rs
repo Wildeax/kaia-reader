@@ -18,7 +18,7 @@ use kaia_ui::{Theme, Tone, WidgetPod};
 
 use crate::surfaces::common::short;
 use crate::surfaces::library::commands::{Chip, SortChoice, View};
-use crate::surfaces::library::data::{self, Prefs};
+use crate::surfaces::library::data::{self, Prefs, SeriesGroup};
 use crate::surfaces::library::press::Pressable;
 
 /// One row of a list: a title, a line of detail, an optional cover, and the
@@ -32,6 +32,8 @@ pub struct Line {
     pub tap: String,
     pub hold: Option<String>,
     pub enabled: bool,
+    /// In select mode a book row shows a check box with this state, in place of the chevron.
+    pub checked: Option<bool>,
 }
 
 impl Line {
@@ -50,7 +52,17 @@ impl Line {
             tap: format!("library:open:{}", info.id),
             hold: Some(format!("library:details:{}", info.id)),
             enabled: true,
+            checked: None,
         }
+    }
+
+    /// A book row in select mode: a check box, and a tap that checks the book.
+    pub fn checkable(info: &BookInfo, checked: bool) -> Line {
+        let mut line = Line::book(info);
+        line.tap = format!("library:select:toggle:{}", info.id);
+        line.hold = None;
+        line.checked = Some(checked);
+        line
     }
 }
 
@@ -64,7 +76,10 @@ fn line_row(line: &Line) -> WidgetPod {
     if line.key.starts_with("book-") {
         row = row.cover(CoverImage::new(line.title.clone(), line.cover.clone()));
     }
-    row = row.chevron();
+    row = match line.checked {
+        Some(on) => row.checkbox(on),
+        None => row.chevron(),
+    };
     let pod = WidgetPod::new(row);
     let pod = match &line.hold {
         Some(id) => WidgetPod::new(Pressable::new(pod).hold(id.clone(), Vec::new())),
@@ -78,16 +93,22 @@ pub fn button(style: ButtonStyle, label: &str, action: &str) -> WidgetPod {
     WidgetPod::new(Button::new(style).text(label).on_action(action)).with_key(action.replace(':', "-"))
 }
 
-/// The page header: the title, the status line and the search action.
-pub fn header(theme: &Theme, title: &str, status: Option<String>) -> WidgetPod {
-    let mut h = Header::new(theme, title).action("appbar.search", "library:search:open");
+/// The page header: the title, the status line and the icon actions. Select mode
+/// has none: its bar holds the way out.
+pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: bool) -> WidgetPod {
+    let mut h = Header::new(theme, title);
+    if !selecting {
+        h = h
+            .action("check", "library:select:on")
+            .action("appbar.search", "library:search:open");
+    }
     if let Some(text) = status {
         h = h.status(text);
     }
     crate::surfaces::common::status_header(h).with_key("library-header")
 }
 
-/// The four view tabs and the sort button. The active tab is the primary button.
+/// The view tabs and the sort button. The active tab is the primary button.
 /// A button keeps 16 dp of padding on each side, so each tab takes a share of the
 /// row that fits its label. A label that is too wide ends with an ellipsis.
 pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
@@ -110,6 +131,7 @@ pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
                 &tr("Collections"),
                 "library:view:collections",
             ),
+            tab(7, Some(View::Series), &tr("Series"), "library:view:series"),
             tab(6, None, &tr("Sort"), "library:sort"),
         ])
         .gap(t.space.xs),
@@ -192,8 +214,14 @@ pub fn covers(t: &Theme, screen: Size, infos: Vec<BookInfo>, loader: crate::cove
 pub fn list(lines: Vec<Line>) -> PagedList<Line> {
     PagedList::new(lines, |line: &Line, _t: &Theme| line_row(line))
 }
+
+/// Like [`list`], with covers. Only book rows load a cover. Other rows, such as
+/// the recent searches, are plain rows.
 pub fn list_covers(lines: Vec<Line>, loader: crate::covers::Shared) -> PagedList<Line> {
     PagedList::new(lines, move |line: &Line, _t: &Theme| {
+        if !line.key.starts_with("book-") {
+            return line_row(line);
+        }
         let line = line.clone();
         let id = line
             .key
@@ -217,6 +245,44 @@ pub fn folder_rows(t: &Theme, heading: String, rows: Vec<Line>) -> WidgetPod {
             1,
         )),
     ]))
+}
+
+/// The Series view: one row per series, with its number of books. A tap opens the
+/// series. The index of a row is the index `library:series:<n>` names.
+pub fn series_list(groups: &[SeriesGroup]) -> WidgetPod {
+    let items: Vec<(usize, SeriesGroup)> = groups.iter().cloned().enumerate().collect();
+    let list = PagedList::new(items, |(n, group): &(usize, SeriesGroup), _t: &Theme| {
+        let row = ListRow::new(group.name.clone())
+            .secondary(tr_format(
+                &tr_n("%1 book", "%1 books", group.books as i64),
+                &[&group.books.to_string()],
+            ))
+            .chevron()
+            .on_action(format!("library:series:{n}"));
+        WidgetPod::new(row).with_key(format!("series-{n}"))
+    });
+    WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("series-list"), 1))
+}
+
+/// The books of an open series, in series order: the name, a row to go back to
+/// the list of series, then the books with their covers.
+pub fn series_books(t: &Theme, name: &str, books: Vec<Line>, loader: crate::covers::Shared) -> WidgetPod {
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Label::new(
+                name.to_string(),
+                t.font.caption.clone(),
+                Tone::InkSecondary,
+            )),
+            WidgetPod::new(ListRow::new(tr("Up")).on_action("library:series:up")).with_key("series-up"),
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(list_covers(books, loader)).with_key("series-books"),
+                1,
+            )),
+        ])
+        .gap(t.space.sm)
+        .cross_align(CrossAlign::Stretch),
+    )
 }
 
 /// The collections tab: one row per collection, which filters the covers by it.
@@ -300,12 +366,21 @@ pub fn body_text(t: &Theme, text: &str) -> WidgetPod {
 }
 
 /// The search page: a field with a close button, the results, and the keyboard.
-pub fn search(t: &Theme, query: &str, results: Vec<Line>, loader: crate::covers::Shared) -> Vec<WidgetPod> {
+/// With no text the list holds the recent searches. `has_recent` enables the
+/// button that clears them.
+pub fn search(
+    t: &Theme,
+    query: &str,
+    results: Vec<Line>,
+    loader: crate::covers::Shared,
+    has_recent: bool,
+) -> Vec<WidgetPod> {
     let field = WidgetPod::new(
         TextField::new()
             .placeholder(tr("Title, author, series"))
             .with_text(query)
-            .on_change("library:search"),
+            .on_change("library:search")
+            .on_submit("library:search:submit"),
     )
     .focusable(true)
     .with_key("search-field");
@@ -318,7 +393,25 @@ pub fn search(t: &Theme, query: &str, results: Vec<Line>, loader: crate::covers:
         .cross_align(CrossAlign::Center),
     );
     // A fixed hint: the results change without a rebuild, so the hint cannot depend on them.
-    let hint = body_text(t, &tr("Type a title, an author or a word from the description."));
+    // The clear button sits beside it, out of the list, so the list can page.
+    let clear = WidgetPod::new(
+        Button::new(ButtonStyle::Secondary)
+            .text(tr("Clear"))
+            .enabled(has_recent)
+            .on_action("library:search:recent:clear"),
+    )
+    .with_key("library-search-recent-clear");
+    let hint = WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                body_text(t, &tr("Type a title, an author or a word from the description.")),
+                1,
+            )),
+            clear,
+        ])
+        .gap(t.space.sm)
+        .cross_align(CrossAlign::Center),
+    );
     let list = WidgetPod::new(Expanded::new(
         WidgetPod::new(list_covers(results, loader)).with_key("results"),
         1,
@@ -512,7 +605,15 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
 }
 
 /// The details of one book: cover and facts, the description, and the actions.
-pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str) -> WidgetPod {
+/// `remove` is the action that takes the book out of the collection being
+/// viewed. None when the book is not in that collection.
+pub fn details_panel(
+    t: &Theme,
+    book: &Book,
+    cover: Option<Pixmap>,
+    close: &str,
+    remove: Option<String>,
+) -> WidgetPod {
     let title = crate::surfaces::common::display_title(book);
     let mut facts = vec![WidgetPod::new(Label::new(
         title.clone(),
@@ -589,11 +690,21 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
             &format!("library:book:finished:{id}"),
         ),
     ));
-    children.push(button(
+    // The rows keep to four, so the sheet fits the page. Inside a collection the
+    // removal shares the history row.
+    let history = button(
         ButtonStyle::Secondary,
         &tr("Remove from history"),
         &format!("library:book:history:{id}"),
-    ));
+    );
+    children.push(match remove {
+        Some(action) => pair(
+            t,
+            button(ButtonStyle::Secondary, &tr("Remove from collection"), &action),
+            history,
+        ),
+        None => history,
+    });
     children.push(pair(
         t,
         button(
@@ -604,6 +715,57 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
         button(ButtonStyle::Secondary, &tr("Close"), close),
     ));
     sheet(t, &tr("Book details"), children)
+}
+
+/// The bar of select mode: the count of checked books, select all and none, the
+/// two marks, and Done. The buttons that need a checked book are off without one.
+/// A batch in progress does not change them: the screen takes the tap and says so.
+pub fn select_bar(t: &Theme, label: String, checked: usize) -> WidgetPod {
+    let mark = |style: ButtonStyle, text: &str, action: &str, enabled: bool| {
+        WidgetPod::new(Button::new(style).text(text).enabled(enabled).on_action(action))
+            .with_key(action.replace(':', "-"))
+    };
+    let any = checked > 0;
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Label::new(label, t.font.caption.clone(), Tone::InkSecondary))
+                .with_key("select-count"),
+            pair(
+                t,
+                mark(
+                    ButtonStyle::Secondary,
+                    &tr("Select all"),
+                    "library:select:all",
+                    true,
+                ),
+                mark(
+                    ButtonStyle::Secondary,
+                    &tr("Deselect all"),
+                    "library:select:none",
+                    any,
+                ),
+            ),
+            pair(
+                t,
+                mark(
+                    ButtonStyle::Primary,
+                    &tr("Mark as finished"),
+                    "library:select:finished",
+                    any,
+                ),
+                mark(
+                    ButtonStyle::Secondary,
+                    &tr("Mark as unread"),
+                    "library:select:unread",
+                    any,
+                ),
+            ),
+            mark(ButtonStyle::Secondary, &tr("Done"), "library:select:off", true),
+        ])
+        .gap(t.space.sm)
+        .cross_align(CrossAlign::Stretch)
+        .shrink(),
+    )
 }
 
 /// Two buttons side by side, each taking half the row.

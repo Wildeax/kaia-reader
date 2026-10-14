@@ -43,6 +43,7 @@ impl Prefs {
             Some("list") => View::List,
             Some("folders") => View::Folders,
             Some("collections") => View::Collections,
+            Some("series") => View::Series,
             _ => View::Covers,
         };
         let sort = match text("library.sort").as_deref() {
@@ -74,6 +75,7 @@ impl Prefs {
             View::List => "list",
             View::Folders => "folders",
             View::Collections => "collections",
+            View::Series => "series",
         };
         let sort = match self.sort {
             SortChoice::Title => "title",
@@ -123,6 +125,69 @@ pub fn filter_for(prefs: &Prefs) -> Filter {
         collection: prefs.collection,
         ..Filter::default()
     }
+}
+
+/// A series in the Series view: its name as the library spells it, and how many
+/// of its books the lists show.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeriesGroup {
+    pub name: String,
+    pub books: usize,
+}
+
+/// True when the lists show the book: its file is still there, and finished
+/// books are shown.
+fn visible(book: &Book, prefs: &Prefs) -> bool {
+    book.path.exists() && (prefs.show_finished || book.status != Status::Complete)
+}
+
+/// The series of the library, by name. Books with no series are left out. Names
+/// that differ only by case are one series. Each series counts its visible books.
+pub fn series_groups(library: &Library, prefs: &Prefs) -> Vec<SeriesGroup> {
+    let books = library
+        .books(Sort::new(SortKey::Series, false), &Filter::default(), 0, ALL)
+        .unwrap_or_default();
+    let mut groups: Vec<SeriesGroup> = Vec::new();
+    for book in books.iter().filter(|b| visible(b, prefs)) {
+        let Some(name) = book.series.as_deref() else {
+            continue;
+        };
+        match groups.last_mut() {
+            Some(group) if group.name.eq_ignore_ascii_case(name) => group.books += 1,
+            _ => groups.push(SeriesGroup {
+                name: name.to_string(),
+                books: 1,
+            }),
+        }
+    }
+    groups
+}
+
+/// The visible books of one series, in series order: by number, then by title.
+pub fn series_books(library: &Library, prefs: &Prefs, name: &str) -> Vec<Book> {
+    let filter = Filter {
+        series: Some(name.to_string()),
+        ..Filter::default()
+    };
+    library
+        .books(Sort::new(SortKey::Series, false), &filter, 0, ALL)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|b| visible(b, prefs))
+        .collect()
+}
+
+/// True when the book is in the collection with id `collection`.
+pub fn in_collection(library: &Library, book_id: i64, collection: i64) -> bool {
+    let filter = Filter {
+        collection: Some(collection),
+        ..Filter::default()
+    };
+    library
+        .books(Sort::new(SortKey::Title, false), &filter, 0, ALL)
+        .unwrap_or_default()
+        .iter()
+        .any(|b| b.id == book_id)
 }
 
 /// Every book whose file is still there, by title. The folder tree reads these.

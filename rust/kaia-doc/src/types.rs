@@ -125,6 +125,10 @@ pub enum LinkTarget {
 pub struct Link {
     pub bbox: RectF,
     pub target: LinkTarget,
+    /// Stable internal destination, when the engine supplies one.
+    pub location: Option<Location>,
+    /// Plain footnote text. None means this link should navigate normally.
+    pub note: Option<String>,
 }
 
 /// Page margins in points.

@@ -67,6 +67,7 @@ fn main() {
     }
     println!("cargo:rerun-if-changed=csrc/kaia_cre.cpp");
     println!("cargo:rerun-if-changed=csrc/kaia_cre.h");
+    println!("cargo:rerun-if-changed=csrc/footnotes.h");
 
     let paths = locate(&repo);
 

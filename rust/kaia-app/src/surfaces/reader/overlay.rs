@@ -11,7 +11,7 @@ use crate::slider::Slider;
 use kaia_events::ShowOpts;
 use kaia_gfx::Size;
 use kaia_i18n::{format as tr_format, tr};
-use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Row, Spacer};
+use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Padding, Row, Spacer};
 use kaia_ui::controls::ToolButton;
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, WidgetPod, Window};
@@ -33,6 +33,7 @@ pub struct OverlayModel {
     /// one line such as `12 min left in chapter`. Empty when the book has no pages.
     pub time_left: String,
     pub bookmarked: bool,
+    pub can_go_back: bool,
 }
 
 /// The overlay surface. The reader keeps a handle to its window, so it can update the bars.
@@ -92,6 +93,21 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
     let bar_pad = Insets::symmetric(t.space.lg, t.space.sm);
 
     let home = tool("home", &tr("Home"), "nav:home", "overlay-home");
+    // A zero-gap group keeps the original bar spacing when Back is hidden.
+    let back = WidgetPod::new(Padding::new(
+        tool("chevron.left", &tr("Back"), "reader:back", "overlay-back"),
+        Insets {
+            left: sp,
+            ..Insets::all(0)
+        },
+    ))
+    .visible(model.can_go_back);
+    let history = WidgetPod::new(
+        Row::new(vec![home, back])
+            .shrink()
+            .cross_align(CrossAlign::Center),
+    )
+    .with_key("overlay-history");
     let title = WidgetPod::new(Label::new(
         model.title.clone(),
         t.font.body_bold.clone(),
@@ -111,7 +127,7 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
     let more = tool("appbar.menu", &tr("More"), "reader:panel:more", "overlay-more");
     let top = WidgetPod::new(
         Row::new(vec![
-            home,
+            history,
             WidgetPod::new(Expanded::new(title, 1)),
             search,
             bookmark,

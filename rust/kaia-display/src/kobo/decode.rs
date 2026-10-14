@@ -26,8 +26,7 @@
 //! # Keys
 //!
 //! Key codes come from KOReader's Kobo `event_map` (`frontend/device/kobo/device.lua`).
-//! Only the codes that map to a [`Key`] are decoded. The light button (90) has no
-//! [`Key`] variant and is dropped.
+//! The light button emits a separate event on release.
 
 use kaia_gfx::{Point, Size};
 use kaia_input::{Key, KeyEvent, Phase, TouchEvent};
@@ -54,7 +53,7 @@ pub mod key {
     /// KEY_H on the Elipsa and KEY_F1 on the other boards, both mapped to SleepCover.
     pub const SLEEP_COVER_A: u16 = 35;
     pub const SLEEP_COVER_B: u16 = 59;
-    /// LightButton. No [`super::Key`] variant exists for it, so it is dropped.
+    /// LightButton, handled on release.
     pub const LIGHT_BUTTON: u16 = 90;
     /// Home.
     pub const HOME: u16 = 102;
@@ -85,6 +84,7 @@ pub struct RawEvent {
 /// One decoded key or a complete touch frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DecodedEvent {
+    Light,
     Key(KeyEvent),
     TouchFrame(Vec<TouchEvent>),
 }
@@ -197,6 +197,7 @@ impl EvdevDecoder {
         self.feed_frames(events)
             .into_iter()
             .flat_map(|event| match event {
+                DecodedEvent::Light => vec![InputEvent::Light],
                 DecodedEvent::Key(key) => vec![InputEvent::Key(key)],
                 DecodedEvent::TouchFrame(frame) => frame.into_iter().map(InputEvent::Touch).collect(),
             })
@@ -210,7 +211,9 @@ impl EvdevDecoder {
             match ev.kind {
                 code::EV_ABS => self.abs(ev),
                 code::EV_KEY => {
-                    if let Some(key) = key_event(ev) {
+                    if ev.code == key::LIGHT_BUTTON && ev.value == KEY_RELEASE {
+                        out.push(DecodedEvent::Light);
+                    } else if let Some(key) = key_event(ev) {
                         out.push(DecodedEvent::Key(key));
                     }
                 }
@@ -728,14 +731,16 @@ mod tests {
     }
 
     #[test]
-    fn autorepeat_unknown_and_light_keys_are_dropped() {
+    fn light_release_is_decoded_but_presses_repeats_and_unknown_keys_are_dropped() {
         let mut d = EvdevDecoder::new(identity());
         let out = d.feed(&[
             key(key::RPG_FWD, 2, 1),
             key(10, KEY_PRESS, 2),
-            key(key::LIGHT_BUTTON, KEY_RELEASE, 3),
+            key(key::LIGHT_BUTTON, KEY_PRESS, 3),
+            key(key::LIGHT_BUTTON, 2, 4),
+            key(key::LIGHT_BUTTON, KEY_RELEASE, 5),
         ]);
-        assert!(out.is_empty());
+        assert_eq!(out, vec![InputEvent::Light]);
     }
 
     #[test]

@@ -158,10 +158,6 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let Some(value) = args.first().cloned() else {
         return Outcome::Handled;
     };
-    if key == keys::DISPLAY_ROTATION_LOCK {
-        env.toast(tr("Automatic rotation is not available yet."), 3.0);
-        return Outcome::Handled;
-    }
     env.services.settings.save(key, value);
     if !key.starts_with("sync.") {
         save(env);
@@ -184,10 +180,6 @@ fn pick(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     if value.as_str() == Some("") {
         env.services.settings.del(key);
     } else {
-        if key == keys::DISPLAY_ROTATION_LOCK {
-            env.toast(tr("Automatic rotation is not available yet."), 3.0);
-            return Outcome::Handled;
-        }
         env.services.settings.save(key, value);
     }
     save(env);

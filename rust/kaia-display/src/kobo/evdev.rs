@@ -177,6 +177,7 @@ impl InputSource for EvdevInput {
                 .feed_frames(&raw)
                 .into_iter()
                 .map(|decoded| match decoded {
+                    DecodedEvent::Light => InputEvent::Light,
                     DecodedEvent::Key(k) => InputEvent::Key(k),
                     DecodedEvent::TouchFrame(frame) => InputEvent::TouchFrame(frame),
                 })

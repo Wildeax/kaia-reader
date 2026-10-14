@@ -15,6 +15,7 @@
 
 mod commands;
 mod dict;
+mod navigation;
 mod overlay;
 pub mod page;
 pub mod panels;
@@ -554,6 +555,33 @@ impl Surface for ReaderSurface {
             self.core.borrow_mut().events.push_back(ev.clone());
             return Outcome::Handled;
         }
+        if ev.name == "ScreenResized" {
+            // A rotation. The session is on the worker while a job runs, so the
+            // event waits for it, as the sync events above do.
+            if self.core.borrow().job.is_some() {
+                self.core.borrow_mut().events.push_back(ev.clone());
+                return Outcome::Handled;
+            }
+            let dimension = |i: usize| ev.args.get(i).and_then(Value::as_i64).unwrap_or(0).max(0) as u32;
+            let size = kaia_gfx::Size::new(dimension(0), dimension(1));
+            let mut c = self.core.borrow_mut();
+            c.viewport = size;
+            let result = c
+                .session
+                .as_mut()
+                .map(|s| s.set_viewport(size).map(|()| s.is_reflowable()));
+            match result {
+                // A reflowable book lays out again for the new size. A fixed-layout
+                // book fits its pages to the new size on the next paint.
+                Some(Ok(reflowable)) => c.layout_pending |= reflowable,
+                Some(Err(e)) => env.notice(tr_format(&tr("cannot resize the page: %1"), &[&e.to_string()])),
+                None => {}
+            }
+            c.repaint_page(env.ctx, PaintHint::Full);
+            drop(c);
+            schedule_if_pending(&self.core, env.ctx);
+            return Outcome::Handled;
+        }
         if matches!(ev.name.as_str(), "Suspend" | "SaveState" | "Resume") {
             self.persistence.tick(&mut self.core.borrow_mut(), env);
             self.persistence.event(&ev.name, env);
@@ -799,6 +827,28 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     c.clear_selection(env.ctx);
                     return Outcome::Handled;
                 }
+                if let Some(link) = c
+                    .links
+                    .iter()
+                    .find(|(rect, _)| rect.contains(Point::new(x as i32, y as i32)))
+                    .map(|(_, link)| link.clone())
+                {
+                    if let Some(text) = link.note {
+                        let window = panels::link_text(env.services, env.screen, &tr("Footnote"), &text);
+                        return push_panel(rc, &mut c, env.ctx, window);
+                    }
+                    match link.target {
+                        kaia_book::LinkTarget::Page(page) => {
+                            c.go_to(env.ctx, link.location.unwrap_or(kaia_book::Location::Page(page)));
+                            return Outcome::Handled;
+                        }
+                        kaia_book::LinkTarget::Uri(uri) => {
+                            let text = tr_format(&tr("Invalid or external link:\n%1"), &[&uri]);
+                            let window = panels::link_text(env.services, env.screen, &tr("Link"), &text);
+                            return push_panel(rc, &mut c, env.ctx, window);
+                        }
+                    }
+                }
                 let w = f64::from(env.screen.w);
                 let h = f64::from(env.screen.h);
                 let centre = x >= w / 3.0 && x < 2.0 * w / 3.0 && y >= h / 3.0 && y < 2.0 * h / 3.0;
@@ -821,6 +871,32 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         x >= w / 3.0
                     },
                 )
+            }
+            Command::Back => {
+                c.back();
+                if c.overlay.is_some() {
+                    Outcome::Navigate(Nav::Pop)
+                } else {
+                    Outcome::Handled
+                }
+            }
+            Command::GotoOpen => {
+                let window = panels::go_to(env.services, env.screen);
+                show_panel(rc, &mut c, env.ctx, window, true)
+            }
+            Command::GotoPage | Command::GotoPercent => {
+                let Some(layer) = c.panel.as_ref() else {
+                    return Outcome::Handled;
+                };
+                let text = read_field(&layer.window, env.ctx, "goto-field").unwrap_or_default();
+                let count = c.session.as_ref().map_or(0, |s| s.page_count());
+                let percent = command == Command::GotoPercent || text.trim().ends_with('%');
+                let Some(page) = navigation::entered_page(&text, percent, count) else {
+                    env.toast(tr("Invalid page number or percentage"), 3.0);
+                    return Outcome::Handled;
+                };
+                c.go_to(env.ctx, kaia_book::Location::Page(page));
+                Outcome::Navigate(Nav::Pop)
             }
             Command::Next => step(rc, &mut c, env, true),
             Command::Prev => step(rc, &mut c, env, false),
@@ -1104,14 +1180,14 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                             5.0,
                         );
                     }
-                    _ => {
-                        if let Some(session) = c.session.as_ref() {
-                            if let Err(e) = persistence::update_index(session, c.book, env) {
-                                env.notice(e);
-                            }
+                    Some(Ok(())) => {
+                        if let Err(e) = crate::book_index::mark_finished(env.services, c.book) {
+                            env.notice(e);
+                            return Outcome::Handled;
                         }
                         env.toast(tr("Marked as finished"), 2.0);
                     }
+                    None => return Outcome::Handled,
                 }
                 Outcome::Navigate(Nav::Pop)
             }

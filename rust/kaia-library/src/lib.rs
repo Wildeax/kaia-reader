@@ -16,8 +16,8 @@
 //! # Schema
 //!
 //! The schema version is `PRAGMA user_version`. See `schema.rs` for the tables.
-//! Metadata fields that `kaia-doc` does not expose yet (series, language,
-//! description) are NULL.
+//! Metadata fields that `kaia-doc` does not expose yet (language, description)
+//! are NULL. Series comes from the EPUB package.
 
 mod error;
 mod extract;
@@ -42,6 +42,9 @@ pub use types::{
 /// Time allowed for extracting one book. Passed to [`Library::set_extract_budget`]
 /// to change it.
 pub const DEFAULT_EXTRACT_BUDGET: Duration = Duration::from_secs(10);
+
+/// Distinct searches that [`Library::record_search`] keeps.
+pub const RECENT_SEARCHES: usize = 10;
 
 /// A handle on the library database.
 pub struct Library {

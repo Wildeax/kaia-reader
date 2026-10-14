@@ -10,6 +10,7 @@ pub(super) struct Frame {
     pub page: Option<Arc<Pixmap>>,
     pub marks: Vec<Mark>,
     pub hits: Vec<Rect>,
+    pub links: Vec<(Rect, kaia_book::Link)>,
     pub selection: Option<Selection>,
     pub error: Option<WorkError>,
     pub stickers: Vec<super::stickers::Drawing>,
@@ -75,8 +76,22 @@ pub(super) fn spawn(
                 }
             }
             let mut hits = Vec::new();
+            let mut links = Vec::new();
             let page = session.current().page;
             if let Ok(transform) = session.page_transform(viewport) {
+                let dx = (viewport.w as i32 - transform.image.w as i32) / 2;
+                let dy = (viewport.h as i32 - transform.image.h as i32) / 2;
+                if let Ok(page_links) = session.links() {
+                    links = page_links
+                        .into_iter()
+                        .map(|link| {
+                            let mut rect = transform.to_screen(link.bbox);
+                            rect.x += dx;
+                            rect.y += dy;
+                            (rect, link)
+                        })
+                        .collect();
+                }
                 for result in session.search_results().iter().filter(|r| r.page == page) {
                     hits.extend(result.rects.iter().map(|r| transform.to_screen(*r)));
                 }
@@ -99,6 +114,7 @@ pub(super) fn spawn(
                 page: rendered.ok(),
                 marks,
                 hits,
+                links,
                 selection,
                 error,
             }

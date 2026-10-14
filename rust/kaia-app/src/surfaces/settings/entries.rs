@@ -16,6 +16,12 @@ use super::commands::Light;
 /// One line of a section.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Entry {
+    DeviceToggle {
+        key: &'static str,
+        label: String,
+        on: bool,
+        enabled: bool,
+    },
     /// A small heading above a group of rows.
     Heading(String),
     /// A short explanation. Wraps to as many lines as it needs.
@@ -103,6 +109,18 @@ const BAR_LABEL_ROW_HEIGHTS: u32 = 2;
 /// The widget for one entry of a section.
 pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
     match entry {
+        Entry::DeviceToggle {
+            key,
+            label,
+            on,
+            enabled,
+        } => WidgetPod::new(
+            ListRow::new(label.clone())
+                .toggle(*on)
+                .enabled(*enabled)
+                .on_action(format!("settings:set:{key}")),
+        )
+        .with_key(format!("set-{key}")),
         // A heading starts a new group, so it has a space above it.
         Entry::Heading(text) => WidgetPod::new(Padding::new(
             WidgetPod::new(Label::new(text.clone(), t.font.label.clone(), Tone::InkSecondary)),

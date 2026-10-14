@@ -13,6 +13,10 @@ pub enum InputEvent {
     /// The gesture detector applies all of them before it runs, like KOReader.
     TouchFrame(Vec<TouchEvent>),
     Key(KeyEvent),
+    /// The hardware light button was released.
+    Light,
+    /// An orientation sensor reported a new orientation.
+    Orientation(crate::Rotation),
     /// The window was closed or the app should exit.
     Quit,
     /// The logical screen size changed, for example after a rotation.

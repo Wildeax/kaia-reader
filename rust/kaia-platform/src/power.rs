@@ -281,6 +281,28 @@ impl PowerManager {
         )])
     }
 
+    /// Clears the alarm, syncs storage and asks init to power off on MTK.
+    pub fn power_off(&self) -> Plan {
+        let Some(kobo) = &self.kobo else {
+            return Plan::skipped(NO_POWER_MANAGEMENT);
+        };
+        let source = "frontend/device/kobo/device.lua:1529-1540 (powerOff)";
+        let mut plan = self.clear_wakeup();
+        let mut sync = Step::run("sync", &[], None, &[], source);
+        sync.on_error = OnError::Abort;
+        plan.steps.push(sync);
+        let mut off = Step::run(
+            "poweroff",
+            if kobo.mtk { &[] } else { &["-f"] },
+            None,
+            &[],
+            source,
+        );
+        off.on_error = OnError::Abort;
+        plan.steps.push(off);
+        plan
+    }
+
     /// Clears the RTC alarm. Run it on power off, as `Kobo:powerOff` does, and
     /// when a scheduled wakeup is cancelled.
     ///
@@ -356,6 +378,24 @@ mod tests {
         let path = base.join(rel);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn power_off_clears_alarm_then_syncs_then_calls_init_on_mtk() {
+        let dir = tempfile::tempdir().unwrap();
+        let pm = PowerManager::kobo(&Root::new(dir.path()), dir.path().into(), vec![], true);
+        let plan = pm.power_off();
+        assert_eq!(plan.steps.len(), 3);
+        assert_eq!(plan.steps[0].action, Action::ClearWakeAlarm);
+        assert!(
+            matches!(&plan.steps[1].action, Action::Run { program, args, .. } if program == "sync" && args.is_empty())
+        );
+        assert!(
+            matches!(&plan.steps[2].action, Action::Run { program, args, .. } if program == "poweroff" && args.is_empty())
+        );
+        assert_eq!(plan.steps[1].on_error, OnError::Abort);
+        assert_eq!(plan.steps[2].on_error, OnError::Abort);
+        assert!(PowerManager::none().power_off().is_skipped());
     }
 
     #[test]

@@ -146,6 +146,8 @@ impl Document for MupdfDocument {
             .into_iter()
             .map(|l| Link {
                 bbox: rect(l.bbox),
+                location: l.page.map(Location::Page),
+                note: None,
                 target: match l.page {
                     Some(p) => LinkTarget::Page(p),
                     None => LinkTarget::Uri(l.uri),

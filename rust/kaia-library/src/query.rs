@@ -117,6 +117,10 @@ impl Library {
             args.push(Value::Text(lo));
             args.push(Value::Text(hi));
         }
+        if let Some(series) = &filter.series {
+            sql.push_str(" AND series IS NOT NULL AND series COLLATE NOCASE = ?");
+            args.push(Value::Text(series.trim().to_string()));
+        }
 
         let dir = if sort.descending { "DESC" } else { "ASC" };
         let order = match sort.key {
@@ -124,7 +128,9 @@ impl Library {
             SortKey::Author => format!(
                 "COALESCE(authors, '') COLLATE NOCASE {dir}, COALESCE(title, path) COLLATE NOCASE, id"
             ),
-            SortKey::Added => format!("added_at {dir}, id"),
+            // Ties follow the same direction, so the book indexed last comes first
+            // when the list is newest first.
+            SortKey::Added => format!("added_at {dir}, id {dir}"),
             SortKey::LastRead => {
                 format!("last_opened_at IS NULL, last_opened_at {dir}, {LAST_OPEN_SEQ} {dir}, id")
             }
@@ -172,6 +178,69 @@ impl Library {
             cols("books.")
         );
         self.query_books(&sql, params![expr, limit as i64])
+    }
+
+    /// The book that follows `book_id` in its series: the book with the smallest
+    /// series number above the book's own, and then the first by title. Books
+    /// with no number do not count. None when the book has no series number, or
+    /// when no other book in the library has a higher one.
+    pub fn next_in_series(&self, book_id: i64) -> Result<Option<Book>> {
+        let sql = format!(
+            "SELECT {} FROM books
+             JOIN (SELECT series, series_index FROM books WHERE id = ?1) AS cur
+             WHERE cur.series_index IS NOT NULL
+               AND books.series IS NOT NULL
+               AND books.series COLLATE NOCASE = cur.series COLLATE NOCASE
+               AND books.series_index > cur.series_index
+               AND books.id != ?1
+               AND books.missing_since IS NULL
+             ORDER BY books.series_index, COALESCE(books.title, books.path) COLLATE NOCASE, books.id
+             LIMIT 1",
+            cols("books.")
+        );
+        Ok(self.conn.query_row(&sql, [book_id], book_from_row).optional()?)
+    }
+
+    /// Records a search. The text is trimmed. A search that matches an earlier
+    /// one ignoring case replaces it, so each search is kept once and moves to the
+    /// top. Only the newest [`RECENT_SEARCHES`](crate::RECENT_SEARCHES) are kept.
+    /// Blank text is not recorded.
+    pub fn record_search(&mut self, query: &str) -> Result<()> {
+        let text = query.trim();
+        if text.is_empty() {
+            return Ok(());
+        }
+        let key = text.to_lowercase();
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute("DELETE FROM recent_searches WHERE key = ?1", [&key])?;
+        tx.execute(
+            "INSERT INTO recent_searches (query, key) VALUES (?1, ?2)",
+            params![text, key],
+        )?;
+        tx.execute(
+            "DELETE FROM recent_searches WHERE id NOT IN
+             (SELECT id FROM recent_searches ORDER BY id DESC LIMIT ?1)",
+            [crate::RECENT_SEARCHES as i64],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The recent searches, newest first, at most `limit` of them.
+    pub fn recent_searches(&self, limit: usize) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT query FROM recent_searches ORDER BY id DESC LIMIT ?1")?;
+        let rows = stmt.query_map([limit as i64], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Removes every recent search. Books and their state do not change.
+    pub fn clear_recent_searches(&mut self) -> Result<()> {
+        self.conn.execute("DELETE FROM recent_searches", [])?;
+        Ok(())
     }
 
     /// All collections by name, with the number of books in each.
@@ -449,16 +518,36 @@ impl Library {
         Ok(())
     }
 
-    /// Sets the reading status of a book.
+    /// Sets the reading status of a book. A book set to `New` also leaves the
+    /// reading history, as [`Library::set_status_many`] describes.
     pub fn set_status(&mut self, book_id: i64, status: Status) -> Result<()> {
-        let n = self.conn.execute(
-            "UPDATE books SET status = ?2 WHERE id = ?1",
-            params![book_id, status.as_str()],
-        )?;
-        if n == 0 {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if set_status_in(&tx, book_id, status)? == 0 {
             return Err(LibraryError::NotFound(book_id));
         }
+        tx.commit()?;
         Ok(())
+    }
+
+    /// Sets the reading status of many books in one transaction and returns how
+    /// many books changed. An id with no book is skipped, so a selection that a
+    /// scan has since changed still applies to the other books.
+    ///
+    /// A book set to `New` (unread) also leaves the reading history and loses its
+    /// last-opened time, so it no longer shows under Recent or Continue. Its
+    /// progress stays, because the reading position is kept.
+    pub fn set_status_many(&mut self, book_ids: &[i64], status: Status) -> Result<usize> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut changed = 0;
+        for &id in book_ids {
+            changed += set_status_in(&tx, id, status)?;
+        }
+        tx.commit()?;
+        Ok(changed)
     }
 
     /// The JPEG cover of a book at `size`. None when the book has no cover, when
@@ -527,6 +616,21 @@ pub(crate) fn fts_query(input: &str) -> Option<String> {
 
 fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || ('\u{0300}'..='\u{036F}').contains(&c)
+}
+
+/// Sets the status of one book on `conn`, which is normally a transaction.
+/// Returns the rows changed: 0 when no book has the id. See
+/// [`Library::set_status_many`] for what `New` clears.
+fn set_status_in(conn: &Connection, book_id: i64, status: Status) -> Result<usize> {
+    let n = conn.execute(
+        "UPDATE books SET status = ?2 WHERE id = ?1",
+        params![book_id, status.as_str()],
+    )?;
+    if n > 0 && status == Status::New {
+        conn.execute("DELETE FROM history WHERE book_id = ?1", [book_id])?;
+        conn.execute("UPDATE books SET last_opened_at = NULL WHERE id = ?1", [book_id])?;
+    }
+    Ok(n)
 }
 
 /// Fails with `NotFound` when no book has this id.

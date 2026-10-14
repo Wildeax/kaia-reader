@@ -188,6 +188,10 @@ impl Ramp {
 pub trait Frontlight {
     /// Whether the light is on.
     fn is_on(&self) -> bool;
+    /// Whether the current fade ends with the light on, or its state without a fade.
+    fn target_is_on(&self) -> bool {
+        self.is_on()
+    }
     /// Intensity 0 to 100. Returns 0 while the light is off, as KOReader's `frontlightIntensity` does.
     fn intensity(&self) -> u8;
     /// Sets intensity. Values above 100 are clamped. 0 turns the light off.
@@ -345,6 +349,11 @@ fn warmth_to_native(warmth: u8, nl_max: u8) -> u8 {
 impl<W: SysfsWriter> Frontlight for SysfsFrontlight<W> {
     fn is_on(&self) -> bool {
         self.on
+    }
+
+    fn target_is_on(&self) -> bool {
+        self.ramping
+            .map_or(self.on, |direction| direction == RampDirection::On)
     }
 
     fn intensity(&self) -> u8 {

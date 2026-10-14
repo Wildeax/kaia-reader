@@ -160,6 +160,9 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
         Some(book) => sections.push(hero_section(env, book)),
         None => sections.push(empty_section(&t)),
     }
+    if let Some(next) = next_in_series(lib, &recent, hero.as_ref()) {
+        sections.push(next_section(env, &next));
+    }
     if let Some(shelf) = shelf_section(env, &recent, hero.as_ref()) {
         sections.push(shelf);
     }
@@ -207,6 +210,70 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
         Insets::symmetric(t.space.lg, t.space.md),
     );
     window(services, env.screen, page)
+}
+
+/// The next book in the series of the book read most recently. It is offered when
+/// that book is finished or is the book to continue, and the next number of the
+/// series is in the library and not started yet.
+fn next_in_series(lib: &Library, recent: &[Book], hero: Option<&Book>) -> Option<Book> {
+    let last = recent.first()?;
+    let current = hero.is_some_and(|h| h.id == last.id);
+    if last.status != Status::Complete && !current {
+        return None;
+    }
+    // The hero is already on the page, so it is not offered again.
+    lib.next_in_series(last.id)
+        .ok()?
+        .filter(|b| b.status == Status::New && b.path.exists() && hero.is_none_or(|h| h.id != b.id))
+}
+
+/// The next book in its series: a label, then a card that opens the book.
+fn next_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
+    let t = &env.services.theme;
+    let title = data::title(book);
+    let cover = data::cover(&env.services.library, book.id, CoverSize::Small);
+    let cover_box = WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(CoverImage::new(title.clone(), cover))))
+            .width(t.scale.dp(72))
+            .height(t.scale.dp(108)),
+    );
+    let mut details = vec![WidgetPod::new(Label::new(
+        title,
+        t.font.book_title.clone(),
+        Tone::Ink,
+    ))];
+    if let Some(series) = book.series.as_deref() {
+        let number = book.series_index.map(|n| n.to_string()).unwrap_or_default();
+        details.push(WidgetPod::new(Label::new(
+            tr_format(&tr("%1, book %2"), &[series, number.as_str()]),
+            t.font.caption.clone(),
+            Tone::InkSecondary,
+        )));
+    }
+    let row = Row::new(vec![
+        cover_box,
+        WidgetPod::new(Expanded::new(
+            WidgetPod::new(Column::new(details).gap(t.space.xs).shrink()),
+            1,
+        )),
+    ])
+    .gap(t.space.md);
+    let card =
+        WidgetPod::new(Pressable::new(WidgetPod::new(row)).tap(format!("open_book:{}", book.id), Vec::new()))
+            .with_key("next-in-series");
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Label::new(
+                tr("Next in series"),
+                t.font.label.clone(),
+                Tone::InkSecondary,
+            )),
+            card,
+        ])
+        .gap(t.space.md)
+        .cross_align(CrossAlign::Stretch)
+        .shrink(),
+    )
 }
 
 /// The most recently added book, for a library nobody has opened yet.

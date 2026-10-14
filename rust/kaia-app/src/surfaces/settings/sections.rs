@@ -91,6 +91,11 @@ fn reading(services: &Services) -> Vec<Entry> {
             unit: StepUnit::KoreaderUnits,
         },
         Entry::Heading(tr("Page turns")),
+        Entry::Toggle {
+            key: keys::READING_INVERT_PAGE_BUTTONS,
+            label: tr("Invert page buttons"),
+            on: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
+        },
         Entry::Radio {
             key: keys::READING_TAP_ZONES,
             options: labels(keys::READING_TAP_ZONES),
@@ -155,9 +160,21 @@ fn display(services: &Services) -> Vec<Entry> {
     out.push(Entry::Text(tr(
         "Color rendering applies on the color panel only. Grayscale panels ignore it.",
     )));
-    out.push(Entry::Text(tr(
-        "Automatic rotation is not available yet. The screen keeps its current orientation.",
-    )));
+    out.push(Entry::Toggle {
+        key: keys::DISPLAY_ROTATION_LOCK,
+        label: tr("Lock orientation"),
+        on: keys::bool_or(s, keys::DISPLAY_ROTATION_LOCK, false),
+    });
+    out.push(Entry::Heading(tr("Orientation")));
+    out.push(Entry::Radio {
+        key: keys::DISPLAY_ROTATION,
+        options: super::quick::orientation_labels(),
+        selected: (keys::number_or(
+            s,
+            keys::DISPLAY_ROTATION,
+            f64::from(services.platform.device.startup_rotation_degrees()),
+        ) / 90.0) as usize,
+    });
     out.push(Entry::Heading(tr("Language")));
     let current = crate::i18n::available(&services.catalog_root)
         .into_iter()
@@ -344,18 +361,45 @@ fn day_bar(day: &DayTotal, longest: i64) -> Entry {
     }
 }
 
+fn idle_choices(s: &kaia_events::Settings, key: &'static str, default: f64) -> Entry {
+    let value = keys::number_or(s, key, default);
+    Entry::Radio {
+        key,
+        options: keys::IDLE_MINUTES
+            .iter()
+            .map(|n| {
+                if *n == 0 {
+                    tr("Never")
+                } else {
+                    tr_format(&tr("%1 min"), &[&n.to_string()])
+                }
+            })
+            .collect(),
+        selected: keys::IDLE_MINUTES
+            .iter()
+            .position(|n| f64::from(*n) == value)
+            .unwrap_or(0),
+    }
+}
+
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     vec![
-        Entry::Heading(tr("Sleep")),
-        Entry::Stepper {
-            key: keys::DEVICE_SLEEP_MINUTES,
-            label: tr("Sleep after"),
-            value: keys::number_or(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
-            min: 1.0,
-            max: 120.0,
-            step: 1.0,
-            unit: StepUnit::Minutes,
+        Entry::Heading(tr("Sleep after")),
+        idle_choices(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
+        Entry::Heading(tr("Power off after")),
+        idle_choices(s, keys::DEVICE_POWER_OFF_MINUTES, 0.0),
+        Entry::Toggle {
+            key: keys::DEVICE_SLEEP_COVER,
+            label: tr("Sleep cover"),
+            on: keys::bool_or(s, keys::DEVICE_SLEEP_COVER, true),
+        },
+        Entry::DeviceToggle {
+            key: keys::DEVICE_PAGE_BUTTON_WAKE,
+            label: tr("Wake with page buttons"),
+            on: services.platform.supports_page_button_wake()
+                && keys::bool_or(s, keys::DEVICE_PAGE_BUTTON_WAKE, false),
+            enabled: services.platform.supports_page_button_wake(),
         },
         Entry::Heading(tr("Sleep screen")),
         Entry::Radio {

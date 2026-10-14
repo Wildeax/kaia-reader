@@ -107,10 +107,14 @@ pub(super) fn run(options: Options) -> Result<()> {
             for bytes in uevents.drain()? {
                 if let Some(event) = usb::classify_bytes(&bytes) {
                     eprintln!("kaia: USB {event:?}");
+                    app.usb_event(event);
                     match event {
                         UsbEvent::PluggedIntoHost => {
                             eprintln!("kaia: saving and returning to Nickel for USB");
                             return Ok(());
+                        }
+                        UsbEvent::UnpluggedFromHost => {
+                            app.broadcast_app(kaia_events::Event::new("NotCharging"));
                         }
                         UsbEvent::Charging | UsbEvent::NotCharging => {
                             app.broadcast_app(kaia_events::Event::new(if event == UsbEvent::Charging {

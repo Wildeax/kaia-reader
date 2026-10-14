@@ -165,6 +165,11 @@ impl Platform {
         })
     }
 
+    /// No verified MT8113T page-button wake node is known yet.
+    pub fn supports_page_button_wake(&self) -> bool {
+        false
+    }
+
     /// Runs a plan on this device. Sleeps block the calling thread.
     pub fn run_plan(&mut self, plan: &Plan) -> Outcome {
         execute(plan, &mut self.io, &mut |d| std::thread::sleep(d))

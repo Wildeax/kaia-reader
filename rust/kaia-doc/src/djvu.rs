@@ -158,7 +158,12 @@ impl Document for DjvuDocument {
                     _ => continue,
                 };
                 if let Some(bbox) = link_rect(&items[3], info) {
-                    links.push(Link { bbox, target });
+                    links.push(Link {
+                        bbox,
+                        target,
+                        location: None,
+                        note: None,
+                    });
                 }
             }
         }

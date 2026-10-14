@@ -354,6 +354,12 @@ pub fn more(services: &Services, screen: Size) -> Window {
         Column::new(vec![
             button(
                 ButtonStyle::Secondary,
+                &tr("Go to page"),
+                "reader:goto:open",
+                "more-goto",
+            ),
+            button(
+                ButtonStyle::Secondary,
                 &tr("Go to the start"),
                 "reader:more:start",
                 "more-start",
@@ -681,12 +687,12 @@ pub fn note(services: &Services, screen: Size, word: &str) -> Window {
     )
 }
 
-/// The end of book sheet: mark the book as finished, or go back to the Library.
+/// The end of book sheet: finish, keep reading, or close the book.
 pub fn end_of_book(services: &Services, screen: Size) -> Window {
     let t = &services.theme;
     let children = vec![
         WidgetPod::new(Paragraph::new(
-            tr("You have reached the end of this book."),
+            tr("You've reached the end of the document.\nWhat would you like to do?"),
             t.font.body.clone(),
             Tone::Ink,
         )),
@@ -698,9 +704,15 @@ pub fn end_of_book(services: &Services, screen: Size) -> Window {
         ),
         button(
             ButtonStyle::Secondary,
-            &tr("Back to Library"),
+            &tr("Close book"),
             "nav:library",
             "end-library",
+        ),
+        button(
+            ButtonStyle::Secondary,
+            &tr("Keep reading"),
+            "reader:panel:close",
+            "end-keep",
         ),
     ];
     sheet(services, screen, Some(&tr("End of book")), children, None)
@@ -923,5 +935,58 @@ pub fn sticker_note(services: &Services, screen: Size, text: &str) -> Window {
         Some(&tr("Text note")),
         children,
         Some(WRITING_PERCENT),
+    )
+}
+
+/// Page or percent entry, using KOReader's two explicit actions.
+pub fn go_to(services: &Services, screen: Size) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Enter page number or percentage")),
+        vec![
+            WidgetPod::new(TextField::new().placeholder(tr("Enter page number or percentage")))
+                .with_key("goto-field")
+                .focusable(true),
+            button(
+                ButtonStyle::Primary,
+                &tr("Go to page"),
+                "reader:goto:page",
+                "goto-page",
+            ),
+            button(
+                ButtonStyle::Secondary,
+                &tr("Go to %"),
+                "reader:goto:percent",
+                "goto-percent",
+            ),
+            WidgetPod::new(OnScreenKeyboard::new(&ENGLISH)),
+        ],
+        Some(WRITING_PERCENT),
+    )
+}
+
+/// Notes and addresses use a paged sheet so all of the text remains reachable.
+pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> Window {
+    let width = screen
+        .w
+        .saturating_sub(2 * services.theme.space.lg + 2 * services.theme.line.hairline)
+        .max(1);
+    let lines = dictionary_lines(services, text, width);
+    let list = PagedList::new(lines, |line: &String, t| {
+        WidgetPod::new(
+            Paragraph::new(line.trim_end_matches('\n'), t.font.body.clone(), Tone::Ink).max_lines(usize::MAX),
+        )
+    })
+    .labels(page_labels());
+    sheet(
+        services,
+        screen,
+        Some(title),
+        vec![WidgetPod::new(Expanded::new(
+            WidgetPod::new(list).with_key("link-text"),
+            1,
+        ))],
+        Some(TALL_PERCENT),
     )
 }

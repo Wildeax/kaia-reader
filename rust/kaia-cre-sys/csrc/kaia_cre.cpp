@@ -25,6 +25,7 @@
 #include "lvtinydom.h"
 #include "hyphman.h"
 #include "props.h"
+#include "footnotes.h"
 
 extern LVFontManager *fontMan;
 
@@ -563,6 +564,8 @@ int kaia_cre_page_links(kaia_cre_doc *doc, kaia_cre_link_box **out, size_t *coun
         auto release = [&boxes]() {
             for (auto &b : boxes) {
                 std::free(b.href);
+                std::free(b.xpointer);
+                std::free(b.note);
             }
             boxes.clear();
         };
@@ -571,10 +574,35 @@ int kaia_cre_page_links(kaia_cre_doc *doc, kaia_cre_link_box **out, size_t *coun
                 ldomXPointer a_xpointer;
                 lString32 href = links[i]->getHRef(a_xpointer);
                 int32_t target = -1;
+                lString32 xpointer;
+                lString32 note;
                 if (!href.empty() && href[0] == '#') {
                     ldomNode *node = dom->getElementById(href.c_str() + 1);
                     if (node) {
                         target = view->getBookmarkPage(ldomXPointer(node, 0), false);
+                        xpointer = ldomXPointer(node, 0).toString();
+                        if (!a_xpointer.isNull()) {
+                            FootnoteDocument context{view, dom};
+                            lString32 reason, stop;
+                            ldomXRange extended;
+                            // readerlink.lua defaults: trusted source, semantic notes,
+                            // FB2 notes, forward anchors, source shape and 10,000 chars.
+                            constexpr int flags = 0x0002 | 0x0004 | 0x0008 | 0x0010
+                                | 0x0020 | 0x0040 | 0x0100 | 0x0200 | 0x0400 | 0x0800
+                                | 0x1000 | 0x4000 | 0x8000;
+                            bool footnote = _isLinkToFootnote(&context, a_xpointer.toString(),
+                                href, flags, 10000, reason, stop, extended);
+                            // EPUB also permits an aside without an epub:type.
+                            if (node->getNodeName() == "aside") footnote = true;
+                            if (footnote) {
+                                if (!extended.isNull()) {
+                                    note = extended.getRangeText('\n');
+                                } else {
+                                    ldomNode *container = ldomXPointerEx(node, 0).getFinalNode();
+                                    note = (container ? container : node)->getText('\n');
+                                }
+                            }
+                        }
                     }
                 }
                 ldomXRange range(*links[i]);
@@ -595,6 +623,8 @@ int kaia_cre_page_links(kaia_cre_doc *doc, kaia_cre_link_box **out, size_t *coun
                     b.y1 = static_cast<float>(rc.bottom);
                     b.page = target;
                     b.href = dup_utf8(href);
+                    b.xpointer = xpointer.empty() ? nullptr : dup_utf8(xpointer);
+                    b.note = note.empty() ? nullptr : dup_utf8(note);
                 }
             }
             if (boxes.empty()) {
@@ -622,6 +652,8 @@ void kaia_cre_free_link_boxes(kaia_cre_link_box *boxes, size_t count) {
     }
     for (size_t i = 0; i < count; i++) {
         std::free(boxes[i].href);
+        std::free(boxes[i].xpointer);
+        std::free(boxes[i].note);
     }
     std::free(boxes);
 }

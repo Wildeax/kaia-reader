@@ -272,7 +272,8 @@ fn dropped_cover_is_extracted_after_version_three_migration() {
          ALTER TABLE books DROP COLUMN missing_since;
          DROP INDEX collections_name_key;
          ALTER TABLE collections DROP COLUMN name_key;
-         ALTER TABLE collections DROP COLUMN position;",
+         ALTER TABLE collections DROP COLUMN position;
+         DROP TABLE recent_searches;",
     )
     .unwrap();
     raw.pragma_update(None, "user_version", 2).unwrap();

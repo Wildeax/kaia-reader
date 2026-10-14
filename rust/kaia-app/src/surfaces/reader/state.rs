@@ -76,6 +76,7 @@ pub struct Core {
     pub moving_sticker: Option<String>,
     pub editing_sticker: Option<String>,
     pub stickers: Vec<super::stickers::Drawing>,
+    pub links: Vec<(kaia_gfx::Rect, kaia_book::Link)>,
     pub search_text: String,
     search_painted: Option<(u64, usize, bool)>,
     search_paint_at: std::time::Duration,
@@ -121,6 +122,7 @@ impl Core {
             moving_sticker: None,
             editing_sticker: None,
             stickers: Vec::new(),
+            links: Vec::new(),
             search_text: String::new(),
             search_painted: None,
             search_paint_at: std::time::Duration::ZERO,
@@ -241,6 +243,7 @@ impl Core {
         self.selection = frame.selection;
         self.sticker_anchor = frame.sticker_anchor;
         self.stickers = frame.stickers.clone();
+        self.links = frame.links;
         self.error = frame.error.map(|error| error.message());
         let Some(window) = self.page_window.clone() else {
             return;
@@ -278,6 +281,7 @@ impl Core {
             page_count: info.page_count,
             time_left: time_line(&info, self.seconds_per_page),
             bookmarked,
+            can_go_back: session.can_go_back(),
         })
     }
 
@@ -307,6 +311,18 @@ impl Core {
         if hint == PaintHint::Fast {
             return;
         }
+        layer
+            .window
+            .update::<kaia_ui::components::Row, _>(ctx, "overlay-history", |row, cx| {
+                use kaia_ui::widget::Widget;
+                let mut children = row.children_mut();
+                let back = &mut children[1];
+                if back.is_visible() != model.can_go_back {
+                    back.set_visible(model.can_go_back);
+                    cx.request_layout();
+                    cx.request_paint();
+                }
+            });
         let time_left = model.time_left.clone();
         layer
             .window
@@ -388,13 +404,29 @@ impl Core {
         self.selecting = false;
         self.job = Some(super::work::spawn(self.viewport, move || {
             let error = session
-                .go_to(location)
+                .jump_to(location)
                 .err()
                 .map(|e| WorkError::GoTo(e.to_string()));
             Ok((session, None, error))
         }));
         let _ = ctx;
         true
+    }
+
+    /// Restores history on the worker without recording another jump.
+    pub fn back(&mut self) {
+        let Some(mut session) = self.session.take() else {
+            return;
+        };
+        self.selection = None;
+        self.selecting = false;
+        self.sticker_anchor = None;
+        self.pending_hint = PaintHint::Full;
+        self.pages_since_full = 0;
+        self.job = Some(super::work::spawn(self.viewport, move || {
+            let error = session.back().err().map(|e| WorkError::GoTo(e.to_string()));
+            Ok((session, None, error))
+        }));
     }
 
     /// Selects the word under a point. The point is in screen pixels.

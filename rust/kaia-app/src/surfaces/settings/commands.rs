@@ -122,6 +122,11 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
 
 /// The value to store for radio option `index` of `key`. None when the key or index is unknown.
 pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
+    if matches!(key, keys::DEVICE_SLEEP_MINUTES | keys::DEVICE_POWER_OFF_MINUTES) {
+        return keys::IDLE_MINUTES
+            .get(index)
+            .map(|n| Value::Number(f64::from(*n)));
+    }
     let (stored, _) = options_for(key)?.get(index)?;
     Some(Value::from(*stored))
 }
@@ -130,7 +135,11 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
 pub fn is_known_key(key: &str) -> bool {
     matches!(
         key,
-        keys::SYNC_ENABLED
+        keys::READING_INVERT_PAGE_BUTTONS
+            | keys::DEVICE_SLEEP_COVER
+            | keys::DEVICE_PAGE_BUTTON_WAKE
+            | keys::DEVICE_POWER_OFF_MINUTES
+            | keys::SYNC_ENABLED
             | keys::SYNC_INVALID_CERTS
             | keys::SYNC_FORWARD
             | keys::SYNC_BACKWARD

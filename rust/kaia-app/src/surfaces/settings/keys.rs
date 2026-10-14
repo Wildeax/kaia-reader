@@ -12,7 +12,7 @@
 //! | `reading.full_refresh_pages` | number | 6 | E Ink full refresh every this many page turns. |
 //! | `display.night_mode` | bool | false | Night mode: light text on a dark page. |
 //! | `display.color_rendering` | bool | true | Color rendering on a color panel. |
-//! | `display.rotation_lock` | bool | false | Reserved. Automatic rotation is not available. |
+//! | `display.rotation_lock` | bool | false | Ignore automatic orientation changes. |
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
@@ -39,6 +39,16 @@ pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
 pub const DISPLAY_NIGHT_MODE: &str = "display.night_mode";
 pub const DISPLAY_COLOR_RENDERING: &str = "display.color_rendering";
+/// Manual orientation in degrees, restored at startup.
+pub const DISPLAY_ROTATION: &str = "display.rotation";
+/// Swap the bezel page keys. Default false.
+pub const READING_INVERT_PAGE_BUTTONS: &str = "reading.invert_page_buttons";
+/// Accept sleep cover events. Default true.
+pub const DEVICE_SLEEP_COVER: &str = "device.sleep_cover";
+/// Wake on a page button where supported. Default false.
+pub const DEVICE_PAGE_BUTTON_WAKE: &str = "device.page_button_wake";
+/// Idle power-off timeout in minutes. Zero means never and is the default.
+pub const DEVICE_POWER_OFF_MINUTES: &str = "device.power_off_minutes";
 pub const DISPLAY_ROTATION_LOCK: &str = "display.rotation_lock";
 pub const LIBRARY_FOLDERS: &str = "library.folders";
 pub const LIBRARY_SHOW_FINISHED: &str = "library.show_finished";
@@ -70,6 +80,9 @@ pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
 
 /// The sleep screen choices, in the order the Device section lists them.
 pub const SLEEP_SCREENS: [(&str, &str); 2] = [("cover", "Book cover"), ("blank", "Blank")];
+
+/// Idle timeout choices. Zero means never.
+pub const IDLE_MINUTES: [u32; 7] = [0, 5, 10, 15, 30, 45, 60];
 
 pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
     settings.read(key).as_bool().unwrap_or(default)

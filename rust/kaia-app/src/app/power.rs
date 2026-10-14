@@ -27,6 +27,7 @@ use crate::surfaces::{settings, Route};
 const WIFI_JOB: u64 = 0;
 const FINISH_JOB: u64 = u64::MAX;
 const RESUME_JOB: u64 = u64::MAX - 1;
+const POWER_OFF_JOB: u64 = u64::MAX - 2;
 
 /// How often the loop polls a worker while one of its jobs runs.
 const POLL: Duration = Duration::from_millis(50);
@@ -42,6 +43,12 @@ pub(super) struct State {
     /// A Power press or Resume came while `finishing`. The resume runs when the finish plan returns.
     resume_queued: bool,
     last_activity: Duration,
+    suspended_time: Duration,
+    suspend_started: Option<(Duration, std::time::SystemTime)>,
+    power_press: Option<(Duration, u64, bool)>,
+    off_requested: bool,
+    off_started: bool,
+    off_screen: Option<WindowId>,
     battery_due: Duration,
     battery_warned: bool,
     charge_screen: bool,
@@ -74,6 +81,12 @@ impl State {
             finishing: false,
             resume_queued: false,
             last_activity: Duration::ZERO,
+            suspended_time: Duration::ZERO,
+            suspend_started: None,
+            power_press: None,
+            off_requested: false,
+            off_started: false,
+            off_screen: None,
             battery_due: Duration::ZERO,
             battery_warned: false,
             charge_screen: false,
@@ -132,7 +145,7 @@ impl<B: Backend> App<B> {
         self.power.sleep_covered = picture.is_some();
         let id = self.show_sleep_screen(picture.flatten());
         self.power.screen = Some(id);
-        self.power.restore_light = self.services.platform.frontlight.is_on();
+        self.power.restore_light = self.services.platform.frontlight.target_is_on();
         if self.power.restore_light {
             self.toggle_light();
         }
@@ -157,12 +170,17 @@ impl<B: Backend> App<B> {
         };
         self.stack
             .close(id, Some(Refresh::new(RefreshMode::Full)), &mut self.ctx);
-        let plan = self.services.platform.power.resume(ResumeContext {
-            sync_system_clock: true,
-            ..ResumeContext::default()
-        });
+        let plan = self
+            .services
+            .platform
+            .power
+            .clear_wakeup()
+            .then(self.services.platform.power.resume(ResumeContext {
+                sync_system_clock: true,
+                ..ResumeContext::default()
+            }));
         self.power.scripts.submit(RESUME_JOB, plan);
-        if self.power.restore_light {
+        if self.power.restore_light && !self.services.platform.frontlight.target_is_on() {
             self.toggle_light();
         }
         self.broadcast_app(Event::new("Resume"));
@@ -174,9 +192,14 @@ impl<B: Backend> App<B> {
         let Some(ramp) = self.services.platform.frontlight.begin_toggle() else {
             return;
         };
-        let mut delay = Duration::ZERO;
-        for step in ramp.steps {
-            delay += step.delay;
+        // Keep the platform's brightness steps and use Nickel's full fade durations.
+        let duration = match ramp.direction {
+            kaia_platform::frontlight::RampDirection::On => Duration::from_millis(1500),
+            kaia_platform::frontlight::RampDirection::Off => Duration::from_millis(750),
+        };
+        let count = ramp.steps.len() as u32;
+        for (index, step) in ramp.steps.into_iter().enumerate() {
+            let delay = duration.mul_f64((index + 1) as f64 / f64::from(count));
             let queue = self.power.queue.clone();
             self.ctx.scheduler.schedule_in(
                 delay.as_secs_f64(),
@@ -215,7 +238,11 @@ impl<B: Backend> App<B> {
     }
 
     pub(super) fn note_activity(&mut self) {
-        self.power.last_activity = self.ctx.scheduler.now();
+        self.power.last_activity = self.idle_now();
+    }
+
+    fn idle_now(&self) -> Duration {
+        self.ctx.scheduler.now() + self.power.suspended_time
     }
 
     pub(super) fn power_wait(&self) -> Duration {
@@ -231,23 +258,33 @@ impl<B: Backend> App<B> {
     fn idle_wait(&self) -> Duration {
         let now = self.ctx.scheduler.now();
         let battery = self.power.battery_due.saturating_sub(now);
+        let mut wait = battery;
+        if let Some((pressed, _, _)) = self.power.power_press {
+            wait = wait.min((pressed + kaia_platform::events::POWER_OFF_HOLD).saturating_sub(now));
+        }
         #[cfg(feature = "lua")]
         if self.services.plugins.idle_paused() {
-            return battery;
+            return wait;
         }
-        let minutes = self
-            .services
-            .settings
-            .read("device.sleep_minutes")
-            .as_f64()
-            .unwrap_or(15.0);
-        if self.sleeping() || !minutes.is_finite() || minutes <= 0.0 {
-            return battery;
+        if self.usb_mass_storage || self.power.off_started {
+            return wait;
         }
-        battery.min(
-            (self.power.last_activity + Duration::from_secs_f64((minutes * 60.0).min(86400.0)))
-                .saturating_sub(now),
-        )
+        for (key, default, enabled) in [
+            (settings::keys::DEVICE_SLEEP_MINUTES, 15.0, !self.sleeping()),
+            (settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0, true),
+        ] {
+            if enabled {
+                if let Some(timeout) = self.idle_timeout(key, default) {
+                    wait = wait.min((self.power.last_activity + timeout).saturating_sub(self.idle_now()));
+                }
+            }
+        }
+        wait
+    }
+
+    fn idle_timeout(&self, key: &str, default: f64) -> Option<Duration> {
+        let minutes = settings::keys::number_or(&self.services.settings, key, default);
+        (minutes.is_finite() && minutes > 0.0).then(|| Duration::from_secs_f64((minutes * 60.0).min(86400.0)))
     }
 
     fn check_idle_power(&mut self) {
@@ -273,27 +310,125 @@ impl<B: Backend> App<B> {
                 .toast(tr("Battery low. Please charge your reader."), 5.0);
             }
         }
-        let minutes = self
-            .services
-            .settings
-            .read("device.sleep_minutes")
-            .as_f64()
-            .unwrap_or(15.0);
+        if let Some((pressed, _, _)) = self.power.power_press {
+            if now.saturating_sub(pressed) >= kaia_platform::events::POWER_OFF_HOLD {
+                self.power.power_press = None;
+                self.request_power_off();
+            }
+        }
         #[cfg(not(feature = "lua"))]
         let paused = false;
         #[cfg(feature = "lua")]
         let paused = self.services.plugins.idle_paused();
-        if !paused
-            && !self.sleeping()
-            && minutes.is_finite()
-            && minutes > 0.0
-            && now.saturating_sub(self.power.last_activity).as_secs_f64() >= minutes * 60.0
+        if paused || self.usb_mass_storage || self.power.off_requested || self.power.off_started {
+            return;
+        }
+        let idle = self.idle_now().saturating_sub(self.power.last_activity);
+        if self
+            .idle_timeout(settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0)
+            .is_some_and(|timeout| idle >= timeout)
+        {
+            self.request_power_off();
+        } else if !self.sleeping()
+            && self
+                .idle_timeout(settings::keys::DEVICE_SLEEP_MINUTES, 15.0)
+                .is_some_and(|timeout| idle >= timeout)
         {
             self.sleep();
         }
     }
 
+    pub(super) fn power_key(&mut self, event: kaia_input::KeyEvent) {
+        if self.power.off_requested || self.power.off_started {
+            return;
+        }
+        if event.pressed {
+            if self.power.power_press.is_some() {
+                return;
+            }
+            let woke = self.sleeping();
+            self.power.power_press = Some((self.ctx.scheduler.now(), event.time_us, woke));
+            if woke {
+                self.resume();
+            }
+        } else if let Some((pressed, time_us, woke)) = self.power.power_press.take() {
+            let held = self
+                .ctx
+                .scheduler
+                .now()
+                .saturating_sub(pressed)
+                .max(Duration::from_micros(event.time_us.saturating_sub(time_us)));
+            if held >= kaia_platform::events::POWER_OFF_HOLD {
+                self.request_power_off();
+            } else if !woke {
+                self.sleep();
+            }
+        }
+    }
+
+    fn request_power_off(&mut self) {
+        if self.power.off_requested || self.power.off_started {
+            return;
+        }
+        self.power.off_requested = true;
+        self.power.prepare_generation += 1;
+        self.power.resume_queued = false;
+        self.quitting = true;
+        let effects = self.power.flow.resume();
+        self.power_effects(effects);
+    }
+
+    pub(super) fn power_off_requested(&self) -> bool {
+        self.power.off_requested && !self.power.off_started
+    }
+
+    pub(super) fn cancel_power_off(&mut self) {
+        self.power.off_requested = false;
+        self.power.off_started = false;
+        if let Some(id) = self.power.off_screen.take() {
+            self.stack
+                .close(id, Some(Refresh::new(RefreshMode::Full)), &mut self.ctx);
+        }
+        self.note_activity();
+    }
+
+    pub(super) fn finish_power_off(&mut self) {
+        if self.power.finishing {
+            self.quitting = false;
+            return;
+        }
+        if let Err(error) = self.services.settings.flush(&self.services.settings_path()) {
+            self.notices.push(kaia_i18n::format(
+                &tr("Cannot save settings: %1"),
+                &[&error.to_string()],
+            ));
+            self.cancel_power_off();
+            self.quitting = false;
+            return;
+        }
+        self.power.off_started = true;
+        self.quitting = false;
+        self.power.off_screen = Some(self.show_sleep_screen(None));
+        self.stack.apply_requests(&mut self.ctx);
+        self.router.register(&mut self.transient);
+        if let Err(error) = self.repaint() {
+            self.notices.push(kaia_i18n::format(
+                &tr("Could not draw the power-off screen: %1"),
+                &[&error.to_string()],
+            ));
+            self.cancel_power_off();
+            return;
+        }
+        self.backend.wait_idle();
+        self.power
+            .scripts
+            .submit(POWER_OFF_JOB, self.services.platform.power.power_off());
+    }
+
     pub(super) fn power_due(&mut self) {
+        if self.power.off_requested && !self.power.off_started && !self.power.finishing {
+            self.quitting = true;
+        }
         self.check_idle_power();
         self.sleep_picture_due();
         while let Some((job, outcome)) = self.power.scripts.poll() {
@@ -319,7 +454,10 @@ impl<B: Backend> App<B> {
                     };
                     self.power_effects(effects);
                 }
-                Due::Light(generation, step) if generation == self.power.ramp_generation => {
+                Due::Light(generation, step)
+                    if generation == self.power.ramp_generation
+                        && self.services.platform.frontlight.is_ramping() =>
+                {
                     if let Err(e) = self.services.platform.frontlight.apply_ramp_step(&step) {
                         self.services.platform.frontlight.cancel_ramp();
                         self.power.ramp_generation += 1;
@@ -334,6 +472,17 @@ impl<B: Backend> App<B> {
     /// Acts on a plan that the worker finished.
     fn plan_done(&mut self, job: u64, outcome: Outcome) {
         match job {
+            POWER_OFF_JOB => {
+                if matches!(outcome, Outcome::Completed | Outcome::Skipped(_)) {
+                    self.quitting = true;
+                } else {
+                    self.cancel_power_off();
+                    self.notices.push(kaia_i18n::format(
+                        &tr("Could not power off: %1"),
+                        &[&format!("{outcome:?}")],
+                    ));
+                }
+            }
             WIFI_JOB => {
                 self.power.wifi_jobs = self.power.wifi_jobs.saturating_sub(1);
                 if !matches!(outcome, Outcome::Completed) {
@@ -341,10 +490,17 @@ impl<B: Backend> App<B> {
                 }
             }
             FINISH_JOB => {
+                if let Some((clock, wall)) = self.power.suspend_started.take() {
+                    let elapsed = wall.elapsed().unwrap_or_default();
+                    let awake = self.ctx.scheduler.now().saturating_sub(clock);
+                    self.power.suspended_time += elapsed.saturating_sub(awake);
+                }
                 // The suspend write returned. The device woke up, or the kernel refused to suspend.
                 self.power.finishing = false;
-                let effects = self.power.flow.finish_done();
-                self.power_effects(effects);
+                if !self.power.off_requested {
+                    let effects = self.power.flow.finish_done();
+                    self.power_effects(effects);
+                }
                 if std::mem::take(&mut self.power.resume_queued) {
                     self.resume();
                 }
@@ -388,7 +544,9 @@ impl<B: Backend> App<B> {
 
     /// Builds the sleep screen and queues it as a full-screen modal window.
     fn show_sleep_screen(&mut self, picture: Option<Pixmap>) -> WindowId {
-        let label = if self.power.charge_screen {
+        let label = if self.power.off_started {
+            tr("Kaia, powered off")
+        } else if self.power.charge_screen {
             tr("Please charge your reader")
         } else {
             tr("Kaia, sleeping")
@@ -459,7 +617,22 @@ impl<B: Backend> App<B> {
                     // The panel finishes its last update first. Only the sync and the
                     // suspend write run on the worker.
                     self.backend.wait_idle();
-                    let plan = self.services.platform.power.finish_suspend();
+                    let mut plan = self.services.platform.power.finish_suspend();
+                    if let Some(timeout) = self.idle_timeout(settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0) {
+                        let remaining = (self.power.last_activity + timeout).saturating_sub(self.idle_now());
+                        let epoch = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+                        let alarm = self
+                            .services
+                            .platform
+                            .power
+                            .schedule_wakeup(remaining.as_secs().max(1), epoch);
+                        plan = alarm.then(plan);
+                    }
+                    self.power.suspend_started =
+                        Some((self.ctx.scheduler.now(), std::time::SystemTime::now()));
                     self.power.finishing = true;
                     self.power.scripts.submit(FINISH_JOB, plan);
                 }
@@ -739,5 +912,97 @@ mod latency_tests {
         wait_until(&mut app, "the suspend write to return", |a| !a.power.finishing);
         wait_until(&mut app, "the queued resume", |a| !a.sleeping());
         drop(reader.join().unwrap());
+    }
+}
+
+#[cfg(test)]
+mod idle_tests {
+    use super::*;
+    use crate::{AppOptions, HeadlessBackend, ScriptInput, Services};
+    use kaia_events::{Clock, ManualClock, Value};
+    use kaia_platform::{Env, Platform};
+
+    fn app() -> (tempfile::TempDir, App<HeadlessBackend>, ManualClock) {
+        let dir = tempfile::tempdir().unwrap();
+        let platform = Platform::detect_in(
+            dir.path(),
+            &Env {
+                home: Some(dir.path().into()),
+                ..Env::default()
+            },
+        )
+        .unwrap();
+        let panel = kaia_display::PanelSpec::LIBRA_COLOUR;
+        let services = Services::open(platform, panel, Some(dir.path().join("data"))).unwrap();
+        let clock = ManualClock::new();
+        let mut app = App::new(
+            HeadlessBackend::new(panel, ScriptInput::idle()),
+            services,
+            Box::new(clock.clone()),
+            AppOptions::default(),
+        );
+        app.start().unwrap();
+        (dir, app, clock)
+    }
+
+    #[test]
+    fn pending_orientation_runs_on_the_next_loop_without_an_input_wait() {
+        let (_dir, mut app, _) = app();
+        app.command("settings:pick:display.rotation", &[Value::Number(1.0)]);
+        assert_eq!(app.wait_budget(None), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn suspended_wall_time_counts_toward_idle_power_off() {
+        let (_dir, mut app, clock) = app();
+        app.services
+            .settings
+            .save(settings::keys::DEVICE_POWER_OFF_MINUTES, Value::Number(5.0));
+        app.sleep();
+        // Model a kernel sleep where the monotonic clock advances by only one second.
+        app.power.finishing = true;
+        app.power.suspend_started = Some((
+            clock.now(),
+            std::time::SystemTime::now() - Duration::from_secs(301),
+        ));
+        clock.advance(Duration::from_secs(1));
+        app.plan_done(FINISH_JOB, Outcome::Completed);
+        app.check_idle_power();
+        assert!(app.power.off_requested);
+        assert!(app.power.timers.is_empty());
+    }
+
+    #[test]
+    fn power_off_drops_a_late_suspend_prepare_result() {
+        let (_dir, mut app, _) = app();
+        app.sleep();
+        app.power.prepare_generation = 5;
+        let generation = app.power.prepare_generation;
+        app.request_power_off();
+        app.plan_done(generation, Outcome::Completed);
+        assert!(app.power.timers.is_empty());
+        assert!(!app.power.flow.finish_pending());
+    }
+
+    #[test]
+    fn failed_power_off_closes_its_screen_and_resets_idle() {
+        let (_dir, mut app, clock) = app();
+        app.power.off_requested = true;
+        app.power.off_started = true;
+        let id = app.show_sleep_screen(None);
+        app.power.off_screen = Some(id);
+        app.stack.apply_requests(&mut app.ctx);
+        clock.advance(Duration::from_secs(42));
+        app.plan_done(
+            POWER_OFF_JOB,
+            Outcome::Failed {
+                step: 2,
+                recovered: false,
+            },
+        );
+        assert!(!app.stack.contains(id));
+        assert!(!app.power.off_requested);
+        assert!(!app.power.off_started);
+        assert_eq!(app.power.last_activity, clock.now());
     }
 }

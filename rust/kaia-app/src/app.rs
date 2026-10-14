@@ -64,6 +64,8 @@ macro_rules! env {
     };
 }
 
+mod device_input;
+
 /// Counters for tests and for the desktop run.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FrameStats {
@@ -108,6 +110,10 @@ pub struct App<B: Backend> {
     presented_color: Option<bool>,
     presented_night: Option<bool>,
     screen: Size,
+    rotation: kaia_display::Rotation,
+    pending_rotation: Option<kaia_display::Rotation>,
+    usb_mass_storage: bool,
+    scan_again: bool,
     gestures: GestureDetector,
     options: AppOptions,
     scan: Option<LibraryScan>,
@@ -149,6 +155,7 @@ impl<B: Backend> App<B> {
         if let Some(root) = options.library_roots.first() {
             services.plugins.library.borrow_mut().folder = root.clone();
         }
+        let rotation = device_input::rotation(services.platform.device.startup_rotation_degrees() as i64);
         let screen = backend.size();
         let format = services.theme.pixel_format();
         let mut frame = Pixmap::new(screen.w, screen.h, format);
@@ -172,6 +179,10 @@ impl<B: Backend> App<B> {
             presented_color: None,
             presented_night: None,
             screen,
+            rotation,
+            pending_rotation: None,
+            usb_mass_storage: false,
+            scan_again: false,
             gestures,
             options,
             scan: None,
@@ -195,6 +206,14 @@ impl<B: Backend> App<B> {
 
     /// Shows Home with a full refresh, starts the library scan, and paints the first frame.
     pub fn start(&mut self) -> Result<(), DisplayError> {
+        let degrees = self
+            .services
+            .settings
+            .read(surfaces::settings::keys::DISPLAY_ROTATION)
+            .as_i64();
+        if let Some(degrees) = degrees {
+            self.rotate(device_input::rotation(degrees))?;
+        }
         self.switch_root_to(Route::Home, RefreshMode::Full);
         for notice in std::mem::take(&mut self.services.startup_notices) {
             env!(self).notice(notice);
@@ -259,14 +278,17 @@ impl<B: Backend> App<B> {
         self.process(vec![down, up])
     }
 
-    /// Presses a key, then runs one iteration.
+    /// Taps a key with both edges, then runs one iteration.
     pub fn key(&mut self, key: Key) -> Result<Flow, DisplayError> {
         let ev = KeyEvent {
             key,
             pressed: true,
             time_us: self.gesture_now_us(),
         };
-        self.process(vec![InputEvent::Key(ev)])
+        self.process(vec![
+            InputEvent::Key(ev),
+            InputEvent::Key(KeyEvent { pressed: false, ..ev }),
+        ])
     }
 
     /// Asks the loop to stop after the current iteration. A refused exit keeps it running.
@@ -443,6 +465,11 @@ impl<B: Backend> App<B> {
     /// The loop body after input: the touches, keys and events, gestures, actions,
     /// paint, tasks and paint again.
     fn step(&mut self, input: Vec<InputEvent>) -> Result<Flow, DisplayError> {
+        if !self.reader_busy() {
+            if let Some(rotation) = self.pending_rotation.take() {
+                self.rotate(rotation)?;
+            }
+        }
         self.pump_scan();
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
@@ -486,7 +513,9 @@ impl<B: Backend> App<B> {
         // Each event is dispatched, painted and settled before the next one, so a
         // later event sees the screen that the earlier one produced.
         for event in input {
-            self.note_activity();
+            if self.counts_as_activity(&event) {
+                self.note_activity();
+            }
             #[cfg(feature = "lua")]
             if !self.reader_busy() {
                 if let Some(ui) = self.services.plugins.ui.clone() {
@@ -499,7 +528,18 @@ impl<B: Backend> App<B> {
                 InputEvent::TouchFrame(frame) => self.touch_frame(frame),
                 InputEvent::Key(k) => self.key_event(k),
                 InputEvent::Quit => self.quitting = true,
-                InputEvent::Resize(_) => {}
+                InputEvent::Light if !self.sleeping() => self.toggle_light(),
+                InputEvent::Light => {}
+                InputEvent::Orientation(rotation) => {
+                    if !self
+                        .services
+                        .settings
+                        .is_true(surfaces::settings::keys::DISPLAY_ROTATION_LOCK)
+                    {
+                        self.pending_rotation = Some(rotation);
+                    }
+                }
+                InputEvent::Resize(size) => self.resize(size),
             }
             self.show_input_result()?;
         }
@@ -520,9 +560,16 @@ impl<B: Backend> App<B> {
                 return Ok(Flow::Continue);
             }
             match self.prepare_exit() {
-                Ok(()) => self.quitting = true,
+                Ok(()) => {
+                    if self.power_off_requested() {
+                        self.finish_power_off();
+                    } else {
+                        self.quitting = true;
+                    }
+                }
                 Err(refusal) => {
                     self.refuse_exit(refusal);
+                    self.cancel_power_off();
                     self.quitting = false;
                     self.exit_at = None;
                     // Paint the toast or the prompt now, not at the next input.
@@ -623,30 +670,52 @@ impl<B: Backend> App<B> {
         }
     }
 
-    fn key_event(&mut self, ev: KeyEvent) {
+    fn key_event(&mut self, mut ev: KeyEvent) {
+        if ev.key == Key::Power {
+            self.power_key(ev);
+            return;
+        }
         if !ev.pressed {
             return;
         }
         match ev.key {
-            Key::Power => {
-                if self.sleeping() {
-                    self.resume();
-                } else {
-                    self.sleep();
+            Key::SleepCoverClosed | Key::SleepCoverOpened => {
+                if !self.usb_mass_storage
+                    && surfaces::settings::keys::bool_or(
+                        &self.services.settings,
+                        surfaces::settings::keys::DEVICE_SLEEP_COVER,
+                        true,
+                    )
+                {
+                    if ev.key == Key::SleepCoverClosed {
+                        self.sleep();
+                    } else {
+                        self.resume();
+                    }
                 }
                 return;
             }
-            Key::SleepCoverClosed => {
-                self.sleep();
+            _ if self.sleeping() => {
+                if device_input::is_page_key(ev.key)
+                    && self.services.platform.supports_page_button_wake()
+                    && self
+                        .services
+                        .settings
+                        .is_true(surfaces::settings::keys::DEVICE_PAGE_BUTTON_WAKE)
+                {
+                    self.resume();
+                }
                 return;
             }
-            Key::SleepCoverOpened => {
-                self.resume();
-                return;
-            }
-            _ if self.sleeping() => return,
             _ => {}
         }
+        ev.key = device_input::page_key(
+            ev.key,
+            self.rotation,
+            self.services
+                .settings
+                .is_true(surfaces::settings::keys::READING_INVERT_PAGE_BUTTONS),
+        );
         let handled = self.dispatch_input(UiEvent::Key(ev));
         if !handled {
             match ev.key {
@@ -822,6 +891,9 @@ impl<B: Backend> App<B> {
             self.pending_navigation = Some((id.to_string(), args.to_vec()));
             return;
         }
+        if self.device_command(id, args) {
+            return;
+        }
         match id {
             "resume" => {
                 self.resume();
@@ -921,6 +993,7 @@ impl<B: Backend> App<B> {
 
     fn start_scan(&mut self) {
         if self.scan.is_some() {
+            self.scan_again = true;
             return;
         }
         let roots = if self.options.library_roots.is_empty() {
@@ -1206,6 +1279,9 @@ impl<B: Backend> App<B> {
                 ScanMessage::Finished(result) => {
                     self.scan = None;
                     self.scan_progress = None;
+                    if std::mem::take(&mut self.scan_again) {
+                        self.start_scan();
+                    }
                     match result {
                         Ok(report) => {
                             self.broadcast_app(Event::with_args(
@@ -1321,6 +1397,9 @@ impl<B: Backend> App<B> {
     /// the next scheduled task, the next gesture timer, the exit time, and the scan
     /// poll interval while a scan runs.
     fn wait_budget(&self, timeout: Option<Duration>) -> Option<Duration> {
+        if self.pending_rotation.is_some() && !self.sleeping() && !self.reader_busy() {
+            return Some(Duration::ZERO);
+        }
         let now = self.ctx.scheduler.now();
         let mut budget = min_opt(timeout, self.power_wait());
         if let Some(due) = self.ctx.scheduler.next_due() {

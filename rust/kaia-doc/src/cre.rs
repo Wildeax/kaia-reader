@@ -563,26 +563,14 @@ impl Document for CreDocument {
             doc.goto_page(page).map_err(engine_err)?;
             doc.page_links().map_err(engine_err)?
         };
-        // Consecutive boxes with the same target make one link, so a link that
-        // spans lines comes back as one entry with a union box.
-        let mut links: Vec<(Option<u32>, String, RectF)> = Vec::new();
-        for b in boxes {
-            let bbox = rect_of(b.rect);
-            match links.last_mut() {
-                Some((page, href, bounds)) if *page == b.page && *href == b.href => {
-                    *bounds = union(*bounds, bbox);
-                }
-                _ => links.push((b.page, b.href, bbox)),
-            }
-        }
-        Ok(links
+        // Keep each line's box separate so whitespace between lines is not clickable.
+        Ok(boxes
             .into_iter()
-            .map(|(target, href, bbox)| Link {
-                bbox,
-                target: match target {
-                    Some(p) => LinkTarget::Page(p),
-                    None => LinkTarget::Uri(href),
-                },
+            .map(|b| Link {
+                bbox: rect_of(b.rect),
+                target: b.page.map(LinkTarget::Page).unwrap_or(LinkTarget::Uri(b.href)),
+                location: b.xpointer.map(Location::Engine),
+                note: b.note,
             })
             .collect())
     }

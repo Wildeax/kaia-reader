@@ -35,7 +35,7 @@ impl Surface for BookDetailsSurface {
         match env.services.library.book(self.book) {
             Ok(Some(book)) => {
                 let cover = data::cover(&env.services.library, book.id, CoverSize::Large);
-                let details = views::details_panel(&t, &book, cover, "back");
+                let details = views::details_panel(&t, &book, cover, "back", None);
                 let page = Padding::new(
                     WidgetPod::new(Column::new(vec![details]).gap(t.space.md)),
                     Insets::all(t.space.md),

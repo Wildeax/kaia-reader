@@ -82,6 +82,10 @@ pub enum Command {
     MoreEnd,
     /// The More panel and the end of book sheet: mark the book as finished.
     Finish,
+    Back,
+    GotoOpen,
+    GotoPage,
+    GotoPercent,
 }
 
 fn number(args: &[Value], index: usize) -> Option<f64> {
@@ -153,6 +157,10 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["more", "start"] => Command::MoreStart,
         ["more", "end"] => Command::MoreEnd,
         ["finish"] => Command::Finish,
+        ["back"] => Command::Back,
+        ["goto", "open"] => Command::GotoOpen,
+        ["goto", "page"] => Command::GotoPage,
+        ["goto", "percent"] => Command::GotoPercent,
         _ => return None,
     };
     Some(command)

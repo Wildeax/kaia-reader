@@ -38,8 +38,9 @@ impl Status {
 ///
 /// `title` is the metadata title, or the file name without its extension when
 /// the engine gives none, so the app can always show a title. `authors` is the
-/// engine's author string as written. `series`, `series_index`, `language` and
-/// `description` stay empty until the document layer exposes them.
+/// engine's author string as written. `series` and `series_index` come from the
+/// EPUB package. `language` and `description` stay empty until the document
+/// layer exposes them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Book {
     pub id: i64,
@@ -82,7 +83,8 @@ pub enum SortKey {
     /// Last `record_open`. Books never opened sort last in either direction.
     LastRead,
     Progress,
-    /// Series name, series index, then title.
+    /// Series name, then series index, then title. Books with no series sort
+    /// last. Within a series, books with no index come after the numbered ones.
     Series,
     /// Manual order inside the collection named by `Filter::collection`. Falls
     /// back to title when no collection is set.
@@ -111,6 +113,8 @@ pub struct Filter {
     pub collection: Option<i64>,
     /// Books in this folder and its subfolders.
     pub folder: Option<PathBuf>,
+    /// Books in this series. The name matches without regard to case.
+    pub series: Option<String>,
 }
 
 /// A stored cover thumbnail: the encoded image and its MIME type.
