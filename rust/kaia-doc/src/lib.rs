@@ -1,17 +1,19 @@
 //! Document trait and engine backends.
 //!
 //! [`open`] picks a backend for a file and returns it behind the [`Document`]
-//! trait. The reader talks only to the trait. Three backends exist:
+//! trait. The reader talks only to the trait. The backends are:
 //!
 //! - CREngine (feature `cre`, default on): KOReader's typography for EPUB,
 //!   FB2, HTML, TXT, RTF, DOC and CHM. See [`cre`].
 //! - DjVuLibre (feature `djvu`, default on): DjVu. See [`djvu`].
+//! - libarchive: RAR and RAR5 comics with PNG or JPEG pages. See [`cbr`].
 //! - MuPDF: PDF, CBZ, XPS, MOBI, SVG, and EPUB or FB2 when asked for with
 //!   [`open_with`] and [`Engine::Mupdf`].
 //!
 //! This crate has no `unsafe` code. The C bindings live in `kaia-mupdf-sys`,
-//! `kaia-cre-sys`, and `kaia-djvu-sys`.
+//! `kaia-cre-sys`, `kaia-djvu-sys`, and `kaia-archive-sys`.
 
+pub mod cbr;
 #[cfg(feature = "djvu")]
 pub mod djvu;
 pub mod document;
@@ -25,6 +27,7 @@ pub mod cre;
 
 use std::path::Path;
 
+pub use cbr::CbrDocument;
 #[cfg(feature = "djvu")]
 pub use djvu::DjvuDocument;
 pub use document::Document;
@@ -69,6 +72,12 @@ pub fn open_with(path: &Path, engine: Engine) -> Result<Box<dyn Document>> {
         };
     }
     let format = format::detect(path)?;
+    if format == Format::Cbr {
+        if engine != Engine::Auto {
+            return Err(DocError::UnknownFormat(path.to_path_buf()));
+        }
+        return Ok(Box::new(CbrDocument::open(path)?));
+    }
     if format == Format::Djvu {
         return open_djvu(path, engine);
     }

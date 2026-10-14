@@ -30,11 +30,11 @@ Rules used:
 | font files | 43 |
 | image directories | 6 |
 | image files | 141 |
-| license files in repo | 46 |
+| license files in repo | 47 |
 | lua directories outside frontend | 14 |
 | plugins | 39 |
 | asset flags | 0 |
-| needs review | 86 |
+| needs review | 85 |
 
 The needs-review list is at the end of this file.
 
@@ -89,7 +89,7 @@ The needs-review list is at the end of this file.
 | koreader-lfs | v1_9_0 | download (GIT) | v1_9_0 | https://github.com/lunarmodules/luafilesystem | lfs-pushnumber-for-wide-types.patch, lfs-visibility.patch | unknown, needs review | unknown, needs review | MIT (unverified) | yes |
 | kpvcrlib | - | vendored in tree (no download declaration) | - | - | - | license files in subtree only, not mapped to components | mixed or unmapped (see license_files) | GPL-2.0-or-later for crengine core; subtree mixes licenses (unverified) | yes |
 | leptonica | 1.87.0 | download (URL) | 1f66c425c270e9793982289e1ff9634a | https://github.com/DanBloomberg/leptonica/archive/refs/tags/1.87.0.tar.gz | cmake_tweaks.patch, fmemopen-arm-compat-symbol.patch, k2pdfopt.patch, no_messing_with_debug_flags.patch | unknown, needs review | unknown, needs review | Leptonica license (BSD-2-Clause style) (unverified) | yes |
-| libarchive | 3.8.8 | download (URL) | 81a6d70daf20671ea2c5cd4bb1d371ae | https://github.com/libarchive/libarchive/releases/download/v3.8.8/libarchive-3.8.8.tar.xz | android.patch, avoid_mode_t.patch, ignore_locale_and_use_utf8.patch | unknown, needs review | unknown, needs review | BSD-2-Clause (unverified) | yes |
+| libarchive | 3.8.8 | download (URL) | 81a6d70daf20671ea2c5cd4bb1d371ae | https://github.com/libarchive/libarchive/releases/download/v3.8.8/libarchive-3.8.8.tar.xz | android.patch, avoid_mode_t.patch, ignore_locale_and_use_utf8.patch | pinned source COPYING copied to rust/kaia-archive-sys/COPYING.libarchive | BSD-2-Clause; COPYING also lists BSD-3-Clause, public-domain and CC0/OpenSSL/Apache-2.0 files | BSD-2-Clause (unverified) | no |
 | libjpeg-turbo | 3.2.0 | download (URL) | a80f9f1c735b57d3cdd66daed1ba6bb4 | https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz | no_12_or_16_bits_precision.patch, no_cmake_rpath_shenanigans.patch, no_other_image_formats_except_bmp.patch, no_simdcoverage_exe.patch | unknown, needs review | unknown, needs review | IJG, BSD-3-Clause and zlib (mixed) (unverified) | yes |
 | libk2pdfopt | not declared (pinned to commit) | download (GIT) | 1fcffeb1e61ec43265d23e2ac77d9a901f8c45d2 | https://github.com/koreader/libk2pdfopt.git | - | unknown, needs review | unknown, needs review | not recorded | yes |
 | libpng | 1.6.58 | download (URL) | 92972b05f1895240139f749ff24afce8 | https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.58.tar.gz | - | unknown, needs review | unknown, needs review | libpng license (zlib style) (unverified) | yes |
@@ -553,6 +553,7 @@ Excludes `build` directories and `.git`. Code-like files such as `license.lua` a
 | resources/icons/src/menu-icon-license.txt | bd550b1e172e6894 | CC0-1.0 text |
 | resources/kaia-fonts/atkinson-hyperlegible/OFL.txt | f32d22b3908fcad2 | SIL OFL 1.1 text |
 | resources/kaia-fonts/opendyslexic/OFL.txt | caafcccfb70fc724 | SIL OFL 1.1 text |
+| rust/kaia-archive-sys/COPYING.libarchive | 30e556b3959e3985 | BSD-2-Clause text |
 | rust/kaia-lua/tests/community/anki.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
 | rust/kaia-lua/tests/community/bookends.koplugin/LICENSE | 0d96a4ff68ad6d4b | AGPL-3.0 text (-only or -or-later not determined) |
 | rust/kaia-lua/tests/community/foldermemory.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
@@ -583,7 +584,7 @@ No flagged paths outside `test/`, fonts and `base/thirdparty`.
 
 ## Needs review
 
-86 items.
+85 items.
 
 1. `font:nerdfonts`: license text not classified
 2. `image:resources`: images with no license or attribution file in this directory or a parent under resources/
@@ -628,50 +629,48 @@ No flagged paths outside `test/`, fonts and `base/thirdparty`.
 41. `thirdparty:koreader-lfs`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 42. `thirdparty:kpvcrlib`: 15 license files under this directory, not mapped to components
 43. `thirdparty:leptonica`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-44. `thirdparty:libarchive`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-45. `thirdparty:libjpeg-turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-46. `thirdparty:libk2pdfopt`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-47. `thirdparty:libpng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-48. `thirdparty:libressl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-49. `thirdparty:libunibreak`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-50. `thirdparty:libwebp`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-51. `thirdparty:libzmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-52. `thirdparty:lj-wpaclient`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-53. `thirdparty:lodepng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-54. `thirdparty:lpeg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-55. `thirdparty:lua-Spore`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-56. `thirdparty:lua-htmlparser`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-57. `thirdparty:lua-rapidjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-58. `thirdparty:luajit`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-59. `thirdparty:luajson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-60. `thirdparty:luarocks`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-61. `thirdparty:luasec`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-62. `thirdparty:luasocket`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-63. `thirdparty:lunasvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-64. `thirdparty:md4c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-65. `thirdparty:miniconv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-66. `thirdparty:minizip`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-67. `thirdparty:mupdf`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-68. `thirdparty:nanosvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-69. `thirdparty:openlipclua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-70. `thirdparty:openssh`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-71. `thirdparty:popen-noshell`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-72. `thirdparty:proxy-libintl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-73. `thirdparty:sdcv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-74. `thirdparty:sdl3`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-75. `thirdparty:sqlite`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-76. `thirdparty:tar`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-77. `thirdparty:tesseract`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-78. `thirdparty:tree-sitter`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-79. `thirdparty:tree-sitter-c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-80. `thirdparty:turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-81. `thirdparty:utf8proc`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-82. `thirdparty:xxhash`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-83. `thirdparty:xz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-84. `thirdparty:zlib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-85. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-86. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
-
+44. `thirdparty:libjpeg-turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+45. `thirdparty:libk2pdfopt`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+46. `thirdparty:libpng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+47. `thirdparty:libressl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+48. `thirdparty:libunibreak`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+49. `thirdparty:libwebp`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+50. `thirdparty:libzmq`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+51. `thirdparty:lj-wpaclient`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+52. `thirdparty:lodepng`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+53. `thirdparty:lpeg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+54. `thirdparty:lua-Spore`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+55. `thirdparty:lua-htmlparser`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+56. `thirdparty:lua-rapidjson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+57. `thirdparty:luajit`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+58. `thirdparty:luajson`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+59. `thirdparty:luarocks`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+60. `thirdparty:luasec`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+61. `thirdparty:luasocket`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+62. `thirdparty:lunasvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+63. `thirdparty:md4c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+64. `thirdparty:miniconv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+65. `thirdparty:minizip`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+66. `thirdparty:mupdf`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+67. `thirdparty:nanosvg`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+68. `thirdparty:openlipclua`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+69. `thirdparty:openssh`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+70. `thirdparty:popen-noshell`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+71. `thirdparty:proxy-libintl`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+72. `thirdparty:sdcv`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+73. `thirdparty:sdl3`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+74. `thirdparty:sqlite`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+75. `thirdparty:tar`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+76. `thirdparty:tesseract`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+77. `thirdparty:tree-sitter`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+78. `thirdparty:tree-sitter-c`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+79. `thirdparty:turbo`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+80. `thirdparty:utf8proc`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+81. `thirdparty:xxhash`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+82. `thirdparty:xz`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+83. `thirdparty:zlib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+84. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+85. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 
 ## Community plugin fixtures
 

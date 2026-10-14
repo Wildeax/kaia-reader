@@ -152,6 +152,13 @@ export KAIA_MUPDF_INCLUDE="${ST}/include"
 export KAIA_MUPDF_LIB="${ST}/lib"
 export KAIA_MUPDF_DEP_LIBS="${ST}/lib"
 
+# libarchive (kaia-archive-sys). Both Kobo targets use the shared KOReader build.
+export KAIA_ARCHIVE_LIB="${ST}/lib"
+if [ ! -f "${KAIA_ARCHIVE_LIB}/libarchive.so" ]; then
+    echo "missing KOReader libarchive under ${ST}/lib" >&2
+    exit 1
+fi
+
 # DjVuLibre (kaia-djvu-sys, a default feature of kaia-doc).
 export KAIA_DJVU_INCLUDE="${ST}/include"
 export KAIA_DJVU_LIB="${ST}/lib"

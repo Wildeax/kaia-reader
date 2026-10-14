@@ -517,6 +517,7 @@ impl PlannedImport {
             format,
             kaia_doc::Format::Pdf
                 | kaia_doc::Format::Cbz
+                | kaia_doc::Format::Cbr
                 | kaia_doc::Format::Xps
                 | kaia_doc::Format::Djvu
                 | kaia_doc::Format::Svg
@@ -699,6 +700,18 @@ mod tests {
             Path::new("/x/metadata.epub.lua"),
         );
         assert!(none.preferred_dictionaries.is_empty());
+    }
+
+    #[test]
+    fn cbr_import_keeps_fixed_page_position_and_zoom() {
+        let dir = tempfile::tempdir().unwrap();
+        let book = dir.path().join("comic.cbr");
+        let sidecar = dir.path().join("metadata.cbr.lua");
+        std::fs::write(&book, b"Rar!\x1a\x07\x00").unwrap();
+        std::fs::write(&sidecar, r#"return { last_page = 12, zoom_mode = "width" }"#).unwrap();
+        let plan = PlannedImport::prepare(&book, &[sidecar]).unwrap().unwrap();
+        assert_eq!(plan.state.position, Some(Location::Page(11)));
+        assert_eq!(plan.state.zoom, ZoomMode::FitWidth);
     }
 
     #[test]

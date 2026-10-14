@@ -910,6 +910,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaia-archive-sys"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "tempfile",
+]
+
+[[package]]
 name = "kaia-book"
 version = "0.1.0"
 dependencies = [
@@ -977,12 +985,16 @@ version = "0.1.0"
 name = "kaia-doc"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
+ "image",
+ "kaia-archive-sys",
  "kaia-cre-sys",
  "kaia-djvu-sys",
  "kaia-events",
  "kaia-gfx",
  "kaia-mupdf-sys",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

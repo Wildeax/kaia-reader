@@ -16,6 +16,7 @@ pub enum Format {
     Pdf,
     Epub,
     Cbz,
+    Cbr,
     Xps,
     Fb2,
     Mobi,
@@ -32,6 +33,7 @@ impl Format {
             Format::Pdf => ".pdf",
             Format::Epub => ".epub",
             Format::Cbz => ".cbz",
+            Format::Cbr => ".cbr",
             Format::Xps => ".xps",
             Format::Fb2 => ".fb2",
             Format::Mobi => ".mobi",
@@ -48,6 +50,7 @@ impl Format {
             "pdf" => Some(Format::Pdf),
             "epub" => Some(Format::Epub),
             "cbz" => Some(Format::Cbz),
+            "cbr" => Some(Format::Cbr),
             "xps" => Some(Format::Xps),
             "fb2" => Some(Format::Fb2),
             "mobi" | "azw" | "azw3" | "prc" => Some(Format::Mobi),
@@ -95,6 +98,9 @@ fn read_head(path: &Path) -> Result<Vec<u8>> {
 
 /// Returns the format named by the bytes, or None when the bytes do not decide.
 pub fn sniff(head: &[u8]) -> Option<Format> {
+    if head.starts_with(b"Rar!\x1a\x07\x00") || head.starts_with(b"Rar!\x1a\x07\x01\x00") {
+        return Some(Format::Cbr);
+    }
     if head.starts_with(b"AT&TFORM") {
         return Some(Format::Djvu);
     }

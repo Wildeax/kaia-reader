@@ -9,6 +9,7 @@ members = [
     "kaia-input",
     "kaia-luadata",
     "kaia-mupdf-sys",
+    "kaia-archive-sys",
     "kaia-doc",
     "kaia-display",
     "kaia-ui",
