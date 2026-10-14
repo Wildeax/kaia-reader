@@ -3,31 +3,33 @@
 
 use std::path::PathBuf;
 
+use kaia_i18n::{format as tr_format, tr};
 use kaia_platform::platform::Kind;
 use kaia_stats::DayTotal;
 
 use super::commands::{options_for, Light};
-use super::entries::Entry;
+use super::entries::{Entry, StepUnit};
 use super::facts::{self, duration, KoreaderFolder, StatsView};
 use super::keys;
 use crate::services::Services;
 
 /// The title of a section.
-pub fn title(name: &str) -> &'static str {
+pub fn title(name: &str) -> String {
     match name {
-        "reading" => "Reading",
-        "display" => "Display and light",
-        "library" => "Library",
-        "network" => "Network and sync",
-        "statistics" => "Statistics",
-        "device" => "Device",
-        "extensions" => "Extensions",
-        "plugin-menus" => "Plugins",
-        "data" => "Data",
-        "about" => "About",
-        "advanced" => "Advanced",
-        _ if name.starts_with("plugin:") => "Plugin",
-        _ => "Settings",
+        "reading" => tr("Reading"),
+        "display" => tr("Display and light"),
+        "library" => tr("Library"),
+        "network" => tr("Network and sync"),
+        "statistics" => tr("Statistics"),
+        "device" => tr("Device"),
+        "extensions" => tr("Extensions"),
+        "plugin-menus" => tr("Plugins"),
+        "data" => tr("Data"),
+        "about" => tr("About"),
+        "advanced" => tr("Advanced"),
+        "language" => tr("Language"),
+        _ if name.starts_with("plugin:") => tr("Plugin"),
+        _ => tr("Settings"),
     }
 }
 
@@ -47,6 +49,7 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "device" => device(services),
         "extensions" => extensions(services),
         "plugin-menus" => reader_menus(services),
+        "language" => language(services),
         "data" => data(services),
         "about" => about(),
         "advanced" => advanced(),
@@ -65,7 +68,7 @@ fn reading(services: &Services) -> Vec<Entry> {
     let dictionaries = services.paths.data_dir.join("dict");
     let found = facts::dictionary_count(&services.paths.data_dir);
     vec![
-        Entry::Heading("Text".into()),
+        Entry::Heading(tr("Text")),
         Entry::Radio {
             key: keys::READING_FONT_FAMILY,
             options: labels(keys::READING_FONT_FAMILY),
@@ -73,20 +76,21 @@ fn reading(services: &Services) -> Vec<Entry> {
         },
         Entry::Stepper {
             key: keys::READING_FONT_SIZE,
-            label: format!(
-                "Font size, {} px",
-                crate::surfaces::reader::koreader_px(
+            label: tr_format(
+                &tr("Font size, %1 px"),
+                &[&crate::surfaces::reader::koreader_px(
                     kaia_gfx::Size::new(services.theme.scale.width, services.theme.scale.height),
-                    keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE)
+                    keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
                 )
+                .to_string()],
             ),
             value: keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
             min: 12.0,
             max: 40.0,
             step: 1.0,
-            unit: " KOReader units",
+            unit: StepUnit::KoreaderUnits,
         },
-        Entry::Heading("Page turns".into()),
+        Entry::Heading(tr("Page turns")),
         Entry::Radio {
             key: keys::READING_TAP_ZONES,
             options: labels(keys::READING_TAP_ZONES),
@@ -94,7 +98,7 @@ fn reading(services: &Services) -> Vec<Entry> {
         },
         Entry::Stepper {
             key: keys::READING_FULL_REFRESH_PAGES,
-            label: "Full refresh every".into(),
+            label: tr("Full refresh every"),
             value: keys::number_or(
                 s,
                 keys::READING_FULL_REFRESH_PAGES,
@@ -103,14 +107,14 @@ fn reading(services: &Services) -> Vec<Entry> {
             min: 1.0,
             max: 50.0,
             step: 1.0,
-            unit: " pages",
+            unit: StepUnit::Pages,
         },
-        Entry::Heading("Dictionary".into()),
+        Entry::Heading(tr("Dictionary")),
         Entry::Row {
-            primary: "Dictionary folder".into(),
+            primary: tr("Dictionary folder"),
             // The last two parts only. See `facts::short_path`.
             secondary: Some(facts::short_path(&dictionaries)),
-            value: Some(format!("{found} found")),
+            value: Some(tr_format(&tr("%1 found"), &[&found.to_string()])),
             action: None,
         },
     ]
@@ -118,48 +122,71 @@ fn reading(services: &Services) -> Vec<Entry> {
 
 fn display(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
-    let mut out = vec![Entry::Heading("Light".into())];
+    let mut out = vec![Entry::Heading(tr("Light"))];
     if has_frontlight(services) {
         out.push(Entry::Slider {
             which: Light::Frontlight,
-            label: "Frontlight".into(),
+            label: tr("Frontlight"),
             value: f64::from(services.platform.frontlight.intensity()),
             enabled: true,
         });
         out.push(Entry::Slider {
             which: Light::Warmth,
-            label: "Warmth".into(),
+            label: tr("Warmth"),
             value: f64::from(services.platform.frontlight.warmth()),
             enabled: true,
         });
     } else {
-        out.push(Entry::Text(
-            "The frontlight and warmth work on the Kobo only. This is a desktop build.".into(),
-        ));
+        out.push(Entry::Text(tr(
+            "The frontlight and warmth work on the Kobo only. This is a desktop build.",
+        )));
     }
-    out.push(Entry::Heading("Screen".into()));
+    out.push(Entry::Heading(tr("Screen")));
     out.push(Entry::Toggle {
         key: keys::DISPLAY_NIGHT_MODE,
-        label: "Night mode".into(),
+        label: tr("Night mode"),
         on: keys::bool_or(s, keys::DISPLAY_NIGHT_MODE, false),
     });
     out.push(Entry::Toggle {
         key: keys::DISPLAY_COLOR_RENDERING,
-        label: "Color rendering".into(),
+        label: tr("Color rendering"),
         on: keys::bool_or(s, keys::DISPLAY_COLOR_RENDERING, true),
     });
-    out.push(Entry::Text(
-        "Color rendering applies on the color panel only. Grayscale panels ignore it.".into(),
-    ));
-    out.push(Entry::Text(
-        "Automatic rotation is not available yet. The screen keeps its current orientation.".into(),
-    ));
+    out.push(Entry::Text(tr(
+        "Color rendering applies on the color panel only. Grayscale panels ignore it.",
+    )));
+    out.push(Entry::Text(tr(
+        "Automatic rotation is not available yet. The screen keeps its current orientation.",
+    )));
+    out.push(Entry::Heading(tr("Language")));
+    let current = crate::i18n::available(&services.catalog_root)
+        .into_iter()
+        .find(|(tag, _)| *tag == services.language)
+        .map_or(services.language.clone(), |(_, name)| name.to_string());
+    out.push(Entry::Row {
+        primary: current,
+        secondary: None,
+        value: None,
+        action: Some("settings:language".into()),
+    });
     out
+}
+
+/// The languages on offer, one row each. The row of the language in use has a checkbox.
+fn language(services: &Services) -> Vec<Entry> {
+    crate::i18n::available(&services.catalog_root)
+        .into_iter()
+        .map(|(tag, name)| Entry::Choice {
+            label: name.to_string(),
+            selected: tag == services.language,
+            action: format!("settings:language:{tag}"),
+        })
+        .collect()
 }
 
 fn library(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
-    let mut out = vec![Entry::Heading("Book folders".into())];
+    let mut out = vec![Entry::Heading(tr("Book folders"))];
     for folder in facts::library_folders(s, &services.paths.books_dir) {
         out.push(Entry::Row {
             primary: folder,
@@ -170,13 +197,13 @@ fn library(services: &Services) -> Vec<Entry> {
     }
     out.push(Entry::Button {
         key: "settings-scan",
-        label: "Scan now".into(),
+        label: tr("Scan now"),
         action: "scan".into(),
     });
-    out.push(Entry::Heading("Shelves".into()));
+    out.push(Entry::Heading(tr("Shelves")));
     out.push(Entry::Toggle {
         key: keys::LIBRARY_SHOW_FINISHED,
-        label: "Show finished books".into(),
+        label: tr("Show finished books"),
         on: keys::bool_or(s, keys::LIBRARY_SHOW_FINISHED, true),
     });
     out
@@ -185,18 +212,18 @@ fn library(services: &Services) -> Vec<Entry> {
 fn network(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let mut out = vec![
-        Entry::Heading("Progress sync".into()),
+        Entry::Heading(tr("Progress sync")),
         Entry::Toggle {
             key: keys::SYNC_ENABLED,
-            label: "Sync reading progress".into(),
+            label: tr("Sync reading progress"),
             on: s.is_true(keys::SYNC_ENABLED),
         },
         Entry::Toggle {
             key: keys::SYNC_INVALID_CERTS,
-            label: "Accept self-signed certificates".into(),
+            label: tr("Accept self-signed certificates"),
             on: s.is_true(keys::SYNC_INVALID_CERTS),
         },
-        Entry::Heading("Sync to a newer state".into()),
+        Entry::Heading(tr("Sync to a newer state")),
         Entry::Radio {
             key: keys::SYNC_FORWARD,
             options: labels(keys::SYNC_FORWARD),
@@ -205,7 +232,7 @@ fn network(services: &Services) -> Vec<Entry> {
                 &keys::text_or(s, keys::SYNC_FORWARD, "prompt"),
             ),
         },
-        Entry::Heading("Sync to an older state".into()),
+        Entry::Heading(tr("Sync to an older state")),
         Entry::Radio {
             key: keys::SYNC_BACKWARD,
             options: labels(keys::SYNC_BACKWARD),
@@ -216,43 +243,43 @@ fn network(services: &Services) -> Vec<Entry> {
         },
         Entry::Field {
             key: keys::SYNC_SERVER,
-            label: "Server address".into(),
+            label: tr("Server address"),
             value: keys::text(s, keys::SYNC_SERVER),
             password: false,
         },
         Entry::Field {
             key: keys::SYNC_USERNAME,
-            label: "Username".into(),
+            label: tr("Username"),
             value: keys::text(s, keys::SYNC_USERNAME),
             password: false,
         },
         Entry::Field {
             key: keys::SYNC_PASSWORD,
-            label: "Password".into(),
+            label: tr("Password"),
             value: keys::text(s, keys::SYNC_PASSWORD),
             password: true,
         },
         Entry::Button {
             key: "settings-sync-test",
-            label: "Test connection".into(),
+            label: tr("Test connection"),
             action: "settings:sync:test".into(),
         },
-        Entry::Text(
-            "Turn on sync to send progress on close and sleep, and read progress from other devices.".into(),
-        ),
+        Entry::Text(tr(
+            "Turn on sync to send progress on close and sleep, and read progress from other devices.",
+        )),
     ];
     out.splice(
         0..0,
         [
             Entry::Row {
-                primary: "OPDS catalogs".into(),
-                secondary: Some("Browse catalogs and download books".into()),
+                primary: tr("OPDS catalogs"),
+                secondary: Some(tr("Browse catalogs and download books")),
                 value: None,
                 action: Some("settings:catalogs".into()),
             },
             Entry::Row {
-                primary: "Calibre wireless".into(),
-                secondary: Some("Receive books from Calibre".into()),
+                primary: tr("Calibre wireless"),
+                secondary: Some(tr("Receive books from Calibre")),
                 value: None,
                 action: Some("settings:calibre".into()),
             },
@@ -263,44 +290,44 @@ fn network(services: &Services) -> Vec<Entry> {
 
 fn statistics(services: &Services, now: i64) -> Vec<Entry> {
     match facts::stats_view(&services.paths.data_dir, now) {
-        None => vec![Entry::Text(
-            "No reading recorded yet. Statistics appear after the first book is read.".into(),
-        )],
+        None => vec![Entry::Text(tr(
+            "No reading recorded yet. Statistics appear after the first book is read.",
+        ))],
         Some(view) => statistics_rows(&view),
     }
 }
 
 fn statistics_rows(view: &StatsView) -> Vec<Entry> {
     let mut out = vec![
-        Entry::Heading("Reading time".into()),
+        Entry::Heading(tr("Reading time")),
         Entry::Row {
-            primary: "Today".into(),
-            secondary: Some(format!("{} pages", view.today.pages)),
+            primary: tr("Today"),
+            secondary: Some(facts::page_count(view.today.pages)),
             value: Some(duration(view.today.seconds)),
             action: None,
         },
         Entry::Row {
-            primary: "This week".into(),
-            secondary: Some(format!("{} pages", view.week.pages)),
+            primary: tr("This week"),
+            secondary: Some(facts::page_count(view.week.pages)),
             value: Some(duration(view.week.seconds)),
             action: None,
         },
-        Entry::Heading("Last seven days".into()),
+        Entry::Heading(tr("Last seven days")),
     ];
     let longest = view.days.iter().map(|d| d.seconds).max().unwrap_or(0).max(1);
     for day in &view.days {
         out.push(day_bar(day, longest));
     }
-    out.push(Entry::Heading("Books".into()));
+    out.push(Entry::Heading(tr("Books")));
     for book in &view.books {
         let title = if book.title.trim().is_empty() {
-            "Untitled".to_string()
+            tr("Untitled")
         } else {
             book.title.clone()
         };
         out.push(Entry::Row {
             primary: title,
-            secondary: Some(format!("{} pages", book.distinct_pages)),
+            secondary: Some(facts::page_count(book.distinct_pages)),
             value: Some(duration(book.seconds)),
             action: None,
         });
@@ -320,17 +347,17 @@ fn day_bar(day: &DayTotal, longest: i64) -> Entry {
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     vec![
-        Entry::Heading("Sleep".into()),
+        Entry::Heading(tr("Sleep")),
         Entry::Stepper {
             key: keys::DEVICE_SLEEP_MINUTES,
-            label: "Sleep after".into(),
+            label: tr("Sleep after"),
             value: keys::number_or(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
             min: 1.0,
             max: 120.0,
             step: 1.0,
-            unit: " min",
+            unit: StepUnit::Minutes,
         },
-        Entry::Heading("Sleep screen".into()),
+        Entry::Heading(tr("Sleep screen")),
         Entry::Radio {
             key: keys::DEVICE_SLEEP_SCREEN,
             options: labels(keys::DEVICE_SLEEP_SCREEN),
@@ -339,64 +366,63 @@ fn device(services: &Services) -> Vec<Entry> {
                 &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover"),
             ),
         },
-        Entry::Text("The cover of the book you are reading, or a blank screen.".into()),
+        Entry::Text(tr("The cover of the book you are reading, or a blank screen.")),
     ]
 }
 
 fn data(services: &Services) -> Vec<Entry> {
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    let mut out = vec![Entry::Heading("Import from KOReader".into())];
+    let mut out = vec![Entry::Heading(tr("Import from KOReader"))];
     match facts::find_koreader(&services.paths, home.as_deref()) {
-        None => out.push(Entry::Text(
-            "No KOReader folder found. Kaia looks in the books folder and in the standard KOReader folders."
-                .into(),
-        )),
+        None => out.push(Entry::Text(tr(
+            "No KOReader folder found. Kaia looks in the books folder and in the standard KOReader folders.",
+        ))),
         Some(folder) => {
             out.extend(found_rows(&folder));
             out.push(Entry::Button {
                 key: "settings-import",
-                label: "Import from KOReader".into(),
+                label: tr("Import from KOReader"),
                 action: "settings:data:import".into(),
             });
         }
     }
-    out.push(Entry::Heading("Notes".into()));
+    out.push(Entry::Heading(tr("Notes")));
     out.push(Entry::Button {
         key: "settings-export",
-        label: "Export notes".into(),
+        label: tr("Export notes"),
         action: "settings:data:export".into(),
     });
-    out.push(Entry::Text(
-        "Writes every highlight, note and bookmark to the exports folder in Markdown and JSON.".into(),
-    ));
+    out.push(Entry::Text(tr(
+        "Writes every highlight, note and bookmark to the exports folder in Markdown and JSON.",
+    )));
     out
 }
 
 fn found_rows(folder: &KoreaderFolder) -> Vec<Entry> {
-    let yes_no = |found: bool| if found { "found" } else { "not found" };
+    let yes_no = |found: bool| if found { tr("found") } else { tr("not found") };
     vec![
         Entry::Row {
-            primary: "KOReader folder".into(),
+            primary: tr("KOReader folder"),
             secondary: Some(folder.path.display().to_string()),
             value: None,
             action: None,
         },
         Entry::Row {
-            primary: "Reading history".into(),
+            primary: tr("Reading history"),
             secondary: Some("history.lua".into()),
-            value: Some(yes_no(folder.history).into()),
+            value: Some(yes_no(folder.history)),
             action: None,
         },
         Entry::Row {
-            primary: "Collections".into(),
+            primary: tr("Collections"),
             secondary: Some("collection.lua".into()),
-            value: Some(yes_no(folder.collections).into()),
+            value: Some(yes_no(folder.collections)),
             action: None,
         },
         Entry::Row {
-            primary: "Statistics".into(),
+            primary: tr("Statistics"),
             secondary: Some("settings/statistics.sqlite3".into()),
-            value: Some(yes_no(folder.statistics).into()),
+            value: Some(yes_no(folder.statistics)),
             action: None,
         },
     ]
@@ -405,60 +431,59 @@ fn found_rows(folder: &KoreaderFolder) -> Vec<Entry> {
 fn about() -> Vec<Entry> {
     vec![
         Entry::Row {
-            primary: "Kaia Reader".into(),
-            secondary: Some("A reader for the Kobo Libra Colour".into()),
-            value: Some(format!("version {}", env!("CARGO_PKG_VERSION"))),
+            primary: tr("Kaia Reader"),
+            secondary: Some(tr("A reader for the Kobo Libra Colour")),
+            value: Some(tr_format(&tr("version %1"), &[env!("CARGO_PKG_VERSION")])),
             action: None,
         },
         Entry::Row {
-            primary: "License".into(),
-            secondary: Some("GNU Affero General Public License v3.0 (AGPL-3.0)".into()),
+            primary: tr("License"),
+            secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),
             value: None,
             action: None,
         },
         Entry::Row {
-            primary: "Source".into(),
+            primary: tr("Source"),
             secondary: Some("https://github.com/Wildeax/kaia-reader".into()),
             value: None,
             action: None,
         },
-        Entry::Heading("Credits".into()),
-        Entry::Text(
+        Entry::Heading(tr("Credits")),
+        Entry::Text(tr(
             "Kaia Reader is a fork of KOReader, base version v2026.07.1 (commit 9192014d8). \
              KOReader is free software under AGPL-3.0, written by the KOReader developers. \
-             Kaia keeps its document engines, its Kobo support and its file formats."
-                .into(),
-        ),
+             Kaia keeps its document engines, its Kobo support and its file formats.",
+        )),
     ]
 }
 
 fn advanced() -> Vec<Entry> {
     let items = [
         (
-            "Gesture zones",
-            "Custom zone layouts and gesture bindings. Choose a preset in Reading.",
+            tr("Gesture zones"),
+            tr("Custom zone layouts and gesture bindings. Choose a preset in Reading."),
         ),
         (
-            "Hardware keys",
-            "Which keys turn pages. Not configurable in Kaia yet.",
+            tr("Hardware keys"),
+            tr("Which keys turn pages. Not configurable in Kaia yet."),
         ),
         (
-            "Auto suspend",
-            "Suspend after a set time with no input. The sleep timeout is in Device.",
+            tr("Auto suspend"),
+            tr("Suspend after a set time with no input. The sleep timeout is in Device."),
         ),
-        ("Backup", "Copy the data folder to keep a backup."),
+        (tr("Backup"), tr("Copy the data folder to keep a backup.")),
         (
-            "Date and time",
-            "Kaia uses the clock of the device. Set it in the device settings.",
+            tr("Date and time"),
+            tr("Kaia uses the clock of the device. Set it in the device settings."),
         ),
     ];
-    let mut out = vec![Entry::Text(
-        "These KOReader options have no Kaia control yet. Each line says what the option does.".into(),
-    )];
+    let mut out = vec![Entry::Text(tr(
+        "These KOReader options have no Kaia control yet. Each line says what the option does.",
+    ))];
     for (primary, secondary) in items {
         out.push(Entry::Row {
-            primary: primary.into(),
-            secondary: Some(secondary.into()),
+            primary,
+            secondary: Some(secondary),
             value: None,
             action: None,
         });
@@ -469,8 +494,25 @@ fn advanced() -> Vec<Entry> {
 /// The labels of a radio group, in the order of [`options_for`].
 fn labels(key: &str) -> Vec<String> {
     options_for(key)
-        .map(|opts| opts.iter().map(|(_, label)| (*label).to_string()).collect())
+        .map(|opts| opts.iter().map(|(_, label)| option_label(label)).collect())
         .unwrap_or_default()
+}
+
+/// The text of a radio option label in the language in use. A label with no
+/// translation, such as a font name, stays as it is.
+fn option_label(label: &str) -> String {
+    match label {
+        "Engine default" => tr("Engine default"),
+        "Ask first" => tr("Ask first"),
+        "Use synced position" => tr("Use synced position"),
+        "Never" => tr("Never"),
+        "Default" => tr("Default"),
+        "Left-handed" => tr("Left-handed"),
+        "Page turn only" => tr("Page turn only"),
+        "Book cover" => tr("Book cover"),
+        "Blank" => tr("Blank"),
+        other => other.to_string(),
+    }
 }
 
 fn extensions(services: &Services) -> Vec<Entry> {
@@ -479,12 +521,12 @@ fn extensions(services: &Services) -> Vec<Entry> {
         let _ = services;
         vec![
             Entry::Row {
-                primary: "Native statistics".into(),
+                primary: tr("Native statistics"),
                 secondary: None,
                 value: None,
                 action: Some("settings:statistics".into()),
             },
-            Entry::Text("This build has no Lua plugin support.".into()),
+            Entry::Text(tr("This build has no Lua plugin support.")),
         ]
     }
     #[cfg(feature = "lua")]
@@ -492,24 +534,24 @@ fn extensions(services: &Services) -> Vec<Entry> {
         let p = &services.plugins;
         let mut entries = vec![
             Entry::Row {
-                primary: "Native statistics".into(),
+                primary: tr("Native statistics"),
                 secondary: None,
                 value: None,
                 action: Some("settings:statistics".into()),
             },
             Entry::Toggle {
                 key: crate::plugins::ENABLED,
-                label: "Enable KOReader plugins".into(),
+                label: tr("Enable KOReader plugins"),
                 on: services.settings.is_true(crate::plugins::ENABLED),
             },
             Entry::Toggle {
                 key: crate::plugins::SAFE_MODE,
-                label: "Safe mode, bundled plugins only".into(),
+                label: tr("Safe mode, bundled plugins only"),
                 on: p.startup_safe_mode || services.settings.is_true(crate::plugins::SAFE_MODE),
             },
         ];
         if let Some(error) = p.error() {
-            entries.push(Entry::Text(format!("Plugin runtime failed: {error}")));
+            entries.push(Entry::Text(tr_format(&tr("Plugin runtime failed: %1"), &[error])));
         }
         for plugin in &p.entries {
             entries.push(Entry::Row {
@@ -563,14 +605,14 @@ fn reader_menus(services: &Services) -> Vec<Entry> {
     #[cfg(not(feature = "lua"))]
     {
         let _ = services;
-        vec![Entry::Text("This build has no Lua plugin support.".into())]
+        vec![Entry::Text(tr("This build has no Lua plugin support."))]
     }
     #[cfg(feature = "lua")]
     {
         if !services.plugins.running() {
-            return vec![Entry::Text(
-                "Enable KOReader plugins in Settings, Extensions.".into(),
-            )];
+            return vec![Entry::Text(tr(
+                "Enable KOReader plugins in Settings, Extensions.",
+            ))];
         }
         services
             .plugins

@@ -15,6 +15,8 @@
 //! - `settings:data:import` and `settings:data:export` run the Data actions.
 //! - `settings:quick:<name>` is a control of the quick settings sheet. The app
 //!   passes these ids to [`super::quick::command`].
+//! - `settings:language` opens the language page. `settings:language:<tag>`
+//!   shows the screens in that language.
 
 use kaia_events::Value;
 
@@ -55,6 +57,8 @@ pub enum Command {
     Import,
     ExportNotes,
     Quick(String),
+    Language,
+    LanguagePick(String),
 }
 
 /// Parses a settings action id. None for every other id, and for an unknown section.
@@ -69,6 +73,7 @@ pub fn parse(id: &str) -> Option<Command> {
         "sync:test" => return Some(Command::SyncTest),
         "data:import" => return Some(Command::Import),
         "data:export" => return Some(Command::ExportNotes),
+        "language" => return Some(Command::Language),
         _ => {}
     }
     if let Some(key) = rest.strip_prefix("set:") {
@@ -86,6 +91,9 @@ pub fn parse(id: &str) -> Option<Command> {
     }
     if let Some(name) = rest.strip_prefix("quick:") {
         return (!name.is_empty()).then(|| Command::Quick(name.to_string()));
+    }
+    if let Some(tag) = rest.strip_prefix("language:") {
+        return (!tag.is_empty()).then(|| Command::LanguagePick(tag.to_string()));
     }
     SECTIONS
         .contains(&rest)

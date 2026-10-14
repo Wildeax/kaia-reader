@@ -1,6 +1,7 @@
 //! One lazy Lua runtime, driven by the app thread.
 mod library;
 
+use kaia_i18n::tr;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -183,11 +184,11 @@ impl Plugins {
                     .as_bool()
                     .unwrap_or(bundled && DEFAULTS.contains(&name));
                 let state = if safe && !bundled {
-                    "Disabled by safe mode"
+                    tr("Disabled by safe mode")
                 } else if enabled && settings.is_true(ENABLED) {
-                    "Enabled"
+                    tr("Enabled")
                 } else {
-                    "Disabled"
+                    tr("Disabled")
                 };
                 entries.insert(
                     name.to_owned(),
@@ -195,7 +196,7 @@ impl Plugins {
                         name: name.into(),
                         bundled,
                         enabled: enabled && (bundled || !safe),
-                        state: state.into(),
+                        state,
                     },
                 );
             }

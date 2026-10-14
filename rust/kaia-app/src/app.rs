@@ -19,6 +19,7 @@ mod plugins;
 mod power;
 mod sleep_picture;
 
+use kaia_i18n::{format as tr_format, tr};
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -269,8 +270,9 @@ impl<B: Backend> App<B> {
             .sync
             .finish(&self.services.settings, self.ctx.scheduler.now())
         {
-            env!(self).notice(format!(
-                "Cannot save queued sync. Free storage, then try again. {error}"
+            env!(self).notice(tr_format(
+                &tr("Cannot save queued sync. Free storage, then try again. %1"),
+                &[error.to_string().as_str()],
             ));
             self.quitting = false;
             return;
@@ -401,11 +403,11 @@ impl<B: Backend> App<B> {
                 crate::sync::Reply::Pushed(document) => {
                     self.broadcast_app(Event::with_args("SyncPushed", vec![Value::Str(document)]))
                 }
-                crate::sync::Reply::Status(message) => {
-                    env!(self).toast(message, 4.0);
+                crate::sync::Reply::ServerAnswered => {
+                    env!(self).toast(tr("The server answered."), 4.0);
                 }
                 crate::sync::Reply::Error(e) => {
-                    env!(self).toast(format!("Progress sync failed: {e}"), 5.0);
+                    env!(self).toast(tr_format(&tr("Progress sync failed: %1"), &[e.as_str()]), 5.0);
                 }
                 crate::sync::Reply::Done => {}
             }
@@ -796,6 +798,7 @@ impl<B: Backend> App<B> {
 
     /// Asks the surface at `index` about a command. True when it took the command.
     fn route_command(&mut self, index: usize, id: &str, args: &[Value]) -> bool {
+        let language = self.services.language_epoch;
         let outcome = {
             let mut env = env!(self);
             match self.router.surface_mut(index) {
@@ -806,7 +809,19 @@ impl<B: Backend> App<B> {
         if !matches!(outcome, Outcome::NotMine) {
             self.broadcast_app(Event::new("ReaderTick"));
         }
-        self.apply(index, outcome)
+        let taken = self.apply(index, outcome);
+        if self.services.language_epoch != language {
+            self.rebuild_all();
+        }
+        taken
+    }
+
+    /// Builds every screen of the stack again, after the language changed. The top
+    /// screen is swapped now. A covered one is marked and rebuilt when it becomes the top.
+    fn rebuild_all(&mut self) {
+        for index in 0..self.router.depth() {
+            self.rebuild(index);
+        }
     }
 
     /// Applies what a surface returned. False when the surface did not take the command.

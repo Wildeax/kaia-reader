@@ -145,6 +145,10 @@ mkdir -p "${APP}/resources/fonts/freefont"
 cp "${ROOT}/resources/fonts/freefont/FreeSans.ttf" "${ROOT}/resources/fonts/freefont/FreeSerif.ttf" \
     "${ROOT}/resources/fonts/freefont/COPYING" "${APP}/resources/fonts/freefont/"
 cp -R "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/"
+# The Rust app reads KOReader's l10n/ (already in the package) and Kaia's own
+# catalogs in l10n-kaia/<lang>/kaia.po. The template is not needed on the device.
+mkdir -p "${APP}/l10n-kaia"
+find "${ROOT}/l10n-kaia" -mindepth 1 -maxdepth 1 -type d ! -name templates -exec cp -R {} "${APP}/l10n-kaia/" \;
 bash "${ROOT}/tools/kaia/check-rust-package.sh" "${WORK}/stage" "${RUST_BIN}"
 
 # Fixed mtimes, so the zip does not depend on when the files were unpacked.

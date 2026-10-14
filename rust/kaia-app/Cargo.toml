@@ -32,6 +32,7 @@ kaia-stats = { path = "../kaia-stats" }
 kaia-sync = { path = "../kaia-sync" }
 kaia-opds = { path = "../kaia-opds" }
 kaia-id = { path = "../kaia-id" }
+kaia-i18n = { path = "../kaia-i18n" }
 kaia-display = { path = "../kaia-display", default-features = false }
 kaia-doc = { path = "../kaia-doc" }
 kaia-events = { path = "../kaia-events" }

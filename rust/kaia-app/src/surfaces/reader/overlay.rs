@@ -10,6 +10,7 @@ use std::rc::Rc;
 use crate::slider::Slider;
 use kaia_events::ShowOpts;
 use kaia_gfx::Size;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Row, Spacer};
 use kaia_ui::controls::ToolButton;
 use kaia_ui::geometry::Insets;
@@ -90,19 +91,24 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
     let sp = t.space.md;
     let bar_pad = Insets::symmetric(t.space.lg, t.space.sm);
 
-    let home = tool("home", "Home", "nav:home", "overlay-home");
+    let home = tool("home", &tr("Home"), "nav:home", "overlay-home");
     let title = WidgetPod::new(Label::new(
         model.title.clone(),
         t.font.body_bold.clone(),
         Tone::Ink,
     ));
-    let search = tool("appbar.search", "Search", "reader:search:open", "overlay-search");
+    let search = tool(
+        "appbar.search",
+        &tr("Search"),
+        "reader:search:open",
+        "overlay-search",
+    );
     let bookmark = WidgetPod::new(
         ToolButton::new("bookmark", bookmark_label(model.bookmarked)).on_action("reader:bookmark"),
     )
     .focusable(true)
     .with_key("overlay-bookmark");
-    let more = tool("appbar.menu", "More", "reader:panel:more", "overlay-more");
+    let more = tool("appbar.menu", &tr("More"), "reader:panel:more", "overlay-more");
     let top = WidgetPod::new(
         Row::new(vec![
             home,
@@ -119,7 +125,12 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
     let page = model.page;
     let slider = WidgetPod::new(
         Slider::new(f64::from(page + 1), 1.0, count as f64, 1.0)
-            .format(move |v| format!("page {} of {}", v as i64, count))
+            .format(move |v| {
+                tr_format(
+                    &tr("page %1 of %2"),
+                    &[&(v as i64).to_string(), &count.to_string()],
+                )
+            })
             .on_action("reader:slider"),
     )
     .with_key("overlay-slider");
@@ -134,27 +145,32 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
             WidgetPod::new(Expanded::new(
                 tool(
                     "appbar.navigation",
-                    "Contents",
+                    &tr("Contents"),
                     "reader:panel:contents",
                     "overlay-contents",
                 ),
                 1,
             )),
             WidgetPod::new(Expanded::new(
-                tool("edit", "Notes", "nav:notes", "overlay-notes"),
+                tool("edit", &tr("Notes"), "nav:notes", "overlay-notes"),
                 1,
             )),
             WidgetPod::new(Expanded::new(
                 tool(
                     "appbar.typeset",
-                    "Text and layout",
+                    &tr("Text and layout"),
                     "reader:panel:layout",
                     "overlay-layout",
                 ),
                 1,
             )),
             WidgetPod::new(Expanded::new(
-                tool("appbar.contrast", "Light", "settings:quick:open", "overlay-light"),
+                tool(
+                    "appbar.contrast",
+                    &tr("Light"),
+                    "settings:quick:open",
+                    "overlay-light",
+                ),
                 1,
             )),
         ])
@@ -185,10 +201,10 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
 }
 
 /// The label of the bookmark button. It names the state of the current page.
-pub fn bookmark_label(bookmarked: bool) -> &'static str {
+pub fn bookmark_label(bookmarked: bool) -> String {
     if bookmarked {
-        "Bookmarked"
+        tr("Bookmarked")
     } else {
-        "Bookmark"
+        tr("Bookmark")
     }
 }

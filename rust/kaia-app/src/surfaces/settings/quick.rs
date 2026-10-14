@@ -9,6 +9,7 @@
 
 use crate::slider::Slider;
 use kaia_events::Value;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Label, Row};
 use kaia_ui::composite::{ListRow, SheetPanel};
 use kaia_ui::controls::{Button, ButtonStyle};
@@ -28,7 +29,7 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
 
     let mut rows = Vec::new();
     rows.push(slider(
-        "Frontlight",
+        &tr("Frontlight"),
         frontlight,
         kobo,
         "settings:quick:frontlight",
@@ -36,7 +37,7 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
         t,
     ));
     rows.push(slider(
-        "Warmth",
+        &tr("Warmth"),
         warmth,
         kobo,
         "settings:quick:warmth",
@@ -45,14 +46,14 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     ));
     if !kobo {
         rows.push(WidgetPod::new(Label::new(
-            "The light controls work on the Kobo only.",
+            tr("The light controls work on the Kobo only."),
             t.font.caption.clone(),
             Tone::InkSecondary,
         )));
     }
     rows.push(
         WidgetPod::new(
-            ListRow::new("Wi-Fi")
+            ListRow::new(tr("Wi-Fi"))
                 .toggle(wifi_on)
                 .on_action("settings:quick:wifi"),
         )
@@ -60,7 +61,7 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
     );
     rows.push(
         WidgetPod::new(
-            ListRow::new("Fixed orientation").secondary("Automatic rotation is not available yet."),
+            ListRow::new(tr("Fixed orientation")).secondary(tr("Automatic rotation is not available yet.")),
         )
         .with_key("quick-rotation"),
     );
@@ -69,15 +70,19 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
             WidgetPod::new(Expanded::new(
                 WidgetPod::new(
                     Button::new(ButtonStyle::Secondary)
-                        .text("Toggle light")
+                        .text(tr("Toggle light"))
                         .on_action("settings:quick:toggle-light"),
                 )
                 .with_key("quick-toggle-light"),
                 1,
             )),
             WidgetPod::new(Expanded::new(
-                WidgetPod::new(Button::new(ButtonStyle::Primary).text("Sleep").on_action("sleep"))
-                    .with_key("quick-sleep"),
+                WidgetPod::new(
+                    Button::new(ButtonStyle::Primary)
+                        .text(tr("Sleep"))
+                        .on_action("sleep"),
+                )
+                .with_key("quick-sleep"),
                 1,
             )),
         ])
@@ -86,12 +91,12 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
 
     // The sheet is short, so its rows are spaced by the small gap.
     let content = WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch));
-    SheetPanel::new(t, "Quick settings", content)
+    SheetPanel::new(t, tr("Quick settings"), content)
 }
 
 fn slider(label: &str, value: f64, enabled: bool, id: &str, key: &str, t: &Theme) -> WidgetPod {
     let control = Slider::new(value, 0.0, 100.0, 1.0)
-        .format(|v| format!("{v}%"))
+        .format(|v| tr_format(&tr("%1%"), &[&v.to_string()]))
         .enabled(enabled)
         .on_action(id);
     WidgetPod::new(
@@ -128,7 +133,7 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
                 env.services.platform.frontlight.set_warmth(v)
             };
             if let Err(e) = result {
-                env.notice(format!("cannot set the light: {e}"));
+                env.notice(tr_format(&tr("cannot set the light: %1"), &[&e.to_string()]));
             }
             if name == "warmth" {
                 env.services
@@ -141,7 +146,7 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
             Outcome::Handled
         }
         "rotation" => {
-            env.toast("Automatic rotation is not available yet.", 3.0);
+            env.toast(tr("Automatic rotation is not available yet."), 3.0);
             Outcome::Handled
         }
         _ => Outcome::NotMine,

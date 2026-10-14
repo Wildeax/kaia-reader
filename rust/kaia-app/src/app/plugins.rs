@@ -1,4 +1,5 @@
 //! Plugin calls run between native input, session work and painting.
+use kaia_i18n::{format as tr_format, tr};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -182,11 +183,11 @@ impl<B: Backend> App<B> {
                     p.failed.insert(status.name.clone(), error);
                 }
                 if let Some(entry) = p.entries.iter_mut().find(|e| e.name == status.name) {
-                    entry.state = if status.loaded { "Works".into() } else { "Disabled".into() };
+                    entry.state = if status.loaded { tr("Works") } else { tr("Disabled") };
                 }
             }
             for entry in &mut p.entries {
-                if let Some(error) = p.failed.get(&entry.name) { entry.state = format!("Failed: {error}"); }
+                if let Some(error) = p.failed.get(&entry.name) { entry.state = tr_format(&tr("Failed: %1"), &[error.as_str()]); }
             }
             p.menus = lua.menu_entries();
             p.owners = p.menus.iter().filter_map(|m| lua.menu_owner(&m.id).map(|o| (m.id.clone(), o))).collect();

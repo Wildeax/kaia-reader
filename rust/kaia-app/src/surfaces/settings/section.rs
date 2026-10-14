@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use kaia_events::Value;
 use kaia_gfx::Size;
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_stats::Stats;
 use kaia_ui::components::Expanded;
 use kaia_ui::Window;
@@ -70,6 +71,10 @@ impl Surface for SettingsSectionSurface {
             }
             Some(Command::Set(key)) => set(&key, args, env),
             Some(Command::Pick(key)) => pick(&key, args, env),
+            Some(Command::Language) => Outcome::Navigate(Nav::Push(Box::new(SettingsSectionSurface::new(
+                "language".into(),
+            )))),
+            Some(Command::LanguagePick(tag)) => pick_language(&tag, env),
             Some(Command::Light(which)) => light(which, args, env),
             Some(Command::SyncTest) => {
                 sync_test(env);
@@ -115,13 +120,13 @@ pub fn section_page(services: &Services, name: &str, typing: bool, now: i64) -> 
     let mut children = vec![header];
     if has_text_fields(name) {
         let (label, action) = if typing {
-            ("Done editing", "settings:fields:close")
+            (tr("Done editing"), "settings:fields:close")
         } else {
-            ("Edit fields", "settings:fields:open")
+            (tr("Edit fields"), "settings:fields:open")
         };
         children.push(crate::surfaces::common::button(
             kaia_ui::controls::ButtonStyle::Secondary,
-            label,
+            &label,
             action,
             "settings-fields",
         ));
@@ -154,7 +159,7 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         return Outcome::Handled;
     };
     if key == keys::DISPLAY_ROTATION_LOCK {
-        env.toast("Automatic rotation is not available yet.", 3.0);
+        env.toast(tr("Automatic rotation is not available yet."), 3.0);
         return Outcome::Handled;
     }
     env.services.settings.save(key, value);
@@ -180,11 +185,23 @@ fn pick(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         env.services.settings.del(key);
     } else {
         if key == keys::DISPLAY_ROTATION_LOCK {
-            env.toast("Automatic rotation is not available yet.", 3.0);
+            env.toast(tr("Automatic rotation is not available yet."), 3.0);
             return Outcome::Handled;
         }
         env.services.settings.save(key, value);
     }
+    save(env);
+    Outcome::Handled
+}
+
+/// Shows the screens in language `tag`, when it is on offer, and stores the choice.
+fn pick_language(tag: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
+    let on_offer = crate::i18n::available(&env.services.catalog_root);
+    let Some(&(known, _)) = on_offer.iter().find(|(t, _)| *t == tag) else {
+        return Outcome::NotMine;
+    };
+    env.services.settings.save(keys::UI_LANGUAGE, Value::from(known));
+    env.services.set_language(known);
     save(env);
     Outcome::Handled
 }
@@ -201,7 +218,7 @@ fn light(which: commands::Light, args: &[Value], env: &mut SurfaceEnv<'_>) -> Ou
         commands::Light::Warmth => env.services.platform.frontlight.set_warmth(v),
     };
     if let Err(e) = result {
-        env.notice(format!("cannot set the light: {e}"));
+        env.notice(tr_format(&tr("cannot set the light: %1"), &[&e.to_string()]));
     }
     if which == commands::Light::Warmth {
         env.services
@@ -224,7 +241,7 @@ pub fn sync_test(env: &mut SurfaceEnv<'_>) {
 fn import_koreader(env: &mut SurfaceEnv<'_>) {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let Some(folder) = facts::find_koreader(&env.services.paths, home.as_deref()) else {
-        env.toast("No KOReader folder found.", 4.0);
+        env.toast(tr("No KOReader folder found."), 4.0);
         return;
     };
     let mut done = Vec::new();
@@ -234,8 +251,11 @@ fn import_koreader(env: &mut SurfaceEnv<'_>) {
             .library
             .import_koreader_history(&folder.history_path())
         {
-            Ok(r) => done.push(format!("{} history entries", r.added)),
-            Err(e) => env.notice(format!("history import failed: {e}")),
+            Ok(r) => done.push(tr_format(
+                &tr_n("%1 history entry", "%1 history entries", r.added as i64),
+                &[&r.added.to_string()],
+            )),
+            Err(e) => env.notice(tr_format(&tr("history import failed: %1"), &[&e.to_string()])),
         }
     }
     if folder.collections {
@@ -244,21 +264,25 @@ fn import_koreader(env: &mut SurfaceEnv<'_>) {
             .library
             .import_koreader_collections(&folder.collections_path())
         {
-            Ok(r) => done.push(format!("{} collection entries", r.added)),
-            Err(e) => env.notice(format!("collections import failed: {e}")),
+            Ok(r) => done.push(tr_format(
+                &tr_n("%1 collection entry", "%1 collection entries", r.added as i64),
+                &[&r.added.to_string()],
+            )),
+            Err(e) => env.notice(tr_format(&tr("collections import failed: %1"), &[&e.to_string()])),
         }
     }
     if folder.statistics {
         let stats_path = facts::stats_path(&env.services.paths.data_dir);
         match Stats::open(&stats_path).and_then(|mut stats| stats.import_koreader(folder.statistics_path())) {
-            Ok(_) => done.push("statistics".to_string()),
-            Err(e) => env.notice(format!("statistics import failed: {e}")),
+            Ok(_) => done.push(tr("statistics")),
+            Err(e) => env.notice(tr_format(&tr("statistics import failed: %1"), &[&e.to_string()])),
         }
     }
     let message = if done.is_empty() {
-        "Nothing to import.".to_string()
+        tr("Nothing to import.")
     } else {
-        format!("Imported {}.", done.join(", "))
+        let separator = tr(", ");
+        tr_format(&tr("Imported %1."), &[&done.join(separator.as_str())])
     };
     env.toast(message, 5.0);
 }

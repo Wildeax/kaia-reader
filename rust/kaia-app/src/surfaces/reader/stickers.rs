@@ -7,6 +7,7 @@ use std::sync::Arc;
 use kaia_book::{BookSession, Pos, Selection, TextLayout};
 use kaia_doc::{cre::CreDocument, Document, PageText, RectF};
 use kaia_gfx::{image, AlphaPixmap, Point, Rect, Size};
+use kaia_i18n::tr;
 use kaia_storage::{Anchor, DocumentId, Offset, Placement, Sticker, StickerState, Store, TextQuote};
 
 pub const BUNDLED: [(&str, &str); 4] = [
@@ -29,8 +30,23 @@ pub(super) fn store(session: &BookSession) -> Result<Store, String> {
         .state_path()
         .parent()
         .and_then(Path::parent)
-        .ok_or("No data folder.")?;
+        .ok_or_else(|| tr("No data folder."))?;
     Store::open(dir).map_err(|e| e.to_string())
+}
+
+/// The text of a sticker error for the page. The sticker frame runs on the engine
+/// thread, which has no catalog, so that code reports English. The catalog is read
+/// here, on the UI thread. Other text, such as an engine message, passes through.
+pub(super) fn error_text(error: &str) -> String {
+    match error {
+        "No data folder." => tr("No data folder."),
+        "Stickers need CREngine for this book." => tr("Stickers need CREngine for this book."),
+        "No text document." => tr("No text document."),
+        "The selection has no text box." => tr("The selection has no text box."),
+        "The selected text could not be located." => tr("The selected text could not be located."),
+        "This text engine has no sticker positions." => tr("This text engine has no sticker positions."),
+        other => other.to_string(),
+    }
 }
 
 pub(super) fn identity(session: &BookSession) -> DocumentId {
@@ -88,8 +104,9 @@ impl Drawing {
                 }
             } else {
                 let style = cx.theme.style(&cx.theme.font.caption, Tone::Ink);
+                let fallback = tr("Sticker");
                 let text = cx.fonts.layout(
-                    self.text.as_deref().unwrap_or("Sticker"),
+                    self.text.as_deref().unwrap_or(&fallback),
                     &style,
                     self.rect.w.saturating_sub(8),
                     Some(3),

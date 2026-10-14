@@ -1,0 +1,14 @@
+# Source of l10n/de/koreader.mo, which is compiled with msgfmt. The fixture has only the .mo,
+# so the test covers a catalog that ships compiled, as the Kobo package does.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgid "%1 book"
+msgid_plural "%1 books"
+msgstr[0] "%1 Buch"
+msgstr[1] "%1 Bücher"

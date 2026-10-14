@@ -16,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use kaia_events::Value;
 use kaia_gfx::Size;
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::{Book, Filter as LibraryFilter, Sort, SortKey};
 use kaia_ui::components::{Expanded, Row};
 use kaia_ui::composite::{Header, ListRow, PagedList};
@@ -111,7 +112,7 @@ fn handle(state: &NotesView, cmd: &str, env: &mut SurfaceEnv<'_>) -> Outcome {
                 }
             }
         }
-        env.toast("This sticker's book is not in the library.", 4.0);
+        env.toast(tr("This sticker's book is not in the library."), 4.0);
         return Outcome::Handled;
     }
     match commands::parse(cmd) {
@@ -143,17 +144,24 @@ fn replace(view: NotesView) -> Outcome {
 pub fn export_all(env: &mut SurfaceEnv<'_>) {
     let books = load_books(env.services);
     if books.is_empty() {
-        env.toast("There are no notes to export.", 3.0);
+        env.toast(tr("There are no notes to export."), 3.0);
         return;
     }
     let data_dir = env.services.paths.data_dir.clone();
     match export::export(&data_dir, &books, now_unix()) {
         Ok(done) => {
-            let message = format!("Exported {} notes to {}", done.count, done.markdown.display());
+            let message = tr_format(
+                &tr_n(
+                    "Exported %1 note to %2",
+                    "Exported %1 notes to %2",
+                    done.count as i64,
+                ),
+                &[&done.count.to_string(), &done.markdown.display().to_string()],
+            );
             env.toast(message, 6.0);
         }
         Err(e) => {
-            env.toast(format!("Export failed: {e}"), 6.0);
+            env.toast(tr_format(&tr("Export failed: %1"), &[&e.to_string()]), 6.0);
         }
     }
 }
@@ -216,7 +224,7 @@ fn filter_row(services: &Services, filter: Filter) -> WidgetPod {
                     WidgetPod::new(Expanded::new(
                         button(
                             style,
-                            f.label(),
+                            &f.label(),
                             &format!("notes:filter:{}", f.name()),
                             &format!("notes-filter-{}", f.name()),
                         ),
@@ -237,13 +245,13 @@ fn filter_row(services: &Services, filter: Filter) -> WidgetPod {
 fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Filter) -> Window {
     let mut children = vec![
         crate::surfaces::common::status_header(
-            Header::new(&services.theme, "Notes")
+            Header::new(&services.theme, tr("Notes"))
                 .status(crate::surfaces::library::data::status_line(services).unwrap_or_default()),
         ),
         filter_row(services, filter),
         button(
             ButtonStyle::Text,
-            "Export all notes",
+            &tr("Export all notes"),
             "notes:export",
             "notes-export",
         ),
@@ -251,7 +259,7 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
     if books.is_empty() {
         children.push(body(
             services,
-            "No highlights, notes or bookmarks yet. Select text in a book to start.",
+            tr("No highlights, notes or bookmarks yet. Select text in a book to start."),
         ));
     } else {
         let mut items: Vec<Item> = books
@@ -272,13 +280,13 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
         for book in books {
             for note in book.notes.iter().filter(|n| n.orphaned && filter.matches(n)) {
                 if repairs.is_empty() {
-                    repairs.push(Item::Heading("Needs repair".into()));
+                    repairs.push(Item::Heading(tr("Needs repair")));
                 }
                 repairs.push(entry_item(book, note, repairs.len()));
             }
         }
         if !repairs.is_empty() {
-            repairs.push(Item::Heading("Books".into()));
+            repairs.push(Item::Heading(tr("Books")));
             repairs.append(&mut items);
             items = repairs;
         }
@@ -304,9 +312,9 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
             continue;
         }
         if repair {
-            items.push(Item::Heading("Needs repair".into()));
+            items.push(Item::Heading(tr("Needs repair")));
         } else if matching.iter().any(|n| n.orphaned) {
-            items.push(Item::Heading("In the book".into()));
+            items.push(Item::Heading(tr("In the book")));
         }
         for note in group {
             items.push(entry_item(book, note, items.len()));
@@ -314,7 +322,7 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
     }
     let mut children = vec![header, filter_row(services, filter)];
     if items.is_empty() {
-        children.push(body(services, "Nothing matches this filter."));
+        children.push(body(services, tr("Nothing matches this filter.")));
     } else {
         children.push(list(items));
     }
@@ -342,7 +350,7 @@ fn entry_item(book: &BookNotes, note: &Note, index: usize) -> Item {
     Item::Entry {
         primary: note.primary(),
         secondary: if note.orphaned && note.sticker.is_some() {
-            format!("{} · Repair", book.title)
+            tr_format(&tr("%1 · Repair"), &[book.title.as_str()])
         } else {
             note.secondary()
         },
@@ -362,26 +370,30 @@ fn counts(notes: &[&Note]) -> String {
     let mut parts = Vec::new();
     let stickers = notes.iter().filter(|n| n.sticker.is_some()).count();
     if stickers > 0 {
-        parts.push(plural(stickers, "sticker"));
+        parts.push(tr_format(
+            &tr_n("%1 sticker", "%1 stickers", stickers as i64),
+            &[&stickers.to_string()],
+        ));
     }
     if highlights > 0 {
-        parts.push(plural(highlights, "highlight"));
+        parts.push(tr_format(
+            &tr_n("%1 highlight", "%1 highlights", highlights as i64),
+            &[&highlights.to_string()],
+        ));
     }
     if with_note > 0 {
-        parts.push(plural(with_note, "note"));
+        parts.push(tr_format(
+            &tr_n("%1 note", "%1 notes", with_note as i64),
+            &[&with_note.to_string()],
+        ));
     }
     if bookmarks > 0 {
-        parts.push(plural(bookmarks, "bookmark"));
+        parts.push(tr_format(
+            &tr_n("%1 bookmark", "%1 bookmarks", bookmarks as i64),
+            &[&bookmarks.to_string()],
+        ));
     }
     parts.join(", ")
-}
-
-fn plural(n: usize, word: &str) -> String {
-    if n == 1 {
-        format!("1 {word}")
-    } else {
-        format!("{n} {word}s")
-    }
 }
 
 /// The list of items, one page at a time.
@@ -451,6 +463,10 @@ mod tests {
         let a = note(true, false, Some("q"));
         let b = note(false, true, None);
         assert_eq!(counts(&[&a, &b]), "1 highlight, 1 bookmark");
-        assert_eq!(plural(2, "note"), "2 notes");
+        let noted = Note {
+            note: Some("text".into()),
+            ..note(false, false, None)
+        };
+        assert_eq!(counts(&[&noted, &noted]), "2 notes");
     }
 }

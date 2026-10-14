@@ -5,6 +5,7 @@
 
 use kaia_events::Value;
 use kaia_gfx::{Pixmap, Size};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::{Book, Collection};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Paragraph, ProgressBar, Row, SizedBox, Spacer,
@@ -100,16 +101,16 @@ pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
     };
     WidgetPod::new(
         Row::new(vec![
-            tab(7, Some(View::Covers), "Covers", "library:view:covers"),
-            tab(5, Some(View::List), "List", "library:view:list"),
-            tab(8, Some(View::Folders), "Folders", "library:view:folders"),
+            tab(7, Some(View::Covers), &tr("Covers"), "library:view:covers"),
+            tab(5, Some(View::List), &tr("List"), "library:view:list"),
+            tab(8, Some(View::Folders), &tr("Folders"), "library:view:folders"),
             tab(
                 12,
                 Some(View::Collections),
-                "Collections",
+                &tr("Collections"),
                 "library:view:collections",
             ),
-            tab(6, None, "Sort", "library:sort"),
+            tab(6, None, &tr("Sort"), "library:sort"),
         ])
         .gap(t.space.xs),
     )
@@ -131,25 +132,25 @@ pub fn filter_row(t: &Theme, prefs: &Prefs) -> WidgetPod {
             chip(
                 9,
                 prefs.chip == Some(Chip::Reading),
-                "Reading",
+                &tr("Reading"),
                 "library:filter:reading",
             ),
             chip(
                 12,
                 prefs.chip == Some(Chip::NotStarted),
-                "Not started",
+                &tr("Not started"),
                 "library:filter:not-started",
             ),
             chip(
                 9,
                 prefs.chip == Some(Chip::Finished),
-                "Finished",
+                &tr("Finished"),
                 "library:filter:finished",
             ),
             chip(
                 11,
                 prefs.collection.is_some(),
-                "Collection",
+                &tr("Collection"),
                 "library:filter:collection",
             ),
         ])
@@ -231,7 +232,10 @@ pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
             Column::new(vec![
                 WidgetPod::new(
                     ListRow::new(c.name.clone())
-                        .secondary(format!("{} books", c.books))
+                        .secondary(tr_format(
+                            &tr_n("%1 book", "%1 books", c.books as i64),
+                            &[&c.books.to_string()],
+                        ))
                         .on_action(format!("library:collection:{id}")),
                 )
                 .with_key(format!("collection-{id}")),
@@ -239,22 +243,22 @@ pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
                     Row::new(vec![
                         button(
                             ButtonStyle::Secondary,
-                            "Rename",
+                            &tr("Rename"),
                             &format!("library:collections:rename:{id}"),
                         ),
                         button(
                             ButtonStyle::Secondary,
-                            "Delete",
+                            &tr("Delete"),
                             &format!("library:collections:delete:{id}"),
                         ),
                         button(
                             ButtonStyle::Secondary,
-                            "Move up",
+                            &tr("Move up"),
                             &format!("library:collections:move:{id}:{}", position.saturating_sub(1)),
                         ),
                         button(
                             ButtonStyle::Secondary,
-                            "Move down",
+                            &tr("Move down"),
                             &format!("library:collections:move:{id}:{}", position + 1),
                         ),
                     ])
@@ -267,11 +271,15 @@ pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
     WidgetPod::new(Expanded::new(
         WidgetPod::new(
             Column::new(vec![
-                button(ButtonStyle::Primary, "New collection", "library:collections:new"),
+                button(
+                    ButtonStyle::Primary,
+                    &tr("New collection"),
+                    "library:collections:new",
+                ),
                 WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("collection-list"), 1)),
                 button(
                     ButtonStyle::Secondary,
-                    "Clear reading history",
+                    &tr("Clear reading history"),
                     "library:history:clear",
                 ),
             ])
@@ -295,7 +303,7 @@ pub fn body_text(t: &Theme, text: &str) -> WidgetPod {
 pub fn search(t: &Theme, query: &str, results: Vec<Line>, loader: crate::covers::Shared) -> Vec<WidgetPod> {
     let field = WidgetPod::new(
         TextField::new()
-            .placeholder("Title, author, series")
+            .placeholder(tr("Title, author, series"))
             .with_text(query)
             .on_change("library:search"),
     )
@@ -304,13 +312,13 @@ pub fn search(t: &Theme, query: &str, results: Vec<Line>, loader: crate::covers:
     let top = WidgetPod::new(
         Row::new(vec![
             WidgetPod::new(Expanded::new(field, 1)),
-            button(ButtonStyle::Secondary, "Close", "library:search:close"),
+            button(ButtonStyle::Secondary, &tr("Close"), "library:search:close"),
         ])
         .gap(t.space.sm)
         .cross_align(CrossAlign::Center),
     );
     // A fixed hint: the results change without a rebuild, so the hint cannot depend on them.
-    let hint = body_text(t, "Type a title, an author or a word from the description.");
+    let hint = body_text(t, &tr("Type a title, an author or a word from the description."));
     let list = WidgetPod::new(Expanded::new(
         WidgetPod::new(list_covers(results, loader)).with_key("results"),
         1,
@@ -339,6 +347,19 @@ pub fn sheet(t: &Theme, title: &str, mut children: Vec<WidgetPod>) -> WidgetPod 
     )
 }
 
+/// The label of a row in the sort table of `sort_panel`.
+fn sort_label(label: &str) -> String {
+    match label {
+        "Title" => tr("Title"),
+        "Author" => tr("Author"),
+        "Recently read" => tr("Recently read"),
+        "Recently added" => tr("Recently added"),
+        "Progress" => tr("Progress"),
+        "Series" => tr("Series"),
+        other => other.to_string(),
+    }
+}
+
 /// The sort panel: one row per choice. The current one shows a value.
 pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
     let options = [
@@ -352,23 +373,23 @@ pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
     let rows: Vec<WidgetPod> = options
         .into_iter()
         .map(|(choice, label, key, enabled)| {
-            let mut row = ListRow::new(label)
+            let mut row = ListRow::new(sort_label(label))
                 .enabled(enabled)
                 .on_action(format!("library:sort:{key}"));
             if !enabled {
-                row = row.secondary("Needs series data from the book files");
+                row = row.secondary(tr("Needs series data from the book files"));
             } else if choice == current {
-                row = row.value("Current");
+                row = row.value(tr("Current"));
             }
             WidgetPod::new(row).with_key(format!("sort-{key}"))
         })
         .collect();
     sheet(
         t,
-        "Sort by",
+        &tr("Sort by"),
         vec![
             WidgetPod::new(Column::new(rows).cross_align(CrossAlign::Stretch).shrink()),
-            button(ButtonStyle::Secondary, "Cancel", "library:panel:close"),
+            button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
         ],
     )
 }
@@ -388,48 +409,55 @@ pub fn collection_panel(
             None => format!("library:collection:{}", c.id),
         };
         let mut row = ListRow::new(c.name.clone())
-            .secondary(format!("{} books", c.books))
+            .secondary(tr_format(
+                &tr_n("%1 book", "%1 books", c.books as i64),
+                &[&c.books.to_string()],
+            ))
             .on_action(action.clone());
         if book.is_none() && filter == Some(c.id) {
-            row = row.value("Showing");
+            row = row.value(tr("Showing"));
         }
         rows.push(WidgetPod::new(row).with_key(format!("collection-{}", c.id)));
     }
     if rows.is_empty() {
-        rows.push(body_text(t, "No collections yet."));
+        rows.push(body_text(t, &tr("No collections yet.")));
     }
     let mut footer = Vec::new();
     match book {
         Some(b) => footer.push(button(
             ButtonStyle::Primary,
-            "New collection",
+            &tr("New collection"),
             &format!("library:add:{b}:new"),
         )),
         None if filter.is_some() => footer.push(button(
             ButtonStyle::Secondary,
-            "Show all books",
+            &tr("Show all books"),
             "library:collection:none",
         )),
         None => {}
     }
-    footer.push(button(ButtonStyle::Secondary, "Cancel", "library:panel:close"));
+    footer.push(button(
+        ButtonStyle::Secondary,
+        &tr("Cancel"),
+        "library:panel:close",
+    ));
     let title = if book.is_some() {
-        "Add to collection"
+        tr("Add to collection")
     } else {
-        "Filter by collection"
+        tr("Filter by collection")
     };
     let mut children = vec![WidgetPod::new(
         Column::new(rows).cross_align(CrossAlign::Stretch).shrink(),
     )];
     children.push(WidgetPod::new(Row::new(footer).gap(t.space.md)));
-    sheet(t, title, children)
+    sheet(t, &title, children)
 }
 
 /// The name panel for a new collection: a field, the keyboard and two buttons.
 pub fn name_panel(t: &Theme, name: &str) -> WidgetPod {
     let field = WidgetPod::new(
         TextField::new()
-            .placeholder("Collection name")
+            .placeholder(tr("Collection name"))
             .with_text(name)
             .on_change("library:name")
             .on_submit("library:name:save"),
@@ -439,14 +467,14 @@ pub fn name_panel(t: &Theme, name: &str) -> WidgetPod {
     let keyboard = WidgetPod::new(OnScreenKeyboard::new(&ENGLISH).background(Tone::Surface));
     sheet(
         t,
-        "New collection",
+        &tr("New collection"),
         vec![
             field,
             keyboard,
             WidgetPod::new(
                 Row::new(vec![
-                    button(ButtonStyle::Secondary, "Cancel", "library:panel:close"),
-                    button(ButtonStyle::Primary, "Save", "library:name:save"),
+                    button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
+                    button(ButtonStyle::Primary, &tr("Save"), "library:name:save"),
                 ])
                 .gap(t.space.md),
             ),
@@ -459,16 +487,23 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
     let title = crate::surfaces::common::display_title(book);
     sheet(
         t,
-        "Delete this file?",
+        &tr("Delete this file?"),
         vec![
             body_text(
                 t,
-                &format!("\"{title}\" is removed from the device. The book leaves the library. This cannot be undone."),
+                &tr_format(
+                    &tr("\"%1\" is removed from the device. The book leaves the library. This cannot be undone."),
+                    &[&title],
+                ),
             ),
             WidgetPod::new(
                 Row::new(vec![
-                    button(ButtonStyle::Secondary, "Cancel", "library:panel:close"),
-                    button(ButtonStyle::Primary, "Delete", &format!("library:book:delete-confirm:{}", book.id)),
+                    button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
+                    button(
+                        ButtonStyle::Primary,
+                        &tr("Delete"),
+                        &format!("library:book:delete-confirm:{}", book.id),
+                    ),
                 ])
                 .gap(t.space.md),
             ),
@@ -492,14 +527,16 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
         )));
     }
     facts.push(WidgetPod::new(ProgressBar::new(book.percent as f32)));
-    facts.push(body_text(t, data::status_label(book)));
-    let mut info = format!(
-        "{} file, {}",
-        book.format.to_uppercase(),
-        data::size_text(book.size)
+    facts.push(body_text(t, &data::status_label(book)));
+    let mut info = tr_format(
+        &tr("%1 file, %2"),
+        &[&book.format.to_uppercase(), &data::size_text(book.size)],
     );
     if let Some(pages) = book.pages {
-        info.push_str(&format!(", {pages} pages"));
+        info.push_str(&tr_format(
+            &tr_n(", %1 page", ", %1 pages", pages as i64),
+            &[&pages.to_string()],
+        ));
     }
     facts.push(WidgetPod::new(Label::new(
         info,
@@ -536,37 +573,37 @@ pub fn details_panel(t: &Theme, book: &Book, cover: Option<Pixmap>, close: &str)
     let id = book.id;
     children.push(button(
         ButtonStyle::Primary,
-        "Open",
+        &tr("Open"),
         &format!("library:open:{id}"),
     ));
     children.push(pair(
         t,
         button(
             ButtonStyle::Secondary,
-            "Add to collection",
+            &tr("Add to collection"),
             &format!("library:book:collection:{id}"),
         ),
         button(
             ButtonStyle::Secondary,
-            "Mark as finished",
+            &tr("Mark as finished"),
             &format!("library:book:finished:{id}"),
         ),
     ));
     children.push(button(
         ButtonStyle::Secondary,
-        "Remove from history",
+        &tr("Remove from history"),
         &format!("library:book:history:{id}"),
     ));
     children.push(pair(
         t,
         button(
             ButtonStyle::Secondary,
-            "Delete file",
+            &tr("Delete file"),
             &format!("library:book:delete:{id}"),
         ),
-        button(ButtonStyle::Secondary, "Close", close),
+        button(ButtonStyle::Secondary, &tr("Close"), close),
     ));
-    sheet(t, "Book details", children)
+    sheet(t, &tr("Book details"), children)
 }
 
 /// Two buttons side by side, each taking half the row.

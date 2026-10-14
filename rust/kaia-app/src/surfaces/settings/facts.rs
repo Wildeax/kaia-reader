@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use kaia_events::{Settings, Value};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_platform::Paths;
 use kaia_stats::{BookSummary, DayTotal, Stats, Totals, Weekday};
 
@@ -51,10 +52,18 @@ pub fn stats_view(data_dir: &Path, now: i64) -> Option<StatsView> {
 pub fn duration(seconds: i64) -> String {
     let minutes = seconds.max(0) / 60;
     if minutes >= 60 {
-        format!("{} h {} min", minutes / 60, minutes % 60)
+        tr_format(
+            &tr("%1 h %2 min"),
+            &[&(minutes / 60).to_string(), &(minutes % 60).to_string()],
+        )
     } else {
-        format!("{minutes} min")
+        tr_format(&tr("%1 min"), &[&minutes.to_string()])
     }
+}
+
+/// A page count as `1 page` or `12 pages`.
+pub fn page_count(pages: i64) -> String {
+    tr_format(&tr_n("%1 page", "%1 pages", pages), &[&pages.to_string()])
 }
 
 /// What the KOReader folder holds that Kaia can import.

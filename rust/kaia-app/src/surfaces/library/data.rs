@@ -4,6 +4,7 @@
 use kaia_events::{Settings, Value};
 use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::Pixmap;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
 use kaia_ui::composite::BookInfo;
 
@@ -182,7 +183,11 @@ pub fn status_line(services: &Services) -> Option<String> {
         parts.push(format!("{level}%"));
     }
     let wifi = &services.platform.network;
-    parts.push(if wifi.is_connected() { "Wi-Fi" } else { "Wi-Fi off" }.to_string());
+    parts.push(if wifi.is_connected() {
+        tr("Wi-Fi")
+    } else {
+        tr("Wi-Fi off")
+    });
     Some(parts.join("  "))
 }
 
@@ -208,12 +213,12 @@ pub fn common_root(books: &[Book]) -> Option<std::path::PathBuf> {
 }
 
 /// The label of a book's status for the details page.
-pub fn status_label(book: &Book) -> &'static str {
+pub fn status_label(book: &Book) -> String {
     match book.status {
-        Status::New => "Not started",
-        Status::Reading => "Reading",
-        Status::Abandoned => "Abandoned",
-        Status::Complete => "Finished",
+        Status::New => tr("Not started"),
+        Status::Reading => tr("Reading"),
+        Status::Abandoned => tr("Abandoned"),
+        Status::Complete => tr("Finished"),
     }
 }
 
@@ -225,8 +230,8 @@ pub fn percent(book: &Book) -> u32 {
 /// The file size in megabytes with one decimal place.
 pub fn size_text(bytes: u64) -> String {
     if bytes >= 1_000_000 {
-        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
+        tr_format(&tr("%1 MB"), &[&format!("{:.1}", bytes as f64 / 1_000_000.0)])
     } else {
-        format!("{} KB", bytes / 1000)
+        tr_format(&tr("%1 KB"), &[&(bytes / 1000).to_string()])
     }
 }

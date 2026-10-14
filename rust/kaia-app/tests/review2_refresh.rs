@@ -16,6 +16,7 @@ fn inactivity_sleep_resets_on_input() {
         },
     )
     .unwrap();
+    pin_english(&dir.join("data"));
     let mut services = Services::open(platform, panel(), Some(dir.join("data"))).unwrap();
     services.settings.save("device.sleep_minutes", Value::Number(1.0));
     let clock = ManualClock::new();

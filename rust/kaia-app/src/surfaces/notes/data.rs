@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use kaia_book::state::{STATE_FORMAT, STATE_VERSION};
 use kaia_events::{Settings, Value};
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::Book;
 
 /// One highlight, note or bookmark, read from a state file.
@@ -103,13 +104,13 @@ impl Filter {
     }
 
     /// The label of the chip.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Filter::All => "All",
-            Filter::Highlights => "Highlights",
-            Filter::Notes => "Notes",
-            Filter::Bookmarks => "Bookmarks",
-            Filter::Stickers => "Stickers",
+            Filter::All => tr("All"),
+            Filter::Highlights => tr("Highlights"),
+            Filter::Notes => tr("Notes"),
+            Filter::Bookmarks => tr("Bookmarks"),
+            Filter::Stickers => tr("Stickers"),
         }
     }
 
@@ -142,41 +143,41 @@ impl Note {
             return note.to_string();
         }
         if self.sticker.is_some() {
-            return "Sticker".into();
+            return tr("Sticker");
         }
         match &self.chapter {
-            Some(chapter) if !chapter.is_empty() => format!("Bookmark in {chapter}"),
-            _ => "Bookmark".to_string(),
+            Some(chapter) if !chapter.is_empty() => tr_format(&tr("Bookmark in %1"), &[chapter.as_str()]),
+            _ => tr("Bookmark"),
         }
     }
 
     /// The line under the entry: the kind, the page and the note text.
     pub fn secondary(&self) -> String {
         let kind = if self.sticker.is_some() {
-            "Sticker"
+            tr("Sticker")
         } else if self.note.as_deref() == Some("Shared to Notes") {
-            "Shared to Notes"
+            tr("Shared to Notes")
         } else {
             match (self.highlight, self.bookmark) {
-                (true, _) => "Highlight",
-                (false, true) => "Bookmark",
-                (false, false) => "Note",
+                (true, _) => tr("Highlight"),
+                (false, true) => tr("Bookmark"),
+                (false, false) => tr("Note"),
             }
         };
-        let mut parts = vec![kind.to_string()];
+        let mut parts = vec![kind];
         if let Some(page) = self.pageno {
-            parts.push(format!("page {page}"));
+            parts.push(tr_format(&tr("page %1"), &[&page.to_string()]));
         }
         if let Some(chapter) = self.chapter.as_deref().filter(|c| !c.is_empty()) {
             parts.push(chapter.to_string());
         }
         if self.highlight {
             if let Some(note) = self.note.as_deref().filter(|n| !n.trim().is_empty()) {
-                parts.push(format!("note: {note}"));
+                parts.push(tr_format(&tr("note: %1"), &[note]));
             }
         }
         if self.orphaned {
-            parts.push("needs repair".to_string());
+            parts.push(tr("needs repair"));
         }
         parts.join(" · ")
     }

@@ -2,6 +2,7 @@
 use crate::services::Services;
 use kaia_book::state::{STATE_FORMAT, STATE_VERSION};
 use kaia_events::{Settings, Value};
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::{Sort, SortKey, Status};
 
 pub(crate) fn mark_finished(services: &mut Services, id: i64) -> Result<(), String> {
@@ -9,7 +10,7 @@ pub(crate) fn mark_finished(services: &mut Services, id: i64) -> Result<(), Stri
         .library
         .book(id)
         .map_err(|e| e.to_string())?
-        .ok_or("Book not found")?;
+        .ok_or_else(|| tr("Book not found"))?;
     let path = services
         .paths
         .data_dir
@@ -20,7 +21,7 @@ pub(crate) fn mark_finished(services: &mut Services, id: i64) -> Result<(), Stri
             if settings.read("format").as_str() != Some(STATE_FORMAT)
                 || settings.read("version").as_i64() != Some(STATE_VERSION)
             {
-                return Err("Cannot read this book's saved state. It was kept unchanged.".into());
+                return Err(tr("Cannot read this book's saved state. It was kept unchanged."));
             }
             let mut summary = settings.read("summary").as_table().cloned().unwrap_or_default();
             summary.insert("status".into(), Value::from("complete"));
@@ -40,9 +41,9 @@ pub(crate) fn mark_finished(services: &mut Services, id: i64) -> Result<(), Stri
         }
         Err(error) => {
             let backup = crate::durable::preserve(&path).map_err(|e| e.to_string())?;
-            return Err(format!(
-                "Cannot read book state. Kept a copy at {}. {error}",
-                backup.display()
+            return Err(tr_format(
+                &tr("Cannot read book state. Kept a copy at %1. %2"),
+                &[backup.display().to_string().as_str(), error.to_string().as_str()],
             ));
         }
     }

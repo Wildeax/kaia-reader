@@ -15,6 +15,7 @@ use kaia_gfx::{
     image::{decode_rgb, DecodeLimits},
     Pixmap,
 };
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::Library;
 use kaia_opds::{Acquisition, Catalog, Client, Feed};
 
@@ -27,13 +28,50 @@ pub enum Request {
     Connect { address: String, password: String },
 }
 
+/// What the worker sends back. The worker thread has no translation catalog, so its
+/// text is English. The UI thread turns it into the language in use, see [`worker_text`].
 pub enum Reply {
-    Progress(String),
+    Progress(Progress),
     Feed(Feed),
     Cover(Pixmap),
     Servers(Vec<Server>),
     Book(i64),
     Finished(Result<(), String>),
+}
+
+/// A line of status text. A line with numbers keeps the numbers, so the UI thread can
+/// write it in the language in use.
+pub enum Progress {
+    /// English text with no numbers. See [`worker_text`].
+    Text(String),
+    /// Kilobytes received, and the size of the file when the server sent one.
+    Downloading { done_kb: u64, total_kb: Option<u64> },
+    /// Kilobytes received, and the size of the file.
+    Receiving { done_kb: u64, total_kb: u64 },
+}
+
+impl Progress {
+    /// The line to show. Call this on the UI thread.
+    pub fn text(&self) -> String {
+        match self {
+            Self::Text(text) => worker_text(text),
+            Self::Downloading {
+                done_kb,
+                total_kb: Some(total_kb),
+            } => tr_format(
+                &tr("Downloading %1 of %2 KB"),
+                &[&done_kb.to_string(), &total_kb.to_string()],
+            ),
+            Self::Downloading {
+                done_kb,
+                total_kb: None,
+            } => tr_format(&tr("Downloading %1 KB"), &[&done_kb.to_string()]),
+            Self::Receiving { done_kb, total_kb } => tr_format(
+                &tr("Receiving %1 of %2 KB"),
+                &[&done_kb.to_string(), &total_kb.to_string()],
+            ),
+        }
+    }
 }
 
 pub struct Worker {
@@ -168,11 +206,10 @@ fn run(
                     staging.path(),
                     |bytes, total| {
                         if last.elapsed() >= Duration::from_millis(500) {
-                            let text = match total {
-                                Some(n) => format!("Downloading {} of {} KB", bytes / 1024, n / 1024),
-                                None => format!("Downloading {} KB", bytes / 1024),
-                            };
-                            progress(tx, &text);
+                            let _ = tx.send(Reply::Progress(Progress::Downloading {
+                                done_kb: bytes / 1024,
+                                total_kb: total.map(|n| n / 1024),
+                            }));
                             last = Instant::now();
                         }
                     },
@@ -251,7 +288,7 @@ fn run(
 }
 
 fn progress(tx: &Sender<Reply>, text: &str) {
-    let _ = tx.send(Reply::Progress(text.into()));
+    let _ = tx.send(Reply::Progress(Progress::Text(text.into())));
 }
 
 pub fn opds_error(error: kaia_opds::Error) -> String {
@@ -317,10 +354,10 @@ impl Storage for BookStorage {
             part.write_all(&buffer[..count])?;
             written += count as u64;
             if last.elapsed() >= Duration::from_millis(500) {
-                progress(
-                    &self.tx,
-                    &format!("Receiving {} of {} KB", written / 1024, length / 1024),
-                );
+                let _ = self.tx.send(Reply::Progress(Progress::Receiving {
+                    done_kb: written / 1024,
+                    total_kb: length / 1024,
+                }));
                 last = Instant::now();
             }
         }
@@ -364,4 +401,71 @@ fn publish_download(source: &Path, root: &Path) -> Result<PathBuf, String> {
         }
     }
     Err("Too many books share this filename.".into())
+}
+
+/// The words for English text that the worker sent. The catalog belongs to the UI
+/// thread, so call this on the UI thread. Text that is not listed comes back as it is.
+pub fn worker_text(english: &str) -> String {
+    match english {
+        "Turning on Wi-Fi..." => tr("Turning on Wi-Fi..."),
+        "Loading catalog..." => tr("Loading catalog..."),
+        "Searching catalog..." => tr("Searching catalog..."),
+        "Loading cover..." => tr("Loading cover..."),
+        "Downloading book..." => tr("Downloading book..."),
+        "Finding the download format..." => tr("Finding the download format..."),
+        "Adding book to the library..." => tr("Adding book to the library..."),
+        "Looking for Calibre..." => tr("Looking for Calibre..."),
+        "Connecting to Calibre..." => tr("Connecting to Calibre..."),
+        "Connected. Send books from Calibre." => tr("Connected. Send books from Calibre."),
+        "Book received. Connected to Calibre." => tr("Book received. Connected to Calibre."),
+        "Calibre sent a message. Check the server." => tr("Calibre sent a message. Check the server."),
+        "Cancelled." => tr("Cancelled."),
+        "Cannot start the network worker." => tr("Cannot start the network worker."),
+        "Network worker stopped." => tr("Network worker stopped."),
+        "Cannot start Wi-Fi." => tr("Cannot start Wi-Fi."),
+        "Cannot turn on Wi-Fi." => tr("Cannot turn on Wi-Fi."),
+        "Cannot join the saved Wi-Fi network." => tr("Cannot join the saved Wi-Fi network."),
+        "Cannot read this cover." => tr("Cannot read this cover."),
+        "The catalog did not offer this download format." => {
+            tr("The catalog did not offer this download format.")
+        }
+        "Cannot create the downloads folder." => tr("Cannot create the downloads folder."),
+        "Cannot prepare the download." => tr("Cannot prepare the download."),
+        "Cannot discover Calibre. Try a manual address." => {
+            tr("Cannot discover Calibre. Try a manual address.")
+        }
+        "Use a server address and port." => tr("Use a server address and port."),
+        "Cannot find this server." => tr("Cannot find this server."),
+        "Cannot connect to Calibre." => tr("Cannot connect to Calibre."),
+        "Calibre connection ended. Check the server and password." => {
+            tr("Calibre connection ended. Check the server and password.")
+        }
+        "Cannot open the library." => tr("Cannot open the library."),
+        "Cannot find the book." => tr("Cannot find the book."),
+        "Cannot update the library." => tr("Cannot update the library."),
+        "Cannot prepare the library scan." => tr("Cannot prepare the library scan."),
+        "Cannot find the downloaded book." => tr("Cannot find the downloaded book."),
+        "The book has no filename." => tr("The book has no filename."),
+        "The book was saved but could not be indexed." => tr("The book was saved but could not be indexed."),
+        "Cannot read the library." => tr("Cannot read the library."),
+        "The book format is not supported." => tr("The book format is not supported."),
+        "Cannot save the downloaded book." => tr("Cannot save the downloaded book."),
+        "Too many books share this filename." => tr("Too many books share this filename."),
+        "Authentication failed. Check the username and password." => {
+            tr("Authentication failed. Check the username and password.")
+        }
+        "This address did not return an OPDS feed." => tr("This address did not return an OPDS feed."),
+        "The server took too long to reply." => tr("The server took too long to reply."),
+        "Cannot save the book. Check the downloads folder." => {
+            tr("Cannot save the book. Check the downloads folder.")
+        }
+        "The server could not find this item." => tr("The server could not find this item."),
+        "This format needs an external download service." => {
+            tr("This format needs an external download service.")
+        }
+        "Cannot load this item. Check the address and connection." => {
+            tr("Cannot load this item. Check the address and connection.")
+        }
+        other => other.to_string(),
+    }
 }

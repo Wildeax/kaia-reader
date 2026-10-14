@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use kaia_events::{Event, Value};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::{CoverSize, Library};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Padding};
 use kaia_ui::composite::{BookInfo, PagedList};
@@ -180,12 +181,12 @@ impl LibrarySurface {
             Command::DeleteCollection(id) => {
                 env.dialog(kaia_ui::composite::Dialog::new(
                     env.theme(),
-                    "Delete collection?",
-                    "The books and their reading progress will stay in the library.",
+                    tr("Delete collection?"),
+                    tr("The books and their reading progress will stay in the library."),
                     vec![
-                        kaia_ui::composite::DialogButton::new("Cancel", "dialog:dismiss"),
+                        kaia_ui::composite::DialogButton::new(tr("Cancel"), "dialog:dismiss"),
                         kaia_ui::composite::DialogButton::new(
-                            "Delete",
+                            tr("Delete"),
                             format!("library:collections:delete-confirm:{id}"),
                         ),
                     ],
@@ -194,7 +195,10 @@ impl LibrarySurface {
             }
             Command::ConfirmDeleteCollection(id) => {
                 if let Err(e) = env.services.library.delete_collection(id) {
-                    env.toast(format!("Cannot delete collection: {e}"), 4.0);
+                    env.toast(
+                        tr_format(&tr("Cannot delete collection: %1"), &[&e.to_string()]),
+                        4.0,
+                    );
                 }
                 if self.prefs.collection == Some(id) {
                     self.prefs.collection = None;
@@ -204,31 +208,37 @@ impl LibrarySurface {
             }
             Command::ReorderCollection(id, position) => {
                 if let Err(e) = env.services.library.reorder_collection(id, position) {
-                    env.toast(format!("Cannot move collection: {e}"), 4.0);
+                    env.toast(
+                        tr_format(&tr("Cannot move collection: %1"), &[&e.to_string()]),
+                        4.0,
+                    );
                 }
                 Outcome::Rebuild
             }
             Command::RemoveHistory(id) => {
                 if let Err(e) = env.services.library.remove_from_history(id) {
-                    env.toast(format!("Cannot remove history: {e}"), 4.0);
+                    env.toast(
+                        tr_format(&tr("Cannot remove history: %1"), &[&e.to_string()]),
+                        4.0,
+                    );
                 }
                 Outcome::Rebuild
             }
             Command::ClearHistory => {
                 env.dialog(kaia_ui::composite::Dialog::new(
                     env.theme(),
-                    "Clear reading history?",
-                    "Reading positions and annotations will stay saved.",
+                    tr("Clear reading history?"),
+                    tr("Reading positions and annotations will stay saved."),
                     vec![
-                        kaia_ui::composite::DialogButton::new("Cancel", "dialog:dismiss"),
-                        kaia_ui::composite::DialogButton::new("Clear", "library:history:clear-confirm"),
+                        kaia_ui::composite::DialogButton::new(tr("Cancel"), "dialog:dismiss"),
+                        kaia_ui::composite::DialogButton::new(tr("Clear"), "library:history:clear-confirm"),
                     ],
                 ));
                 Outcome::Handled
             }
             Command::ConfirmClearHistory => {
                 if let Err(e) = env.services.library.clear_history() {
-                    env.toast(format!("Cannot clear history: {e}"), 4.0);
+                    env.toast(tr_format(&tr("Cannot clear history: %1"), &[&e.to_string()]), 4.0);
                 }
                 Outcome::Rebuild
             }
@@ -315,9 +325,12 @@ impl LibrarySurface {
             Command::MarkFinished(id) => {
                 match crate::book_index::mark_finished(env.services, id) {
                     Ok(()) => {
-                        env.toast("Marked as finished", 2.0);
+                        env.toast(tr("Marked as finished"), 2.0);
                     }
-                    Err(e) => env.notice(format!("cannot mark book {id}: {e}")),
+                    Err(e) => env.notice(tr_format(
+                        &tr("cannot mark book %1: %2"),
+                        &[&id.to_string(), &e.to_string()],
+                    )),
                 }
                 Outcome::Rebuild
             }
@@ -337,11 +350,14 @@ impl LibrarySurface {
                 match name {
                     Some(name) => match env.services.library.add_to_collection(book, &name) {
                         Ok(()) => {
-                            env.toast(format!("Added to {name}"), 2.0);
+                            env.toast(tr_format(&tr("Added to %1"), &[&name]), 2.0);
                         }
-                        Err(e) => env.notice(format!("cannot add book {book}: {e}")),
+                        Err(e) => env.notice(tr_format(
+                            &tr("cannot add book %1: %2"),
+                            &[&book.to_string(), &e.to_string()],
+                        )),
                     },
-                    None => env.notice(format!("no collection {collection}")),
+                    None => env.notice(tr_format(&tr("no collection %1"), &[&collection.to_string()])),
                 }
                 self.panel = Some(Panel::Details { book });
                 Outcome::Rebuild
@@ -368,7 +384,10 @@ impl LibrarySurface {
                     match result {
                         Ok(()) => self.panel = None,
                         Err(e) => {
-                            env.toast(format!("Cannot save collection: {e}"), 4.0);
+                            env.toast(
+                                tr_format(&tr("Cannot save collection: %1"), &[&e.to_string()]),
+                                4.0,
+                            );
                             return Outcome::Handled;
                         }
                     }
@@ -379,7 +398,7 @@ impl LibrarySurface {
                 };
                 let name = self.name.trim().to_string();
                 if name.is_empty() {
-                    env.toast("Type a name first", 2.0);
+                    env.toast(tr("Type a name first"), 2.0);
                     return Outcome::Handled;
                 }
                 match env
@@ -389,9 +408,12 @@ impl LibrarySurface {
                     .and_then(|_| env.services.library.add_to_collection(book, &name))
                 {
                     Ok(()) => {
-                        env.toast(format!("Added to {name}"), 2.0);
+                        env.toast(tr_format(&tr("Added to %1"), &[&name]), 2.0);
                     }
-                    Err(e) => env.notice(format!("cannot create the collection: {e}")),
+                    Err(e) => env.notice(tr_format(
+                        &tr("cannot create the collection: %1"),
+                        &[&e.to_string()],
+                    )),
                 }
                 self.name.clear();
                 self.panel = Some(Panel::Details { book });
@@ -421,7 +443,7 @@ impl LibrarySurface {
             .filter(|b| self.prefs.show_finished || b.status != kaia_library::Status::Complete)
             .collect();
         let Some(root) = folders::root_of(&all) else {
-            return vec![views::body_text(t, "No books yet.")];
+            return vec![views::body_text(t, &tr("No books yet."))];
         };
         let current = self
             .folder
@@ -437,7 +459,7 @@ impl LibrarySurface {
         if current != root {
             lines.push(Line {
                 key: "folder-up".into(),
-                title: "Up".into(),
+                title: tr("Up"),
                 detail: String::new(),
                 cover: None,
                 tap: "library:folder:up".into(),
@@ -450,7 +472,7 @@ impl LibrarySurface {
                 Entry::Dir { name, books, .. } => lines.push(Line {
                     key: format!("folder-{n}"),
                     title: name.clone(),
-                    detail: format!("{books} books"),
+                    detail: tr_format(&tr_n("%1 book", "%1 books", *books as i64), &[&books.to_string()]),
                     cover: None,
                     tap: format!("library:folder:{n}"),
                     hold: None,
@@ -552,7 +574,7 @@ impl LibrarySurface {
         }
         let t = env.services.theme.clone();
         let status = data::status_line(env.services);
-        let mut children = vec![views::header(&t, "Library", status)];
+        let mut children = vec![views::header(&t, &tr("Library"), status)];
         if !self.search {
             children.push(views::view_tabs(&t, self.prefs.view));
             children.push(views::filter_row(&t, &self.prefs));
@@ -586,16 +608,13 @@ impl LibrarySurface {
     }
 }
 
-/// The steps to add books to an empty library. The heading is "No books yet".
-pub const EMPTY_LIBRARY: &str = "Connect the Kobo to a computer over USB and copy book files into the Books folder. Kaia adds them after the next scan.";
-
 /// Deletes the file of book `id` and reports the result. The row leaves the list
 /// the next time the lists are read, because they skip books whose file is gone.
 fn delete_file(env: &mut SurfaceEnv<'_>, id: i64) {
     let path = match env.services.library.book(id) {
         Ok(Some(book)) => book.path,
         _ => {
-            env.notice(format!("no book {id}"));
+            env.notice(tr_format(&tr("no book %1"), &[&id.to_string()]));
             return;
         }
     };
@@ -603,15 +622,21 @@ fn delete_file(env: &mut SurfaceEnv<'_>, id: i64) {
         Ok(()) => {
             if let Err(e) = env.services.library.remove_book(id) {
                 env.toast(
-                    format!("File deleted, but the library could not update: {e}"),
+                    tr_format(
+                        &tr("File deleted, but the library could not update: %1"),
+                        &[&e.to_string()],
+                    ),
                     4.0,
                 );
             }
-            env.toast("File deleted", 2.0);
+            env.toast(tr("File deleted"), 2.0);
         }
         Err(e) => {
-            env.notice(format!("cannot delete {}: {e}", path.display()));
-            env.toast("The file could not be deleted", 2.0);
+            env.notice(tr_format(
+                &tr("cannot delete %1: %2"),
+                &[&path.display().to_string(), &e.to_string()],
+            ));
+            env.toast(tr("The file could not be deleted"), 2.0);
         }
     }
 }
@@ -658,5 +683,5 @@ impl Surface for LibrarySurface {
 
 /// The message for a panel whose book has gone from the library.
 fn gone(t: &Theme) -> WidgetPod {
-    views::body_text(t, "That book is no longer in the library.")
+    views::body_text(t, &tr("That book is no longer in the library."))
 }

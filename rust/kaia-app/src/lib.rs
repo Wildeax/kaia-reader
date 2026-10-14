@@ -17,6 +17,7 @@ pub mod app;
 pub mod backend;
 pub mod command;
 pub mod covers;
+pub mod i18n;
 pub mod refresh;
 pub mod router;
 pub mod scan;

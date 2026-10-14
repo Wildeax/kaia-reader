@@ -1,0 +1,8 @@
+# Fixture for the kaia-app i18n test. Stands in for Kaia's own l10n-kaia/fr/kaia.po.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+
+msgid "Scan now"
+msgstr "Analyser maintenant"

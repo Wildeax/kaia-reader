@@ -2,6 +2,7 @@
 //! user holds a book, so this surface only serves the route: a full page with
 //! Back. Its actions go to the Library below, which owns the book commands.
 
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::CoverSize;
 use kaia_ui::components::{Column, Padding};
 use kaia_ui::geometry::Insets;
@@ -42,7 +43,7 @@ impl Surface for BookDetailsSurface {
                 Some(window(env.services, env.screen, page))
             }
             _ => {
-                env.notice(format!("no book {}", self.book));
+                env.notice(tr_format(&tr("no book %1"), &[&self.book.to_string()]));
                 None
             }
         }

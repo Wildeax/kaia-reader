@@ -20,6 +20,7 @@
 //! | `sync.password` | string | empty | Progress sync password, stored as typed. |
 //! | `opds.catalogs` | array of tables | empty | User OPDS catalogs: `{ title = ..., url = ... }`. |
 //! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
+//! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
 //! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
 //!
 //! `display.warmth` stores the last warmth value and restores it at startup.
@@ -51,6 +52,7 @@ pub const SYNC_PASSWORD: &str = "sync.password";
 pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
+pub const UI_LANGUAGE: &str = crate::i18n::SETTING;
 
 /// Default reading font size in KOReader units. It becomes 47 px on the Libra Colour.
 pub const DEFAULT_FONT_SIZE: f64 = 22.0;

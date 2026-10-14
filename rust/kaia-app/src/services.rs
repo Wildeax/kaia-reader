@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use kaia_display::PanelSpec;
 use kaia_events::Settings;
 use kaia_gfx::PixelFormat;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::{Library, LibraryError};
 use kaia_platform::{Paths, Platform};
 use kaia_ui::assets::{AssetError, Assets, SharedAssets};
@@ -37,6 +38,12 @@ pub struct Services {
     pub paths: Paths,
     pub theme: Theme,
     pub assets: SharedAssets,
+    /// The language the screens show, as a tag such as `fr`. See [`crate::i18n`].
+    pub language: String,
+    /// Goes up by one on each language change. The app builds its screens again when it sees a change.
+    pub language_epoch: u64,
+    /// The folder with the `l10n` catalogs. See [`crate::i18n::catalog_root`].
+    pub catalog_root: PathBuf,
 }
 
 /// Why services could not start.
@@ -89,20 +96,37 @@ impl Services {
             )),
         })?;
         let settings_path = data_dir.join("settings.json");
-        let mut startup_notices = Vec::new();
+        let mut kept = Vec::new();
         for path in [settings_path.clone(), data_dir.join("settings.json.old")] {
             if Settings::read_exact(&path).is_err() {
                 let backup = crate::durable::preserve(&path).map_err(|source| ServicesError::Io {
                     path: path.clone(),
                     source,
                 })?;
-                startup_notices.push(format!(
-                    "Settings were unreadable. Kept {} in the data folder.",
-                    backup.file_name().unwrap_or_default().to_string_lossy()
-                ));
+                kept.push(
+                    backup
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
             }
         }
         let mut settings = Settings::open(&settings_path);
+        // The language comes before the notices, so the notices show in it.
+        let catalog_root = crate::i18n::catalog_root(&platform);
+        let on_offer = crate::i18n::available(&catalog_root);
+        let language = crate::i18n::resolve(settings.read(crate::i18n::SETTING).as_str(), &on_offer);
+        crate::i18n::activate(&catalog_root, &language);
+        let startup_notices: Vec<String> = kept
+            .iter()
+            .map(|name| {
+                tr_format(
+                    &tr("Settings were unreadable. Kept %1 in the data folder."),
+                    &[name.as_str()],
+                )
+            })
+            .collect();
         if let Some(warmth) = settings.read("display.warmth").as_i64() {
             let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
         }
@@ -153,11 +177,15 @@ impl Services {
             paths,
             theme,
             assets,
+            language,
+            language_epoch: 0,
+            catalog_root,
         };
         if let Err(error) = crate::book_index::reconcile(&mut services) {
-            services
-                .startup_notices
-                .push(format!("Cannot update library progress: {error}"));
+            services.startup_notices.push(tr_format(
+                &tr("Cannot update library progress: %1"),
+                &[error.as_str()],
+            ));
         }
         Ok(services)
     }
@@ -170,6 +198,14 @@ impl Services {
     /// Where the library database lives.
     pub fn library_path(&self) -> PathBuf {
         self.paths.data_dir.join("library.sqlite3")
+    }
+
+    /// Shows the screens in `tag` from now on. `tag` is one of the languages of
+    /// [`crate::i18n::available`]. The app rebuilds its screens when the epoch changes.
+    pub fn set_language(&mut self, tag: &str) {
+        crate::i18n::activate(&self.catalog_root, tag);
+        self.language = tag.to_string();
+        self.language_epoch += 1;
     }
 }
 

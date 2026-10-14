@@ -6,6 +6,7 @@ use std::path::Path;
 
 use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::{Pixmap, Size};
+use kaia_i18n::tr;
 use kaia_library::{Book, CoverSize, Library};
 use kaia_stats::{Stats, DEFAULT_MAX_READ_SEC};
 use kaia_ui::components::{Column, Label, Padding, Paragraph, Spacer};
@@ -14,7 +15,6 @@ use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, Widget, WidgetPod, Window};
 
 use crate::services::Services;
-use crate::surfaces::library::EMPTY_LIBRARY;
 use crate::surfaces::settings::facts;
 
 /// Longest book title shown in a list row. Longer titles end with an ellipsis.
@@ -73,7 +73,7 @@ pub(crate) fn display_title(book: &Book) -> String {
             .path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Untitled".to_string()),
+            .unwrap_or_else(|| tr("Untitled")),
     }
 }
 
@@ -97,9 +97,9 @@ pub(crate) fn cover(library: &Library, book_id: i64) -> Option<Pixmap> {
 /// The empty library: a heading, then the steps to add books.
 pub(crate) fn empty_library(t: &Theme) -> Vec<WidgetPod> {
     vec![
-        WidgetPod::new(Label::new("No books yet", t.font.title.clone(), Tone::Ink)),
+        WidgetPod::new(Label::new(tr("No books yet"), t.font.title.clone(), Tone::Ink)),
         WidgetPod::new(Paragraph::new(
-            EMPTY_LIBRARY,
+            tr("Connect the Kobo to a computer over USB and copy book files into the Books folder. Kaia adds them after the next scan."),
             t.font.body.clone(),
             Tone::InkSecondary,
         )),

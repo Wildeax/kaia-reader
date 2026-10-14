@@ -31,6 +31,7 @@ use std::rc::Rc;
 
 use kaia_book::{Drawer, Margins, OpenOptions, Point, TextLayout, ZoomMode};
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, Value};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::Stack;
 use kaia_ui::widget::PaintHint;
 use kaia_ui::{WidgetPod, Window};
@@ -149,7 +150,10 @@ impl ReaderSurface {
                     env.services.plugins.reader_book = Some(self.book);
                 }
                 Err(e) => {
-                    env.notice(format!("Cannot connect reader plugins: {e}"));
+                    env.notice(tr_format(
+                        &tr("Cannot connect reader plugins: %1"),
+                        &[&e.to_string()],
+                    ));
                     return;
                 }
             }
@@ -264,11 +268,14 @@ impl ReaderSurface {
                 self.remote = Some(location);
                 env.dialog(kaia_ui::composite::Dialog::new(
                     env.theme(),
-                    "Use synced position?",
-                    format!("Another device is at {:.0} percent.", remote.percentage * 100.0),
+                    tr("Use synced position?"),
+                    tr_format(
+                        &tr("Another device is at %1 percent."),
+                        &[&format!("{:.0}", remote.percentage * 100.0)],
+                    ),
                     vec![
-                        kaia_ui::composite::DialogButton::new("Keep this position", "dialog:dismiss"),
-                        kaia_ui::composite::DialogButton::new("Go there", "reader:sync:accept"),
+                        kaia_ui::composite::DialogButton::new(tr("Keep this position"), "dialog:dismiss"),
+                        kaia_ui::composite::DialogButton::new(tr("Go there"), "reader:sync:accept"),
                     ],
                 ));
             }
@@ -288,19 +295,19 @@ impl ReaderSurface {
         if let Some(issue) = session.state_issue() {
             let message = match issue {
                 kaia_book::StateIssue::NewerVersion(_) => {
-                    "This book's saved state needs a newer Kaia. Changes cannot be saved."
+                    tr("This book's saved state needs a newer Kaia. Changes cannot be saved.")
                 }
                 kaia_book::StateIssue::Corrupt => {
-                    "The saved state was damaged. Kaia will save edits in a recovered file."
+                    tr("The saved state was damaged. Kaia will save edits in a recovered file.")
                 }
                 kaia_book::StateIssue::Locked => {
-                    "Another process has this book open. Changes cannot be saved."
+                    tr("Another process has this book open. Changes cannot be saved.")
                 }
             };
             env.toast(message, 6.0);
         }
         if let Some(error) = session.save_error() {
-            env.toast(format!("Cannot save this book: {error}"), 6.0);
+            env.toast(tr_format(&tr("Cannot save this book: %1"), &[error]), 6.0);
         }
         if session.state_is_stale() || session.migration_report().is_some() {
             let count = session
@@ -308,11 +315,18 @@ impl ReaderSurface {
                 .map_or(0, |r| r.annotations_need_reanchoring);
             env.dialog(kaia_ui::composite::Dialog::new(
                 env.theme(),
-                "Book file changed",
-                format!("Saved progress was kept. Check the reading position and {count} annotations."),
+                tr("Book file changed"),
+                tr_format(
+                    &tr_n(
+                        "Saved progress was kept. Check the reading position and %1 annotation.",
+                        "Saved progress was kept. Check the reading position and %1 annotations.",
+                        count as i64,
+                    ),
+                    &[&count.to_string()],
+                ),
                 vec![
-                    kaia_ui::composite::DialogButton::new("Review later", "dialog:dismiss"),
-                    kaia_ui::composite::DialogButton::new("Reviewed", "reader:acknowledge-change"),
+                    kaia_ui::composite::DialogButton::new(tr("Review later"), "dialog:dismiss"),
+                    kaia_ui::composite::DialogButton::new(tr("Reviewed"), "reader:acknowledge-change"),
                 ],
             ));
         }
@@ -342,7 +356,7 @@ impl Surface for ReaderSurface {
         let row = match env.services.library.book(self.book) {
             Ok(Some(row)) => row,
             _ => {
-                env.notice(format!("no book {}", self.book));
+                env.notice(tr_format(&tr("no book %1"), &[&self.book.to_string()]));
                 return None;
             }
         };
@@ -387,7 +401,7 @@ impl Surface for ReaderSurface {
         // Opening a book is a reading event, so the library records it now.
         if let Some(percent) = progress {
             if let Err(e) = env.services.library.record_open(row.id, percent) {
-                env.notice(format!("cannot record the open: {e}"));
+                env.notice(tr_format(&tr("cannot record the open: %1"), &[&e.to_string()]));
             }
         }
         schedule_if_pending(&self.core, env.ctx);
@@ -527,7 +541,10 @@ impl Surface for ReaderSurface {
         if cmd == "reader:acknowledge-change" {
             if let Some(session) = self.core.borrow_mut().session.as_mut() {
                 if let Err(e) = session.acknowledge_file_change() {
-                    env.toast(format!("Cannot save confirmation: {e}"), 5.0);
+                    env.toast(
+                        tr_format(&tr("Cannot save confirmation: %1"), &[&e.to_string()]),
+                        5.0,
+                    );
                 }
             }
             return Outcome::Handled;
@@ -543,7 +560,7 @@ impl Surface for ReaderSurface {
                     let result = c
                         .session
                         .as_ref()
-                        .ok_or("No book is open.".to_string())
+                        .ok_or(tr("No book is open."))
                         .and_then(stickers::store)
                         .and_then(|s| s.get_sticker(id).map_err(|e| e.to_string()));
                     match result {
@@ -554,7 +571,7 @@ impl Surface for ReaderSurface {
                         {
                             if value.get("repair_sticker").as_str().is_some() {
                                 c.moving_sticker = Some(id.into());
-                                env.toast("Long-press the new place, then choose Sticker.", 6.0);
+                                env.toast(tr("Long-press the new place, then choose Sticker."), 6.0);
                             } else {
                                 let location = match sticker.anchor {
                                     kaia_storage::Anchor::Reflowable { locator, .. } => {
@@ -571,7 +588,7 @@ impl Surface for ReaderSurface {
                             }
                         }
                         Ok(_) => {
-                            env.toast("This sticker belongs to another book.", 4.0);
+                            env.toast(tr("This sticker belongs to another book."), 4.0);
                         }
                         Err(e) => {
                             env.toast(e, 4.0);
@@ -592,7 +609,7 @@ impl Surface for ReaderSurface {
 
     fn can_hide(&mut self, env: &mut SurfaceEnv<'_>) -> bool {
         if self.core.borrow().job.is_some() {
-            env.toast("The page is still loading. Try again when it finishes.", 3.0);
+            env.toast(tr("The page is still loading. Try again when it finishes."), 3.0);
             return false;
         }
         self.persistence.save(&mut self.core.borrow_mut(), env)
@@ -745,14 +762,17 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 match result {
                     Some(Ok(added)) => {
                         let message = if added {
-                            "Bookmark added"
+                            tr("Bookmark added")
                         } else {
-                            "Bookmark removed"
+                            tr("Bookmark removed")
                         };
                         env.toast(message, 2.0);
                         c.refresh_overlay(env.ctx);
                     }
-                    Some(Err(e)) => env.notice(format!("cannot change the bookmark: {e}")),
+                    Some(Err(e)) => env.notice(tr_format(
+                        &tr("cannot change the bookmark: %1"),
+                        &[&e.to_string()],
+                    )),
                     None => {}
                 }
                 Outcome::Handled
@@ -786,13 +806,13 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 c.reset_search_paint();
                 c.search_text = text.clone();
                 if text.is_empty() {
-                    env.toast("Type a word to search.", 2.0);
+                    env.toast(tr("Type a word to search."), 2.0);
                     return Outcome::Handled;
                 }
                 let started = c.session.as_mut().map(|s| s.start_search(&text));
                 match started {
                     Some(Ok(())) => c.update_search(env.ctx),
-                    Some(Err(e)) => env.notice(format!("cannot search: {e}")),
+                    Some(Err(e)) => env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()])),
                     None => {}
                 }
                 Outcome::Handled
@@ -846,7 +866,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     c.go_to(env.ctx, location);
                     Outcome::Navigate(Nav::Pop)
                 } else {
-                    env.toast("This entry has no page.", 2.0);
+                    env.toast(tr("This entry has no page."), 2.0);
                     Outcome::Handled
                 }
             }
@@ -918,7 +938,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
             Command::SelCopy => {
                 if let Some(selection) = c.selection.clone() {
                     env.services.clipboard = Some(selection.text.clone());
-                    env.toast("Copied", 2.0);
+                    env.toast(tr("Copied"), 2.0);
                     c.clear_selection(env.ctx);
                 }
                 Outcome::Navigate(Nav::Pop)
@@ -948,7 +968,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 c.clear_selection(env.ctx);
                 let started = c.session.as_mut().map(|s| s.start_search(&text));
                 if let Some(Err(e)) = started {
-                    env.notice(format!("cannot search: {e}"));
+                    env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()]));
                 }
                 let rows = c
                     .session
@@ -988,7 +1008,10 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let result = c.session.as_mut().map(|s| s.set_status(Some("complete")));
                 match result {
                     Some(Err(e)) => {
-                        env.toast(format!("Cannot mark the book as finished: {e}"), 5.0);
+                        env.toast(
+                            tr_format(&tr("Cannot mark the book as finished: %1"), &[&e.to_string()]),
+                            5.0,
+                        );
                     }
                     _ => {
                         if let Some(session) = c.session.as_ref() {
@@ -996,7 +1019,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                                 env.notice(e);
                             }
                         }
-                        env.toast("Marked as finished", 2.0);
+                        env.toast(tr("Marked as finished"), 2.0);
                     }
                 }
                 Outcome::Navigate(Nav::Pop)
@@ -1085,10 +1108,10 @@ fn finish_highlight(
     match result {
         Some(Ok(_)) => {
             c.clear_selection(env.ctx);
-            env.toast("Highlighted", 2.0);
+            env.toast(tr("Highlighted"), 2.0);
         }
         Some(Err(e)) => {
-            env.toast(format!("Cannot highlight. {e}"), 3.0);
+            env.toast(tr_format(&tr("Cannot highlight. %1"), &[&e.to_string()]), 3.0);
         }
         None => {}
     }
@@ -1104,21 +1127,27 @@ fn highlight_color(c: &Core) -> &'static str {
 
 fn search_status(c: &Core) -> String {
     match c.session.as_ref() {
-        Some(s) if !s.search_results().is_empty() => format!("{} matches.", s.search_results().len()),
-        _ => "Type a word and press Search.".to_string(),
+        Some(s) if !s.search_results().is_empty() => {
+            let count = s.search_results().len();
+            tr_format(
+                &tr_n("%1 match.", "%1 matches.", count as i64),
+                &[&count.to_string()],
+            )
+        }
+        _ => tr("Type a word and press Search."),
     }
 }
 
 /// The Contents panel for `tab`, built from the session.
 fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
     let (items, empty) = match c.session.as_mut() {
-        None => (Vec::new(), "No book is open."),
+        None => (Vec::new(), tr("No book is open.")),
         Some(session) => match tab {
             1 => {
                 let marks = session.bookmarks().unwrap_or_default();
                 (
                     panels::annotation_items(&marks, true),
-                    "No bookmarks yet. Use the bookmark button in the top bar.",
+                    tr("No bookmarks yet. Use the bookmark button in the top bar."),
                 )
             }
             2 => {
@@ -1126,7 +1155,7 @@ fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
                 let highlights: Vec<_> = all.into_iter().filter(|a| !a.is_bookmark()).collect();
                 (
                     panels::annotation_items(&highlights, false),
-                    "No highlights yet. Hold a word to select it.",
+                    tr("No highlights yet. Hold a word to select it."),
                 )
             }
             _ => {
@@ -1137,17 +1166,20 @@ fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
                     .enumerate()
                     .map(|(index, entry)| ContentItem {
                         label: entry.title.clone(),
-                        detail: entry.page.map(|p| format!("Page {}", p + 1)).unwrap_or_default(),
+                        detail: entry
+                            .page
+                            .map(|p| tr_format(&tr("Page %1"), &[&(p + 1).to_string()]))
+                            .unwrap_or_default(),
                         current: current.as_deref() == Some(entry.title.as_str()),
                         action: format!("reader:contents:goto:{index}"),
                         level: entry.level.saturating_sub(1),
                     })
                     .collect();
-                (items, "This book has no table of contents.")
+                (items, tr("This book has no table of contents."))
             }
         },
     };
-    panels::contents(env.services, env.screen, tab.min(2), items, empty)
+    panels::contents(env.services, env.screen, tab.min(2), items, &empty)
 }
 
 /// The Text and layout sheet, or the zoom sheet of a fixed-layout book.

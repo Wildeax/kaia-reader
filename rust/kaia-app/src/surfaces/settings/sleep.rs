@@ -8,6 +8,7 @@
 
 use kaia_gfx::image::{scale_pixmap, FitMode};
 use kaia_gfx::{Pixmap, Size};
+use kaia_i18n::tr;
 use kaia_ui::components::{Align, Frame, Image, Label, Padding, Spacer, Stack};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Alignment, Tone, WidgetPod};
@@ -15,9 +16,6 @@ use kaia_ui::{Alignment, Tone, WidgetPod};
 use super::keys;
 use crate::services::Services;
 use crate::surfaces::common;
-
-/// The label drawn on the sleep screen.
-pub const SLEEP_LABEL: &str = "Kaia, sleeping";
 
 /// Whether the sleep screen shows a cover: the setting is `cover` and the book has one.
 pub fn shows_cover(services: &Services) -> bool {
@@ -51,7 +49,7 @@ fn cover_widget(cover: &Pixmap, screen: Size) -> WidgetPod {
 /// The sleep screen for `book_id`, the book being read. None means no book:
 /// the screen is blank.
 pub fn sleep_screen(services: &Services, screen: Size, book_id: Option<i64>) -> Stack {
-    sleep_screen_with_label(services, screen, book_id, SLEEP_LABEL)
+    sleep_screen_with_label(services, screen, book_id, &tr("Kaia, sleeping"))
 }
 
 pub fn sleep_screen_with_label(

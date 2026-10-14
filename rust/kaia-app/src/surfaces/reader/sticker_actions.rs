@@ -5,16 +5,17 @@ use super::{
     stickers,
 };
 use crate::surface::{Nav, Outcome, SurfaceEnv};
+use kaia_i18n::{format as tr_format, tr};
 use kaia_storage::{Sticker, StickerSize, StickerState};
 use kaia_ui::widget::PaintHint;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 fn get(c: &Core, id: &str) -> Result<Sticker, String> {
-    let s = c.session.as_ref().ok_or("No book is open.")?;
+    let s = c.session.as_ref().ok_or_else(|| tr("No book is open."))?;
     let sticker = stickers::store(s)?.get_sticker(id).map_err(|e| e.to_string())?;
     if sticker.doc.partial_md5 != s.identity().partial_md5 {
-        return Err("This sticker belongs to another book.".into());
+        return Err(tr("This sticker belongs to another book."));
     }
     Ok(sticker)
 }
@@ -41,7 +42,7 @@ pub(super) fn command(rc: &Rc<RefCell<Core>>, cmd: &str, env: &mut SurfaceEnv<'_
     Some(match result {
         Ok(outcome) => outcome,
         Err(e) => {
-            env.notice(format!("Cannot save sticker or note. {e}"));
+            env.notice(tr_format(&tr("Cannot save sticker or note. %1"), &[e.as_str()]));
             Outcome::Handled
         }
     })
@@ -49,10 +50,10 @@ pub(super) fn command(rc: &Rc<RefCell<Core>>, cmd: &str, env: &mut SurfaceEnv<'_
 
 fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>) -> Result<Outcome, String> {
     if cmd == "reader:sel:share" {
-        let selection = c.selection.clone().ok_or("Select some text first.")?;
+        let selection = c.selection.clone().ok_or_else(|| tr("Select some text first."))?;
         c.session
             .as_mut()
-            .ok_or("No book is open.")?
+            .ok_or_else(|| tr("No book is open."))?
             .add_highlight(
                 &selection,
                 kaia_book::Drawer::Lighten,
@@ -61,13 +62,16 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
             )
             .map_err(|e| e.to_string())?;
         c.clear_selection(env.ctx);
-        env.toast("Shared to Notes", 2.0);
+        env.toast(tr("Shared to Notes"), 2.0);
         return Ok(Outcome::Navigate(Nav::Pop));
     }
     if cmd == "reader:sel:sticker" {
         if let Some(id) = c.moving_sticker.clone() {
             let mut sticker = get(c, &id)?;
-            let mut anchor = c.sticker_anchor.clone().ok_or("Select some text first.")?;
+            let mut anchor = c
+                .sticker_anchor
+                .clone()
+                .ok_or_else(|| tr("Select some text first."))?;
             if let (
                 kaia_storage::Anchor::Reflowable { placement: old, .. },
                 kaia_storage::Anchor::Reflowable {
@@ -87,7 +91,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
             save(c, &sticker)?;
             c.moving_sticker = None;
             c.clear_selection(env.ctx);
-            env.toast("Sticker placed", 2.0);
+            env.toast(tr("Sticker placed"), 2.0);
             return Ok(Outcome::Navigate(Nav::Pop));
         }
         c.editing_sticker = None;
@@ -97,7 +101,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
     let rest = cmd.strip_prefix("reader:sticker:").unwrap_or("");
     if rest == "cancel-move" {
         c.moving_sticker = None;
-        env.toast("Move cancelled", 2.0);
+        env.toast(tr("Move cancelled"), 2.0);
         return Ok(Outcome::Navigate(Nav::Pop));
     }
     if let Some(id) = rest.strip_prefix("open:") {
@@ -107,7 +111,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
         get(c, id)?;
         c.moving_sticker = Some(id.into());
         c.clear_selection(env.ctx);
-        env.toast("Long-press the new place, then choose Sticker.", 6.0);
+        env.toast(tr("Long-press the new place, then choose Sticker."), 6.0);
         return Ok(Outcome::Navigate(Nav::Pop));
     }
     if let Some(id) = rest.strip_prefix("delete:") {
@@ -136,7 +140,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
         let text = if let Some(id) = rest.strip_prefix("edit:") {
             let s = get(c, id)?;
             if s.asset.is_some() {
-                return Err("Only text notes can be edited.".into());
+                return Err(tr("Only text notes can be edited."));
             }
             c.editing_sticker = Some(id.into());
             s.text.unwrap_or_default()
@@ -156,7 +160,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
                 .and_then(|layer| read_field(&layer.window, env.ctx, "sticker-note-field"))
                 .unwrap_or_default();
             if text.trim().is_empty() {
-                return Err("Write a note first.".into());
+                return Err(tr("Write a note first."));
             }
             Some(text.trim().to_string())
         } else {
@@ -168,12 +172,16 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
             save(c, &sticker)?;
             c.editing_sticker = None;
         } else {
-            let anchor = c.sticker_anchor.clone().ok_or("Select some text first.")?;
-            let session = c.session.as_ref().ok_or("No book is open.")?;
+            let anchor = c
+                .sticker_anchor
+                .clone()
+                .ok_or_else(|| tr("Select some text first."))?;
+            let session = c.session.as_ref().ok_or_else(|| tr("No book is open."))?;
             let mut store = stickers::store(session)?;
             let asset = image
                 .map(|name| {
-                    let path = stickers::bundled_path(env.services, name).ok_or("Unknown sticker.")?;
+                    let path =
+                        stickers::bundled_path(env.services, name).ok_or_else(|| tr("Unknown sticker."))?;
                     store.add_asset_file(&path, "").map_err(|e| e.to_string())
                 })
                 .transpose()?;
@@ -217,7 +225,7 @@ fn run(rc: &Rc<RefCell<Core>>, c: &mut Core, cmd: &str, env: &mut SurfaceEnv<'_>
 }
 
 fn save(c: &Core, sticker: &Sticker) -> Result<(), String> {
-    stickers::store(c.session.as_ref().ok_or("No book is open.")?)?
+    stickers::store(c.session.as_ref().ok_or_else(|| tr("No book is open."))?)?
         .put_sticker(sticker)
         .map_err(|e| e.to_string())?;
     Ok(())

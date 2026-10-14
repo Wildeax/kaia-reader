@@ -1,4 +1,5 @@
 use kaia_gfx::{image::FitMode, Size};
+use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Image, Label, Paragraph, Row, SizedBox};
 use kaia_ui::composite::{Header, ListRow, PagedList, SheetPanel};
 use kaia_ui::controls::{ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
@@ -35,7 +36,7 @@ fn row(item: &Item, t: &Theme) -> WidgetPod {
         WidgetPod::new(
             Row::new(vec![
                 WidgetPod::new(Expanded::new(main, 1)),
-                button(ButtonStyle::Secondary, "Edit", edit, edit),
+                button(ButtonStyle::Secondary, &tr("Edit"), edit, edit),
             ])
             .gap(t.space.sm)
             .cross_align(CrossAlign::Center),
@@ -78,23 +79,23 @@ fn text_field(t: &Theme, label: &str, value: &str, name: &str, password: bool) -
 pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -> Window {
     let t = &services.theme;
     let title = match &state.view {
-        View::Catalogs => "OPDS catalogs",
-        View::Suggestions => "Suggested catalogs",
+        View::Catalogs => tr("OPDS catalogs"),
+        View::Suggestions => tr("Suggested catalogs"),
         View::Editor { index, .. } => {
             if index.is_some() {
-                "Edit catalog"
+                tr("Edit catalog")
             } else {
-                "Add catalog"
+                tr("Add catalog")
             }
         }
-        View::Feed { feed, .. } => &feed.title,
-        View::Book { .. } => "Book details",
-        View::Calibre => "Calibre wireless",
-        View::Downloads => "Downloads folder",
+        View::Feed { feed, .. } => feed.title.clone(),
+        View::Book { .. } => tr("Book details"),
+        View::Calibre => tr("Calibre wireless"),
+        View::Downloads => tr("Downloads folder"),
     };
     let mut children = Vec::new();
     if !matches!(state.view, View::Book { .. }) {
-        children.push(WidgetPod::new(Header::new(t, title).back("back")));
+        children.push(WidgetPod::new(Header::new(t, title.clone()).back("back")));
     }
     let active = state.worker.is_some() || state.pending.is_some();
     match &state.view {
@@ -102,14 +103,14 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
             children.push(actions(
                 t,
                 vec![
-                    action("Add catalog", "catalogs:add"),
-                    action("Suggestions", "catalogs:suggestions"),
-                    action("Downloads", "catalogs:downloads"),
+                    action(&tr("Add catalog"), "catalogs:add"),
+                    action(&tr("Suggestions"), "catalogs:suggestions"),
+                    action(&tr("Downloads"), "catalogs:downloads"),
                 ],
             ));
             let catalogs = store::catalogs(&services.settings);
             if catalogs.is_empty() {
-                children.push(body(services, "Add a catalog to browse and download books."));
+                children.push(body(services, tr("Add a catalog to browse and download books.")));
             }
             children.push(list(
                 catalogs
@@ -127,7 +128,7 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         View::Suggestions => {
             children.push(body(
                 services,
-                "Choose a catalog to add. These are KOReader's default suggestions.",
+                tr("Choose a catalog to add. These are KOReader's default suggestions."),
             ));
             children.push(list(
                 kaia_opds::default_catalogs()
@@ -140,55 +141,55 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         View::Editor { index, catalog } => {
             if state.typing {
                 let (label, value, name, password) = match state.field {
-                    1 => ("URL", catalog.url.as_str(), "url", false),
+                    1 => (tr("URL"), catalog.url.as_str(), "url", false),
                     2 => (
-                        "Username, optional",
+                        tr("Username, optional"),
                         catalog.username.as_deref().unwrap_or(""),
                         "username",
                         false,
                     ),
                     3 => (
-                        "Password, optional",
+                        tr("Password, optional"),
                         catalog.password.as_deref().unwrap_or(""),
                         "password",
                         true,
                     ),
-                    _ => ("Name", catalog.title.as_str(), "name", false),
+                    _ => (tr("Name"), catalog.title.as_str(), "name", false),
                 };
-                children.push(text_field(t, label, value, name, password));
+                children.push(text_field(t, &label, value, name, password));
                 if password {
-                    children.push(body(services, "Stored on this device without encryption"));
+                    children.push(body(services, tr("Stored on this device without encryption")));
                 }
-                children.push(action("Done", "catalogs:hide-keyboard"));
+                children.push(action(&tr("Done"), "catalogs:hide-keyboard"));
                 children.push(WidgetPod::new(kaia_ui::components::Spacer::new(1)));
             } else {
                 children.push(list(vec![
-                    item("Name", &catalog.title, "catalogs:field:0"),
-                    item("URL", &catalog.url, "catalogs:field:1"),
+                    item(tr("Name"), &catalog.title, "catalogs:field:0"),
+                    item(tr("URL"), &catalog.url, "catalogs:field:1"),
                     item(
-                        "Username, optional",
+                        tr("Username, optional"),
                         catalog.username.as_deref().unwrap_or(""),
                         "catalogs:field:2",
                     ),
                     item(
-                        "Password, optional",
-                        "Stored on this device without encryption",
+                        tr("Password, optional"),
+                        tr("Stored on this device without encryption"),
                         "catalogs:field:3",
                     ),
                 ]));
-                let mut buttons = vec![action("Save", "catalogs:save")];
+                let mut buttons = vec![action(&tr("Save"), "catalogs:save")];
                 if index.is_some() {
-                    buttons.push(action("Delete", "catalogs:delete"));
+                    buttons.push(action(&tr("Delete"), "catalogs:delete"));
                 }
                 children.push(actions(t, buttons));
             }
         }
         View::Feed { feed, .. } => {
             if state.typing {
-                children.push(text_field(t, "Search catalog", &state.query, "query", false));
-                children.push(action("Search", "catalogs:search-go"));
+                children.push(text_field(t, &tr("Search catalog"), &state.query, "query", false));
+                children.push(action(&tr("Search"), "catalogs:search-go"));
             } else if !active && (feed.search_template.is_some() || feed.search_description.is_some()) {
-                children.push(action("Search", "catalogs:search"));
+                children.push(action(&tr("Search"), "catalogs:search"));
             }
             children.push(list(
                 feed.entries
@@ -199,9 +200,9 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                             &e.title,
                             if e.authors.is_empty() {
                                 if e.navigation.is_some() {
-                                    "Browse catalog".into()
+                                    tr("Browse catalog")
                                 } else {
-                                    "Book details".into()
+                                    tr("Book details")
                                 }
                             } else {
                                 e.authors.join(", ")
@@ -214,10 +215,10 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
             if !active {
                 let mut buttons = Vec::new();
                 if feed.prev.is_some() {
-                    buttons.push(action("Previous feed page", "catalogs:previous"));
+                    buttons.push(action(&tr("Previous feed page"), "catalogs:previous"));
                 }
                 if feed.next.is_some() {
-                    buttons.push(action("Next feed page", "catalogs:next"));
+                    buttons.push(action(&tr("Next feed page"), "catalogs:next"));
                 }
                 if !buttons.is_empty() {
                     children.push(actions(t, buttons));
@@ -254,7 +255,10 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
             children.push(WidgetPod::new(Row::new(heading).gap(t.space.md)));
             children.push(WidgetPod::new(
                 Paragraph::new(
-                    entry.summary.as_deref().unwrap_or("No summary provided."),
+                    entry
+                        .summary
+                        .clone()
+                        .unwrap_or_else(|| tr("No summary provided.")),
                     t.font.body.clone(),
                     Tone::InkSecondary,
                 )
@@ -265,10 +269,15 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                     .downloads()
                     .enumerate()
                     .map(|(i, a)| {
+                        let kind = a
+                            .file_type()
+                            .map_or_else(|| tr("book").to_uppercase(), str::to_uppercase);
                         item(
-                            format!("Download {}", a.file_type().unwrap_or("book").to_uppercase()),
+                            tr_format(&tr("Download %1"), &[&kind]),
                             a.title.clone().unwrap_or_else(|| {
-                                a.size.map(|n| format!("{} KB", n / 1024)).unwrap_or_default()
+                                a.size
+                                    .map(|n| tr_format(&tr("%1 KB"), &[&(n / 1024).to_string()]))
+                                    .unwrap_or_default()
                             }),
                             format!("catalogs:download:{i}"),
                         )
@@ -276,7 +285,7 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                     .collect(),
             ));
             if entry.downloads().next().is_none() {
-                children.push(body(services, "No supported download format."));
+                children.push(body(services, tr("No supported download format.")));
             }
         }
         View::Calibre => {
@@ -284,7 +293,7 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                 if state.field == 1 {
                     children.push(text_field(
                         t,
-                        "Server password, optional",
+                        &tr("Server password, optional"),
                         &state.password,
                         "calibre-password",
                         true,
@@ -292,34 +301,34 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
                 } else {
                     children.push(text_field(
                         t,
-                        "Server address and port",
+                        &tr("Server address and port"),
                         &state.address,
                         "address",
                         false,
                     ));
                 }
-                children.push(action("Done", "catalogs:hide-keyboard"));
+                children.push(action(&tr("Done"), "catalogs:hide-keyboard"));
             } else if !active {
                 children.push(body(
                     services,
-                    "Start Calibre's wireless device connection, then connect here to receive books.",
+                    tr("Start Calibre's wireless device connection, then connect here to receive books."),
                 ));
                 children.push(actions(
                     t,
                     vec![
-                        action("Discover", "catalogs:discover"),
-                        action("Connect", "catalogs:connect"),
-                        action("Downloads", "catalogs:downloads"),
+                        action(&tr("Discover"), "catalogs:discover"),
+                        action(&tr("Connect"), "catalogs:connect"),
+                        action(&tr("Downloads"), "catalogs:downloads"),
                     ],
                 ));
                 children.push(row(
-                    &item("Server address and port", &state.address, "catalogs:field:0"),
+                    &item(tr("Server address and port"), &state.address, "catalogs:field:0"),
                     t,
                 ));
                 children.push(row(
                     &item(
-                        "Server password, optional",
-                        "Used for this connection only",
+                        tr("Server password, optional"),
+                        tr("Used for this connection only"),
                         "catalogs:field:1",
                     ),
                     t,
@@ -337,12 +346,18 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         View::Downloads => {
             children.push(body(
                 services,
-                "OPDS and Calibre save books here. The default is the device's books folder.",
+                tr("OPDS and Calibre save books here. The default is the device's books folder."),
             ));
-            children.push(text_field(t, "Folder", &state.download_folder, "folder", false));
-            children.push(action("Save folder", "catalogs:save-folder"));
+            children.push(text_field(
+                t,
+                &tr("Folder"),
+                &state.download_folder,
+                "folder",
+                false,
+            ));
+            children.push(action(&tr("Save folder"), "catalogs:save-folder"));
             if !state.typing {
-                children.push(action("Edit folder", "catalogs:field:0"));
+                children.push(action(&tr("Edit folder"), "catalogs:field:0"));
             }
             children.push(WidgetPod::new(kaia_ui::components::Spacer::new(1)));
         }
@@ -359,18 +374,22 @@ pub(super) fn build(state: &CatalogSurface, services: &Services, screen: Size) -
         children.push(actions(
             t,
             vec![
-                action("Cancel", "catalogs:cancel"),
-                action("Turn on Wi-Fi", "catalogs:wifi"),
+                action(&tr("Cancel"), "catalogs:cancel"),
+                action(&tr("Turn on Wi-Fi"), "catalogs:wifi"),
             ],
         ));
     } else if state.worker.is_some() {
         children.push(action(
-            if state.connection { "Disconnect" } else { "Cancel" },
+            &if state.connection {
+                tr("Disconnect")
+            } else {
+                tr("Cancel")
+            },
             "catalogs:cancel",
         ));
     }
     if state.book.is_some() {
-        children.push(action("Open", "catalogs:open-book"));
+        children.push(action(&tr("Open"), "catalogs:open-book"));
     }
     if state.typing {
         children.push(WidgetPod::new(

@@ -1,5 +1,6 @@
 //! Progress sync is opt-in. A single worker runs requests away from the UI thread.
 
+use kaia_i18n::tr;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{
@@ -15,11 +16,13 @@ use kaia_sync::{Credentials, Progress, SyncClient, SyncOptions, Timeouts};
 
 use crate::sync_queue::SyncQueue;
 
+/// What a worker sends back. A worker thread has no translation catalog, so the
+/// worker sends a variant for a Kaia message and the UI thread writes the text.
 pub enum Reply {
     Remote(i64, Progress),
     Pushed(String),
     Error(String),
-    Status(String),
+    ServerAnswered,
     Done,
 }
 
@@ -98,7 +101,7 @@ impl ProgressSync {
                         let result = match job {
                             Job::Health(config) => {
                                 config.client().and_then(|client| client.health()).map(|()| {
-                                    let _ = replies.send(Reply::Status("The server answered.".into()));
+                                    let _ = replies.send(Reply::ServerAnswered);
                                 })
                             }
                             Job::Pull(config, book, document) => config.client().and_then(|client| {
@@ -149,7 +152,7 @@ impl ProgressSync {
 
     pub fn health(&mut self, settings: &Settings) -> Result<(), String> {
         if !settings.is_true("sync.enabled") {
-            return Err("Turn on progress sync first.".into());
+            return Err(tr("Turn on progress sync first."));
         }
         let config = Config::read(settings);
         config.client().map_err(|e| e.to_string())?;

@@ -15,6 +15,7 @@ use kaia_book::{
     BookEvent, BookSession, OpenOptions, PageInfo, Point, Selection, Size, TextLayout, ZoomMode,
 };
 use kaia_events::Ctx;
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::Label;
 use kaia_ui::controls::{TextField, ToolButton};
 use kaia_ui::widget::PaintHint;
@@ -23,6 +24,7 @@ use kaia_ui::Window;
 use super::overlay::{bookmark_label, OverlayModel};
 use super::page::{PageView, PAGE_KEY};
 use super::panels::{search_rows, SearchRow, FONT_CHOICES};
+use super::work::WorkError;
 use kaia_ui::composite::PagedList;
 
 /// Full refresh every this many page turns, so the panel clears its ghosts.
@@ -136,7 +138,7 @@ impl Core {
         self.job = Some(super::work::spawn(self.viewport, move || {
             BookSession::open(path, opts)
                 .map(|s| (s, None, None))
-                .map_err(|e| format!("Cannot open this book. {e}"))
+                .map_err(|e| WorkError::Open(e.to_string()))
         }));
     }
 
@@ -193,12 +195,13 @@ impl Core {
         let result = match reply.try_recv() {
             Ok(result) => result,
             Err(std::sync::mpsc::TryRecvError::Empty) => return,
-            Err(_) => Err("The book worker stopped.".to_string()),
+            Err(_) => Err(WorkError::Stopped),
         };
         self.job = None;
         let frame = match result {
             Ok(frame) => frame,
             Err(error) => {
+                let error = error.message();
                 self.error = Some(error.clone());
                 self.queued.clear();
                 if let Some(window) = &self.page_window {
@@ -215,7 +218,7 @@ impl Core {
         self.selection = frame.selection;
         self.sticker_anchor = frame.sticker_anchor;
         self.stickers = frame.stickers.clone();
-        self.error = frame.error;
+        self.error = frame.error.map(|error| error.message());
         let Some(window) = self.page_window.clone() else {
             return;
         };
@@ -336,7 +339,7 @@ impl Core {
             let error = session
                 .go_to(kaia_book::Location::Page(page))
                 .err()
-                .map(|e| format!("Cannot turn the page. {e}"));
+                .map(|e| WorkError::Turn(e.to_string()));
             Ok((session, None, error))
         }));
         let _ = ctx;
@@ -364,7 +367,7 @@ impl Core {
             let error = session
                 .go_to(location)
                 .err()
-                .map(|e| format!("Cannot go there. {e}"));
+                .map(|e| WorkError::GoTo(e.to_string()));
             Ok((session, None, error))
         }));
         let _ = ctx;
@@ -383,7 +386,9 @@ impl Core {
             let point = page_point(&mut session, point, viewport);
             let mut selection = session.select_word_at(point, viewport).ok().flatten();
             if selection.is_none() && !session.is_reflowable() {
-                let t = session.page_transform(viewport).map_err(|e| e.to_string())?;
+                let t = session
+                    .page_transform(viewport)
+                    .map_err(|e| WorkError::Engine(e.to_string()))?;
                 let p = t.to_page(point);
                 let pos = kaia_book::Pos::Point {
                     page: session.current().page,
@@ -430,9 +435,9 @@ impl Core {
     /// Changes the reflowable layout. The change runs on the engine thread. The
     /// page updates when it applies (see [`Core::pump`]).
     pub fn change_layout(&mut self, change: impl FnOnce(&mut TextLayout)) -> Result<(), String> {
-        let session = self.session.as_mut().ok_or("No book is open.")?;
+        let session = self.session.as_mut().ok_or_else(|| tr("No book is open."))?;
         if !session.is_reflowable() {
-            return Err("This book has no text settings.".to_string());
+            return Err(tr("This book has no text settings."));
         }
         let current = session.layout().clone();
         let mut next = current.clone();
@@ -447,7 +452,7 @@ impl Core {
 
     /// Sets the fixed-layout zoom. The page is repainted at once.
     pub fn set_zoom(&mut self, ctx: &mut Ctx, zoom: ZoomMode) -> Result<(), String> {
-        let session = self.session.as_mut().ok_or("No book is open.")?;
+        let session = self.session.as_mut().ok_or_else(|| tr("No book is open."))?;
         session.set_zoom(zoom).map_err(|e| e.to_string())?;
         self.repaint_page(ctx, PaintHint::Full);
         Ok(())
@@ -472,7 +477,10 @@ impl Core {
                 }
                 BookEvent::LayoutFailed { message } => {
                     self.layout_pending = false;
-                    self.error = Some(format!("Cannot lay out this book. {message}"));
+                    self.error = Some(tr_format(
+                        &tr("Cannot lay out this book. %1"),
+                        &[message.as_str()],
+                    ));
                     self.repaint_page(ctx, PaintHint::Full);
                 }
                 BookEvent::SearchProgress { .. } | BookEvent::SearchFinished { .. } => {
@@ -517,11 +525,14 @@ impl Core {
             Some(session) => {
                 let results = session.search_results();
                 let status = if session.search_running() {
-                    format!("Searching. {} found so far.", results.len())
+                    tr_format(&tr("Searching. %1 found so far."), &[&results.len().to_string()])
                 } else if results.is_empty() {
-                    "No matches.".to_string()
+                    tr("No matches.")
                 } else {
-                    format!("{} matches.", results.len())
+                    tr_format(
+                        &tr_n("%1 match.", "%1 matches.", results.len() as i64),
+                        &[&results.len().to_string()],
+                    )
                 };
                 (search_rows(results), status)
             }
@@ -549,18 +560,26 @@ pub fn time_line(info: &PageInfo, seconds_per_page: f64) -> String {
     if info.page_count == 0 {
         return String::new();
     }
-    let (pages, scope) = match (&info.chapter, info.pages_left_in_chapter) {
-        (Some(_), Some(n)) => (u64::from(n), "chapter"),
+    let (pages, in_chapter) = match (&info.chapter, info.pages_left_in_chapter) {
+        (Some(_), Some(n)) => (u64::from(n), true),
         _ => (
             info.page_count.saturating_sub(info.page as usize + 1) as u64,
-            "book",
+            false,
         ),
     };
     if pages == 0 {
-        return format!("Last page of the {scope}");
+        return if in_chapter {
+            tr("Last page of the chapter")
+        } else {
+            tr("Last page of the book")
+        };
     }
     let minutes = (pages as f64 * seconds_per_page / 60.0).round().max(1.0) as u64;
-    format!("{minutes} min left in {scope}")
+    if in_chapter {
+        tr_format(&tr("%1 min left in chapter"), &[&minutes.to_string()])
+    } else {
+        tr_format(&tr("%1 min left in book"), &[&minutes.to_string()])
+    }
 }
 
 /// The face for a font index from the Text and layout sheet.

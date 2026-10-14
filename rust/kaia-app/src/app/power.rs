@@ -2,6 +2,7 @@
 //! plans (Wi-Fi scripts, suspend, resume) run on the worker in `network.rs`, and
 //! the sleep picture is prepared in `sleep_picture.rs`.
 
+use kaia_i18n::tr;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -269,7 +270,7 @@ impl<B: Backend> App<B> {
                     &mut self.notices,
                     &mut self.transient,
                 )
-                .toast("Battery low. Please charge your reader.", 5.0);
+                .toast(tr("Battery low. Please charge your reader."), 5.0);
             }
         }
         let minutes = self
@@ -388,11 +389,11 @@ impl<B: Backend> App<B> {
     /// Builds the sleep screen and queues it as a full-screen modal window.
     fn show_sleep_screen(&mut self, picture: Option<Pixmap>) -> WindowId {
         let label = if self.power.charge_screen {
-            "Please charge your reader"
+            tr("Please charge your reader")
         } else {
-            settings::sleep::SLEEP_LABEL
+            tr("Kaia, sleeping")
         };
-        let stack = sleep_picture::sleep_screen(&self.services, self.screen, picture, label);
+        let stack = sleep_picture::sleep_screen(&self.services, self.screen, picture, &label);
         let window = Window::new(
             stack,
             self.services.theme.clone(),

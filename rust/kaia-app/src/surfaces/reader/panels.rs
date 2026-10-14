@@ -10,6 +10,7 @@ use std::rc::Rc;
 use kaia_book::{Annotation, TextLayout, ZoomMode};
 use kaia_events::ShowOpts;
 use kaia_gfx::Size;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox};
 use kaia_ui::composite::{ListRow, PageLabels, PagedList};
 use kaia_ui::controls::{
@@ -31,6 +32,15 @@ pub const FONT_CHOICES: [(&str, Option<&str>); 3] = [
     ("Noto Serif", Some("Noto Serif")),
     ("Noto Sans", Some("Noto Sans")),
 ];
+
+fn font_label(label: &str) -> String {
+    match label {
+        "Book's font" => tr("Book's font"),
+        "Noto Serif" => tr("Noto Serif"),
+        "Noto Sans" => tr("Noto Sans"),
+        other => other.to_string(),
+    }
+}
 
 /// Share of the screen height that a tall sheet takes.
 const TALL_PERCENT: u32 = 70;
@@ -199,9 +209,9 @@ pub fn contents(
     let t = &services.theme;
     let tabs = WidgetPod::new(
         Row::new(vec![
-            tab_button(0, "Chapters", tab == 0),
-            tab_button(1, "Bookmarks", tab == 1),
-            tab_button(2, "Highlights", tab == 2),
+            tab_button(0, &tr("Chapters"), tab == 0),
+            tab_button(1, &tr("Bookmarks"), tab == 1),
+            tab_button(2, &tr("Highlights"), tab == 2),
         ])
         .gap(t.space.sm),
     );
@@ -221,7 +231,7 @@ pub fn contents(
                 row = row.secondary(item.detail.clone());
             }
             if item.current {
-                row = row.value("Now");
+                row = row.value(tr("Now"));
             }
             WidgetPod::new(row).with_key(key_of(&item.action))
         })
@@ -231,7 +241,13 @@ pub fn contents(
             1,
         )));
     }
-    sheet(services, screen, Some("Contents"), children, Some(TALL_PERCENT))
+    sheet(
+        services,
+        screen,
+        Some(&tr("Contents")),
+        children,
+        Some(TALL_PERCENT),
+    )
 }
 
 /// The key of a list row: its action id with the colons turned into dashes, so
@@ -241,8 +257,8 @@ pub fn key_of(action: &str) -> String {
 }
 
 fn page_labels() -> PageLabels {
-    PageLabels::new("Previous", "Next", |page, count| {
-        format!("Page {page} of {count}")
+    PageLabels::new(tr("Previous"), tr("Next"), |page, count| {
+        tr_format(&tr("Page %1 of %2"), &[&page.to_string(), &count.to_string()])
     })
 }
 
@@ -256,13 +272,10 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
                 .iter()
                 .position(|(_, face)| *face == layout.font_family.as_deref())
                 .or(Some(0));
-            let options = FONT_CHOICES
-                .iter()
-                .map(|(label, _)| (*label).to_string())
-                .collect();
+            let options = FONT_CHOICES.iter().map(|(label, _)| font_label(label)).collect();
             let font = WidgetPod::new(RadioGroup::new(options, selected).on_action("reader:layout:font"))
                 .with_key("layout-font");
-            children.push(group_heading(services, "Font"));
+            children.push(group_heading(services, &tr("Font")));
             children.push(font);
             let size = WidgetPod::new(
                 Stepper::new(
@@ -275,33 +288,33 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
                 .on_action("reader:layout:size"),
             )
             .with_key("layout-size");
-            children.push(labelled(services, "Size", size));
+            children.push(labelled(services, &tr("Size"), size));
             let spacing = WidgetPod::new(
                 Stepper::new(f64::from(layout.line_spacing), 0.8, 2.0, 0.1)
                     .format(|v| format!("{v:.1}"))
                     .on_action("reader:layout:spacing"),
             )
             .with_key("layout-spacing");
-            children.push(labelled(services, "Line spacing", spacing));
+            children.push(labelled(services, &tr("Line spacing"), spacing));
             let margins = WidgetPod::new(
                 Stepper::new(f64::from(layout.margins.left), 0.0, 80.0, 5.0)
                     .format(|v| format!("{}", v as i64))
                     .on_action("reader:layout:margins"),
             )
             .with_key("layout-margins");
-            children.push(labelled(services, "Margins", margins));
+            children.push(labelled(services, &tr("Margins"), margins));
             // The pill switch of the Settings rows, so every on or off setting looks the same.
             let toggle = |on: bool, action: &str, key: &str| {
                 WidgetPod::new(Toggle::pill(on).on_action(action)).with_key(key)
             };
             children.push(labelled(
                 services,
-                "Justified text",
+                &tr("Justified text"),
                 toggle(layout.justify, "reader:layout:justify", "layout-justify"),
             ));
             children.push(labelled(
                 services,
-                "Hyphenation",
+                &tr("Hyphenation"),
                 toggle(
                     layout.hyphenation,
                     "reader:layout:hyphenation",
@@ -310,7 +323,7 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
             ));
             children.push(labelled(
                 services,
-                "Book's styles",
+                &tr("Book's styles"),
                 toggle(layout.embedded_styles, "reader:layout:styles", "layout-styles"),
             ));
         }
@@ -319,20 +332,20 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
                 ZoomMode::FitPage | ZoomMode::Manual { .. } => 0,
                 ZoomMode::FitWidth => 1,
             };
-            let options = vec!["Fit page".to_string(), "Fit width".to_string()];
+            let options = vec![tr("Fit page"), tr("Fit width")];
             let zoom_group =
                 WidgetPod::new(RadioGroup::new(options, Some(index)).on_action("reader:layout:zoom"))
                     .with_key("layout-zoom");
-            children.push(group_heading(services, "Zoom"));
+            children.push(group_heading(services, &tr("Zoom")));
             children.push(zoom_group);
         }
     }
     let title = if reflow.is_some() {
-        "Text and layout"
+        tr("Text and layout")
     } else {
-        "Page view"
+        tr("Page view")
     };
-    sheet(services, screen, Some(title), children, Some(WRITING_PERCENT))
+    sheet(services, screen, Some(&title), children, Some(WRITING_PERCENT))
 }
 
 /// The More panel: go to either end and mark the book as finished.
@@ -341,25 +354,25 @@ pub fn more(services: &Services, screen: Size) -> Window {
         Column::new(vec![
             button(
                 ButtonStyle::Secondary,
-                "Go to the start",
+                &tr("Go to the start"),
                 "reader:more:start",
                 "more-start",
             ),
             button(
                 ButtonStyle::Secondary,
-                "Go to the end",
+                &tr("Go to the end"),
                 "reader:more:end",
                 "more-end",
             ),
             button(
                 ButtonStyle::Secondary,
-                "Mark as finished",
+                &tr("Mark as finished"),
                 "reader:finish",
                 "more-finish",
             ),
             button(
                 ButtonStyle::Secondary,
-                "Plugins",
+                &tr("Plugins"),
                 "reader:plugins",
                 "more-plugins",
             ),
@@ -367,7 +380,7 @@ pub fn more(services: &Services, screen: Size) -> Window {
         .gap(services.theme.space.sm)
         .cross_align(CrossAlign::Stretch),
     )];
-    sheet(services, screen, Some("More"), children, None)
+    sheet(services, screen, Some(&tr("More")), children, None)
 }
 
 /// The selection popover and its annotation actions.
@@ -379,19 +392,19 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
     if word.is_empty() {
         let mut children = vec![button(
             ButtonStyle::Primary,
-            "Sticker",
+            &tr("Sticker"),
             "reader:sel:sticker",
             "sel-sticker",
         )];
         if moving {
             children.push(button(
                 ButtonStyle::Secondary,
-                "Cancel move",
+                &tr("Cancel move"),
                 "reader:sticker:cancel-move",
                 "sticker-cancel-move",
             ));
         }
-        return sheet(services, screen, Some("Page sticker"), children, None);
+        return sheet(services, screen, Some(&tr("Page sticker")), children, None);
     }
     let t = &services.theme;
     let shown = if word.chars().count() > 40 {
@@ -425,7 +438,7 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
                 WidgetPod::new(Expanded::new(
                     button(
                         ButtonStyle::Secondary,
-                        "Sticker",
+                        &tr("Sticker"),
                         "reader:sel:sticker",
                         "sel-sticker",
                     ),
@@ -434,7 +447,7 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
                 WidgetPod::new(Expanded::new(
                     button(
                         ButtonStyle::Secondary,
-                        "Share to Notes",
+                        &tr("Share to Notes"),
                         "reader:sel:share",
                         "sel-share",
                     ),
@@ -444,16 +457,16 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
             .gap(t.space.sm),
         ),
         row([
-            ("Highlight", "reader:sel:highlight", "sel-highlight"),
-            ("Note", "reader:sel:note", "sel-note"),
-            ("Copy", "reader:sel:copy", "sel-copy"),
+            (&tr("Highlight"), "reader:sel:highlight", "sel-highlight"),
+            (&tr("Note"), "reader:sel:note", "sel-note"),
+            (&tr("Copy"), "reader:sel:copy", "sel-copy"),
         ]),
         WidgetPod::new(
             Row::new(vec![
                 WidgetPod::new(Expanded::new(
                     button(
                         ButtonStyle::Secondary,
-                        "Dictionary",
+                        &tr("Dictionary"),
                         "reader:sel:dict",
                         "sel-dict",
                     ),
@@ -462,7 +475,7 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
                 WidgetPod::new(Expanded::new(
                     button(
                         ButtonStyle::Secondary,
-                        "Search",
+                        &tr("Search"),
                         "reader:sel:search",
                         "sel-search",
                     ),
@@ -475,7 +488,7 @@ pub(super) fn selection_popover(services: &Services, screen: Size, word: &str, m
     if moving {
         children.push(button(
             ButtonStyle::Secondary,
-            "Cancel move",
+            &tr("Cancel move"),
             "reader:sticker:cancel-move",
             "sticker-cancel-move",
         ));
@@ -501,7 +514,7 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
         return sheet(
             services,
             screen,
-            Some("Dictionary"),
+            Some(&tr("Dictionary")),
             dictionary_plugins(
                 services,
                 vec![
@@ -525,7 +538,7 @@ pub fn dictionary(services: &Services, screen: Size, word: &str, text: &str) -> 
     sheet(
         services,
         screen,
-        Some("Dictionary"),
+        Some(&tr("Dictionary")),
         dictionary_plugins(
             services,
             vec![
@@ -594,11 +607,16 @@ pub fn search(services: &Services, screen: Size, text: &str, rows: Vec<SearchRow
     let field = WidgetPod::new(
         TextField::new()
             .with_text(text.to_string())
-            .placeholder("Search this book"),
+            .placeholder(tr("Search this book")),
     )
     .with_key("search-field")
     .focusable(true);
-    let go = button(ButtonStyle::Primary, "Search", "reader:search:go", "search-go");
+    let go = button(
+        ButtonStyle::Primary,
+        &tr("Search"),
+        "reader:search:go",
+        "search-go",
+    );
     let entry = WidgetPod::new(
         Row::new(vec![WidgetPod::new(Expanded::new(field, 1)), go])
             .gap(t.space.sm)
@@ -628,7 +646,7 @@ pub fn search(services: &Services, screen: Size, text: &str, rows: Vec<SearchRow
     sheet(
         services,
         screen,
-        Some("Search this book"),
+        Some(&tr("Search this book")),
         children,
         Some(WRITING_PERCENT),
     )
@@ -637,10 +655,10 @@ pub fn search(services: &Services, screen: Size, text: &str, rows: Vec<SearchRow
 /// The note editor for a selection: a text field and the keyboard.
 pub fn note(services: &Services, screen: Size, word: &str) -> Window {
     let t = &services.theme;
-    let field = WidgetPod::new(TextField::new().placeholder("Note"))
+    let field = WidgetPod::new(TextField::new().placeholder(tr("Note")))
         .with_key("note-field")
         .focusable(true);
-    let save = button(ButtonStyle::Primary, "Save", "reader:note:save", "note-save");
+    let save = button(ButtonStyle::Primary, &tr("Save"), "reader:note:save", "note-save");
     let children = vec![
         WidgetPod::new(Label::new(
             word.to_string(),
@@ -654,7 +672,13 @@ pub fn note(services: &Services, screen: Size, word: &str) -> Window {
         ),
         WidgetPod::new(OnScreenKeyboard::new(&ENGLISH)),
     ];
-    sheet(services, screen, Some("Note"), children, Some(WRITING_PERCENT))
+    sheet(
+        services,
+        screen,
+        Some(&tr("Note")),
+        children,
+        Some(WRITING_PERCENT),
+    )
 }
 
 /// The end of book sheet: mark the book as finished, or go back to the Library.
@@ -662,24 +686,24 @@ pub fn end_of_book(services: &Services, screen: Size) -> Window {
     let t = &services.theme;
     let children = vec![
         WidgetPod::new(Paragraph::new(
-            "You have reached the end of this book.".to_string(),
+            tr("You have reached the end of this book."),
             t.font.body.clone(),
             Tone::Ink,
         )),
         button(
             ButtonStyle::Primary,
-            "Mark as finished",
+            &tr("Mark as finished"),
             "reader:finish",
             "end-finish",
         ),
         button(
             ButtonStyle::Secondary,
-            "Back to Library",
+            &tr("Back to Library"),
             "nav:library",
             "end-library",
         ),
     ];
-    sheet(services, screen, Some("End of book"), children, None)
+    sheet(services, screen, Some(&tr("End of book")), children, None)
 }
 
 /// The rows of the Contents panel for bookmarks or highlights.
@@ -688,11 +712,11 @@ pub fn annotation_items(annotations: &[Annotation], bookmarks: bool) -> Vec<Cont
         .iter()
         .map(|a| {
             let label = if bookmarks {
-                a.chapter.clone().unwrap_or_else(|| "Bookmark".to_string())
+                a.chapter.clone().unwrap_or_else(|| tr("Bookmark"))
             } else {
                 match a.text.as_deref() {
                     Some(text) if !text.trim().is_empty() => shorten(text, 80),
-                    _ => "Highlight".to_string(),
+                    _ => tr("Highlight"),
                 }
             };
             let detail = if bookmarks {
@@ -729,7 +753,7 @@ pub fn search_rows(results: &[kaia_book::SearchResult]) -> Vec<SearchRow> {
     results
         .iter()
         .map(|r| SearchRow {
-            label: format!("Page {}", r.page + 1),
+            label: tr_format(&tr("Page %1"), &[&(r.page + 1).to_string()]),
             snippet: r.snippet.clone(),
             action: format!("reader:search:hit:{}", r.index),
         })
@@ -747,7 +771,7 @@ fn dictionary_plugins(services: &Services, children: Vec<WidgetPod>) -> Vec<Widg
         let mut children = children;
         children.push(button(
             ButtonStyle::Secondary,
-            "Plugin actions",
+            &tr("Plugin actions"),
             "plugins:dictionary",
             "dictionary-plugins",
         ));
@@ -771,7 +795,7 @@ pub fn sticker_picker(services: &Services, screen: Size) -> Window {
             }
             children.push(button(
                 ButtonStyle::Secondary,
-                label,
+                &sticker_label(label),
                 &format!("reader:sticker:add:{name}"),
                 &format!("sticker-pick-{name}"),
             ));
@@ -784,18 +808,28 @@ pub fn sticker_picker(services: &Services, screen: Size) -> Window {
     sheet(
         services,
         screen,
-        Some("Choose a sticker"),
+        Some(&tr("Choose a sticker")),
         vec![
             WidgetPod::new(Row::new(choices).gap(t.space.sm)),
             button(
                 ButtonStyle::Secondary,
-                "Text note",
+                &tr("Text note"),
                 "reader:sticker:text",
                 "sticker-text",
             ),
         ],
         None,
     )
+}
+
+fn sticker_label(label: &str) -> String {
+    match label {
+        "Star" => tr("Star"),
+        "Heart" => tr("Heart"),
+        "Question" => tr("Question"),
+        "Check" => tr("Check"),
+        other => other.to_string(),
+    }
 }
 
 fn sticker_image(path: &std::path::Path, height: u32) -> Option<WidgetPod> {
@@ -814,31 +848,31 @@ pub fn sticker_sheet(services: &Services, screen: Size, sticker: &kaia_storage::
     let id = sticker.id.as_deref().unwrap_or("");
     let mut children = vec![button(
         ButtonStyle::Secondary,
-        "View",
+        &tr("View"),
         &format!("reader:sticker:view:{id}"),
         "sticker-view",
     )];
     if sticker.asset.is_none() {
         children.push(button(
             ButtonStyle::Secondary,
-            "Edit",
+            &tr("Edit"),
             &format!("reader:sticker:edit:{id}"),
             "sticker-edit",
         ));
     }
     children.push(button(
         ButtonStyle::Secondary,
-        "Move to another place",
+        &tr("Move to another place"),
         &format!("reader:sticker:move:{id}"),
         "sticker-move",
     ));
     children.push(button(
         ButtonStyle::Secondary,
-        "Delete",
+        &tr("Delete"),
         &format!("reader:sticker:delete:{id}"),
         "sticker-delete",
     ));
-    sheet(services, screen, Some("Sticker"), children, None)
+    sheet(services, screen, Some(&tr("Sticker")), children, None)
 }
 
 pub fn sticker_view(
@@ -865,11 +899,11 @@ pub fn sticker_view(
             1,
         )));
     }
-    sheet(services, screen, Some("Sticker"), children, Some(60))
+    sheet(services, screen, Some(&tr("Sticker")), children, Some(60))
 }
 
 pub fn sticker_note(services: &Services, screen: Size, text: &str) -> Window {
-    let mut field = TextField::new().placeholder("Text note");
+    let mut field = TextField::new().placeholder(tr("Text note"));
     field.set_text(text);
     let children = vec![
         WidgetPod::new(field)
@@ -877,7 +911,7 @@ pub fn sticker_note(services: &Services, screen: Size, text: &str) -> Window {
             .focusable(true),
         button(
             ButtonStyle::Primary,
-            "Save",
+            &tr("Save"),
             "reader:sticker:save",
             "sticker-note-save",
         ),
@@ -886,7 +920,7 @@ pub fn sticker_note(services: &Services, screen: Size, text: &str) -> Window {
     sheet(
         services,
         screen,
-        Some("Text note"),
+        Some(&tr("Text note")),
         children,
         Some(WRITING_PERCENT),
     )

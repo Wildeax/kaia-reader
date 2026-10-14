@@ -2,6 +2,7 @@
 use super::page::{Mark, MarkStyle};
 use kaia_book::{BookSession, Drawer, Selection, Size};
 use kaia_gfx::{Pixmap, Rect};
+use kaia_i18n::{format as tr_format, tr};
 use std::sync::{mpsc, Arc};
 
 pub(super) struct Frame {
@@ -10,14 +11,45 @@ pub(super) struct Frame {
     pub marks: Vec<Mark>,
     pub hits: Vec<Rect>,
     pub selection: Option<Selection>,
-    pub error: Option<String>,
+    pub error: Option<WorkError>,
     pub stickers: Vec<super::stickers::Drawing>,
     pub sticker_anchor: Option<kaia_storage::Anchor>,
 }
-pub(super) type Reply = mpsc::Receiver<Result<Frame, String>>;
+
+/// An error from the engine thread. That thread has no catalog, so the sentence is
+/// built by [`WorkError::message`] on the UI thread, when the page shows it.
+pub(super) enum WorkError {
+    Open(String),
+    Turn(String),
+    GoTo(String),
+    Draw(String),
+    Stickers(String),
+    /// An engine message that the page shows as it is.
+    Engine(String),
+    Stopped,
+}
+
+impl WorkError {
+    pub(super) fn message(&self) -> String {
+        match self {
+            Self::Engine(e) => e.clone(),
+            Self::Open(e) => tr_format(&tr("Cannot open this book. %1"), &[e.as_str()]),
+            Self::Turn(e) => tr_format(&tr("Cannot turn the page. %1"), &[e.as_str()]),
+            Self::GoTo(e) => tr_format(&tr("Cannot go there. %1"), &[e.as_str()]),
+            Self::Draw(e) => tr_format(&tr("Cannot draw this page. %1"), &[e.as_str()]),
+            Self::Stickers(e) => {
+                let detail = super::stickers::error_text(e);
+                tr_format(&tr("Cannot load stickers. %1"), &[detail.as_str()])
+            }
+            Self::Stopped => tr("The book worker stopped."),
+        }
+    }
+}
+
+pub(super) type Reply = mpsc::Receiver<Result<Frame, WorkError>>;
 pub(super) fn spawn(
     viewport: Size,
-    task: impl FnOnce() -> Result<(BookSession, Option<Selection>, Option<String>), String> + Send + 'static,
+    task: impl FnOnce() -> Result<(BookSession, Option<Selection>, Option<WorkError>), WorkError> + Send + 'static,
 ) -> Reply {
     let (send, reply) = mpsc::sync_channel(1);
     submit(Box::new(move || {
@@ -26,7 +58,7 @@ pub(super) fn spawn(
             let mut error = rendered
                 .as_ref()
                 .err()
-                .map(|e| format!("Cannot draw this page. {e}"))
+                .map(|e| WorkError::Draw(e.to_string()))
                 .or(operation_error);
             let mut marks = Vec::new();
             if let Ok(list) = session.annotations_on_page(viewport) {
@@ -56,7 +88,7 @@ pub(super) fn spawn(
                 match super::stickers::frame(&mut session, selection.as_ref(), viewport) {
                     Ok(frame) => frame,
                     Err(e) => {
-                        error = Some(format!("Cannot load stickers. {e}"));
+                        error = Some(WorkError::Stickers(e));
                         (Vec::new(), None)
                     }
                 };
@@ -101,7 +133,7 @@ mod tests {
         let reply = spawn(Size::new(10, 10), move || {
             assert_ne!(caller, std::thread::current().id());
             wait.recv().unwrap();
-            Err("test document".into())
+            Err(WorkError::Open("test document".into()))
         });
         assert!(matches!(reply.try_recv(), Err(mpsc::TryRecvError::Empty)));
         release.send(()).unwrap();

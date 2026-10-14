@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::services::Services;
 use kaia_dict::{Library, LookupOptions};
+use kaia_i18n::{format as tr_format, tr};
 
 pub fn lookup(word: &str, services: &mut Services) -> String {
     if services.dictionary.is_none() {
@@ -50,7 +51,7 @@ pub fn lookup(word: &str, services: &mut Services) -> String {
         })
         .collect();
     if blocks.is_empty() {
-        format!("No entry for \"{word}\" in the installed dictionaries.")
+        tr_format(&tr("No entry for \"%1\" in the installed dictionaries."), &[word])
     } else {
         blocks.join("\n\n")
     }
@@ -58,8 +59,9 @@ pub fn lookup(word: &str, services: &mut Services) -> String {
 
 /// The sheet text when no dictionary is installed: what to copy and where.
 pub fn install_hint(data_dir: &Path) -> String {
-    format!(
-        "No dictionary installed. Copy a StarDict dictionary (.ifo, .idx and .dict files) into {}.",
-        data_dir.join("dict").display()
+    let folder = data_dir.join("dict").display().to_string();
+    tr_format(
+        &tr("No dictionary installed. Copy a StarDict dictionary (.ifo, .idx and .dict files) into %1."),
+        &[folder.as_str()],
     )
 }

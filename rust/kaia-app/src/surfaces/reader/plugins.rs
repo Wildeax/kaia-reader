@@ -3,6 +3,7 @@ use super::state::Core;
 use kaia_book::{Drawer, Location, Pos, Selection};
 use kaia_doc::Document;
 use kaia_events::{Key, Settings, Value};
+use kaia_i18n::tr;
 use kaia_lua::ReaderHost;
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -23,7 +24,7 @@ pub(super) struct Host {
 impl Host {
     pub fn new(core: Rc<RefCell<Core>>, data: &std::path::Path) -> Result<Self, String> {
         let c = core.borrow();
-        let s = c.session.as_ref().ok_or("The reader is busy")?;
+        let s = c.session.as_ref().ok_or_else(|| tr("The reader is busy"))?;
         let file = s.path().to_string_lossy().to_string();
         let document = if s.uses_cre() {
             TextDocument::Cre(kaia_doc::cre::CreDocument::open(s.path()).map_err(|e| e.to_string())?)
@@ -115,7 +116,7 @@ impl Host {
     // that its public API does not expose, with the same engine and layout.
     fn sync_text_layout(&self) -> Result<(), String> {
         let c = self.core.borrow();
-        let s = c.session.as_ref().ok_or("The reader is busy")?;
+        let s = c.session.as_ref().ok_or_else(|| tr("The reader is busy"))?;
         if !s.is_reflowable() || self.text_layout.borrow().as_ref() == Some(s.layout()) {
             return Ok(());
         }
@@ -192,7 +193,7 @@ impl ReaderHost for Host {
             TextDocument::Cre(doc) => doc
                 .page_xpointer(page.saturating_sub(1))
                 .map_err(|e| e.to_string()),
-            _ => Err("This book uses page numbers".into()),
+            _ => Err(tr("This book uses page numbers")),
         }
     }
     fn page_for_xpointer(&self, xp: &str) -> Result<u32, String> {
@@ -222,7 +223,12 @@ impl ReaderHost for Host {
     }
     fn page_margins(&self, _: u32) -> Result<Value, String> {
         let c = self.core.borrow();
-        let m = &c.session.as_ref().ok_or("The reader is busy")?.layout().margins;
+        let m = &c
+            .session
+            .as_ref()
+            .ok_or_else(|| tr("The reader is busy"))?
+            .layout()
+            .margins;
         Ok(Value::Table(
             [
                 (Key::from("left"), Value::from(m.left as f64)),
@@ -235,10 +241,13 @@ impl ReaderHost for Host {
     }
     fn text_from_positions(&mut self, start: &Value, end: &Value) -> Result<String, String> {
         let c = self.core.borrow();
-        let selection = c.selection.as_ref().ok_or("There is no active selection")?;
+        let selection = c
+            .selection
+            .as_ref()
+            .ok_or_else(|| tr("There is no active selection"))?;
         if position_value(selection.pos0.clone()) != *start || position_value(selection.pos1.clone()) != *end
         {
-            return Err("The requested positions are outside the active selection".into());
+            return Err(tr("The requested positions are outside the active selection"));
         }
         Ok(selection.text.clone())
     }
@@ -333,7 +342,7 @@ impl ReaderHost for Host {
             .borrow_mut()
             .session
             .as_mut()
-            .ok_or("The reader is busy")?
+            .ok_or_else(|| tr("The reader is busy"))?
             .add_highlight(
                 &selection,
                 Drawer::parse(item.get("drawer").as_str().unwrap_or("lighten")).ok_or("invalid drawer")?,
@@ -349,7 +358,7 @@ impl ReaderHost for Host {
             .borrow_mut()
             .session
             .as_mut()
-            .ok_or("The reader is busy")?
+            .ok_or_else(|| tr("The reader is busy"))?
             .edit_note(id, item.get("note").as_str())
             .map_err(|e| e.to_string())?;
         if let Some(drawer) = item.get("drawer").as_str() {
@@ -357,7 +366,7 @@ impl ReaderHost for Host {
                 .borrow_mut()
                 .session
                 .as_mut()
-                .ok_or("The reader is busy")?
+                .ok_or_else(|| tr("The reader is busy"))?
                 .set_highlight_style(
                     id,
                     Drawer::parse(drawer).ok_or("invalid drawer")?,
@@ -373,7 +382,7 @@ impl ReaderHost for Host {
             .borrow_mut()
             .session
             .as_mut()
-            .ok_or("The reader is busy")?
+            .ok_or_else(|| tr("The reader is busy"))?
             .delete_annotation(id)
             .map_err(|e| e.to_string())?;
         self.refresh_annotations();
@@ -387,7 +396,7 @@ impl ReaderHost for Host {
             .borrow_mut()
             .session
             .as_mut()
-            .ok_or("The reader is busy")?
+            .ok_or_else(|| tr("The reader is busy"))?
             .save()
             .map_err(|e| e.to_string())
     }

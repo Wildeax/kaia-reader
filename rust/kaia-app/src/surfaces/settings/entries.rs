@@ -2,6 +2,7 @@
 //! from the settings and the device; [`widget`] turns each one into a widget.
 //! The list is paged, so the entries are plain data and cheap to build again.
 
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Padding, Paragraph, Row, SizedBox, Spacer,
 };
@@ -25,6 +26,13 @@ pub enum Entry {
         label: String,
         on: bool,
     },
+    /// A row with a checkbox, for one choice of a long list such as the languages.
+    /// Its action sends `action`.
+    Choice {
+        label: String,
+        selected: bool,
+        action: String,
+    },
     /// A plugin switch with a discovered name.
     PluginToggle { key: String, label: String, on: bool },
     /// A stepper. Its action writes `settings:set:<key>` with the new value.
@@ -35,7 +43,7 @@ pub enum Entry {
         min: f64,
         max: f64,
         step: f64,
-        unit: &'static str,
+        unit: StepUnit,
     },
     /// A radio group. Its action writes `settings:pick:<key>` with the chosen index.
     Radio {
@@ -79,6 +87,14 @@ pub enum Entry {
     },
 }
 
+/// The unit that follows a stepper value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepUnit {
+    KoreaderUnits,
+    Pages,
+    Minutes,
+}
+
 /// The widest bar, in multiples of the row height.
 const BAR_ROW_HEIGHTS: u32 = 4;
 /// The label column of a bar, in multiples of the row height.
@@ -108,6 +124,16 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 .on_action(format!("settings:set:{key}")),
         )
         .with_key(format!("set-{key}")),
+        Entry::Choice {
+            label,
+            selected,
+            action,
+        } => WidgetPod::new(
+            ListRow::new(label.clone())
+                .checkbox(*selected)
+                .on_action(action.clone()),
+        )
+        .with_key(action.clone()),
         Entry::PluginToggle { key, label, on } => WidgetPod::new(
             ListRow::new(label.clone())
                 .toggle(*on)
@@ -125,7 +151,7 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
         } => {
             let unit = *unit;
             let stepper = Stepper::new(*value, *min, *max, *step)
-                .format(move |v| format!("{v}{unit}"))
+                .format(move |v| unit_text(unit, v))
                 .on_action(format!("settings:set:{key}"));
             WidgetPod::new(
                 Row::new(vec![
@@ -158,7 +184,7 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 Light::Warmth => "settings:light:warmth",
             };
             let slider = Slider::new(*value, 0.0, 100.0, 1.0)
-                .format(|v| format!("{v}%"))
+                .format(|v| tr_format(&tr("%1%"), &[&v.to_string()]))
                 .enabled(*enabled)
                 .on_action(id);
             WidgetPod::new(
@@ -228,6 +254,16 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             detail,
             fraction,
         } => bar(label, detail, *fraction, t),
+    }
+}
+
+/// A stepper value with its unit, such as `22 KOReader units` or `1 page`.
+fn unit_text(unit: StepUnit, v: f64) -> String {
+    let n = v.to_string();
+    match unit {
+        StepUnit::KoreaderUnits => tr_format(&tr("%1 KOReader units"), &[&n]),
+        StepUnit::Pages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),
+        StepUnit::Minutes => tr_format(&tr("%1 min"), &[&n]),
     }
 }
 

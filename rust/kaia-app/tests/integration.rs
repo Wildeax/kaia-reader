@@ -19,6 +19,7 @@ fn manual(name: &str) -> (App<HeadlessBackend>, ManualClock) {
         },
     )
     .unwrap();
+    pin_english(&dir.join("data"));
     let services = Services::open(platform, panel(), Some(dir.join("data"))).unwrap();
     let clock = ManualClock::new();
     let mut app = App::new(

@@ -19,6 +19,7 @@ pub mod sleep;
 
 use kaia_events::Value;
 use kaia_gfx::Size;
+use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::components::Expanded;
 use kaia_ui::composite::{ListRow, PagedList};
 use kaia_ui::controls::{ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
@@ -104,11 +105,12 @@ fn current_query(args: &[Value]) -> String {
 pub fn save(env: &mut SurfaceEnv<'_>) {
     let path = env.services.settings_path();
     if let Err(e) = env.services.settings.flush(&path) {
-        env.notice(format!("cannot save settings: {e}"));
+        env.notice(tr_format(&tr("cannot save settings: %1"), &[&e.to_string()]));
     }
 }
 
-/// The searchable items: the section and the item title. Search matches the title.
+/// The searchable items: the section and the English item title. Search matches the
+/// title the user sees, see [`item_title`].
 pub const ITEMS: &[(&str, &str)] = &[
     ("reading", "Font size"),
     ("reading", "Font family"),
@@ -120,6 +122,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("display", "Night mode"),
     ("display", "Color rendering"),
     ("display", "Screen rotation"),
+    ("display", "Language"),
     ("library", "Book folders"),
     ("library", "Scan now"),
     ("library", "Show finished books"),
@@ -147,14 +150,59 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Date and time"),
 ];
 
-/// The items whose title contains `query` (case-insensitive), in catalogue order.
+/// The items whose title, in the language in use, contains `query` (case-insensitive),
+/// in catalogue order.
 pub fn search(query: &str) -> Vec<(&'static str, &'static str)> {
     let q = query.to_lowercase();
     ITEMS
         .iter()
         .copied()
-        .filter(|(_, item)| item.to_lowercase().contains(&q))
+        .filter(|(_, item)| item_title(item).to_lowercase().contains(&q))
         .collect()
+}
+
+/// The title of a search item in the language in use. Each English title in
+/// [`ITEMS`] has an arm here. A title without an arm stays English.
+fn item_title(english: &str) -> String {
+    match english {
+        "Font size" => tr("Font size"),
+        "Font family" => tr("Font family"),
+        "Tap zones" => tr("Tap zones"),
+        "Full refresh every" => tr("Full refresh every"),
+        "Dictionary folder" => tr("Dictionary folder"),
+        "Frontlight" => tr("Frontlight"),
+        "Warmth" => tr("Warmth"),
+        "Night mode" => tr("Night mode"),
+        "Color rendering" => tr("Color rendering"),
+        "Screen rotation" => tr("Screen rotation"),
+        "Language" => tr("Language"),
+        "Book folders" => tr("Book folders"),
+        "Scan now" => tr("Scan now"),
+        "Show finished books" => tr("Show finished books"),
+        "Server address" => tr("Server address"),
+        "Username" => tr("Username"),
+        "Password" => tr("Password"),
+        "Test connection" => tr("Test connection"),
+        "OPDS catalogs" => tr("OPDS catalogs"),
+        "Calibre wireless" => tr("Calibre wireless"),
+        "Today" => tr("Today"),
+        "This week" => tr("This week"),
+        "Books" => tr("Books"),
+        "Sleep after" => tr("Sleep after"),
+        "Sleep screen" => tr("Sleep screen"),
+        "KOReader plugins" => tr("KOReader plugins"),
+        "Safe mode" => tr("Safe mode"),
+        "Import from KOReader" => tr("Import from KOReader"),
+        "Export notes" => tr("Export notes"),
+        "License" => tr("License"),
+        "Source" => tr("Source"),
+        "Gesture zones" => tr("Gesture zones"),
+        "Hardware keys" => tr("Hardware keys"),
+        "Auto suspend" => tr("Auto suspend"),
+        "Backup and safe mode" => tr("Backup and safe mode"),
+        "Date and time" => tr("Date and time"),
+        other => other.to_string(),
+    }
 }
 
 /// One line of the root list.
@@ -169,13 +217,13 @@ enum RootItem {
 }
 
 fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window {
-    let mut children = vec![title(services, "Settings")];
+    let mut children = vec![title(services, tr("Settings"))];
     if root.typing {
         children.push(
             WidgetPod::new(
                 TextField::new()
                     .with_text(root.query.clone())
-                    .placeholder("Search settings")
+                    .placeholder(tr("Search settings"))
                     .on_submit("settings:search"),
             )
             .focusable(true)
@@ -183,9 +231,9 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
         );
     } else {
         let label = if root.query.is_empty() {
-            "Search settings".to_string()
+            tr("Search settings")
         } else {
-            format!("Search: {}", root.query)
+            tr_format(&tr("Search: %1"), &[&root.query])
         };
         children.push(button(
             ButtonStyle::Secondary,
@@ -202,7 +250,7 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
         if hits.is_empty() {
             children.push(body(
                 services,
-                format!("No setting matches \u{201c}{}\u{201d}.", root.query),
+                tr_format(&tr("No setting matches \u{201c}%1\u{201d}."), &[&root.query]),
             ));
         } else {
             let items: Vec<RootItem> = hits
@@ -251,7 +299,7 @@ fn build_item(item: &RootItem, _theme: &Theme) -> WidgetPod {
             title,
             index,
         } => WidgetPod::new(
-            ListRow::new(*title)
+            ListRow::new(item_title(title))
                 .secondary(sections::title(section))
                 .chevron()
                 .on_action(format!("settings:{section}")),

@@ -5,12 +5,13 @@ pub mod worker;
 
 use kaia_events::{Event, ShowOpts, TaskId, Value};
 use kaia_gfx::Pixmap;
+use kaia_i18n::tr;
 use kaia_opds::{Catalog, Entry, Feed};
 use kaia_ui::Window;
 
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::Route;
-use worker::{Reply, Request, Worker};
+use worker::{worker_text, Reply, Request, Worker};
 
 pub(super) enum View {
     Catalogs,
@@ -98,14 +99,14 @@ impl CatalogSurface {
             && !env.services.platform.network.is_wifi_on()
         {
             self.pending = Some(request);
-            self.status = "Wi-Fi is off. Turn it on to continue?".into();
+            self.status = tr("Wi-Fi is off. Turn it on to continue?");
         } else {
             self.start(request, false, env);
         }
     }
 
     fn start(&mut self, request: Request, wifi: bool, env: &mut SurfaceEnv<'_>) {
-        self.status = "Starting...".into();
+        self.status = tr("Starting...");
         self.connection = matches!(request, Request::Connect { .. });
         self.worker = Some(Worker::start(
             request,
@@ -130,7 +131,7 @@ impl CatalogSurface {
             .flush(&env.services.settings_path())
             .is_err()
         {
-            self.status = "Cannot save settings. Check device storage.".into();
+            self.status = tr("Cannot save settings. Check device storage.");
         }
     }
 }
@@ -202,7 +203,8 @@ impl Surface for CatalogSurface {
                 continue;
             }
             match reply {
-                Reply::Progress(text) => {
+                Reply::Progress(progress) => {
+                    let text = progress.text();
                     changed |= self.status != text;
                     self.status = text;
                 }
@@ -238,13 +240,13 @@ impl Surface for CatalogSurface {
                 Reply::Finished(result) => {
                     self.worker = None;
                     self.status = match result {
-                        Err(message) => message,
-                        Ok(()) if self.book.is_some() => "Book saved to the library.".into(),
+                        Err(message) => worker_text(&message),
+                        Ok(()) if self.book.is_some() => tr("Book saved to the library."),
                         Ok(()) if matches!(self.view, View::Calibre) => {
                             if self.servers.is_empty() {
-                                "No active connection. Use a manual address or discover servers.".into()
+                                tr("No active connection. Use a manual address or discover servers.")
                             } else {
-                                "Choose a server to connect.".into()
+                                tr("Choose a server to connect.")
                             }
                         }
                         Ok(()) => String::new(),
@@ -281,7 +283,7 @@ impl Surface for CatalogSurface {
             self.pending = None;
             if let Some(worker) = &self.worker {
                 worker.cancel();
-                self.status = "Cancelling...".into();
+                self.status = tr("Cancelling...");
             } else {
                 self.status.clear();
             }
@@ -296,7 +298,7 @@ impl Surface for CatalogSurface {
         if action == "open-book" {
             if let Some(book) = self.book {
                 self.worker.take();
-                self.status = "Book saved to the library.".into();
+                self.status = tr("Book saved to the library.");
                 return Outcome::Navigate(Nav::OpenBook { book, location: None });
             }
         }
@@ -420,7 +422,7 @@ impl Surface for CatalogSurface {
                 "save" => {
                     if let View::Editor { index, catalog } = &mut self.view {
                         if catalog.title.trim().is_empty() || !valid_url(&catalog.url) {
-                            self.status = "Enter a name and an HTTP or HTTPS address.".into();
+                            self.status = tr("Enter a name and an HTTP or HTTPS address.");
                             return Outcome::Rebuild;
                         }
                         catalog.url = kaia_opds::normalize_url(&catalog.url);
@@ -436,7 +438,7 @@ impl Surface for CatalogSurface {
                         self.view = View::Catalogs;
                         self.history.clear();
                         self.typing = false;
-                        self.status = "Catalog saved.".into();
+                        self.status = tr("Catalog saved.");
                         self.flush(env);
                     }
                 }
@@ -449,7 +451,7 @@ impl Surface for CatalogSurface {
                         store::save(&mut env.services.settings, &list);
                         self.view = View::Catalogs;
                         self.history.clear();
-                        self.status = "Catalog deleted.".into();
+                        self.status = tr("Catalog deleted.");
                         self.flush(env);
                     }
                 }
@@ -486,13 +488,13 @@ impl Surface for CatalogSurface {
                 "save-folder" => {
                     let path = std::path::Path::new(&self.download_folder);
                     if !path.is_absolute() {
-                        self.status = "Enter an absolute folder path.".into();
+                        self.status = tr("Enter an absolute folder path.");
                     } else {
                         env.services
                             .settings
                             .save(store::DOWNLOADS, Value::from(self.download_folder.clone()));
                         self.typing = false;
-                        self.status = "Downloads folder saved.".into();
+                        self.status = tr("Downloads folder saved.");
                         self.flush(env);
                     }
                 }
@@ -505,7 +507,7 @@ impl Surface for CatalogSurface {
 impl CatalogSurface {
     fn connect(&mut self, env: &mut SurfaceEnv<'_>) {
         if self.address.trim().is_empty() {
-            self.status = "Enter the server address and port.".into();
+            self.status = tr("Enter the server address and port.");
             return;
         }
         env.services

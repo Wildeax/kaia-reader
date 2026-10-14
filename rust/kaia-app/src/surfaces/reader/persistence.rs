@@ -3,6 +3,7 @@ use super::state::Core;
 use crate::surface::SurfaceEnv;
 use kaia_book::BookSession;
 use kaia_events::TaskId;
+use kaia_i18n::{format as tr_format, tr};
 use std::time::Duration;
 
 #[derive(Default)]
@@ -45,10 +46,10 @@ impl Persistence {
                 Ok(()) => {
                     env.services.settings.del(status_key);
                     if let Err(e) = env.services.settings.flush(&env.services.settings_path()) {
-                        env.notice(format!("Cannot save settings: {e}"));
+                        env.notice(tr_format(&tr("Cannot save settings: %1"), &[&e.to_string()]));
                     }
                 }
-                Err(e) => env.notice(format!("Cannot save book status: {e}")),
+                Err(e) => env.notice(tr_format(&tr("Cannot save book status: %1"), &[&e.to_string()])),
             }
         }
         let now = self.now(env);
@@ -72,7 +73,10 @@ impl Persistence {
                 });
             match result {
                 Ok(stats) => self.stats = Some(stats),
-                Err(e) => env.notice(format!("Cannot record reading time: {e}")),
+                Err(e) => env.notice(tr_format(
+                    &tr("Cannot record reading time: %1"),
+                    &[&e.to_string()],
+                )),
             }
         }
         let position = crate::sync::position(session);
@@ -88,7 +92,10 @@ impl Persistence {
                     .pages_changed(session.page_count() as i64)
                     .and_then(|()| stats.page_turn(session.current().page as i64 + 1, now));
                 if let Err(e) = result {
-                    env.notice(format!("Cannot record reading time: {e}"));
+                    env.notice(tr_format(
+                        &tr("Cannot record reading time: %1"),
+                        &[&e.to_string()],
+                    ));
                 }
             }
             if let Some(due) = c
@@ -124,8 +131,9 @@ impl Persistence {
             return !self.save_pending;
         };
         if let Err(e) = session.save() {
-            env.notice(format!(
-                "Cannot save this book. Free storage, then try again. {e}"
+            env.notice(tr_format(
+                &tr("Cannot save this book. Free storage, then try again. %1"),
+                &[&e.to_string()],
             ));
             return false;
         }
@@ -151,7 +159,7 @@ impl Persistence {
                 _ => stats.flush(),
             };
             if let Err(e) = result {
-                env.notice(format!("Cannot save reading time: {e}"));
+                env.notice(tr_format(&tr("Cannot save reading time: %1"), &[&e.to_string()]));
             }
         }
         if event == "Close" {

@@ -1,0 +1,16 @@
+# Fixture for the kaia-app i18n test. Stands in for KOReader's l10n/fr/koreader.po.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+
+msgid "Settings"
+msgstr "Paramètres"
+
+msgid "Language"
+msgstr "Langue"
+
+msgid "%1 book"
+msgid_plural "%1 books"
+msgstr[0] "%1 livre"
+msgstr[1] "%1 livres"

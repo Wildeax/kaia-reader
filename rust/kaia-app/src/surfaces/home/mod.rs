@@ -11,6 +11,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use kaia_events::{Ctx, Event, RefreshMode, Value};
+use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
 use kaia_ui::components::{Column, CrossAlign, Expanded, Label, Padding, ProgressBar, Row, SizedBox};
 use kaia_ui::composite::Header;
@@ -50,7 +51,12 @@ pub struct HomeSurface {
 
 fn progress_text(progress: Option<(usize, usize)>) -> String {
     progress
-        .map(|(done, total)| format!("Indexing books: {done} of {total}"))
+        .map(|(done, total)| {
+            tr_format(
+                &tr("Indexing books: %1 of %2"),
+                &[&done.to_string(), &total.to_string()],
+            )
+        })
         .unwrap_or_default()
 }
 
@@ -164,7 +170,14 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     let total = data::all(lib).len();
     let reading = count(lib, Status::Reading);
     let finished = count(lib, Status::Complete);
-    let counts = format!("Library: {total} books. Reading: {reading}. Finished: {finished}.");
+    let counts = tr_format(
+        &tr_n(
+            "Library: %1 book. Reading: %2. Finished: %3.",
+            "Library: %1 books. Reading: %2. Finished: %3.",
+            total as i64,
+        ),
+        &[&total.to_string(), &reading.to_string(), &finished.to_string()],
+    );
     let counts = button(ButtonStyle::Text, &counts, "nav:library", "library");
 
     // The sections scroll out of view rather than pushing the counts and the nav
@@ -223,7 +236,7 @@ fn empty_section(t: &Theme) -> WidgetPod {
     let mut children = common::empty_library(t);
     children.push(button(
         ButtonStyle::Primary,
-        "Open Library",
+        &tr("Open Library"),
         "nav:library",
         "empty-library",
     ));
@@ -239,9 +252,9 @@ fn empty_section(t: &Theme) -> WidgetPod {
 fn hero_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
     let t = &env.services.theme;
     let label = if book.last_opened_at.is_some() {
-        "Continue reading"
+        tr("Continue reading")
     } else {
-        "Start reading"
+        tr("Start reading")
     };
     WidgetPod::new(
         Column::new(vec![
@@ -281,7 +294,7 @@ fn shelf_section(env: &SurfaceEnv<'_>, recent: &[Book], hero: Option<&Book>) -> 
         .collect();
     Some(WidgetPod::new(
         Column::new(vec![
-            WidgetPod::new(Label::new("Recent", t.font.label.clone(), Tone::InkSecondary)),
+            WidgetPod::new(Label::new(tr("Recent"), t.font.label.clone(), Tone::InkSecondary)),
             WidgetPod::new(Row::new(tiles).gap(t.space.sm)),
         ])
         .gap(t.space.md)
@@ -313,7 +326,7 @@ fn continue_section(t: &Theme, lib: &Library, hero: Option<&Book>) -> Option<Wid
         return None;
     }
     let mut children = vec![WidgetPod::new(Label::new(
-        "Continue",
+        tr("Continue"),
         t.font.label.clone(),
         Tone::InkSecondary,
     ))];
@@ -374,8 +387,8 @@ fn hero_card(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
     }
     details.push(WidgetPod::new(ProgressBar::new(book.percent as f32)));
     let status = match (book.status, time_left(env, book)) {
-        (Status::Reading, Some(left)) => format!("{} · {left} left", data::status_label(book)),
-        _ => data::status_label(book).to_string(),
+        (Status::Reading, Some(left)) => tr_format(&tr("%1 · %2 left"), &[&data::status_label(book), &left]),
+        _ => data::status_label(book),
     };
     details.push(WidgetPod::new(Label::new(
         status,

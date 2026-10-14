@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use kaia_app::{App, AppOptions, HeadlessBackend, Route, ScriptInput, Services};
 use kaia_display::PanelSpec;
-use kaia_events::{RefreshMode, SystemClock};
+use kaia_events::{RefreshMode, Settings, SystemClock, Value};
 use kaia_gfx::{Point, Rect};
 use kaia_library::{Library, Sort, SortKey};
 use kaia_platform::{Env, Platform};
@@ -38,6 +38,23 @@ pub fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+/// Pins the screens to English in the data folder `data`, so a test reads the same
+/// text on any machine. `Services::open` reads the setting before the system
+/// locale. A settings file that already has a language is left alone, and so is
+/// one that cannot be read: the app keeps those bytes and reports them.
+pub fn pin_english(data: &Path) {
+    fs::create_dir_all(data).unwrap();
+    let path = data.join("settings.json");
+    if path.exists() && Settings::read_exact(&path).is_err() {
+        return;
+    }
+    let mut settings = Settings::open(&path);
+    if settings.read(kaia_app::i18n::SETTING).as_str().is_none() {
+        settings.save(kaia_app::i18n::SETTING, Value::from("en"));
+        settings.flush(&path).unwrap();
+    }
+}
+
 /// A library folder with the three test books copied in.
 pub fn library_with_books(dir: &Path) -> PathBuf {
     let lib = dir.join("books");
@@ -61,6 +78,7 @@ pub fn make_app_with(data: &Path, roots: Vec<PathBuf>, input: ScriptInput) -> Ap
         ..Env::default()
     };
     let platform = Platform::detect_in(&root, &env).unwrap();
+    pin_english(&data.join("data"));
     let services = Services::open(platform, panel(), Some(data.join("data"))).unwrap();
     let backend = HeadlessBackend::new(panel(), input);
     App::new(

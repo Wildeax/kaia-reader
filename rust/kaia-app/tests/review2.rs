@@ -55,7 +55,7 @@ fn unreadable_settings_keep_original_bytes() {
     let dir = scratch("r2-corrupt");
     fs::create_dir_all(dir.join("data")).unwrap();
     let bad = b"{\"recoverable\":42,";
-    fs::write(dir.join("data/settings.json"), bad).unwrap();
+    fs::write(dir.join("data/settings.json.old"), bad).unwrap();
     let mut app = make_app(&dir, vec![]);
     app.start().unwrap();
     assert!(app.notices().iter().any(|message| message.contains("unreadable")));
@@ -78,6 +78,7 @@ fn second_app_is_refused_until_first_drops() {
             },
         )
         .unwrap();
+        pin_english(&dir.join("data"));
         Services::open(platform, panel(), Some(dir.join("data")))
     };
     assert!(open().err().is_some_and(|e| e.to_string().contains("already")));
@@ -385,6 +386,7 @@ fn night_mode_reaches_display_at_startup_and_when_changed() {
         },
     )
     .unwrap();
+    pin_english(&dir.join("data"));
     let mut services = Services::open(platform, panel(), Some(dir.join("data"))).unwrap();
     services.settings.save("display.night_mode", Value::Bool(true));
     let backend = NightBackend {
@@ -418,6 +420,7 @@ fn statistics_exclude_time_asleep() {
         },
     )
     .unwrap();
+    pin_english(&dir.join("data"));
     let mut services = Services::open(platform, panel(), Some(dir.join("data"))).unwrap();
     services.settings.save("device.sleep_minutes", Value::Number(0.0));
     let clock = kaia_events::ManualClock::new();

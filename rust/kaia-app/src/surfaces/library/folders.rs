@@ -5,6 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use kaia_i18n::{format as tr_format, tr};
 use kaia_library::Book;
 
 /// One row of a folder: a subfolder or a book.
@@ -74,8 +75,8 @@ pub fn root_of(books: &[Book]) -> Option<PathBuf> {
 /// The folder `current` relative to `root`, for the heading. Empty at the root.
 pub fn label(root: &Path, current: &Path) -> String {
     match current.strip_prefix(root) {
-        Ok(rest) if rest.as_os_str().is_empty() => "Books".to_string(),
-        Ok(rest) => format!("Books / {}", rest.display()),
+        Ok(rest) if rest.as_os_str().is_empty() => tr("Books"),
+        Ok(rest) => tr_format(&tr("Books / %1"), &[&rest.display().to_string()]),
         Err(_) => current.display().to_string(),
     }
 }

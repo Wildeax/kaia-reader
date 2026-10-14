@@ -8,6 +8,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use kaia_i18n::{format as tr_format, tr};
+
 use super::data::{BookNotes, Location, Note};
 
 /// The folder under the data folder that holds exports.
@@ -43,8 +45,8 @@ pub fn export(data_dir: &Path, books: &[BookNotes], now: i64) -> io::Result<Expo
 /// The Markdown text: one heading per book, one list item per entry.
 pub fn markdown_text(books: &[BookNotes], now: i64) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "# Kaia notes\n");
-    let _ = writeln!(out, "Exported {}.\n", timestamp(now));
+    let _ = writeln!(out, "# {}\n", tr("Kaia notes"));
+    let _ = writeln!(out, "{}\n", tr_format(&tr("Exported %1."), &[&timestamp(now)]));
     for book in books {
         let _ = writeln!(out, "## {}\n", one_line(&book.title));
         for note in &book.notes {

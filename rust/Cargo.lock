@@ -889,6 +889,7 @@ dependencies = [
  "kaia-doc",
  "kaia-events",
  "kaia-gfx",
+ "kaia-i18n",
  "kaia-id",
  "kaia-input",
  "kaia-library",
