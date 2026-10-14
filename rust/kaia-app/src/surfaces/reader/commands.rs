@@ -41,6 +41,8 @@ pub(super) fn gesture(id: &str, args: &[Value]) -> Option<GestureCommand> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayoutChange {
     Font(usize),
+    /// The index of the language in the hyphenation list. 0 is the book language.
+    HyphenationLang(usize),
     Size(f64),
     /// The index of the weight choice in `kaia_book::layout::FONT_WEIGHT_VALUES`.
     Weight(f64),
@@ -106,6 +108,8 @@ pub enum Command {
     Layout(LayoutChange),
     /// Opens the font list over the Text and layout sheet.
     FontList,
+    /// Opens the hyphenation language list over the Text and layout sheet.
+    HyphenationList,
     /// A two-finger pinch (`larger` false) or spread (`larger` true). `distance` is
     /// the sum of both fingers' travel in pixels, as KOReader's `ges.distance`.
     Pinch {
@@ -260,6 +264,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["contents", "annot", n] => Command::ContentsAnnotation(n.parse().ok()?),
         ["layout", "fonts"] => Command::FontList,
         ["layout", "font", n] => Command::Layout(LayoutChange::Font(n.parse().ok()?)),
+        ["layout", "hyphlang"] => Command::HyphenationList,
+        ["layout", "hyphlang", n] => Command::Layout(LayoutChange::HyphenationLang(n.parse().ok()?)),
         ["layout", "size"] => Command::Layout(LayoutChange::Size(number(args, 0)?)),
         ["layout", "weight"] => Command::Layout(LayoutChange::Weight(number(args, 0)?)),
         ["layout", "spacing"] => Command::Layout(LayoutChange::Spacing(number(args, 0)?)),
@@ -369,6 +375,15 @@ mod tests {
         );
         assert_eq!(parse("reader:layout:font:x", &[]), None);
         assert_eq!(parse("reader:layout:fonts", &[]), Some(Command::FontList));
+        assert_eq!(
+            parse("reader:layout:hyphlang", &[]),
+            Some(Command::HyphenationList)
+        );
+        assert_eq!(
+            parse("reader:layout:hyphlang:3", &[]),
+            Some(Command::Layout(LayoutChange::HyphenationLang(3)))
+        );
+        assert_eq!(parse("reader:layout:hyphlang:x", &[]), None);
     }
 
     #[test]

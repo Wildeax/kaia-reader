@@ -14,7 +14,7 @@ use rusqlite::{params, OptionalExtension, Row, TransactionBehavior};
 use crate::error::{LibraryError, Result};
 use crate::extract::{extract_guarded, Cover, Extracted, COVER_MIME};
 use crate::types::{Book, Progress, ScanReport};
-use crate::{now_unix, Library};
+use crate::Library;
 use kaia_id::partial_md5;
 
 /// Extraction attempts before a book is marked failed. A book whose extraction
@@ -27,7 +27,6 @@ const MAX_DEPTH: usize = 32;
 /// Exclude empty text files and cap CREngine's eager text import at 32 MiB.
 /// KOReader's file chooser and the parity plan specify no text size bounds.
 const TEXT_BYTES: std::ops::RangeInclusive<u64> = 1..=32 * 1024 * 1024;
-const MISSING_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
 
 #[derive(Debug)]
 struct Found {
@@ -79,6 +78,7 @@ impl Library {
     ///
     /// A root that is missing, empty, or cannot be read completely is not used
     /// to mark books missing. An empty mount can mean the volume is unavailable.
+    /// A book whose file is gone is marked missing, never deleted.
     pub fn scan<F>(&mut self, roots: &[PathBuf], mut progress: F, cancel: &AtomicBool) -> Result<ScanReport>
     where
         F: FnMut(Progress<'_>),
@@ -118,7 +118,7 @@ impl Library {
         if cancel.load(Ordering::Relaxed) {
             report.cancelled = true;
         } else {
-            self.remove_vanished(&complete_roots, &seen, &mut report)?;
+            self.remove_vanished(&complete_roots, &seen)?;
         }
         report.elapsed = started.elapsed();
         Ok(report)
@@ -251,7 +251,7 @@ impl Library {
                             f.mtime,
                             md5,
                             f.format,
-                            now_unix()
+                            self.now()
                         ],
                     )?;
                     report.added += 1;
@@ -312,27 +312,25 @@ impl Library {
         Ok(Some(id))
     }
 
-    /// Marks unseen rows missing, unless their file is still there. A later
-    /// populated scan purges old missing rows.
-    fn remove_vanished(
-        &mut self,
-        complete_roots: &[PathBuf],
-        seen: &HashSet<i64>,
-        report: &mut ScanReport,
-    ) -> Result<()> {
+    /// Marks unseen rows missing, unless their file is still there. A scan never
+    /// deletes a row. A missing row keeps its history, collections, status and
+    /// cover, and the book comes back under the same id when its file returns.
+    fn remove_vanished(&mut self, complete_roots: &[PathBuf], seen: &HashSet<i64>) -> Result<()> {
         if complete_roots.is_empty() {
             return Ok(());
         }
-        let rows: Vec<(i64, String, Option<i64>)> = {
-            let mut stmt = self.conn.prepare("SELECT id, path, missing_since FROM books")?;
-            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        let rows: Vec<(i64, String)> = {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT id, path FROM books WHERE missing_since IS NULL")?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<rusqlite::Result<_>>()?
         };
+        let now = self.now();
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let now = now_unix();
-        for (id, path, missing_since) in rows {
+        for (id, path) in rows {
             if seen.contains(&id) {
                 continue;
             }
@@ -344,19 +342,10 @@ impl Library {
                 continue;
             }
             if complete_roots.iter().any(|root| p.starts_with(root)) {
-                match missing_since {
-                    Some(since) if since < now - MISSING_RETENTION_SECS => {
-                        tx.execute("DELETE FROM books WHERE id = ?1", [id])?;
-                        report.removed += 1;
-                    }
-                    None => {
-                        tx.execute(
-                            "UPDATE books SET missing_since = ?1 WHERE id = ?2",
-                            params![now, id],
-                        )?;
-                    }
-                    _ => {}
-                }
+                tx.execute(
+                    "UPDATE books SET missing_since = ?1 WHERE id = ?2",
+                    params![now, id],
+                )?;
             }
         }
         tx.commit()?;

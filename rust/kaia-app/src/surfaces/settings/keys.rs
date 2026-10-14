@@ -32,6 +32,11 @@
 //! | `display.natural_light_bedtime_warmth` | number | 92 | Bedtime warmth, from 0 to 100. |
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
+//! | `home.show_current` | bool | true | Home shows the card of the book to continue, or the book to start. Off hides the card. |
+//! | `home.show_next_in_series` | bool | true | Home shows the next book in the series. Off hides the row. |
+//! | `home.show_more_by_author` | bool | true | Home shows another unread book by an author of the book on Home. Off hides the row. |
+//! | `home.show_recent` | bool | true | Home shows the Recent shelf of up to four books. Off hides the shelf. |
+//! | `home.show_in_progress` | bool | true | Home shows the other books in progress under Continue. Off hides the rows. |
 //! | `library.layout` | string | `covers` | Layout of the Books tab: `covers` or `list`. Kept between runs, also while another tab is open. |
 //! | `library.source` | string | empty | Source filter of the Books tab: `calibre`, `opds` or `other`. Empty shows every source. Kept between runs. |
 //! | `library.format` | string | empty | File type filter of the Books tab, as a lowercase extension such as `epub`. Empty shows every type. Kept between runs. |
@@ -104,6 +109,12 @@ pub const DEVICE_POWER_OFF_MINUTES: &str = "device.power_off_minutes";
 pub const DISPLAY_ROTATION_LOCK: &str = "display.rotation_lock";
 pub const LIBRARY_FOLDERS: &str = "library.folders";
 pub const LIBRARY_SHOW_FINISHED: &str = "library.show_finished";
+/// Home sections, each on unless saved off. See `surfaces::home::controls`.
+pub const HOME_SHOW_CURRENT: &str = "home.show_current";
+pub const HOME_SHOW_NEXT_IN_SERIES: &str = "home.show_next_in_series";
+pub const HOME_SHOW_MORE_BY_AUTHOR: &str = "home.show_more_by_author";
+pub const HOME_SHOW_RECENT: &str = "home.show_recent";
+pub const HOME_SHOW_IN_PROGRESS: &str = "home.show_in_progress";
 pub const SYNC_ENABLED: &str = "sync.enabled";
 /// Pull on open and resume. See the table above.
 pub const SYNC_AUTO: &str = "sync.auto";

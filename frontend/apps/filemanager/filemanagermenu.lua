@@ -505,6 +505,12 @@ To:
             UIManager:askForRestart()
         end,
     }
+    -- Kaia: online lookups send selected text over the network. Both are off by default.
+    -- Read in frontend/kaia/online_lookups.lua. Turning one on asks for confirmation first.
+    self.menu_items.kaia_allow_translate = require("kaia/online_lookups"):menuItem("translate")
+    self.menu_items.kaia_allow_translate.sorting_hint = "filemanager_settings"
+    self.menu_items.kaia_allow_wikipedia = require("kaia/online_lookups"):menuItem("wikipedia")
+    self.menu_items.kaia_allow_wikipedia.sorting_hint = "filemanager_settings"
 
     if Device:supportsScreensaver() then
         self.menu_items.screensaver = {

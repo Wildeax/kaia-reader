@@ -142,6 +142,7 @@ function ReaderHighlight:init()
         ["05_wikipedia"] = function(this)
             return {
                 text = _("Wikipedia"),
+                show_in_highlight_dialog_func = function() return require("kaia/online_lookups"):isAllowed("wikipedia") end, -- Kaia
                 callback = function()
                     UIManager:scheduleIn(0.1, function()
                         this:lookupWikipedia()
@@ -164,6 +165,7 @@ function ReaderHighlight:init()
         ["07_translate"] = function(this, index)
             return {
                 text = _("Translate"),
+                show_in_highlight_dialog_func = function() return require("kaia/online_lookups"):isAllowed("translate") end, -- Kaia
                 callback = function()
                     this:translate(index)
                     -- We don't call this:onClose(), so one can still see
@@ -759,16 +761,18 @@ If you wish your highlights to be saved in the document, just move it to a writa
     }
     -- actions
     for i, v in ipairs(long_press_action) do
-        table.insert(menu_items.long_press.sub_item_table, {
-            text = v[1],
-            checked_func = function()
-                return G_reader_settings:readSetting("default_highlight_action", "ask") == v[2]
-            end,
-            radio = true,
-            callback = function()
-                self:onSetHighlightAction(i, true) -- no notification
-            end,
-        })
+        if require("kaia/online_lookups"):allowsAction(v[2]) then -- Kaia: hide online actions while off
+            table.insert(menu_items.long_press.sub_item_table, {
+                text = v[1],
+                checked_func = function()
+                    return G_reader_settings:readSetting("default_highlight_action", "ask") == v[2]
+                end,
+                radio = true,
+                callback = function()
+                    self:onSetHighlightAction(i, true) -- no notification
+                end,
+            })
+        end
     end
     -- highlight dialog position
     local position_sub_item_table = {}
@@ -877,6 +881,7 @@ Except when in two columns mode, where this is limited to showing only the previ
     menu_items.translation_settings = Translator:genSettingsMenu()
     menu_items.translate_current_page = {
         text = _("Translate current page"),
+        enabled_func = function() return require("kaia/online_lookups"):isAllowed("translate") end, -- Kaia
         callback = function()
             self:onTranslateCurrentPage()
         end,
@@ -2047,6 +2052,7 @@ function ReaderHighlight:onHoldRelease()
     self:_resetHoldTimer(true) -- clear state
 
     local default_highlight_action = G_reader_settings:readSetting("default_highlight_action", "ask")
+    if not require("kaia/online_lookups"):allowsAction(default_highlight_action) then default_highlight_action = "ask" end -- Kaia
 
     if self.select_mode then -- extended highlighting, ending fragment
         if self.selected_text then
@@ -2106,8 +2112,10 @@ end
 function ReaderHighlight:getHighlightActions() -- for Dispatcher
     local action_nums, action_texts = {}, {}
     for i, v in ipairs(long_press_action) do
-        table.insert(action_nums, i)
-        table.insert(action_texts, v[1])
+        if require("kaia/online_lookups"):allowsAction(v[2]) then -- Kaia: hide online actions while off
+            table.insert(action_nums, i)
+            table.insert(action_texts, v[1])
+        end
     end
     return action_nums, action_texts
 end

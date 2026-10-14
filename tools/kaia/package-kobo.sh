@@ -133,6 +133,12 @@ cp "${RUST_BIN}" "${APP}/kaia"
 cp -R "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
 cp -R "${ROOT}/frontend/." "${APP}/frontend/"
 cp -R "${ROOT}/plugins/." "${APP}/plugins/"
+# The hyphenation patterns in data/hyph come from KOReader's data/ folder in the
+# upstream package. CREngine reads only the .pattern files there, so the license
+# notice sits beside them as LICENSES.txt.
+[ -s "${APP}/data/hyph/English_US.pattern" ] || fail "no hyphenation patterns in ${APP}/data/hyph"
+cp "${ROOT}/resources/hyph/LICENSES.txt" "${APP}/data/hyph/LICENSES.txt"
+chmod 644 "${APP}/data/hyph/LICENSES.txt"
 # Kaia's reading fonts go into fonts/ next to the upstream CREngine fonts. CREngine
 # reads fonts/ recursively, and so does KOReader's font list (frontend/fontlist.lua).
 mkdir -p "${APP}/fonts"

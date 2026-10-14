@@ -14,12 +14,18 @@ use std::path::Path;
 pub const PICTURE: &str = "pic.png";
 
 /// Writes an EPUB to `path`. `body` is the XHTML inside `<body>`. `chapters`
-/// lists the table of contents as (title, anchor in the body) pairs.
+/// lists the table of contents as (title, anchor in the body) pairs. The book
+/// language is `en`.
 pub fn write_epub(path: &Path, body: &str, chapters: &[(&str, &str)]) {
+    write_epub_in(path, "en", body, chapters);
+}
+
+/// Like [`write_epub`], with `dc:language` set to `language`.
+pub fn write_epub_in(path: &Path, language: &str, body: &str, chapters: &[(&str, &str)]) {
     let entries: Vec<(&str, Vec<u8>)> = vec![
         ("mimetype", b"application/epub+zip".to_vec()),
         ("META-INF/container.xml", CONTAINER.as_bytes().to_vec()),
-        ("OEBPS/content.opf", OPF.as_bytes().to_vec()),
+        ("OEBPS/content.opf", opf(language).into_bytes()),
         ("OEBPS/toc.ncx", ncx(chapters).into_bytes()),
         ("OEBPS/book.xhtml", xhtml(body).into_bytes()),
         ("OEBPS/pic.png", png_gray(64, 64)),
@@ -33,12 +39,14 @@ const CONTAINER: &str = r#"<?xml version="1.0"?>
 </container>
 "#;
 
-const OPF: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+fn opf(language: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>Image test</dc:title>
     <dc:identifier id="id">urn:kaia:image-test</dc:identifier>
-    <dc:language>en</dc:language>
+    <dc:language>{language}</dc:language>
     <dc:creator>Kaia</dc:creator>
   </metadata>
   <manifest>
@@ -48,7 +56,9 @@ const OPF: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </manifest>
   <spine toc="ncx"><itemref idref="book"/></spine>
 </package>
-"#;
+"#
+    )
+}
 
 fn ncx(chapters: &[(&str, &str)]) -> String {
     let mut points = String::new();

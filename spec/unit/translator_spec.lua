@@ -5,6 +5,8 @@ local Translator
 describe("Translator module", function()
     setup(function()
         require("commonrequire")
+        -- Kaia: Translate is opt-in; these tests exercise it with the switch on.
+        G_reader_settings:saveSetting("kaia_allow_translate", true)
         Translator = require("ui/translator")
     end)
 

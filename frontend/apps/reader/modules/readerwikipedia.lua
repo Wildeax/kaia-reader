@@ -77,6 +77,7 @@ end
 function ReaderWikipedia:addToMainMenu(menu_items)
     menu_items.wikipedia_lookup =  {
         text = _("Wikipedia lookup"),
+        enabled_func = function() return require("kaia/online_lookups"):isAllowed("wikipedia") end, -- Kaia
         callback = function() self:onShowWikipediaLookup() end,
     }
     menu_items.wikipedia_history = {
@@ -373,6 +374,7 @@ function ReaderWikipedia:onLookupWikipedia(word, is_sane, box, get_fullpage, for
 end
 
 function ReaderWikipedia:lookupWikipedia(word, is_sane, box, get_fullpage, forced_lang, dict_close_callback)
+    if not require("kaia/online_lookups"):isAllowed("wikipedia") then return end -- Kaia: off by default
     if NetworkMgr:willRerunWhenOnline(function() self:lookupWikipedia(word, is_sane, box, get_fullpage, forced_lang, dict_close_callback) end) then
         -- Not online yet, nothing more to do here, NetworkMgr will forward the callback and run it once connected!
         return
@@ -544,6 +546,7 @@ function ReaderWikipedia:onSaveSettings()
 end
 
 function ReaderWikipedia:onShowWikipediaLookup()
+    if not require("kaia/online_lookups"):isAllowed("wikipedia") then return true end -- Kaia: off by default
     local connect_callback = function()
         self:lookupInput()
     end

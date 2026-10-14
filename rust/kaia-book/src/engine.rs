@@ -301,9 +301,11 @@ impl Worker {
     }
 
     /// Applies a reflowable layout and finds the position in the new layout.
+    /// `hyphenation` is the pattern file the layout hyphenates with, or None for none.
     pub fn apply_layout(
         &mut self,
         layout: &TextLayout,
+        hyphenation: Option<&'static str>,
         viewport: Size,
         position: Option<Location>,
         percent: f64,
@@ -313,8 +315,7 @@ impl Worker {
             return Err(DocError::NotReflowable);
         }
         self.doc.doc_mut().set_layout(&layout.to_doc_layout(viewport))?;
-        self.doc
-            .set_cre_options(layout.hyphenation, layout.embedded_styles)?;
+        self.doc.set_cre_options(hyphenation, layout.embedded_styles)?;
         self.layout += 1;
         self.texts.clear();
         let (page, position) = self.restore_position(position, percent)?;

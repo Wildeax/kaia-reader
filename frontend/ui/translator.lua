@@ -500,6 +500,7 @@ Returns decoded JSON table from translate server.
 @treturn string result, or nil
 --]]
 function Translator:loadPage(text, target_lang, source_lang)
+    if not require("kaia/online_lookups"):isAllowed("translate") then return end -- Kaia: off by default
     local socket = require("socket")
     local socketutil = require("socketutil")
     local url = require("socket.url")
@@ -635,6 +636,7 @@ Show translated text in TextViewer, with alternate translations
 @string target_lang[opt] (`"en"`, `"fr"`, `…`)
 --]]
 function Translator:showTranslation(text, detailed_view, source_lang, target_lang, from_highlight, index)
+    if not require("kaia/online_lookups"):isAllowed("translate") then return end -- Kaia: off by default
     if Device:hasClipboard() then
         Device.input.setClipboardText(text)
     end

@@ -29,7 +29,8 @@ use super::{experiments, keys};
 use crate::surfaces::reader::dict::Change;
 
 /// The sections, in the order the root lists them.
-pub const SECTIONS: [&str; 10] = [
+pub const SECTIONS: [&str; 11] = [
+    "home",
     "reading",
     "display",
     "library",
@@ -248,6 +249,11 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::DISPLAY_NATURAL_LIGHT_DAY_WARMTH
                 | keys::DISPLAY_NATURAL_LIGHT_BEDTIME_WARMTH
                 | keys::LIBRARY_SHOW_FINISHED
+                | keys::HOME_SHOW_CURRENT
+                | keys::HOME_SHOW_NEXT_IN_SERIES
+                | keys::HOME_SHOW_MORE_BY_AUTHOR
+                | keys::HOME_SHOW_RECENT
+                | keys::HOME_SHOW_IN_PROGRESS
                 | keys::SYNC_SERVER
                 | keys::SYNC_USERNAME
                 | keys::SYNC_PASSWORD

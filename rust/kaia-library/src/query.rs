@@ -15,7 +15,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::error::{LibraryError, Result};
 use crate::scan::{book_file, mtime_secs};
 use crate::types::{Book, Collection, CoverImage, CoverSize, Filter, Sort, SortKey, Status};
-use crate::{now_unix, Library};
+use crate::Library;
 
 const COLS: [&str; 19] = [
     "id",
@@ -664,7 +664,7 @@ impl Library {
             ));
         }
         let percent = percent.clamp(0.0, 1.0);
-        let now = now_unix();
+        let now = self.now();
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;

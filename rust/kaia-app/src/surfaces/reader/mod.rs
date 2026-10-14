@@ -492,6 +492,7 @@ impl Surface for ReaderSurface {
         opts.viewport = header.viewport(&footer, screen, env.theme());
         opts.default_layout = koreader_default_layout(screen, &env.services.settings);
         opts.pixel_format = env.services.theme.pixel_format();
+        opts.ui_language = Some(env.services.language.clone());
         let color_panel = env.services.theme.color_panel;
         let page = WidgetPod::new(PageView::new()).with_key(PAGE_KEY);
         let mut toolbar = ink::toolbar(env.theme());
@@ -1123,6 +1124,20 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let serial = next_serial(&mut c);
                 Outcome::Navigate(Nav::Push(panels::panel_surface(window, serial, rc.clone())))
             }
+            Command::HyphenationList => {
+                // Pushed over the sheet, as the font list is, so the sheet can show the choice.
+                if c.panel.is_none() {
+                    return Outcome::Handled;
+                }
+                let choice = c
+                    .session
+                    .as_ref()
+                    .and_then(|s| s.layout().hyphenation_lang.clone());
+                let index = panels::hyphenation_index(choice.as_deref());
+                let window = panels::hyphenation_list(env.services, env.screen, index);
+                let serial = next_serial(&mut c);
+                Outcome::Navigate(Nav::Push(panels::panel_surface(window, serial, rc.clone())))
+            }
             Command::ContentsTab(tab) => {
                 c.contents_tab = tab;
                 let window = contents_window(&mut c, env, tab);
@@ -1159,7 +1174,8 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
             }
             Command::Layout(change) => {
-                let font = matches!(change, LayoutChange::Font(_));
+                // Picking a face or a hyphenation language closes its list.
+                let pops = matches!(change, LayoutChange::Font(_) | LayoutChange::HyphenationLang(_));
                 let result = match change {
                     LayoutChange::Font(index) => {
                         // The built-in faces come from `font_face`, the user faces from the list.
@@ -1180,6 +1196,26 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                                 layer
                                     .window
                                     .update::<Button, _>(env.ctx, "layout-font", |button, cx| {
+                                        button.set_text(name);
+                                        cx.request_layout();
+                                    });
+                            }
+                        }
+                        result
+                    }
+                    LayoutChange::HyphenationLang(index) => {
+                        let tag = panels::hyphenation_tag_at(index);
+                        let result = c.change_layout(|l| l.hyphenation_lang = tag);
+                        if result.is_ok() {
+                            if let Some(layer) = c.panel.clone() {
+                                let name = panels::hyphenation_choice_label(
+                                    c.session
+                                        .as_ref()
+                                        .and_then(|s| s.layout().hyphenation_lang.as_deref()),
+                                );
+                                layer
+                                    .window
+                                    .update::<Button, _>(env.ctx, "layout-hyphlang", |button, cx| {
                                         button.set_text(name);
                                         cx.request_layout();
                                     });
@@ -1229,7 +1265,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         env.toast(message, 3.0);
                         Outcome::Handled
                     }
-                    Ok(()) if font => Outcome::Navigate(Nav::Pop),
+                    Ok(()) if pops => Outcome::Navigate(Nav::Pop),
                     Ok(()) => Outcome::Handled,
                 }
             }

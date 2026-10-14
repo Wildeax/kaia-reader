@@ -4,7 +4,10 @@
 //! line at most once a second so a large scan does not flood the screen.
 //!
 //! Each section is one child of the content column. A section that does not fit
-//! on the page is left out whole, so no heading is ever cut in half.
+//! on the page is left out whole, so no heading is ever cut in half. A section
+//! that the Home page of Settings switches off is left out too (see [`controls`]).
+
+pub mod controls;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -13,7 +16,9 @@ use std::time::Duration;
 use kaia_events::{Ctx, Event, RefreshMode, Value};
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
-use kaia_ui::components::{Column, CrossAlign, Expanded, Label, Padding, ProgressBar, Row, SizedBox};
+use kaia_ui::components::{
+    Column, CrossAlign, Expanded, Label, Padding, Paragraph, ProgressBar, Row, SizedBox,
+};
 use kaia_ui::composite::Header;
 use kaia_ui::composite::{BookInfo, BookTile, CoverImage, ListRow};
 use kaia_ui::controls::ButtonStyle;
@@ -149,6 +154,11 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
             .action("appbar.settings", "nav:settings"),
     );
 
+    let shown = controls::Shown::read(&services.settings);
+    // The book card on the page. The other sections leave it out. A hidden card is
+    // not on the page, so its book can appear in the other sections.
+    let on_page = hero.as_ref().filter(|_| shown.current);
+
     // The scan line is empty, and takes no room, when no scan runs.
     let mut sections = vec![WidgetPod::new(Label::new(
         progress_text(progress),
@@ -157,24 +167,42 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     ))
     .with_key("scan-progress")];
     match &hero {
-        Some(book) => sections.push(hero_section(env, book)),
+        Some(book) => {
+            if shown.current {
+                sections.push(hero_section(env, book));
+            }
+        }
         None => sections.push(empty_section(&t)),
     }
     // The next book in series comes first, so when the page is short it is the
     // one that stays. Column hides a section that does not fit and the ones after it.
-    let next = next_in_series(lib, &recent, hero.as_ref());
+    let next = if shown.next_in_series {
+        next_in_series(lib, &recent, hero.as_ref(), on_page)
+    } else {
+        None
+    };
     if let Some(book) = &next {
         sections.push(offer_section(env, tr("Next in series"), book, "next-in-series"));
     }
-    if let Some((name, book)) = more_by_author(lib, hero.as_ref(), next.as_ref()) {
-        let label = tr_format(&tr("More by %1"), &[&name]);
-        sections.push(offer_section(env, label, &book, "more-by-author"));
+    if shown.more_by_author {
+        if let Some((name, book)) = more_by_author(lib, hero.as_ref(), on_page, next.as_ref()) {
+            let label = tr_format(&tr("More by %1"), &[&name]);
+            sections.push(offer_section(env, label, &book, "more-by-author"));
+        }
     }
-    if let Some(shelf) = shelf_section(env, &recent, hero.as_ref()) {
-        sections.push(shelf);
+    if shown.recent {
+        if let Some(shelf) = shelf_section(env, &recent, on_page) {
+            sections.push(shelf);
+        }
     }
-    if let Some(others) = continue_section(&t, lib, hero.as_ref()) {
-        sections.push(others);
+    if shown.in_progress {
+        if let Some(others) = continue_section(&t, lib, on_page) {
+            sections.push(others);
+        }
+    }
+    // Every section is off: a short note and a button to the Library.
+    if hero.is_some() && !shown.any() {
+        sections.push(all_hidden_section(&t));
     }
 
     let total = data::all(lib).len();
@@ -221,25 +249,36 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
 
 /// The next book in the series of the book read most recently. It is offered when
 /// that book is finished or is the book to continue, and the next number of the
-/// series is in the library and not started yet.
-fn next_in_series(lib: &Library, recent: &[Book], hero: Option<&Book>) -> Option<Book> {
+/// series is in the library and not started yet. `hero` is the book to continue,
+/// whether or not its card shows. `on_page` is the card when it shows, and the
+/// card's book is not offered again.
+fn next_in_series(
+    lib: &Library,
+    recent: &[Book],
+    hero: Option<&Book>,
+    on_page: Option<&Book>,
+) -> Option<Book> {
     let last = recent.first()?;
     let current = hero.is_some_and(|h| h.id == last.id);
     if last.status != Status::Complete && !current {
         return None;
     }
-    // The hero is already on the page, so it is not offered again.
     lib.next_in_series(last.id)
         .ok()?
-        .filter(|b| b.status == Status::New && b.path.exists() && hero.is_none_or(|h| h.id != b.id))
+        .filter(|b| b.status == Status::New && b.path.exists() && on_page.is_none_or(|h| h.id != b.id))
 }
 
-/// The unread book by an author of the book on Home, for the author tile. The
+/// The unread book by an author of the book to continue, for the author tile. The
 /// authors are tried in the order the book lists them, and the first one with an
-/// unread book in the library gives the tile. The book on Home and the book
+/// unread book in the library gives the tile. The book on the page and the book
 /// offered as next in series are left out, so the two tiles never open the same
 /// book. Returns the author as the book lists it, and the book.
-fn more_by_author(lib: &Library, hero: Option<&Book>, next: Option<&Book>) -> Option<(String, Book)> {
+fn more_by_author(
+    lib: &Library,
+    hero: Option<&Book>,
+    on_page: Option<&Book>,
+    next: Option<&Book>,
+) -> Option<(String, Book)> {
     let hero = hero?;
     let names = Library::split_authors(hero.authors.as_deref()?);
     if names.is_empty() {
@@ -249,7 +288,11 @@ fn more_by_author(lib: &Library, hero: Option<&Book>, next: Option<&Book>) -> Op
     names.into_iter().find_map(|name| {
         Library::books_by_author(&books, name)
             .into_iter()
-            .find(|b| b.status == Status::New && b.id != hero.id && next.is_none_or(|n| n.id != b.id))
+            .find(|b| {
+                b.status == Status::New
+                    && on_page.is_none_or(|p| p.id != b.id)
+                    && next.is_none_or(|n| n.id != b.id)
+            })
             .map(|book| (name.to_string(), book))
     })
 }
@@ -339,6 +382,34 @@ fn empty_section(t: &Theme) -> WidgetPod {
     )
 }
 
+/// Home with every section switched off: a note and a button to the Library.
+fn all_hidden_section(t: &Theme) -> WidgetPod {
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(Label::new(
+                tr("Every Home section is off."),
+                t.font.title.clone(),
+                Tone::Ink,
+            )),
+            WidgetPod::new(Paragraph::new(
+                tr("Turn sections back on in Settings under Home. Your books stay in the library."),
+                t.font.body.clone(),
+                Tone::InkSecondary,
+            )),
+            button(
+                ButtonStyle::Primary,
+                &tr("Open Library"),
+                "nav:library",
+                "home-all-hidden-library",
+            ),
+        ])
+        .gap(t.space.md)
+        .cross_align(CrossAlign::Stretch)
+        .shrink(),
+    )
+    .with_key("home-all-hidden")
+}
+
 /// The book to continue: its label and the card.
 fn hero_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
     let t = &env.services.theme;
@@ -359,12 +430,13 @@ fn hero_section(env: &SurfaceEnv<'_>, book: &Book) -> WidgetPod {
 }
 
 /// The recent books as four equal columns. None when there is no other book.
-fn shelf_section(env: &SurfaceEnv<'_>, recent: &[Book], hero: Option<&Book>) -> Option<WidgetPod> {
+/// `on_page` is the card on the page, which the shelf leaves out.
+fn shelf_section(env: &SurfaceEnv<'_>, recent: &[Book], on_page: Option<&Book>) -> Option<WidgetPod> {
     let t = &env.services.theme;
     let lib = &env.services.library;
     let shelf: Vec<BookInfo> = recent
         .iter()
-        .filter(|b| hero.is_none_or(|h| h.id != b.id))
+        .filter(|b| on_page.is_none_or(|h| h.id != b.id))
         .take(SHELF)
         .map(|b| data::info(lib, b))
         .collect();
@@ -394,8 +466,9 @@ fn shelf_section(env: &SurfaceEnv<'_>, recent: &[Book], hero: Option<&Book>) -> 
     ))
 }
 
-/// The other books in progress, one row each. None when there are none.
-fn continue_section(t: &Theme, lib: &Library, hero: Option<&Book>) -> Option<WidgetPod> {
+/// The other books in progress, one row each. None when there are none. `on_page`
+/// is the card on the page, which these rows leave out.
+fn continue_section(t: &Theme, lib: &Library, on_page: Option<&Book>) -> Option<WidgetPod> {
     let in_progress = lib
         .books(
             Sort::new(SortKey::LastRead, true),
@@ -409,7 +482,7 @@ fn continue_section(t: &Theme, lib: &Library, hero: Option<&Book>) -> Option<Wid
         .unwrap_or_default();
     let others: Vec<&Book> = in_progress
         .iter()
-        .filter(|b| hero.is_none_or(|h| h.id != b.id))
+        .filter(|b| on_page.is_none_or(|h| h.id != b.id))
         .filter(|b| b.path.exists())
         .take(CONTINUE_ROWS)
         .collect();

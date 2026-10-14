@@ -20,6 +20,8 @@ state. In the Rust app, Kaia owns all reading state:
 |---|---|---|
 | Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
 
+The layout table keeps `hyphenation_lang`, the book's hyphenation language override, a KOReader language name such as `Spanish`. Absent means the book's own language.
+
 The rating is `summary.rating`, 1 to 5, or absent. The Library's book details write it through `kaia_book::write_rating` without opening the document, and only for a book that already has a state file, so a first open can still import its KOReader sidecar. The Kobo import writes the same key.
 | Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
 | Stickers and assets | `kaia-storage` | as below |
@@ -33,6 +35,8 @@ KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, co
 One exception writes a Nickel file, by the owner's decision (B-91, 2026-10-14): the Lua app keeps KOReader's default `KOBO_SYNC_BRIGHTNESS_WITH_NICKEL` (`defaults.lua`), so it writes the frontlight state, level and warmth into Nickel's `Kobo eReader.conf` (`frontend/device/kobo/powerd.lua`). Going back to Nickel then keeps the same light. The Rust app writes no Nickel file.
 
 The `layout` table of a book state holds `font_weight`, a KOReader font weight value (0 is regular, -1 to 3 in the Text and layout sheet). A missing key reads as 0.
+
+Removed books keep their reading data. When a book file is gone from a root that the scan read completely, the scan marks its row in `library.sqlite3` as missing. A scan never deletes that row. The row keeps its history, collections, status and cover. Lists, search and counts leave a missing book out until its file returns. A file copied back to its old path, or to a new path with the same content, gets the same book id. Only an explicit delete removes a row. The storage page deletes present files only, and a catalog server's delete request removes the row for its file. Reading state in `kaia/books/<partial_md5>.json` belongs to `kaia-book`. It is keyed by content, and `kaia-library` never touches it, so a returning book keeps its position, notes and status.
 
 ## Kobo import
 

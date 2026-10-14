@@ -248,7 +248,7 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 | T1-15 | Series order, a series view and the next book in series. | `rust/kaia-library` (series fields in `scan.rs`, sort in `query.rs`), `rust/kaia-app/src/surfaces/library/views.rs` (series view), `rust/kaia-app/src/surfaces/home/mod.rs` (next book card) | M | Built. Q43 sets how series numbers sort. Q44 sets the default. Not blocking. |
 | T1-16 | Date added sort. The Rust sort menu already has it. Check the default and the label. | `rust/kaia-app/src/surfaces/library/views.rs` (Recently added, line 369), `data.rs` (`SortChoice::Added`) | S | Built. The sort menu has Recently added. The default sort stays Title. |
 | T1-17 | Library search with recent searches and suggestions. Full-text search exists. | `rust/kaia-library/src/query.rs` (search), `rust/kaia-app/src/surfaces/library/mod.rs`, a recent-searches store in `rust/kaia-storage` | M | Built. Recent searches (last 10) and up to five title, author and series suggestions. Suggestions do not fold accents yet. |
-| T1-18 | Rescan after USB unplug. | `rust/kaia-app/src/kobo/mod.rs` (the USB match has no unplug arm, line 122), `rust/kaia-app/src/app.rs` (`start_scan`, line 922), `rust/kaia-library/src/scan.rs` (missing rows kept for 30 days, line 27) | S | Built. Q40 and Q41 set Nickel's trigger and pruning rule. Decision still open: keep the 30-day retention, or drop removed files at once. |
+| T1-18 | Rescan after USB unplug. | `rust/kaia-app/src/kobo/mod.rs` (the USB match has no unplug arm, line 122), `rust/kaia-app/src/app.rs` (`start_scan`, line 922), `rust/kaia-library/src/scan.rs` (missing rows are marked, never purged) | S | Built. Q40 and Q41 set Nickel's trigger and pruning rule. Decided (B-95, B-130): a removed book keeps its reading data, and a scan never deletes its row. Test: `rust/kaia-library/tests/missing_books.rs`. |
 | T1-19 | Remove a book from a collection. | `rust/kaia-app/src/surfaces/library/commands.rs` (new command), `rust/kaia-library/src/query.rs` (collection write) | S | Built. |
 | T1-20 | Mark many books finished or unread at once. | `rust/kaia-app/src/surfaces/library/mod.rs` (selection), `rust/kaia-app/src/book_index.rs` (`mark_finished`, line 8), `commands.rs` (`MarkFinished`, line 63) | M | Built. |
 | T1-21 | Finish prompt at the end of a book, with a still-reading answer. | `rust/kaia-app/src/surfaces/reader/panels.rs` (end of book sheet, lines 684 to 706), `rust/kaia-book` (status write), `book_index.rs` | M | Built. Q35 and Q36 set the rule. Not blocking. The rule is ours to set. |
@@ -366,7 +366,7 @@ Line numbers match the working tree on 2026-10-14. Each issue was checked agains
 
 ### 6.1 Translate sends text to Google
 
-Status. Open.
+Status. Fixed on 2026-10-14 by the owner's decision B-92: Translate and Wikipedia stay, each off by default behind a switch that warns the text goes online (`frontend/kaia/online_lookups.lua`). With a switch off, its buttons and long-press choices are hidden and the request functions return early.
 
 Evidence. `frontend/ui/translator.lua` sends selected text to a Google endpoint (line 297, and the header comment on line 4). `frontend/apps/reader/modules/readerhighlight.lua` registers the action as a highlight popup button (line 164), a long-press choice (line 370), and the translation settings and translate-page item (lines 877 to 881). The Wikipedia lookup is a long-press choice on line 371, and it also calls out over the network.
 

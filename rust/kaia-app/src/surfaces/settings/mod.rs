@@ -115,6 +115,11 @@ pub fn save(env: &mut SurfaceEnv<'_>) {
 /// The searchable items: the section and the English item title. Search matches the
 /// title the user sees, see [`item_title`].
 pub const ITEMS: &[(&str, &str)] = &[
+    ("home", "Continue reading"),
+    ("home", "Next in series"),
+    ("home", "More by author"),
+    ("home", "Recent"),
+    ("home", "Other books in progress"),
     ("reading", "Font size"),
     ("reading", "Font family"),
     ("reading", "Tap zones"),
@@ -171,6 +176,11 @@ pub fn search(query: &str) -> Vec<(&'static str, &'static str)> {
 /// [`ITEMS`] has an arm here. A title without an arm stays English.
 fn item_title(english: &str) -> String {
     match english {
+        "Continue reading" => tr("Continue reading"),
+        "Next in series" => tr("Next in series"),
+        "More by author" => tr("More by author"),
+        "Recent" => tr("Recent"),
+        "Other books in progress" => tr("Other books in progress"),
         "Font size" => tr("Font size"),
         "Font family" => tr("Font family"),
         "Tap zones" => tr("Tap zones"),

@@ -1074,6 +1074,7 @@ function DictQuickLookup:buildButtonLayout()
         local new_row = {}
         for _, btn_id in ipairs(row_ids) do
             local button = pool[btn_id]
+            if (btn_id == "translate" or btn_id == "wikipedia") and not require("kaia/online_lookups"):isAllowed(btn_id) then button = nil end -- Kaia: online lookups are opt-in
             if button then
                 if button.can_shrink and button.pairs_with then
                     has_shrinkable_buttons = true

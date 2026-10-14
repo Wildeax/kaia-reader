@@ -186,6 +186,9 @@ pub struct OpenOptions {
     pub cache_bytes: usize,
     /// Pixel format of rendered pages. Gray8 suits E Ink.
     pub pixel_format: PixelFormat,
+    /// The UI language tag, such as `fr`. It picks the hyphenation pattern when
+    /// the book has no language with a pattern. None means English.
+    pub ui_language: Option<String>,
 }
 
 impl OpenOptions {
@@ -208,6 +211,7 @@ impl OpenOptions {
             ],
             cache_bytes: DEFAULT_CACHE_BYTES,
             pixel_format: PixelFormat::Gray8,
+            ui_language: None,
         }
     }
 }
@@ -328,6 +332,8 @@ pub struct BookSession {
     order: OrderCache,
     visit_started: Instant,
     out: Vec<BookEvent>,
+    /// The UI language for the hyphenation fallback. See [`OpenOptions::ui_language`].
+    ui_language: Option<String>,
 }
 
 impl BookSession {
@@ -468,9 +474,13 @@ impl BookSession {
 
         let reflowable = facts.reflowable;
         let viewport = opts.viewport;
+        let book_language = facts.metadata.language.clone();
+        let ui_language = opts.ui_language.clone();
+        let dict = hyphenation_for(&state.layout, book_language.as_deref(), ui_language.as_deref());
         let restored = match engine.call(restore_job(
             reflowable,
             state.layout.clone(),
+            dict,
             viewport,
             state.position.clone(),
             state.percent,
@@ -480,9 +490,11 @@ impl BookSession {
             // gives way to the default layout, so the book still opens.
             Err(_) if reflowable && state.layout != opts.default_layout => {
                 state.layout = opts.default_layout.clone();
+                let dict = hyphenation_for(&state.layout, book_language.as_deref(), ui_language.as_deref());
                 engine.call(restore_job(
                     reflowable,
                     state.layout.clone(),
+                    dict,
                     viewport,
                     state.position.clone(),
                     state.percent,
@@ -568,6 +580,7 @@ impl BookSession {
             order: OrderCache::default(),
             visit_started: Instant::now(),
             out: Vec::new(),
+            ui_language: opts.ui_language.clone(),
         };
         if imported {
             session.dirty = true;
@@ -826,6 +839,16 @@ impl BookSession {
         self.state.layout = layout;
         self.dirty = true;
         self.post_layout()
+    }
+
+    /// The hyphenation pattern that the current layout uses, such as
+    /// `Spanish.pattern`. None when hyphenation is off.
+    pub fn hyphenation_pattern(&self) -> Option<&'static str> {
+        hyphenation_for(
+            &self.state.layout,
+            self.facts.metadata.language.as_deref(),
+            self.ui_language.as_deref(),
+        )
     }
 
     /// Sets the viewport of a reflowable book. The layout takes the viewport's
@@ -1623,13 +1646,18 @@ impl BookSession {
 
     fn post_layout(&mut self) -> Result<()> {
         let layout = self.state.layout.clone();
+        let dict = hyphenation_for(
+            &layout,
+            self.facts.metadata.language.as_deref(),
+            self.ui_language.as_deref(),
+        );
         let viewport = self.viewport;
         let position = self.state.position.clone();
         let percent = self.state.percent;
         self.layout_pending = true;
         self.engine.post(move |w| {
             let result = w
-                .apply_layout(&layout, viewport, position, percent)
+                .apply_layout(&layout, dict, viewport, position, percent)
                 .map_err(|e| e.to_string());
             w.send(Event::Layout(result));
         })
@@ -1955,18 +1983,29 @@ fn read_index(index_path: &Path) -> std::io::Result<Settings> {
     }
 }
 
+/// The pattern file that a layout hyphenates with, or None when hyphenation is off.
+/// The book language and the UI language are the fallbacks, in that order.
+fn hyphenation_for(layout: &TextLayout, book: Option<&str>, ui: Option<&str>) -> Option<&'static str> {
+    let choice = layout.hyphenation_lang.as_deref();
+    let book = book.and_then(crate::layout::primary_book_language);
+    layout
+        .hyphenation
+        .then(|| crate::layout::hyphenation_pattern(choice, book, ui))
+}
+
 /// The job that restores the reading position on the engine thread. For a
 /// reflowable book it applies the layout first.
 fn restore_job(
     reflowable: bool,
     layout: TextLayout,
+    dict: Option<&'static str>,
     viewport: Size,
     position: Option<Location>,
     percent: f64,
 ) -> impl FnOnce(&mut Worker) -> std::result::Result<(u32, Location, usize, u64), DocError> + Send + 'static {
     move |w: &mut Worker| {
         if reflowable {
-            let out = w.apply_layout(&layout, viewport, position, percent)?;
+            let out = w.apply_layout(&layout, dict, viewport, position, percent)?;
             Ok((out.page, out.position, out.page_count, out.layout))
         } else {
             let (page, loc) = w.restore_position(position, percent)?;

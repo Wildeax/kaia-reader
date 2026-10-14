@@ -295,6 +295,9 @@ fn layout_value(l: &TextLayout) -> Value {
     t.insert("margins".into(), Value::Table(m));
     t.insert("line_spacing".into(), Value::from(l.line_spacing as f64));
     t.insert("hyphenation".into(), Value::Bool(l.hyphenation));
+    if let Some(lang) = &l.hyphenation_lang {
+        t.insert("hyphenation_lang".into(), Value::from(lang.as_str()));
+    }
     t.insert("justify".into(), Value::Bool(l.justify));
     t.insert("embedded_styles".into(), Value::Bool(l.embedded_styles));
     t.insert("font_weight".into(), Value::from(f64::from(l.font_weight)));
@@ -328,6 +331,8 @@ fn layout_from_value(v: &Value) -> TextLayout {
         },
         line_spacing: num("line_spacing", d.line_spacing),
         hyphenation: v.get("hyphenation").as_bool().unwrap_or(d.hyphenation),
+        // A missing key means the book language. An unknown tag falls back when it is applied.
+        hyphenation_lang: v.get("hyphenation_lang").as_str().map(str::to_string),
         justify: v.get("justify").as_bool().unwrap_or(d.justify),
         embedded_styles: v.get("embedded_styles").as_bool().unwrap_or(d.embedded_styles),
         // A missing key reads as 0, which is regular.

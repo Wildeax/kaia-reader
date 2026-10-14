@@ -466,6 +466,8 @@ fn layout_from_sidecar(root: &Value) -> Option<TextLayout> {
             .filter(|n| *n > 0.0 && n.is_finite())
             .map_or(d.line_spacing, |n| (n / 100.0) as f32),
         hyphenation: root.get("hyphenation").as_bool().unwrap_or(d.hyphenation),
+        // KOReader's sidecar has no Kaia language choice, so the book language applies.
+        hyphenation_lang: None,
         // KOReader's justification option is not in the fixtures this was
         // written against, so it is not imported.
         justify: d.justify,

@@ -584,6 +584,14 @@ pub fn set_current(catalog: Catalog) {
 pub fn tr(id: &str) -> String {
     CURRENT.with(|c| c.borrow().translate(id))
 }
+/// Translates a msgid that KOReader's own catalog holds, for text that comes from a
+/// table at run time, such as the language names copied from KOReader's typography
+/// table. The Kaia extractor (`tools/kaia/i18n/extract.py`) skips this function, so
+/// use [`tr`] with a literal for every string Kaia adds.
+pub fn tr_known(id: &str) -> String {
+    tr(id)
+}
+
 pub fn tr_ctx(ctx: &str, id: &str) -> String {
     CURRENT.with(|c| c.borrow().translate_ctx(ctx, id))
 }

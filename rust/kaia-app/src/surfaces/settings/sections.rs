@@ -18,6 +18,7 @@ use crate::surfaces::reader::dict;
 /// The title of a section.
 pub fn title(name: &str) -> String {
     match name {
+        "home" => tr("Home"),
         "reading" => tr("Reading"),
         "dictionaries" => tr("Dictionary settings"),
         "display" => tr("Display and light"),
@@ -46,6 +47,7 @@ pub fn has_frontlight(services: &Services) -> bool {
 /// The rows of section `name` at Unix time `now`.
 pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
     match name {
+        "home" => home(services),
         "reading" => reading(services),
         "dictionaries" => dictionary_page(services),
         "display" => display(services),
@@ -344,6 +346,30 @@ fn library(services: &Services) -> Vec<Entry> {
         label: tr("Show finished books"),
         on: keys::bool_or(s, keys::LIBRARY_SHOW_FINISHED, true),
     });
+    out
+}
+
+/// The Home page: one switch per Home section. A switch that is off hides its
+/// section on Home. The books stay in the library.
+fn home(services: &Services) -> Vec<Entry> {
+    let s = &services.settings;
+    let mut out = vec![Entry::Heading(tr("Sections"))];
+    for (key, label) in [
+        (keys::HOME_SHOW_CURRENT, tr("Continue reading")),
+        (keys::HOME_SHOW_NEXT_IN_SERIES, tr("Next in series")),
+        (keys::HOME_SHOW_MORE_BY_AUTHOR, tr("More by author")),
+        (keys::HOME_SHOW_RECENT, tr("Recent")),
+        (keys::HOME_SHOW_IN_PROGRESS, tr("Other books in progress")),
+    ] {
+        out.push(Entry::Toggle {
+            key,
+            label,
+            on: keys::bool_or(s, key, true),
+        });
+    }
+    out.push(Entry::Text(tr(
+        "When every section is off, Home shows a short note and a button to the Library.",
+    )));
     out
 }
 

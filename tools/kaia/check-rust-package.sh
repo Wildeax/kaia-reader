@@ -26,7 +26,24 @@ check 'Lua menu entry remains' grep -qF 'Kaia Reader :cmd_spawn :quiet:exec /mnt
 check 'Rust menu entry is present' grep -qF 'exec /mnt/onboard/.adds/kaia/kaia-rust.sh' "${STAGE}/.adds/nm/kaia"
 check 'EPUB stylesheet is beside the binary' test -s "${APP}/data/epub.css"
 check 'FB2 stylesheet is beside the binary' test -s "${APP}/data/fb2.css"
+# Every pattern that the reader's language table names must be in the package.
+hyphenation_patterns_present() {
+    local name missing=0
+    while IFS= read -r name; do
+        if [ ! -s "${APP}/data/hyph/${name}" ]; then
+            echo "missing hyphenation pattern: ${name}" >&2
+            missing=1
+        fi
+    done < <(sed -n 's/.*pattern: "\([^"]*\.pattern\)".*/\1/p' "${ROOT}/rust/kaia-book/src/layout.rs")
+    [ "${missing}" -eq 0 ]
+}
 check 'English hyphenation data is present' test -s "${APP}/data/hyph/English_US.pattern"
+check 'Spanish hyphenation data is present' test -s "${APP}/data/hyph/Spanish.pattern"
+check 'French hyphenation data is present' test -s "${APP}/data/hyph/French.pattern"
+check 'hyphenation data matches the KOReader source' diff -rq -x LICENSES.txt "${ROOT}/base/thirdparty/kpvcrlib/crengine/cr3gui/data/hyph" "${APP}/data/hyph"
+check 'every hyphenation language in the reader has its pattern' hyphenation_patterns_present
+check 'hyphenation license notice is present' test -s "${APP}/data/hyph/LICENSES.txt"
+check 'hyphenation license notice matches the source' cmp -s "${ROOT}/resources/hyph/LICENSES.txt" "${APP}/data/hyph/LICENSES.txt"
 check 'CREngine font is beside the binary' test -s "${APP}/fonts/noto/NotoSerif-Regular.ttf"
 # Kaia's reading fonts and their licenses, in the fonts/ folder beside the binary.
 KAIA_READING_FONTS=(

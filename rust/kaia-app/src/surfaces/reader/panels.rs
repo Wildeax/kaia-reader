@@ -460,6 +460,13 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
                     "layout-hyphenation",
                 ),
             ));
+            let hyph_lang = button(
+                ButtonStyle::Secondary,
+                &hyphenation_choice_label(layout.hyphenation_lang.as_deref()),
+                "reader:layout:hyphlang",
+                "layout-hyphlang",
+            );
+            children.push(labelled(services, &tr("Hyphenation language"), hyph_lang));
             children.push(labelled(
                 services,
                 &tr("Book's styles"),
@@ -510,6 +517,75 @@ pub fn font_list(services: &Services, screen: Size, current: usize) -> Window {
         services,
         screen,
         Some(&tr("Font")),
+        children,
+        Some(WRITING_PERCENT),
+    )
+}
+
+/// The hyphenation language choices. Index 0 is the book language, which is the
+/// `None` of the layout. Each later index is a language with a pattern, in the
+/// order of `kaia_book::layout::HYPHENATION_LANGUAGES`.
+fn hyphenation_choices() -> Vec<Option<&'static kaia_book::layout::HyphenationLanguage>> {
+    std::iter::once(None)
+        .chain(kaia_book::layout::HYPHENATION_LANGUAGES.iter().map(Some))
+        .collect()
+}
+
+/// The index of a layout's hyphenation language in the list. The book language,
+/// and a tag that names no pattern, take index 0.
+pub fn hyphenation_index(choice: Option<&str>) -> usize {
+    choice
+        .and_then(kaia_book::layout::language_for_tag)
+        .and_then(|lang| {
+            kaia_book::layout::HYPHENATION_LANGUAGES
+                .iter()
+                .position(|candidate| candidate == lang)
+        })
+        .map_or(0, |i| i + 1)
+}
+
+/// The label of a hyphenation choice, as the row and the list show it.
+pub fn hyphenation_choice_label(choice: Option<&str>) -> String {
+    match choice.and_then(kaia_book::layout::language_for_tag) {
+        Some(lang) => kaia_i18n::tr_known(lang.name),
+        None => tr("Book language"),
+    }
+}
+
+/// The language tag that a hyphenation list index saves. None is the book language.
+pub fn hyphenation_tag_at(index: usize) -> Option<String> {
+    index
+        .checked_sub(1)
+        .and_then(|i| kaia_book::layout::HYPHENATION_LANGUAGES.get(i))
+        .map(|lang| lang.tag.to_string())
+}
+
+/// The hyphenation language list, opened from the row of the Text and layout
+/// sheet. The row of choice `current` shows "Current".
+pub fn hyphenation_list(services: &Services, screen: Size, current: usize) -> Window {
+    let choices = hyphenation_choices();
+    let indices: Vec<usize> = (0..choices.len()).collect();
+    let list = PagedList::new(indices, move |index: &usize, _t: &Theme| {
+        let label = match choices[*index] {
+            Some(lang) => kaia_i18n::tr_known(lang.name),
+            None => tr("Book language"),
+        };
+        let action = format!("reader:layout:hyphlang:{index}");
+        let mut row = ListRow::new(label).on_action(action.clone());
+        if *index == current {
+            row = row.value(tr("Current"));
+        }
+        WidgetPod::new(row).with_key(key_of(&action))
+    })
+    .labels(page_labels());
+    let children = vec![WidgetPod::new(Expanded::new(
+        WidgetPod::new(list).with_key("hyphenation-list"),
+        1,
+    ))];
+    sheet(
+        services,
+        screen,
+        Some(&tr("Hyphenation language")),
         children,
         Some(WRITING_PERCENT),
     )
@@ -1695,8 +1771,11 @@ pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{choices_with, FONT_CHOICES};
+    use super::{
+        choices_with, hyphenation_choice_label, hyphenation_index, hyphenation_tag_at, FONT_CHOICES,
+    };
     use crate::surfaces::settings::commands::font_options_with;
+    use kaia_i18n::tr;
 
     /// The Text sheet and the Settings radio list offer the same faces, in the same order.
     #[test]
@@ -1731,5 +1810,28 @@ mod tests {
         assert_eq!(choices.len(), FONT_CHOICES.len() + 1);
         assert_eq!(choices[0].1, None);
         assert_eq!(choices[FONT_CHOICES.len()].1.as_deref(), Some("Zeta Mono"));
+    }
+
+    #[test]
+    fn hyphenation_list_index_zero_is_the_book_language_and_round_trips() {
+        assert_eq!(hyphenation_index(None), 0);
+        assert_eq!(hyphenation_tag_at(0), None);
+        let spanish = hyphenation_index(Some("es"));
+        assert!(spanish > 0);
+        assert_eq!(hyphenation_tag_at(spanish).as_deref(), Some("es"));
+        assert_eq!(hyphenation_index(Some("xx-unknown")), 0);
+        assert_eq!(
+            hyphenation_index(Some("ja")),
+            0,
+            "no pattern, so the book language"
+        );
+        assert_eq!(hyphenation_tag_at(usize::MAX), None);
+    }
+
+    #[test]
+    fn hyphenation_choice_labels_name_the_language_or_the_book() {
+        assert_eq!(hyphenation_choice_label(None), tr("Book language"));
+        assert_eq!(hyphenation_choice_label(Some("xx-unknown")), tr("Book language"));
+        assert_eq!(hyphenation_choice_label(Some("fr")), tr("French"));
     }
 }

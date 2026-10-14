@@ -106,8 +106,8 @@ const SCHEMA_V2: &str = "
 ALTER TABLE covers ADD COLUMN mime TEXT NOT NULL DEFAULT 'image/png';
 ";
 
-/// Missing books keep their related rows until a populated root has been
-/// scanned for more than 30 days. Covers lost in version 2 need extraction.
+/// Missing books keep their related rows. A scan never deletes them. Covers lost
+/// in version 2 need extraction.
 const SCHEMA_V3: &str = "
 ALTER TABLE books ADD COLUMN missing_since INTEGER;
 CREATE INDEX books_missing_since ON books(missing_since);

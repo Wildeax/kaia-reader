@@ -51,6 +51,7 @@ pub const RECENT_SEARCHES: usize = 10;
 pub struct Library {
     pub(crate) conn: Connection,
     pub(crate) extract_budget: Duration,
+    clock: Box<dyn Fn() -> i64 + Send>,
 }
 
 impl Library {
@@ -61,6 +62,7 @@ impl Library {
         Ok(Library {
             conn: schema::open(db_path)?,
             extract_budget: DEFAULT_EXTRACT_BUDGET,
+            clock: Box::new(now_unix),
         })
     }
 
@@ -72,6 +74,18 @@ impl Library {
 
     pub fn extract_budget(&self) -> Duration {
         self.extract_budget
+    }
+
+    /// Replaces the clock that stamps rows with Unix seconds. The stamps are the
+    /// time a book is found missing, the time a book is added and the time it is
+    /// opened. The default reads the system clock. Tests use this to move time.
+    pub fn set_clock(&mut self, clock: impl Fn() -> i64 + Send + 'static) {
+        self.clock = Box::new(clock);
+    }
+
+    /// The current time in Unix seconds, from the clock in use.
+    pub(crate) fn now(&self) -> i64 {
+        (self.clock)()
     }
 }
 

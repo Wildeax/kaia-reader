@@ -174,7 +174,8 @@ pub struct ScanReport {
     pub extracted: usize,
     /// Books whose extraction failed in this scan.
     pub failed: usize,
-    /// Rows purged after more than 30 days missing from populated scans.
+    /// Rows deleted by the scan. Always zero: a scan marks rows missing and never
+    /// deletes them. Kept because the app reports it in its library update event.
     pub removed: usize,
     /// True when the cancel flag stopped the scan. Nothing is removed then.
     pub cancelled: bool,

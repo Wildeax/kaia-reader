@@ -171,13 +171,13 @@ impl EngineDoc {
         }
     }
 
-    /// Sets the CREngine options that the layout does not carry. A no-op for MuPDF.
+    /// Sets the CREngine options that the layout does not carry. `dict` is the
+    /// pattern file to hyphenate with, or None for no hyphenation. A no-op for MuPDF.
     #[cfg_attr(not(feature = "cre"), allow(unused_variables))]
-    pub fn set_cre_options(&mut self, hyphenation: bool, embedded_styles: bool) -> Result<(), DocError> {
+    pub fn set_cre_options(&mut self, dict: Option<&str>, embedded_styles: bool) -> Result<(), DocError> {
         match self {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => {
-                let dict = hyphenation.then_some(crate::layout::HYPHENATION_DICT);
                 d.set_hyphenation(dict)?;
                 d.set_embedded_styles(embedded_styles)
             }

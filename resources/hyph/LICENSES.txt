@@ -1,0 +1,74 @@
+Hyphenation patterns in data/hyph
+
+Kaia ships the TeX hyphenation patterns that KOReader ships for CREngine. The patterns come from the hyph-utf8 project, https://github.com/hyphenation/tex-hyphen, and KOReader's converted copies in base/thirdparty/kpvcrlib/crengine/cr3gui/data/hyph. The package does not change the pattern files.
+
+CREngine loads only files whose names end in .pattern. This file and the other text in data/hyph are not read by the engine.
+
+Files with a license statement
+
+Each file below states its own terms in its header. The terms are copied in summary. The header of each file has the full text.
+
+Catalan.pattern: LaTeX Project Public License, version 1 or any later version. Copyright 1991-2003 Gonçal Badenes.
+
+Dutch.pattern: LaTeX Project Public License, version 1 or any later version. Copyright 1996 Piet Tutelaers.
+
+Galician.pattern: LaTeX Project Public License, version 1.3. Copyright 2006-2010 Javier A. Múgica.
+
+German.pattern: LaTeX Project Public License, version 1 or any later version. Copyright Rechenzentrum der Ruhr-Universitaet Bochum (1988, 1991), Bernd Raichle and DANTE e.V. (1993-1999), Walter Schmidt (1998-2001).
+
+Greek.pattern: LaTeX Project Public License. Copyright 2008-2011 Dimitrios Filippou. The file does not name a version.
+
+Malayalam.pattern: GNU Lesser General Public License, version 3 or any later version. Copyright 2008-2010 Santhosh Thottingal.
+
+Norwegian.pattern: Copying and distribution, with or without modification, in any medium without royalty, provided the copyright notice and the notice in the file are kept. Copyright 2004-2005 Rune Kleveland and Ole Michael Selberg. This is the file's own wording, not a named license.
+
+Polish.pattern: GNU Lesser General Public License, no version named. The file also quotes Knuth's rule for the public-domain macro file plhyph.tex. Author: Artur Polaczyński.
+
+Turkish.pattern: LaTeX Project Public License, version 1 or any later version. Copyright 1987 Pierre A. MacKay, 2008 and 2011 TUG.
+
+Files without a license statement
+
+These files name no license in their headers. They were converted from the hyph-utf8 project. The hyph-utf8 project states the terms for each language. Kaia has not checked those terms against the upstream source. Check each file against its upstream source before a release that carries it.
+
+Armenian.pattern
+Basque.pattern
+Bulgarian.pattern
+Croatian.pattern
+Czech.pattern
+Danish.pattern
+English_GB.pattern
+English_US.pattern
+Esperanto.pattern
+Estonian.pattern
+Finnish.pattern
+French.pattern
+Friulian.pattern
+Georgian.pattern
+Hungarian.pattern
+Icelandic.pattern
+Irish.pattern
+Italian.pattern
+Latin.pattern
+Latin_liturgical.pattern
+Latvian.pattern
+Lithuanian.pattern
+Macedonian.pattern
+Occitan.pattern
+Piedmontese.pattern
+Portuguese.pattern
+Portuguese_BR.pattern
+Romanian.pattern
+Romansh.pattern
+Russian.pattern
+Russian_EnGB.pattern
+Russian_EnUS.pattern
+Serbian.pattern
+Slovak.pattern
+Slovenian.pattern
+Spanish.pattern
+Swedish.pattern
+Ukrainian.pattern
+Welsh.pattern
+Zulu.pattern
+
+Patterns in this package: 49

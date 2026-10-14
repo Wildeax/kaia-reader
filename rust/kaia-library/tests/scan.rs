@@ -217,43 +217,6 @@ fn missing_book_returns_at_new_path_by_content() {
 }
 
 #[test]
-fn old_missing_row_is_purged_only_after_a_populated_scan() {
-    let (tmp, root) = setup();
-    let files = fixture_set(&root);
-    let mut lib = open_library(tmp.path());
-    scan(&mut lib, std::slice::from_ref(&root));
-    let id = lib.book_by_path(&files[0]).unwrap().unwrap().id;
-    lib.record_open(id, 0.2).unwrap();
-    fs::remove_file(&files[0]).unwrap();
-    scan(&mut lib, std::slice::from_ref(&root));
-    let raw = raw_connection(tmp.path());
-    raw.execute(
-        "UPDATE books SET missing_since = ?1 WHERE id = ?2",
-        rusqlite::params![kaia_library_time() - 31 * 24 * 3600, id],
-    )
-    .unwrap();
-    let empty = tmp.path().join("empty");
-    fs::create_dir(&empty).unwrap();
-    assert_eq!(scan(&mut lib, std::slice::from_ref(&empty)).removed, 0);
-    let row_count: i64 = raw
-        .query_row("SELECT COUNT(*) FROM books WHERE id = ?1", [id], |r| r.get(0))
-        .unwrap();
-    assert_eq!(row_count, 1);
-    assert_eq!(scan(&mut lib, std::slice::from_ref(&root)).removed, 1);
-    let row_count: i64 = raw
-        .query_row("SELECT COUNT(*) FROM books WHERE id = ?1", [id], |r| r.get(0))
-        .unwrap();
-    assert_eq!(row_count, 0);
-}
-
-fn kaia_library_time() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
-
-#[test]
 fn dropped_cover_is_extracted_after_version_three_migration() {
     let (tmp, root) = setup();
     let file = copy_fixture("2col.pdf", &root, "book.pdf");
