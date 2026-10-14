@@ -27,7 +27,7 @@ neither crate, so the Rust app can implement the host traits without a cycle.
 | Path | Role |
 |---|---|
 | `src/ui/mod.rs` | `LuaUi`: the public API, the stack, painting and input |
-| `src/ui/bridge.rs` | The request queue and the `KAIA_UI` table that the shims call |
+| `src/ui/bridge.rs` | The request queue, the mirror of the window stack for queries, and the `KAIA_UI` table that the shims call |
 | `src/ui/foreign.rs` | `Foreign` (one shown widget) and its `ForeignRenderer` |
 | `src/ui/input.rs` | Kaia gestures and keys as KOReader event objects |
 | `lua/device.lua` | Shim for `device`: display, screen, input groups, capabilities |
@@ -51,14 +51,15 @@ neither crate, so the Rust app can implement the host traits without a cycle.
 | `lua/kaia/reader_footer.lua` | Additional footer content in the foreign overlay |
 | `tests/plugins.rs` | Bundled plugin loading, real EPUB and PDF menus, events, safe mode and failures |
 | `tests/ui_widgets.rs` | InfoMessage, ConfirmBox, ButtonDialog, Menu, InputDialog, with goldens |
-| `tests/ui_bridge.rs` | Event order, identity, scheduling, errors, input fields, refreshes, scale |
+| `tests/ui_bridge.rs` | Event order, identity, queries right after show and close, scheduling, errors, input fields, refreshes, scale |
 | `tests/golden/*.png` | Rendered frames. Regenerate with `KAIA_UPDATE_GOLDEN=1` |
 
 ## How a call travels
 
 ```text
 widget code                  shim (lua/ui/uimanager.lua)      Rust (LuaUi)
-UIManager:show(w, ...)  ->   KAIA_UI.show(w, x, y, flags,  )  queue Request::Show
+UIManager:show(w, ...)  ->   KAIA_UI.show(w, x, y, flags,  )  mirror: place w at once
+                                                              queue Request::Show
                                                               (applied after the Lua call)
                                                               stack.show(kaia Window with
                                                               ForeignWidget + Renderer(Foreign))
@@ -73,6 +74,11 @@ frame()                      Renderer::paint(target)          Blitbuffer over ta
   `Request`. `LuaUi` applies the queue after each entry point returns: `exec`, `eval`,
   `gesture`, `key`, `send_named`, `run_due`, `frame`, and after each handler. No Lua
   call runs while the window stack or the scheduler is borrowed.
+- **Mirror.** `show` and `close` also change a mirror of the window stack at once, so
+  `isWidgetShown`, `getTopmostVisibleWidget` and `getNthTopWidget` answer right after
+  the call. The mirror holds every window, Rust windows included, because placement
+  depends on them. Each drain copies the real stack into the mirror, so the two agree.
+  `getTopmostVisibleWidget` reads the widget's `invisible` field when it runs.
 - **Identity.** A widget stays in the Lua registry (`RegistryKey`). Its table address
   identifies it, so `close(w)` removes the window that `show(w)` opened, and no other.
 - **Windows.** `show` creates a `kaia_ui::Window` whose root is a `ForeignWidget`. The
@@ -119,10 +125,13 @@ frame()                      Renderer::paint(target)          Blitbuffer over ta
 
 These differ from KOReader. Plugins that depend on them need an adaptation.
 
-1. **Timing of effects.** `show`, `close`, `setDirty`, `scheduleIn`, `unschedule` and
-   `sendEvent` take effect when the Lua call that made them returns, not inside the call.
-   `isWidgetShown` and `getTopmostVisibleWidget` answer from the state at the start of
-   the current call.
+1. **Timing of effects.** `show` and `close` change what `isWidgetShown`,
+   `getTopmostVisibleWidget` and `getNthTopWidget` answer at once. The window itself
+   is created or removed, and the `Show`, `FlushSettings` and `CloseWidget` events
+   are sent, when the Lua call returns. So inside `CloseWidget` or `FlushSettings`,
+   the queries already leave the closed widget out, and KOReader still lists it.
+   `setDirty`, `scheduleIn`, `unschedule` and `sendEvent` take effect when the Lua
+   call returns, not inside the call.
 2. **Events during delivery.** `sendEvent` and `broadcastEvent` visit the windows that
    were on the stack when delivery started. KOReader rechecks the stack after each
    handler, so a window shown by a handler may get the event in KOReader and not here.
@@ -172,6 +181,12 @@ These differ from KOReader. Plugins that depend on them need an adaptation.
 20. **Document defaults.** Plugins can replace `doc_settings.data`; flush writes
     its entries through ReaderHost. The app must deliver DocSettingsLoad before
     the first layout. Tests invoke that lifecycle step explicitly.
+21. **Closing a widget shown twice.** KOReader sends `FlushSettings` and `CloseWidget`
+    once for a widget that is closed. Kaia sends them once per window, so a widget
+    that was shown twice gets each event twice.
+22. **Queries and Rust windows.** `isWidgetShown`, `getTopmostVisibleWidget` and
+    `getNthTopWidget` see only Lua windows. A Rust window above a Lua widget does not
+    stop `getTopmostVisibleWidget` from returning that widget.
 
 ## Errors
 

@@ -7,7 +7,7 @@ mod common;
 use std::time::Duration;
 
 use common::{lua_ui, serial, TempDir};
-use kaia_events::{Rect, Refresh, RefreshMode, Value};
+use kaia_events::{Ctx, Handlers, ManualClock, Rect, Refresh, RefreshMode, ShowOpts, Value, WindowStack};
 use kaia_gfx::{Color, Point, Size};
 use kaia_input::{Direction, Gesture, HoldPanDirection, Key};
 use kaia_lua::LuaUi;
@@ -156,6 +156,388 @@ fn close_removes_the_window_of_that_table_only() {
         eval_string(&ui, "table.concat(LOG, ',')"),
         "never:onFlushSettings,never:onCloseWidget"
     );
+    assert!(ui.take_errors().is_empty());
+}
+
+/// `show` answers at once: the same Lua call sees the widget in `isWidgetShown`
+/// and on top. The window itself is created when the call returns.
+#[test]
+fn show_is_visible_to_queries_before_the_frame() {
+    let _guard = serial();
+    let data = TempDir::new("show-now");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "show.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        DLG = fake("dialog")
+        UIManager:show(DLG)
+        SHOWN_NOW = UIManager:isWidgetShown(DLG)
+        TOP_NOW = UIManager:getTopmostVisibleWidget() == DLG
+        "#,
+    );
+    assert!(eval_bool(&ui, "SHOWN_NOW"), "isWidgetShown right after show");
+    assert!(eval_bool(&ui, "TOP_NOW"), "topmost right after show");
+    ui.frame();
+    assert_eq!(ui.window_count(), 1);
+    assert!(eval_bool(&ui, "require('ui/uimanager'):isWidgetShown(DLG)"));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == DLG"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// The review's example: show, check, close, then ask for the topmost widget.
+/// KOReader answers with the widget below. The check runs before any frame.
+#[test]
+fn close_is_visible_to_queries_before_the_frame() {
+    let _guard = serial();
+    let data = TempDir::new("close-now");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "close.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        BELOW = fake("below")
+        UIManager:show(BELOW)
+        DLG = fake("dialog")
+        UIManager:show(DLG)
+        SHOWN_NOW = UIManager:isWidgetShown(DLG)
+        UIManager:close(DLG)
+        SHOWN_AFTER_CLOSE = UIManager:isWidgetShown(DLG)
+        TOP_AFTER_CLOSE = UIManager:getTopmostVisibleWidget() == BELOW
+        "#,
+    );
+    assert!(eval_bool(&ui, "SHOWN_NOW"), "isWidgetShown before close");
+    assert!(!eval_bool(&ui, "SHOWN_AFTER_CLOSE"), "isWidgetShown after close");
+    assert!(
+        eval_bool(&ui, "TOP_AFTER_CLOSE"),
+        "the widget below is topmost after close"
+    );
+    ui.frame();
+    assert_eq!(ui.window_count(), 1);
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == BELOW"
+    ));
+    assert!(!eval_bool(&ui, "require('ui/uimanager'):isWidgetShown(DLG)"));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// The newer window is first in `getNthTopWidget`, both before and after the frame.
+#[test]
+fn nth_top_lists_the_newest_window_first_at_once() {
+    let _guard = serial();
+    let data = TempDir::new("nth-order");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "order.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        FIRST = fake("first")
+        SECOND = fake("second")
+        UIManager:show(FIRST)
+        UIManager:show(SECOND)
+        NTH_1 = UIManager:getNthTopWidget(1) == SECOND
+        NTH_2 = UIManager:getNthTopWidget(2) == FIRST
+        NTH_3 = UIManager:getNthTopWidget(3) == nil
+        "#,
+    );
+    assert!(eval_bool(&ui, "NTH_1"), "second window on top");
+    assert!(eval_bool(&ui, "NTH_2"), "first window below it");
+    assert!(eval_bool(&ui, "NTH_3"), "no third window");
+    ui.frame();
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(1) == SECOND"
+    ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(2) == FIRST"
+    ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(3) == nil"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// A toast shown before a modal stays above it, at once and after the frame.
+#[test]
+fn a_toast_shown_before_a_modal_stays_above_it() {
+    let _guard = serial();
+    let data = TempDir::new("toast-first");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "toast_first.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        TOAST = fake("toast")
+        TOAST.toast = true
+        MODAL = fake("modal")
+        MODAL.modal = true
+        UIManager:show(TOAST)
+        UIManager:show(MODAL)
+        TOP_NOW = UIManager:getNthTopWidget(1) == TOAST
+        UNDER_NOW = UIManager:getNthTopWidget(2) == MODAL
+        "#,
+    );
+    assert!(eval_bool(&ui, "TOP_NOW"), "toast on top right after show");
+    assert!(
+        eval_bool(&ui, "UNDER_NOW"),
+        "modal below the toast right after show"
+    );
+    ui.frame();
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == TOAST"
+    ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(2) == MODAL"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// A plain toast shown after a modal goes below it, as `UIManager:show` places it.
+#[test]
+fn a_toast_shown_after_a_modal_goes_below_it() {
+    let _guard = serial();
+    let data = TempDir::new("toast-last");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "modal_first.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        MODAL = fake("modal")
+        MODAL.modal = true
+        TOAST = fake("toast")
+        TOAST.toast = true
+        UIManager:show(MODAL)
+        UIManager:show(TOAST)
+        TOP_NOW = UIManager:getNthTopWidget(1) == MODAL
+        UNDER_NOW = UIManager:getNthTopWidget(2) == TOAST
+        "#,
+    );
+    assert!(eval_bool(&ui, "TOP_NOW"), "modal on top right after show");
+    assert!(
+        eval_bool(&ui, "UNDER_NOW"),
+        "toast below the modal right after show"
+    );
+    ui.frame();
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == MODAL"
+    ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(2) == TOAST"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// `show` adds a window each time, as KOReader does. One `close` removes every
+/// window of the widget.
+#[test]
+fn showing_a_widget_twice_adds_two_windows_and_close_removes_both() {
+    let _guard = serial();
+    let data = TempDir::new("show-twice");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "twice.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        A = fake("a")
+        B = fake("b")
+        UIManager:show(A)
+        UIManager:show(B)
+        UIManager:show(A)
+        TWICE_TOP = UIManager:getNthTopWidget(1) == A
+        TWICE_MID = UIManager:getNthTopWidget(2) == B
+        TWICE_LOW = UIManager:getNthTopWidget(3) == A
+        TWICE_NONE = UIManager:getNthTopWidget(4) == nil
+        UIManager:close(A)
+        CLOSED_SHOWN = UIManager:isWidgetShown(A)
+        CLOSED_TOP = UIManager:getNthTopWidget(1) == B
+        CLOSED_NEXT = UIManager:getNthTopWidget(2) == nil
+        "#,
+    );
+    assert!(eval_bool(&ui, "TWICE_TOP"), "A on top after its second show");
+    assert!(eval_bool(&ui, "TWICE_MID"), "B between the two windows of A");
+    assert!(eval_bool(&ui, "TWICE_LOW"), "the first window of A at the bottom");
+    assert!(eval_bool(&ui, "TWICE_NONE"), "exactly three windows");
+    assert!(!eval_bool(&ui, "CLOSED_SHOWN"), "A is gone after one close");
+    assert!(eval_bool(&ui, "CLOSED_TOP"), "B on top after the close");
+    assert!(eval_bool(&ui, "CLOSED_NEXT"), "only B is left");
+    ui.frame();
+    assert_eq!(ui.window_count(), 1);
+    assert!(eval_bool(&ui, "require('ui/uimanager'):getNthTopWidget(1) == B"));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// Closing a widget that is not shown leaves the stack alone. The widget still
+/// gets its two close events, as in KOReader.
+#[test]
+fn closing_an_unshown_widget_leaves_the_stack_alone() {
+    let _guard = serial();
+    let data = TempDir::new("close-unshown");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "shown.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        SHOWN = fake("shown")
+        UIManager:show(SHOWN)
+        "#,
+    );
+    run(&mut ui, "reset.lua", "LOG = {}");
+    run(
+        &mut ui,
+        "close_unshown.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        NEVER = fake("never")
+        UIManager:close(NEVER)
+        NEVER_SHOWN = UIManager:isWidgetShown(NEVER)
+        TOP_NOW = UIManager:getTopmostVisibleWidget() == SHOWN
+        NTH_NOW = UIManager:getNthTopWidget(2) == nil
+        "#,
+    );
+    assert!(!eval_bool(&ui, "NEVER_SHOWN"), "the unshown widget is not shown");
+    assert!(eval_bool(&ui, "TOP_NOW"), "the shown widget stays on top");
+    assert!(eval_bool(&ui, "NTH_NOW"), "the stack still has one window");
+    assert_eq!(
+        eval_string(&ui, "table.concat(LOG, ',')"),
+        "never:onFlushSettings,never:onCloseWidget"
+    );
+    ui.frame();
+    assert_eq!(ui.window_count(), 1);
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == SHOWN"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// `invisible` is read when a query runs. A widget that turns invisible after
+/// `show` is skipped, as KOReader's `getTopmostVisibleWidget` skips it.
+#[test]
+fn invisible_is_read_when_the_query_runs() {
+    let _guard = serial();
+    let data = TempDir::new("invisible");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    run(
+        &mut ui,
+        "invisible.lua",
+        r#"
+        local UIManager = require("ui/uimanager")
+        BELOW = fake("below")
+        UIManager:show(BELOW)
+        TOP = fake("top")
+        UIManager:show(TOP)
+        TOP.invisible = true
+        SKIPPED = UIManager:getTopmostVisibleWidget() == BELOW
+        TOP.invisible = nil
+        BACK = UIManager:getTopmostVisibleWidget() == TOP
+        "#,
+    );
+    assert!(
+        eval_bool(&ui, "SKIPPED"),
+        "an invisible widget is skipped at once"
+    );
+    assert!(eval_bool(&ui, "BACK"), "a visible widget is topmost again");
+    run(&mut ui, "hide.lua", "TOP.invisible = true");
+    ui.frame();
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getTopmostVisibleWidget() == BELOW"
+    ));
+    assert!(ui.take_errors().is_empty());
+}
+
+/// A Rust toast under a Lua modal counts in the placement of the next Lua
+/// toast. The mirror matches the real stack, so the Lua toast is on top of both.
+#[test]
+fn rust_windows_take_part_in_the_placement_of_lua_windows() {
+    let _guard = serial();
+    let data = TempDir::new("mixed-stack");
+    let (mut ui, _clock) = lua_ui(&data, false);
+    run(&mut ui, "fake.lua", FAKE_WIDGET);
+    let mut stack = WindowStack::new();
+    let mut ctx = Ctx::new(Box::new(ManualClock::new()), Rect::new(0, 0, 1264, 1680));
+
+    // The app shows a toast of its own, then the Lua code opens a modal.
+    stack.show(
+        Handlers::new(),
+        ShowOpts {
+            toast: true,
+            ..ShowOpts::default()
+        },
+        &mut ctx,
+    );
+    ui.in_app(&mut stack, &mut ctx, |ui| {
+        run(
+            ui,
+            "modal.lua",
+            r#"
+            local UIManager = require("ui/uimanager")
+            MODAL = fake("modal")
+            MODAL.modal = true
+            UIManager:show(MODAL)
+            "#,
+        )
+    });
+    // The Lua toast goes above the Rust toast, which sits above the modal.
+    ui.in_app(&mut stack, &mut ctx, |ui| {
+        run(
+            ui,
+            "toast.lua",
+            r#"
+            local UIManager = require("ui/uimanager")
+            TOAST = fake("toast")
+            TOAST.toast = true
+            UIManager:show(TOAST)
+            TOP_NOW = UIManager:getNthTopWidget(1) == TOAST
+            UNDER_NOW = UIManager:getNthTopWidget(2) == MODAL
+            "#,
+        )
+    });
+    assert!(
+        eval_bool(&ui, "TOP_NOW"),
+        "the Lua toast is on top right after show"
+    );
+    assert!(eval_bool(&ui, "UNDER_NOW"), "the modal is the next Lua window");
+    let real: Vec<bool> = stack
+        .ids_top_down()
+        .into_iter()
+        .map(|id| ui.window(id).is_some())
+        .collect();
+    assert_eq!(real, vec![true, false, true], "Lua toast, Rust toast, Lua modal");
+    ui.in_app(&mut stack, &mut ctx, |ui| ui.frame());
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(1) == TOAST"
+    ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(2) == MODAL"
+    ));
     assert!(ui.take_errors().is_empty());
 }
 

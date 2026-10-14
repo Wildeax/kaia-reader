@@ -1,10 +1,15 @@
 //! The queue between the Lua UI shims and `LuaUi`, and the `KAIA_UI` table.
 //!
 //! A Lua call to `UIManager:show`, `close`, `setDirty`, `scheduleIn`,
-//! `sendEvent` and the others only records a [`Request`]. `LuaUi` applies the
+//! `sendEvent` and the others records a [`Request`]. `LuaUi` applies the
 //! requests after the Lua call returns. So the window stack, the scheduler and
 //! the Rust state are never borrowed while Lua runs, and a handler can ask for
 //! any change without a re-entrant borrow.
+//!
+//! `show` and `close` also change the [`Mirror`] at once. Queries such as
+//! `isWidgetShown` therefore answer right after the call, as KOReader's do. The
+//! window itself appears when `LuaUi` applies the request. The mirror and the
+//! stack use the same insertion rule, so they agree once the requests are applied.
 //!
 //! Widgets are kept in the Lua registry through `RegistryKey`. A widget is
 //! identified by the address of its table, which stays fixed while the key
@@ -19,13 +24,13 @@ use kaia_events::{Refresh, RefreshMode, TaskId};
 use mlua::{Lua, RegistryKey, Table, Value as LuaValue};
 
 /// The window flags that `UIManager:show` reads from a widget, as the shim sends them.
+/// `invisible` is not a flag here. Queries read the widget's field when they run.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Flags {
     pub(crate) modal: bool,
     pub(crate) toast: bool,
     pub(crate) covers_fullscreen: bool,
     pub(crate) always_active: bool,
-    pub(crate) invisible: bool,
 }
 
 /// A change that a Lua call asked for. `LuaUi` applies it later, in order.
@@ -65,11 +70,19 @@ pub(crate) enum Request {
     },
 }
 
-/// A window on the stack, top first. Lua reads it through `isWidgetShown` and
-/// `getTopmostVisibleWidget`, which answer from this copy.
+/// A window on the stack, bottom first. Placement reads every window, Rust's
+/// too, so `lua` is `None` for a window that Rust owns. Lua reads the windows
+/// that have a `lua` entry, through `isWidgetShown`, `getTopmostVisibleWidget`
+/// and `getNthTopWidget`.
 pub(crate) struct Mirror {
+    pub(crate) modal: bool,
+    pub(crate) toast: bool,
+    pub(crate) lua: Option<LuaWindow>,
+}
+
+/// The Lua side of a [`Mirror`] entry: the widget's address and its registry key.
+pub(crate) struct LuaWindow {
     pub(crate) ptr: usize,
-    pub(crate) invisible: bool,
     pub(crate) widget: Rc<RegistryKey>,
 }
 
@@ -84,6 +97,8 @@ pub(crate) struct TaskRecord {
 pub(crate) struct Bridge {
     queue: RefCell<VecDeque<Request>>,
     errors: RefCell<Vec<String>>,
+    /// The window stack, bottom first. `show` and `close` update it at call
+    /// time. `LuaUi` replaces it with the real stack after each drain.
     pub(crate) mirror: RefCell<Vec<Mirror>>,
     pub(crate) tasks: RefCell<Vec<TaskRecord>>,
     next_token: Cell<u64>,
@@ -147,6 +162,60 @@ impl Bridge {
     pub(crate) fn take_after_paint(&self) -> Vec<Rc<RegistryKey>> {
         std::mem::take(&mut *self.after_paint.borrow_mut())
     }
+
+    /// `UIManager:show` on the mirror. The window goes where `UIManager:show`
+    /// puts it.
+    pub(crate) fn mirror_show(&self, window: LuaWindow, flags: Flags) {
+        let mut mirror = self.mirror.borrow_mut();
+        let at = insert_position(&mirror, flags);
+        mirror.insert(
+            at,
+            Mirror {
+                modal: flags.modal,
+                toast: flags.toast,
+                lua: Some(window),
+            },
+        );
+    }
+
+    /// `UIManager:close` on the mirror. Every window of the widget leaves.
+    pub(crate) fn mirror_close(&self, ptr: usize) {
+        self.mirror
+            .borrow_mut()
+            .retain(|m| !m.lua.as_ref().is_some_and(|w| w.ptr == ptr));
+    }
+
+    /// The Lua windows, top first. The keys are copies, so a caller can run
+    /// Lua while it holds them.
+    pub(crate) fn lua_windows_top_down(&self) -> Vec<Rc<RegistryKey>> {
+        self.mirror
+            .borrow()
+            .iter()
+            .rev()
+            .filter_map(|m| m.lua.as_ref().map(|w| Rc::clone(&w.widget)))
+            .collect()
+    }
+}
+
+/// The index where `UIManager:show` inserts a window, counted from the bottom.
+/// The scan runs from the top. For each window:
+/// - if it is a toast, a new toast goes directly above it;
+/// - if it is not a toast, a new window goes directly above it when the new
+///   window is modal or the window is not modal.
+///
+/// With no match, the window goes to the bottom. `WindowStack::insert_position`
+/// in kaia-events applies the same rule to the real stack.
+fn insert_position(mirror: &[Mirror], flags: Flags) -> usize {
+    for (index, top) in mirror.iter().enumerate().rev() {
+        if top.toast {
+            if flags.toast {
+                return index + 1;
+            }
+        } else if flags.modal || !top.modal {
+            return index + 1;
+        }
+    }
+    0
 }
 
 /// Keeps a widget or a function in the registry and returns its address.
@@ -175,7 +244,6 @@ fn flags_from(table: Option<Table>) -> mlua::Result<Flags> {
         toast: flag("toast")?,
         covers_fullscreen: flag("covers_fullscreen")?,
         always_active: flag("always_active")?,
-        invisible: flag("invisible")?,
     })
 }
 
@@ -213,6 +281,13 @@ pub(crate) fn rect_from(t: &Table) -> mlua::Result<Rect> {
     ))
 }
 
+/// The `invisible` field of a widget, read when a query runs. KOReader's
+/// `getTopmostVisibleWidget` reads it the same way, so a field set after `show` counts.
+fn is_invisible(widget: &Table) -> mlua::Result<bool> {
+    let flag: LuaValue = widget.get("invisible")?;
+    Ok(!matches!(flag, LuaValue::Nil | LuaValue::Boolean(false)))
+}
+
 /// Creates the global `KAIA_UI`, the Rust side of `ui/uimanager`.
 pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
     let ui = lua.create_table()?;
@@ -223,13 +298,24 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
         lua.create_function(
             move |lua, (widget, x, y, flags, refresh): (LuaValue, i32, i32, Option<Table>, Option<Table>)| {
                 let (widget, ptr) = keep(lua, widget)?;
+                // Everything that can fail runs before the mirror changes, so the
+                // mirror and the queue always change together.
+                let flags = flags_from(flags)?;
+                let refresh = refresh_from(lua, &b, refresh)?;
+                b.mirror_show(
+                    LuaWindow {
+                        ptr,
+                        widget: Rc::clone(&widget),
+                    },
+                    flags,
+                );
                 b.push(Request::Show {
                     widget,
                     ptr,
                     x,
                     y,
-                    flags: flags_from(flags)?,
-                    refresh: refresh_from(lua, &b, refresh)?,
+                    flags,
+                    refresh,
                 });
                 Ok(())
             },
@@ -241,11 +327,9 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
         "close",
         lua.create_function(move |lua, (widget, refresh): (LuaValue, Option<Table>)| {
             let (widget, ptr) = keep(lua, widget)?;
-            b.push(Request::Close {
-                widget,
-                ptr,
-                refresh: refresh_from(lua, &b, refresh)?,
-            });
+            let refresh = refresh_from(lua, &b, refresh)?;
+            b.mirror_close(ptr);
+            b.push(Request::Close { widget, ptr, refresh });
             Ok(())
         })?,
     )?;
@@ -305,7 +389,10 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
         "is_shown",
         lua.create_function(move |_, widget: LuaValue| {
             let ptr = widget.to_pointer() as usize;
-            Ok(b.mirror.borrow().iter().any(|m| m.ptr == ptr))
+            Ok(b.mirror
+                .borrow()
+                .iter()
+                .any(|m| m.lua.as_ref().is_some_and(|w| w.ptr == ptr)))
         })?,
     )?;
 
@@ -313,14 +400,15 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
     ui.set(
         "topmost_visible",
         lua.create_function(move |lua, ()| {
-            let mirror = b.mirror.borrow();
-            match mirror.iter().find(|m| !m.invisible) {
-                Some(m) => {
-                    let table: LuaValue = lua.registry_value(&m.widget)?;
-                    Ok(table)
+            // The keys are copies, so no borrow of the mirror is held while
+            // `invisible` is read. That read can run Lua.
+            for key in b.lua_windows_top_down() {
+                let table: Table = lua.registry_value(&key)?;
+                if !is_invisible(&table)? {
+                    return Ok(LuaValue::Table(table));
                 }
-                None => Ok(LuaValue::Nil),
             }
+            Ok(LuaValue::Nil)
         })?,
     )?;
 
@@ -328,13 +416,10 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
     ui.set(
         "nth_top",
         lua.create_function(move |lua, n: i64| {
-            let mirror = b.mirror.borrow();
             let index = n.checked_sub(1).and_then(|i| usize::try_from(i).ok());
-            match index.and_then(|i| mirror.get(i)) {
-                Some(m) => {
-                    let table: LuaValue = lua.registry_value(&m.widget)?;
-                    Ok(table)
-                }
+            let key = index.and_then(|i| b.lua_windows_top_down().into_iter().nth(i));
+            match key {
+                Some(key) => lua.registry_value::<LuaValue>(&key),
                 None => Ok(LuaValue::Nil),
             }
         })?,

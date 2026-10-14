@@ -32,7 +32,7 @@ Test counts are grep counts of `#[test]` in each crate, taken on 2026-10-13. The
 
 ### Review findings
 
-Review 1 (`docs/kaia/reviews/2026-10-13-review-1.md`) covers the Rust crates. It lists 86 findings: 5 critical, 21 high, 32 medium, 27 low and 1 process item. 85 are fixed. UI-L is fixed except for the headless whole-frame refresh. One is open. K-H4 concerns `Ctx`, which queues `send`, `broadcast`, `show` and `close` where KOReader runs them at once.
+Review 1 (`docs/kaia/reviews/2026-10-13-review-1.md`) covers the Rust crates. It lists 86 findings: 5 critical, 21 high, 32 medium, 27 low and 1 process item. 86 are fixed, and no row is marked open. UI-L is fixed except for the headless whole-frame refresh. K-H4 is fixed for the Lua plugin layer, where `show` and `close` answer at once. The Rust `Ctx` still queues them, by design.
 
 Review 2 (`docs/kaia/reviews/2026-10-13-review-2.md`) covers `kaia-app`. It lists 22 findings: 8 high, 13 medium and 1 low. Its status table marks all 22 fixed. Its fix table names regression tests for 14 of them. Tests in `rust/kaia-app/tests/review2_refresh.rs` and `review2_latency.rs` cover R2-H6, H7, H8, M8 and M10. R2-M9, M11 and M12 have code changes but no test with a matching name.
 
@@ -112,7 +112,6 @@ Review 2 (`docs/kaia/reviews/2026-10-13-review-2.md`) covers `kaia-app`. It list
 
 #### Review findings still open
 
-- Review 1 item K-H4 is open. `Ctx` queues `send`, `broadcast`, `show` and `close`, and KOReader runs them at once, so code that checks a result right after the call behaves differently. The Lua layer documents this. Plugins need a decision.
 - Review 1 item UI-L is open for headless output, which still refreshes the whole frame.
 - A full refresh after an image needs a page-image signal from `kaia-book`. Review 1 and review 2 both name this gap.
 

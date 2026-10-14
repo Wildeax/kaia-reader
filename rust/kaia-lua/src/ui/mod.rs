@@ -33,7 +33,7 @@ use mlua::{Function, Lua, Table, Value as LuaValue};
 
 use crate::error::lua_error;
 use crate::{Error, LibraryHost, LuaHost, ReaderHost};
-use bridge::{Bridge, Flags, Mirror, Request, TaskRecord};
+use bridge::{Bridge, Flags, LuaWindow, Mirror, Request, TaskRecord};
 use foreign::{Foreign, Renderer};
 pub use plugins::{PluginOptions, PluginStatus};
 
@@ -51,7 +51,6 @@ pub struct UiConfig {
 struct Shown {
     id: WindowId,
     ptr: usize,
-    invisible: bool,
     foreign: Rc<Foreign>,
     window: Window,
 }
@@ -136,6 +135,10 @@ impl LuaUi {
     pub fn in_app<T>(&mut self, stack: &mut WindowStack, ctx: &mut Ctx, f: impl FnOnce(&mut Self) -> T) -> T {
         std::mem::swap(&mut self.stack, stack);
         std::mem::swap(&mut self.ctx, ctx);
+        // Windows that Rust queued before this call join the stack first. The
+        // drain then copies the app's whole stack into the mirror.
+        self.stack.apply_requests(&mut self.ctx);
+        self.drain();
         let result = f(self);
         self.drain();
         if self.plugin_runtime_loaded {
@@ -587,15 +590,15 @@ impl LuaUi {
         self.shown.push(Shown {
             id,
             ptr,
-            invisible: flags.invisible,
             foreign,
             window,
         });
     }
 
-    /// `UIManager:close`. Every window of the widget leaves the stack, and the
-    /// widget gets `FlushSettings` and `CloseWidget`. A widget that is not on
-    /// the stack gets the two events and nothing else, as in KOReader.
+    /// `UIManager:close`, applied after the Lua call. The mirror dropped the
+    /// windows when `close` was called. Here each window leaves the real stack,
+    /// and the widget gets `FlushSettings` and `CloseWidget`. A widget that is
+    /// not on the stack gets the two events and nothing else, as in KOReader.
     fn apply_close(&mut self, widget: Rc<mlua::RegistryKey>, ptr: usize, refresh: Option<Refresh>) {
         let mut refresh = refresh;
         let mut closed = false;
@@ -744,17 +747,23 @@ impl LuaUi {
         used
     }
 
-    /// Copies the stack order into the bridge, for `isWidgetShown` and friends.
+    /// Copies the whole stack into the bridge, bottom first. Placement reads every
+    /// window, so Rust windows go in with `lua` unset. Queries read the Lua windows.
     fn sync_mirror(&self) {
         let mut mirror = Vec::new();
-        for id in self.stack.ids_top_down() {
-            if let Some(shown) = self.shown.iter().find(|s| s.id == id) {
-                mirror.push(Mirror {
-                    ptr: shown.ptr,
-                    invisible: shown.invisible,
-                    widget: Rc::clone(shown.foreign.widget_key()),
-                });
-            }
+        for id in self.stack.ids_top_down().into_iter().rev() {
+            let Some(opts) = self.stack.options(id) else {
+                continue;
+            };
+            let lua = self.shown.iter().find(|s| s.id == id).map(|s| LuaWindow {
+                ptr: s.ptr,
+                widget: Rc::clone(s.foreign.widget_key()),
+            });
+            mirror.push(Mirror {
+                modal: opts.modal,
+                toast: opts.toast,
+                lua,
+            });
         }
         *self.bridge.mirror.borrow_mut() = mirror;
     }

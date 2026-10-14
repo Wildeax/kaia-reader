@@ -3,9 +3,11 @@ Kaia shim for KOReader's UIManager.
 
 The window stack, the task queue and the refresh queue live in Rust (`LuaUi`).
 Each method here keeps the name and the arguments of KOReader's method and
-forwards to the table `KAIA_UI`, which the Rust side creates. The Rust side
-applies a show, close, dirty mark or task after the Lua call that asked for it
-returns. The differences from KOReader are listed in `rust/kaia-lua/README.md`.
+forwards to the table `KAIA_UI`, which the Rust side creates. A show or close
+changes what the window queries answer at once. The Rust side creates or removes
+the window, and sends its events, after the Lua call that asked for it returns.
+Dirty marks and tasks wait for that point too. The differences from KOReader are
+listed in `rust/kaia-lua/README.md`.
 
 Widgets keep their identity: the table that `show` receives is the table that
 `close` and `setDirty` receive, and the Rust side compares the two by reference.
@@ -81,7 +83,6 @@ local function window_flags(widget)
         toast = widget.toast and true or false,
         covers_fullscreen = widget.covers_fullscreen and true or false,
         always_active = widget.is_always_active and true or false,
-        invisible = widget.invisible and true or false,
     }
 end
 
