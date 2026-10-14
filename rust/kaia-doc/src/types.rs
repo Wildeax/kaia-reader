@@ -154,6 +154,9 @@ pub struct Layout {
     /// Unitless line height, for example 1.4.
     pub line_height: Option<f32>,
     pub font_family: Option<String>,
+    /// Base font weight in CSS units, 400 for regular. None keeps the engine's
+    /// current weight. MuPDF has no weight and ignores this field.
+    pub font_weight: Option<u32>,
     pub css_extra: String,
 }
 
@@ -167,6 +170,7 @@ impl Layout {
             margins: None,
             line_height: None,
             font_family: None,
+            font_weight: None,
             css_extra: String::new(),
         }
     }

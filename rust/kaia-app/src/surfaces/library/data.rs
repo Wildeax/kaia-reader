@@ -18,6 +18,8 @@ pub const ALL: usize = 100_000;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prefs {
     pub view: View,
+    /// The layout of the Books tab: covers or list. It stays when another tab is open.
+    pub layout: View,
     pub sort: SortChoice,
     pub chip: Option<Chip>,
     pub collection: Option<i64>,
@@ -28,6 +30,7 @@ impl Default for Prefs {
     fn default() -> Self {
         Prefs {
             view: View::Covers,
+            layout: View::Covers,
             sort: SortChoice::Title,
             chip: None,
             collection: None,
@@ -47,6 +50,13 @@ impl Prefs {
             Some("authors") => View::Authors,
             _ => View::Covers,
         };
+        // A settings file written before `library.layout` existed keeps a list in `library.view`.
+        let layout = match text("library.layout").as_deref() {
+            Some("list") => View::List,
+            Some("covers") => View::Covers,
+            _ if view == View::List => View::List,
+            _ => View::Covers,
+        };
         let sort = match text("library.sort").as_deref() {
             Some("author") => SortChoice::Author,
             Some("read") => SortChoice::Read,
@@ -63,6 +73,7 @@ impl Prefs {
         };
         Prefs {
             view,
+            layout,
             sort,
             chip,
             collection: settings.read("library.collection").as_i64(),
@@ -93,7 +104,12 @@ impl Prefs {
             Some(Chip::NotStarted) => "not-started",
             Some(Chip::Finished) => "finished",
         };
+        let layout = match self.layout {
+            View::List => "list",
+            _ => "covers",
+        };
         settings.save("library.view", Value::Str(view.into()));
+        settings.save("library.layout", Value::Str(layout.into()));
         settings.save("library.sort", Value::Str(sort.into()));
         settings.save("library.chip", Value::Str(chip.into()));
         settings.save(

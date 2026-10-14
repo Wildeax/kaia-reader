@@ -435,6 +435,7 @@ fn layout_from_sidecar(root: &Value) -> Option<TextLayout> {
         "copt_line_spacing",
         "hyphenation",
         "copt_embedded_css",
+        "copt_font_base_weight",
     ];
     if !keys.iter().any(|k| !root.get(*k).is_nil()) {
         return None;
@@ -472,6 +473,12 @@ fn layout_from_sidecar(root: &Value) -> Option<TextLayout> {
             .get("copt_embedded_css")
             .as_i64()
             .map_or(d.embedded_styles, |n| n != 0),
+        // KOReader stores the delta value itself, as `configurable.font_base_weight`.
+        font_weight: root
+            .get("copt_font_base_weight")
+            .as_f64()
+            .filter(|n| n.is_finite())
+            .map_or(d.font_weight, |n| n as f32),
     })
 }
 
@@ -538,6 +545,7 @@ mod tests {
             ["copt_h_page_margins"] = { [1] = 12, [2] = 14 },
             ["copt_line_spacing"] = 110,
             ["hyphenation"] = false,
+            ["copt_font_base_weight"] = 1.5,
             ["summary"] = { ["status"] = "complete", ["rating"] = 5 },
         }"#;
         let root = kaia_luadata::parse(src).expect("parse");
@@ -555,6 +563,10 @@ mod tests {
         assert_eq!(layout.margins.right, 14.0);
         assert!((layout.line_spacing - 1.1).abs() < 1e-6);
         assert!(!layout.hyphenation);
+        assert_eq!(
+            layout.font_weight, 1.5,
+            "KOReader's font weight delta is imported"
+        );
         assert_eq!(imported.status.as_deref(), Some("complete"));
         assert_eq!(imported.rating, Some(5));
     }

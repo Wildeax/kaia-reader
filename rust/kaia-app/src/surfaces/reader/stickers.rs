@@ -191,6 +191,7 @@ impl TextCache {
             margins: Some(l.margins),
             line_height: Some(l.line_spacing),
             font_family: l.font_family.clone(),
+            font_weight: Some(l.css_weight()),
             css_extra: if l.justify {
                 "body { text-align: justify !important; }\n".into()
             } else {

@@ -42,6 +42,8 @@ pub(super) fn gesture(id: &str, args: &[Value]) -> Option<GestureCommand> {
 pub enum LayoutChange {
     Font(usize),
     Size(f64),
+    /// The index of the weight choice in `kaia_book::layout::FONT_WEIGHT_VALUES`.
+    Weight(f64),
     Spacing(f64),
     Margins(f64),
     Justify(bool),
@@ -254,6 +256,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["layout", "fonts"] => Command::FontList,
         ["layout", "font", n] => Command::Layout(LayoutChange::Font(n.parse().ok()?)),
         ["layout", "size"] => Command::Layout(LayoutChange::Size(number(args, 0)?)),
+        ["layout", "weight"] => Command::Layout(LayoutChange::Weight(number(args, 0)?)),
         ["layout", "spacing"] => Command::Layout(LayoutChange::Spacing(number(args, 0)?)),
         ["layout", "margins"] => Command::Layout(LayoutChange::Margins(number(args, 0)?)),
         ["layout", "justify"] => Command::Layout(LayoutChange::Justify(flag(args))),
@@ -341,6 +344,10 @@ mod tests {
         assert_eq!(
             parse("reader:layout:size", &[Value::Number(18.0)]),
             Some(Command::Layout(LayoutChange::Size(18.0)))
+        );
+        assert_eq!(
+            parse("reader:layout:weight", &[Value::Number(2.0)]),
+            Some(Command::Layout(LayoutChange::Weight(2.0)))
         );
         assert_eq!(
             parse("reader:layout:justify", &[Value::Bool(true)]),

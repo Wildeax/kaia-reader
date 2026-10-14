@@ -382,6 +382,12 @@ int kaia_cre_set_embedded_fonts(kaia_cre_doc *doc, int enabled) {
     return guard([&]() -> int { return set_int_property(doc, "crengine.doc.embedded.fonts.enabled", enabled ? 1 : 0); });
 }
 
+int kaia_cre_set_font_weight(kaia_cre_doc *doc, int weight) {
+    // KOReader's CreDocument:setFontBaseWeight writes the same property.
+    // propsApply re-renders only when the value changes.
+    return guard([&]() -> int { return set_int_property(doc, "font.face.base.weight", weight); });
+}
+
 int kaia_cre_set_hyphenation(kaia_cre_doc *doc, const char *dict) {
     return guard([&]() -> int {
         LVDocView *view = view_of(doc);

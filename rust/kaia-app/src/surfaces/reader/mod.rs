@@ -67,6 +67,13 @@ pub(crate) fn koreader_px(screen: kaia_gfx::Size, units: f64) -> f32 {
 /// options keep the defaults of `kaia_book`. A book with a saved layout keeps it.
 fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Settings) -> TextLayout {
     let base = TextLayout::default();
+    let font_family = settings
+        .read("reading.font_family")
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    // The weight is saved per family, so the default face brings its own weight.
+    let font_weight = crate::surfaces::settings::keys::font_weight(settings, font_family.as_deref()) as f32;
     TextLayout {
         font_size: koreader_px(
             screen,
@@ -77,11 +84,8 @@ fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Setti
                 .unwrap_or(22.0)
                 .clamp(12.0, 40.0),
         ),
-        font_family: settings
-            .read("reading.font_family")
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned),
+        font_family,
+        font_weight,
         margins: Margins {
             top: koreader_px(screen, 15.0),
             right: koreader_px(screen, 10.0),
@@ -1095,7 +1099,15 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     LayoutChange::Font(index) => {
                         // The built-in faces come from `font_face`, the user faces from the list.
                         let face = font_face(index).or_else(|| panels::user_face_at(index));
-                        let result = c.change_layout(|l| l.font_family = face);
+                        // The new face brings the weight saved for it, regular when it has none.
+                        let weight = crate::surfaces::settings::keys::font_weight(
+                            &env.services.settings,
+                            face.as_deref(),
+                        );
+                        let result = c.change_layout(|l| {
+                            l.font_family = face;
+                            l.font_weight = weight as f32;
+                        });
                         // The font list closes. The sheet below shows the new face on its button.
                         if result.is_ok() {
                             if let Some(layer) = c.panel.clone() {
@@ -1111,6 +1123,18 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         result
                     }
                     LayoutChange::Size(size) => c.change_layout(|l| l.font_size = size as f32),
+                    LayoutChange::Weight(index) => {
+                        let value = panels::font_weight_at(index);
+                        let family = c.session.as_ref().and_then(|s| s.layout().font_family.clone());
+                        let result = c.change_layout(|l| l.font_weight = value);
+                        if result.is_ok() {
+                            // The weight is kept for this face, so the next book in it starts there.
+                            let key = crate::surfaces::settings::keys::font_weight_key(family.as_deref());
+                            env.services.settings.save(key, Value::from(f64::from(value)));
+                            save_settings(env);
+                        }
+                        result
+                    }
                     LayoutChange::Spacing(spacing) => c.change_layout(|l| l.line_spacing = spacing as f32),
                     LayoutChange::Margins(px) => {
                         let m = px as f32;
