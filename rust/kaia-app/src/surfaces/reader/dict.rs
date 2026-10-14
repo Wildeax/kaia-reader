@@ -1,6 +1,6 @@
 //! Dictionary lookup for the selected word. StarDict folders are read from
 //! Kaia's `dict` folder in the data directory and from KOReader's
-//! `data/dict` folder on the Kobo, when either exists.
+//! `data/dict` folder on the Kobo. Nickel dictionaries are read from `.kobo/dict`.
 //!
 //! The settings `dictionary.order` (names, first to last) and
 //! `dictionary.disabled` (names that are off) set the order and the on or off
@@ -29,14 +29,17 @@ pub struct Answer {
     pub first: Option<String>,
 }
 
-/// Opens the dictionaries of the first folder that has any. Does nothing after
-/// the first call that finds some. Call this before [`installed`] or [`lookup`].
+/// Opens StarDict folders and the local Kobo dictionary folder once. Call this before [`installed`] or [`lookup`].
 pub fn load(services: &mut Services) {
     if services.dictionary.is_none() {
-        services.dictionary = folders(services)
-            .iter()
-            .filter_map(|dir| Library::open_dir(dir).ok())
-            .find(|lib| !lib.dictionaries().is_empty());
+        let mut library = Library::default();
+        for dir in folders(services) {
+            if let Ok(source) = Library::open_dir(dir) {
+                library.append(source);
+            }
+        }
+        library.add_kobo_dir(&services.paths.books_dir.join(".kobo/dict"));
+        services.dictionary = Some(library);
     }
 }
 
@@ -70,7 +73,7 @@ pub fn installed(services: &Services) -> Vec<String> {
     services
         .dictionary
         .as_ref()
-        .map(|lib| lib.dictionaries().iter().map(|d| d.name().to_string()).collect())
+        .map(Library::names)
         .unwrap_or_default()
 }
 
@@ -208,6 +211,12 @@ pub fn lookup(word: &str, services: &mut Services, preferred: &[String]) -> Answ
             first: None,
         };
     };
+    if library.names().is_empty() {
+        return Answer {
+            text: install_hint(&services.paths.data_dir),
+            first: None,
+        };
+    }
     let entries = library.lookup_with(word, &options);
     let first = entries.first().map(|entry| entry.dict_name.clone());
     let text = if entries.is_empty() {

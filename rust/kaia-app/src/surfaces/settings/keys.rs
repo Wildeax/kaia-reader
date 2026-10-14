@@ -46,6 +46,7 @@
 //! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
 //! | `device.time_zone` | string | unset (system zone) | IANA name of the zone for Kaia's clock, such as `America/Bogota`. Set from the Time zone page. Kaia sets `TZ` at startup, so the footer clock, natural light and statistics dates follow it. An unknown name counts as unset. See `kaia_platform::timezone`. |
 //! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
+//! | `dictionary.allow_downloads` | bool | false | Shows the dictionary download catalog and permits explicitly requested downloads. |
 //! | `network.airplane_mode` | bool | false | Airplane mode: Wi-Fi stays off and Kaia does not turn it on. Set from quick settings. |
 //! | `experimental.enabled` | bool | false | Master switch of the experimental features. See `experiments`. |
 //! | `experimental.<id>` | bool | false | One experimental flag. It works only when the master switch is on. |

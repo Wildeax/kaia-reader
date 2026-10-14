@@ -1,4 +1,4 @@
-//! Offline StarDict dictionary lookup.
+//! Local StarDict and Kobo dictionary lookup, with opt-in verified downloads.
 //!
 //! Reads the StarDict files that KOReader's `sdcv` reads: `.ifo`, `.idx` or `.idx.gz`,
 //! `.dict` or dictzip `.dict.dz`, and an optional `.syn`. The index and synonyms load into
@@ -17,10 +17,12 @@
 
 mod dict;
 mod dictzip;
+pub mod download;
 mod error;
 mod html;
 mod ifo;
 mod index;
+pub mod kobo;
 mod lookup;
 #[cfg(test)]
 mod testgen;

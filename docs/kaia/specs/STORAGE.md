@@ -342,6 +342,58 @@ A font, margin or rotation change never changes stored data. Stickers are positi
 - Asset files with no row, such as leftovers from an interrupted write, are removed at once.
 - A pending time later than the clock, which happens when the clock moves back after an add, keeps the asset until the clock passes that time plus 60 minutes.
 
+## Dictionaries
+
+Kaia reads Nickel's existing `/mnt/onboard/.kobo/dict/dicthtml*.zip`
+files through read-only file handles. It never creates, modifies, downloads or
+redistributes Kobo dictionaries. Readable Kobo dictionaries and StarDict
+folders share `dictionary.order` and `dictionary.disabled`. Per-book dictionary
+preferences take precedence. StarDict sources under `.kaia/dict` and KOReader's
+`data/dict` load together; duplicate paths are loaded once.
+
+The Kobo reader follows Patrick Gaskin's [dicthtml format description](https://pgaskin.net/dictutil/dicthtml/format.html)
+and [prefix rules](https://pgaskin.net/dictutil/dicthtml/prefixes.html).
+It reads plain or gzip HTML shards by their Unicode prefix and matches
+headwords and variants inside `<w>` entries. It does not need the marisa
+`words` index. Definitions use Kaia's existing HTML-to-text conversion.
+It does not implement Japanese-specific matching or Nickel's prefix fallback.
+No dictutil source code is copied.
+
+At discovery, Kaia checks every HTML shard's opening bytes. A ZIP encryption
+flag or a payload without a plain/gzip HTML signature causes the dictionary
+to be skipped with a note in Dictionary settings. Dicthtml's AES payload has
+no documented identifying magic, so an unknown payload is reported as
+"encrypted or unsupported", not as proven encryption. Kaia does not decrypt
+it. Each expanded lookup shard is limited to 32 MiB. Real Nickel dictionaries
+and startup latency still need a Kobo device check.
+
+`dictionary.allow_downloads` defaults to false. Reading and Dictionary settings
+show the switch and explain that downloads use the internet. The Download
+dictionaries page is available only after opt-in. Each download also requires
+a tap; catalog loading and browsing make no requests. Airplane mode refuses
+new downloads with the existing Wi-Fi notice. Turning downloads off or airplane
+mode on cancels an active attempt at the next I/O or extraction check.
+
+The compiled-in catalog is `resources/kaia-dict/catalog.json`. It pins the
+original KOReader URL, byte size, SHA-256, languages and declared license for
+each offered dictionary. Its `skipped` list records unavailable files and
+unclear licenses. The development tool `rust/kaia-dict/tools/pin_catalog.py`
+reads `frontend/ui/data/dictionaries.lua`, downloads each selected archive once
+and records its size and digest. It does not keep archive contents. Rerunning
+it intentionally refreshes the pins and requires reviewing the diff.
+
+Downloads stage in `.kaia/dict/.partial/dictionary-*/`. A per-dictionary lock
+in `.partial` prevents concurrent installs. Kaia verifies the compressed file's
+size and SHA-256 before it unpacks gzip tar, zstd tar or ZIP archives. Extraction
+rejects absolute paths, parent traversal, links, special files, duplicate file
+paths, more than 100,000 entries and more than 4 GiB of expanded data. Kaia
+validates the StarDict files and retains archive license files plus a
+`kaia-source.txt` record. It then renames the staged directory to
+`.kaia/dict/<catalog id>/` on the same filesystem. An existing installation is
+never replaced. Caught failures remove the attempt's files and lock; process
+termination may leave files in `.partial`, which dictionary discovery ignores.
+Those leftovers can be removed while no dictionary download is running.
+
 ## Database rules
 
 - SQLite via `rusqlite` with the bundled SQLite.

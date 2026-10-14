@@ -67,6 +67,8 @@ pub enum Command {
     LanguagePick(String),
     /// Opens the Dictionary settings page.
     Dictionaries,
+    DictionaryDownloads,
+    DictionaryInstall(String),
     /// Changes the dictionary at `index` in lookup order.
     Dictionary {
         index: usize,
@@ -94,8 +96,12 @@ pub fn parse(id: &str) -> Option<Command> {
         "data:export" => return Some(Command::ExportNotes),
         "language" => return Some(Command::Language),
         "dictionaries" => return Some(Command::Dictionaries),
+        "dictionary-downloads" => return Some(Command::DictionaryDownloads),
         "timezone" => return Some(Command::TimeZone),
         _ => {}
+    }
+    if let Some(id) = rest.strip_prefix("dictionary-install:") {
+        return Some(Command::DictionaryInstall(id.into()));
     }
     if let Some(name) = rest.strip_prefix("timezone:") {
         return Some(Command::TimeZonePick(name.to_string()));
@@ -224,6 +230,9 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
 
 /// The keys a `settings:set:` id may write. Other keys are not stored.
 pub fn is_known_key(key: &str) -> bool {
+    if key == crate::dictionary_downloads::ALLOW_KEY {
+        return true;
+    }
     keys::EXPERIMENTAL_ENABLED == key
         || experiments::is_flag_key(experiments::FLAGS, key)
         || matches!(

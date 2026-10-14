@@ -20,6 +20,7 @@ pub fn title(name: &str) -> String {
     match name {
         "reading" => tr("Reading"),
         "dictionaries" => tr("Dictionary settings"),
+        "dictionary-downloads" => tr("Download dictionaries"),
         "display" => tr("Display and light"),
         "library" => tr("Library"),
         "network" => tr("Network and sync"),
@@ -48,6 +49,7 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
     match name {
         "reading" => reading(services),
         "dictionaries" => dictionary_page(services),
+        "dictionary-downloads" => download_page(services),
         "display" => display(services),
         "library" => library(services),
         "network" => network(services),
@@ -144,12 +146,69 @@ fn reading(services: &Services) -> Vec<Entry> {
             action: None,
         },
     ];
-    if found > 0 {
+    if found > 0
+        || services
+            .dictionary
+            .as_ref()
+            .is_some_and(|lib| !lib.errors().is_empty())
+    {
         out.push(Entry::Row {
             primary: tr("Dictionary settings"),
             secondary: None,
             value: None,
             action: Some("settings:dictionaries".into()),
+        });
+    }
+    download_controls(services, &mut out);
+    out
+}
+
+fn download_controls(services: &Services, out: &mut Vec<Entry>) {
+    let on = crate::dictionary_downloads::allowed(&services.settings);
+    out.push(Entry::Toggle {
+        key: crate::dictionary_downloads::ALLOW_KEY,
+        label: tr("Allow dictionary downloads"),
+        on,
+    });
+    out.push(Entry::Text(tr("Dictionary downloads fetch files from the internet. Each file must match its pinned SHA-256 checksum.")));
+    if on {
+        out.push(Entry::Row {
+            primary: tr("Download dictionaries"),
+            secondary: None,
+            value: None,
+            action: Some("settings:dictionary-downloads".into()),
+        });
+    }
+}
+
+fn download_page(services: &Services) -> Vec<Entry> {
+    if !crate::dictionary_downloads::allowed(&services.settings) {
+        return Vec::new();
+    }
+    let busy = services.dictionary_downloads.busy();
+    let mut out = vec![Entry::Text(tr(
+        "These dictionaries come from the internet. Tap a dictionary to download and install it.",
+    ))];
+    if busy {
+        out.push(Entry::Text(tr("Downloading dictionary…")));
+    }
+    for entry in kaia_dict::download::catalog() {
+        let installed = services.paths.data_dir.join("dict").join(&entry.id).exists();
+        out.push(Entry::Row {
+            primary: entry.name.clone(),
+            secondary: Some(format!(
+                "{} → {} · {:.1} MB · {}",
+                entry.lang_in,
+                entry.lang_out,
+                entry.size as f64 / 1_000_000.0,
+                entry.license
+            )),
+            value: Some(if installed {
+                tr("Installed")
+            } else {
+                tr("Download")
+            }),
+            action: (!installed && !busy).then(|| format!("settings:dictionary-install:{}", entry.id)),
         });
     }
     out
@@ -160,17 +219,29 @@ fn reading(services: &Services) -> Vec<Entry> {
 /// shows the install hint instead. Call `dict::load` first.
 fn dictionary_page(services: &Services) -> Vec<Entry> {
     let names = dict::ordered(services);
-    if names.is_empty() {
-        return vec![Entry::Text(dict::install_hint(&services.paths.data_dir))];
-    }
     let off = dict::disabled(services);
     let mut out = vec![Entry::Text(tr(
         "Dictionaries are searched in this order. A dictionary that is off is skipped.",
     ))];
+    if names.is_empty() {
+        out.push(Entry::Text(dict::install_hint(&services.paths.data_dir)));
+    }
+    if let Some(library) = &services.dictionary {
+        for (path, error) in library.errors() {
+            out.push(Entry::Text(tr_format(
+                &tr("Skipped dictionary %1: %2"),
+                &[
+                    &path.file_name().unwrap_or_default().to_string_lossy(),
+                    &error.to_string(),
+                ],
+            )));
+        }
+    }
     for (index, name) in names.into_iter().enumerate() {
         let enabled = !off.contains(&name);
         out.push(Entry::Dictionary { index, name, enabled });
     }
+    download_controls(services, &mut out);
     out
 }
 

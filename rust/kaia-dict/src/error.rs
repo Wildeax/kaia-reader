@@ -1,4 +1,4 @@
-//! Errors from opening StarDict files and folders.
+//! Errors from opening dictionary files and folders.
 
 use std::fmt;
 use std::io;
@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 pub enum Error {
     /// A file or folder could not be read.
     Io { path: PathBuf, source: io::Error },
-    /// A file exists but does not follow the StarDict format.
+    /// A file exists but does not follow a supported dictionary format.
     Format { path: PathBuf, reason: String },
     /// A file the dictionary needs is not on disk.
     Missing { path: PathBuf },
