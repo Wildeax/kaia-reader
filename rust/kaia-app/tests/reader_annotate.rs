@@ -139,14 +139,10 @@ fn write_dictionary(data_dir: &Path, stem: &str, bookname: &str, word: &str, def
     fs::write(dir.join(format!("{stem}.ifo")), ifo).unwrap();
 }
 
-/// The state file of the one book in the test data folder.
+/// Reads juliet's state by content ID. The folder also contains paths.json.
 fn book_state(dir: &Path) -> Settings {
-    let books = dir.join("data/kaia/books");
-    let file = fs::read_dir(&books)
-        .expect("the books folder")
-        .map(|entry| entry.unwrap().path())
-        .find(|path| path.extension().is_some_and(|ext| ext == "json"))
-        .expect("the book has a state file");
+    let id = kaia_id::partial_md5(&dir.join("books/juliet.epub")).unwrap();
+    let file = dir.join("data/kaia/books").join(format!("{id}.json"));
     Settings::read_exact(&file)
         .unwrap()
         .expect("a readable state file")

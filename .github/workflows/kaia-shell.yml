@@ -11,13 +11,13 @@ on:
       - 'tools/kaia/**'
       - 'platform/kobo/kaia/**'
       - '.shellcheckrc'
-      - '.github/workflows/kaia-shell.yml'
+      - '.github/workflows/kaia-*.yml'
   pull_request:
     paths:
       - 'tools/kaia/**'
       - 'platform/kobo/kaia/**'
       - '.shellcheckrc'
-      - '.github/workflows/kaia-shell.yml'
+      - '.github/workflows/kaia-*.yml'
 
 permissions:
   contents: read
@@ -76,3 +76,22 @@ jobs:
       # the device scripts target.
       - name: Run test-collect-profile
         run: sh tools/kaia/device/test-collect-profile.sh
+
+  workflows:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Validate expressions and workflow syntax. The shellcheck job lints the
+      # scripts separately; inline scripts can intentionally split arguments.
+      - name: Check Kaia workflows
+        run: |
+          docker run --rm --volume "${PWD}:/repo:ro" --workdir /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -shellcheck= .github/workflows/kaia-*.yml
