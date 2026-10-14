@@ -74,6 +74,8 @@ fn scan(
     tx: &mpsc::Sender<ScanMessage>,
     stop: &AtomicBool,
 ) -> Result<ScanReport, String> {
+    let _import_lock = crate::durable::lock(&db_path.with_file_name("nickel-import.lock"), true)
+        .map_err(|e| e.to_string())?;
     let mut library = Library::open(db_path).map_err(|e| e.to_string())?;
     library
         .scan(

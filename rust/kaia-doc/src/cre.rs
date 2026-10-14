@@ -141,16 +141,59 @@ impl DerefMut for Session<'_> {
 /// Runtime resource folders for the CREngine backend.
 pub use kaia_cre_sys::RuntimeOptions as CreOptions;
 
+/// Sets the user's font folder. Kaia calls it once at start, with `<data>/fonts`.
+/// Its fonts join the built-in ones from the next engine start or rescan.
+pub use kaia_cre_sys::set_user_font_dir;
+
 /// Called while ENGINE is held. Cache only successful initialization so callers
 /// can correct missing resource paths and retry.
 fn engine_ready(options: &CreOptions) -> Result<()> {
+    ready_state(options, false)
+}
+
+/// Initializes the engine with `options`. With `force`, the engine registers the
+/// fonts in the options again, which adds the files that appeared since the last call.
+fn ready_state(options: &CreOptions, force: bool) -> Result<()> {
     static READY: Mutex<Option<CreOptions>> = Mutex::new(None);
     let mut ready = READY.lock().unwrap_or_else(|p| p.into_inner());
-    if ready.as_ref() != Some(options) {
+    if force || ready.as_ref() != Some(options) {
         kaia_cre_sys::init_with_options(options).map_err(engine_err)?;
         *ready = Some(options.clone());
     }
     Ok(())
+}
+
+/// Registers the fonts in the user folder that CREngine has not seen yet. Call
+/// it when a list of faces opens. CREngine cannot unregister a font, so a file
+/// deleted from the folder stays listed until Kaia restarts.
+pub fn rescan_fonts() -> Result<()> {
+    let _engine = engine_lock();
+    ready_state(&CreOptions::default(), true)
+}
+
+/// The font families that CREngine registered from the user folder, sorted by
+/// name. A family counts when its regular face is a file in that folder, so a
+/// copy of a built-in face can appear here. Empty when no user folder is set or
+/// CREngine does not start.
+pub fn user_font_faces() -> Vec<String> {
+    let Some(dir) = kaia_cre_sys::user_font_dir() else {
+        return Vec::new();
+    };
+    let _engine = engine_lock();
+    if engine_ready(&CreOptions::default()).is_err() {
+        return Vec::new();
+    }
+    let Ok(fonts) = kaia_cre_sys::registered_fonts() else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = fonts
+        .into_iter()
+        .filter(|f| f.file.starts_with(&dir))
+        .map(|f| f.family)
+        .collect();
+    names.sort_by_key(|name| (name.to_lowercase(), name.clone()));
+    names.dedup();
+    names
 }
 
 /// The installed data directory, with a desktop build tree fallback.

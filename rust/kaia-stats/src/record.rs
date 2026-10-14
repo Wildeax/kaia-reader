@@ -118,6 +118,7 @@ impl Stats {
         let mut conn = Connection::open(&path)?;
         conn.busy_timeout(Duration::from_secs(5))?;
         schema::prepare(&mut conn, &path)?;
+        crate::nickel::prepare(&conn)?;
         Ok(Stats {
             conn,
             path,

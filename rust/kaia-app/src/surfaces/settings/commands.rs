@@ -124,7 +124,8 @@ pub fn parse(id: &str) -> Option<Command> {
 }
 
 /// The options of a radio group, as `(stored value, label)`. An empty stored
-/// value removes the key. None for a key with no radio group.
+/// value removes the key. None for a key with no fixed radio group. The reading
+/// font list changes at run time, see [`font_options`].
 pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]> {
     match key {
         keys::SYNC_FORWARD | keys::SYNC_BACKWARD => Some(&[
@@ -132,17 +133,64 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
             ("silent", "Use synced position"),
             ("never", "Never"),
         ]),
-        keys::READING_FONT_FAMILY => Some(&[
-            ("", "Engine default"),
-            ("Noto Serif", "Noto Serif"),
-            ("Noto Sans", "Noto Sans"),
-            ("Atkinson Hyperlegible", "Atkinson Hyperlegible"),
-            ("OpenDyslexic", "OpenDyslexic"),
-        ]),
         keys::READING_TAP_ZONES => Some(&keys::TAP_ZONE_PRESETS),
         keys::DEVICE_SLEEP_SCREEN => Some(&keys::SLEEP_SCREENS),
         _ => None,
     }
+}
+
+/// The reading font choices that do not change: Engine default and the built-in
+/// faces, as `(stored value, label)`.
+const BUILTIN_FONT_OPTIONS: [(&str, &str); 5] = [
+    ("", "Engine default"),
+    ("Noto Serif", "Noto Serif"),
+    ("Noto Sans", "Noto Sans"),
+    ("Atkinson Hyperlegible", "Atkinson Hyperlegible"),
+    ("OpenDyslexic", "OpenDyslexic"),
+];
+
+/// The reading font radio options as `(stored value, label)`: Engine default,
+/// the built-in faces, then the user faces. The user faces come from the engine.
+pub fn font_options() -> Vec<(String, String)> {
+    font_options_with(&kaia_doc::cre::user_font_faces())
+}
+
+/// [`font_options`] with the user faces given. The reader's font list uses the same faces.
+pub fn font_options_with(user: &[String]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = BUILTIN_FONT_OPTIONS
+        .iter()
+        .map(|(value, label)| (value.to_string(), label.to_string()))
+        .collect();
+    out.extend(
+        extra_font_faces(user)
+            .into_iter()
+            .map(|face| (face.clone(), face)),
+    );
+    out
+}
+
+/// The user faces that the built-in list does not already show, sorted by name
+/// and without repeats. A name matches a built-in face without regard to case.
+pub fn extra_font_faces(user: &[String]) -> Vec<String> {
+    let builtin: Vec<&str> = BUILTIN_FONT_OPTIONS
+        .iter()
+        .map(|(value, _)| *value)
+        .filter(|value| !value.is_empty())
+        .collect();
+    let mut faces: Vec<String> = user
+        .iter()
+        .filter(|face| !builtin.iter().any(|b| b.eq_ignore_ascii_case(face)))
+        .cloned()
+        .collect();
+    faces.sort_by_key(|face| (face.to_lowercase(), face.clone()));
+    faces.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    faces
+}
+
+/// Registers the fonts that appeared in the user folder since the last scan.
+/// Call it when a font list opens. A failed scan keeps the fonts already registered.
+pub fn rescan_user_fonts() {
+    let _ = kaia_doc::cre::rescan_fonts();
 }
 
 /// The value to store for radio option `index` of `key`. None when the key or index is unknown.
@@ -151,6 +199,11 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
         return keys::IDLE_MINUTES
             .get(index)
             .map(|n| Value::Number(f64::from(*n)));
+    }
+    if key == keys::READING_FONT_FAMILY {
+        return font_options()
+            .get(index)
+            .map(|(stored, _)| Value::from(stored.as_str()));
     }
     let (stored, _) = options_for(key)?.get(index)?;
     Some(Value::from(*stored))
@@ -251,10 +304,9 @@ mod tests {
 
     #[test]
     fn reading_font_picks_include_the_kaia_faces() {
-        let faces: Vec<&str> = options_for(keys::READING_FONT_FAMILY)
-            .unwrap()
-            .iter()
-            .map(|(value, _)| *value)
+        let faces: Vec<String> = font_options_with(&[])
+            .into_iter()
+            .map(|(value, _)| value)
             .collect();
         assert_eq!(
             faces,
@@ -266,6 +318,7 @@ mod tests {
                 "OpenDyslexic"
             ]
         );
+        assert!(options_for(keys::READING_FONT_FAMILY).is_none());
         assert_eq!(
             value_for_pick(keys::READING_FONT_FAMILY, 3),
             Some(Value::from("Atkinson Hyperlegible"))
@@ -273,6 +326,34 @@ mod tests {
         assert_eq!(
             value_for_pick(keys::READING_FONT_FAMILY, 4),
             Some(Value::from("OpenDyslexic"))
+        );
+    }
+
+    #[test]
+    fn user_faces_follow_the_built_in_faces_once_each() {
+        let user = [
+            "Zeta Mono",
+            "opendyslexic",
+            "Alpha Sans",
+            "zeta mono",
+            "Atkinson Hyperlegible",
+        ]
+        .map(str::to_string);
+        let values: Vec<String> = font_options_with(&user)
+            .into_iter()
+            .map(|(value, _)| value)
+            .collect();
+        assert_eq!(
+            values,
+            [
+                "",
+                "Noto Serif",
+                "Noto Sans",
+                "Atkinson Hyperlegible",
+                "OpenDyslexic",
+                "Alpha Sans",
+                "Zeta Mono",
+            ]
         );
     }
 }

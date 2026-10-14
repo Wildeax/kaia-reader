@@ -237,8 +237,8 @@ fn a_highlight_made_in_the_reader_carries_its_color_to_the_page() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
-    // The default highlight is lighten in yellow on a color panel.
-    tap_key(&mut app, "sel-highlight");
+    // The yellow dot is the default highlight: lighten in yellow on a color panel.
+    tap_key(&mut app, "color-yellow");
     wait_reader(&mut app);
 
     let mut marks: Vec<Mark> = Vec::new();

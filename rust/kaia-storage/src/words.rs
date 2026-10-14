@@ -25,9 +25,34 @@ pub struct Word {
     pub context: Option<String>,
     /// Unix seconds when the word was last saved.
     pub created_at: i64,
+    /// Kobo dictionary suffix, when the source supplied one.
+    pub dict_suffix: Option<String>,
 }
 
 impl Store {
+    /// Imports a Kobo word only when its case-insensitive spelling is new.
+    pub fn import_nickel_word(
+        &mut self,
+        word: &str,
+        book_title: Option<&str>,
+        suffix: Option<&str>,
+        created_at: i64,
+    ) -> Result<bool, StoreError> {
+        let word = word.trim();
+        if word.is_empty() || word.chars().count() > WORD_MAX_CHARS {
+            return Ok(false);
+        }
+        Ok(self.conn().execute(
+            "INSERT OR IGNORE INTO words (word, book_title, created_at, dict_suffix) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                word,
+                clipped(book_title, BOOK_TITLE_MAX_CHARS),
+                created_at,
+                clipped(suffix, 100)
+            ],
+        )? == 1)
+    }
+
     /// Saves a word, or saves it again. A word already in the list keeps its id
     /// and takes the new book, context and time. Returns the id.
     ///
@@ -68,7 +93,7 @@ impl Store {
     /// Every saved word, newest first.
     pub fn list_words(&self) -> Result<Vec<Word>, StoreError> {
         let mut stmt = self.conn().prepare(
-            "SELECT id, word, book_title, context, created_at FROM words
+            "SELECT id, word, book_title, context, created_at, dict_suffix FROM words
              ORDER BY created_at DESC, id DESC",
         )?;
         let rows = stmt.query_map([], |row| {
@@ -78,6 +103,7 @@ impl Store {
                 book_title: row.get(2)?,
                 context: row.get(3)?,
                 created_at: row.get(4)?,
+                dict_suffix: row.get(5)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(StoreError::from)
@@ -87,7 +113,7 @@ impl Store {
     pub fn get_word(&self, id: i64) -> Result<Option<Word>, StoreError> {
         self.conn()
             .query_row(
-                "SELECT id, word, book_title, context, created_at FROM words WHERE id = ?1",
+                "SELECT id, word, book_title, context, created_at, dict_suffix FROM words WHERE id = ?1",
                 params![id],
                 |row| {
                     Ok(Word {
@@ -96,6 +122,7 @@ impl Store {
                         book_title: row.get(2)?,
                         context: row.get(3)?,
                         created_at: row.get(4)?,
+                        dict_suffix: row.get(5)?,
                     })
                 },
             )

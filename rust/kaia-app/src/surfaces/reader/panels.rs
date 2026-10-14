@@ -7,9 +7,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use kaia_book::{Annotation, TextLayout, ZoomMode};
+use kaia_book::{Annotation, Selection, TextLayout, ZoomMode};
 use kaia_events::ShowOpts;
-use kaia_gfx::{Color, Size};
+use kaia_gfx::{Color, Point, Size};
 use kaia_i18n::{format as tr_format, tr};
 use kaia_input::Gesture;
 use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox};
@@ -27,10 +27,11 @@ use super::state::Core;
 use crate::services::Services;
 use crate::surface::{Surface, SurfaceEnv};
 use crate::surfaces::common::{button, fill, window};
+use crate::surfaces::settings::commands;
 use crate::surfaces::Route;
 
-/// Font choices of the Text and layout sheet: the label and the face name.
-/// The first choice keeps the book's own font.
+/// The built-in font choices of the Text and layout sheet: the label and the face
+/// name. The first choice keeps the book's own font. The user faces follow these.
 pub const FONT_CHOICES: [(&str, Option<&str>); 5] = [
     ("Book's font", None),
     ("Noto Serif", Some("Noto Serif")),
@@ -48,20 +49,47 @@ fn font_label(label: &str) -> String {
     }
 }
 
-/// The index in `FONT_CHOICES` of a layout's face. A book with no face, or a face
+/// The font choices in list order: the built-in choices, then the user faces in
+/// `user`. Each choice is its label and its face (None for the book's own font).
+fn choices_with(user: &[String]) -> Vec<(String, Option<String>)> {
+    let builtin = FONT_CHOICES
+        .iter()
+        .map(|(label, face)| (font_label(label), face.map(str::to_string)));
+    let extra = commands::extra_font_faces(user)
+        .into_iter()
+        .map(|face| (face.clone(), Some(face)));
+    builtin.chain(extra).collect()
+}
+
+/// The font choices, with the user faces the engine has registered.
+fn font_choices() -> Vec<(String, Option<String>)> {
+    choices_with(&kaia_doc::cre::user_font_faces())
+}
+
+/// The index in the font choices of a layout's face. A book with no face, or a face
 /// that is not in the list, gets the first choice, the book's own font.
 pub fn font_index(face: Option<&str>) -> usize {
-    FONT_CHOICES
+    font_choices()
         .iter()
-        .position(|(_, name)| *name == face)
+        .position(|(_, name)| name.as_deref() == face)
         .unwrap_or(0)
 }
 
 /// The label of font choice `index`, as the Font row and the font list show it.
 pub fn font_choice_label(index: usize) -> String {
-    FONT_CHOICES
-        .get(index)
-        .map_or_else(String::new, |(label, _)| font_label(label))
+    font_choices()
+        .into_iter()
+        .nth(index)
+        .map_or_else(String::new, |(label, _)| label)
+}
+
+/// The face of font choice `index` when the index is past the built-in choices.
+/// The built-in faces are not here: `state::font_face` maps them.
+pub fn user_face_at(index: usize) -> Option<String> {
+    if index < FONT_CHOICES.len() {
+        return None;
+    }
+    font_choices().into_iter().nth(index).and_then(|(_, face)| face)
 }
 
 /// Share of the screen height that a tall sheet takes.
@@ -131,11 +159,53 @@ impl Surface for Panel {
     }
 }
 
+/// The screen edge that a panel sits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Edge {
+    Top,
+    Bottom,
+}
+
+/// The edge for a panel over `selection`. The panel goes to the top when the
+/// selection is in the lower half of the screen, so it does not cover the word.
+/// Otherwise it stays at the bottom.
+pub(super) fn edge_for(screen: Size, selection: Option<&Selection>) -> Edge {
+    let rects = selection.map_or(&[][..], |s| s.screen_rects.as_slice());
+    let top = rects.iter().map(|r| r.y).min();
+    let bottom = rects.iter().map(|r| r.y + r.h as i32).max();
+    match (top, bottom) {
+        // The middle of the selection is at or below the middle of the screen.
+        (Some(top), Some(bottom)) if top + bottom >= screen.h as i32 => Edge::Top,
+        _ => Edge::Bottom,
+    }
+}
+
 /// A sheet from the bottom edge: an optional title with a close button, then
 /// the content. `height_percent` fixes the height; None sizes it to the content.
 fn sheet(
     services: &Services,
     screen: Size,
+    title: Option<&str>,
+    content: Vec<WidgetPod>,
+    height_percent: Option<u32>,
+) -> Window {
+    framed(
+        services,
+        screen,
+        Edge::Bottom,
+        services.theme.space.lg,
+        title,
+        content,
+        height_percent,
+    )
+}
+
+/// A panel on `edge` with `pad` around its content. See [`sheet`].
+fn framed(
+    services: &Services,
+    screen: Size,
+    edge: Edge,
+    pad: u32,
     title: Option<&str>,
     mut content: Vec<WidgetPod>,
     height_percent: Option<u32>,
@@ -158,21 +228,25 @@ fn sheet(
         body = body.shrink();
     }
     let body = WidgetPod::new(body);
-    let framed = WidgetPod::new(
+    let card = WidgetPod::new(
         Frame::new(body)
             .fill(Tone::Surface)
             .border(Tone::Ink, t.line.hairline)
             .radius(t.radius.card)
-            .padding(Insets::all(t.space.lg)),
+            .padding(Insets::all(pad)),
     );
     let sized = match height_percent {
-        Some(p) => WidgetPod::new(SizedBox::new(Some(framed)).height(screen.h * p / 100)),
-        None => framed,
+        Some(p) => WidgetPod::new(SizedBox::new(Some(card)).height(screen.h * p / 100)),
+        None => card,
+    };
+    let stack = match edge {
+        Edge::Bottom => vec![fill(), sized],
+        Edge::Top => vec![sized, fill()],
     };
     window(
         services,
         screen,
-        Column::new(vec![fill(), sized]).cross_align(CrossAlign::Stretch),
+        Column::new(stack).cross_align(CrossAlign::Stretch),
     )
 }
 
@@ -371,13 +445,14 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
 }
 
 /// The font list, opened from the Font row of the Text and layout sheet. One row
-/// per face in `FONT_CHOICES` order. The row of face `current` shows "Current".
-/// Tapping a row picks that face.
+/// per font choice, in the order of `font_choices`. The row of choice `current`
+/// shows "Current". Tapping a row picks that face.
 pub fn font_list(services: &Services, screen: Size, current: usize) -> Window {
-    let indices: Vec<usize> = (0..FONT_CHOICES.len()).collect();
+    let labels: Vec<String> = font_choices().into_iter().map(|(label, _)| label).collect();
+    let indices: Vec<usize> = (0..labels.len()).collect();
     let list = PagedList::new(indices, move |index: &usize, _t: &Theme| {
         let action = format!("reader:layout:font:{index}");
-        let mut row = ListRow::new(font_choice_label(*index)).on_action(action.clone());
+        let mut row = ListRow::new(labels[*index].clone()).on_action(action.clone());
         if *index == current {
             row = row.value(tr("Current"));
         }
@@ -444,13 +519,15 @@ pub fn more(services: &Services, screen: Size) -> Window {
     sheet(services, screen, Some(&tr("More")), children, None)
 }
 
-/// A square filled with one highlight color, framed. A tap sends its action when it
-/// has one. The fill goes through the page's pixel format, so a grayscale panel
-/// shows the luminance of the color.
+/// A highlight color: a square, or a round dot when `round` is set. It is framed.
+/// The selected one has a thick black frame. A tap sends its action when it has
+/// one. The fill goes through the page's pixel format, so a grayscale panel shows
+/// the luminance of the color.
 struct Swatch {
     color: Color,
     selected: bool,
     action: Option<String>,
+    round: bool,
 }
 
 impl Widget for Swatch {
@@ -463,13 +540,23 @@ impl Widget for Swatch {
 
     fn paint(&mut self, cx: &mut PaintCx) {
         let t = cx.theme;
-        let inner = cx.bounds().inset(t.line.focus as i32);
-        cx.fill_rect(inner, self.color);
         let (width, frame) = if self.selected {
             (t.line.focus.max(4), Color::BLACK)
         } else {
             (t.line.hairline, Color::gray(0x66))
         };
+        if self.round {
+            // The ring sits inside the touch target, and the dot inside the ring.
+            let bounds = cx.bounds();
+            let center = Point::new(bounds.x + bounds.w as i32 / 2, bounds.y + bounds.h as i32 / 2);
+            let outer = bounds.w.min(bounds.h) as f32 / 2.0 - 1.0;
+            let ring = width as f32;
+            cx.fill_circle(center, outer - ring, self.color);
+            cx.stroke_circle(center, outer - ring / 2.0, ring, frame);
+            return;
+        }
+        let inner = cx.bounds().inset(t.line.focus as i32);
+        cx.fill_rect(inner, self.color);
         cx.border(inner, 0, width, frame);
     }
 
@@ -530,6 +617,7 @@ fn style_rows(services: &Services, prefix: &str, drawer: &str, color: &str) -> V
                 color: Color::rgb(rgb[0], rgb[1], rgb[2]),
                 selected: *name == color,
                 action: (drawer != "invert").then(|| format!("{prefix}:color:{name}")),
+                round: false,
             };
             WidgetPod::new(Expanded::new(
                 WidgetPod::new(
@@ -549,6 +637,19 @@ fn style_rows(services: &Services, prefix: &str, drawer: &str, color: &str) -> V
             ))
         })
         .collect();
+    let mut children = vec![
+        group_heading(services, &tr("Color")),
+        WidgetPod::new(Row::new(swatches).gap(t.space.xs)),
+        group_heading(services, &tr("Style")),
+    ];
+    children.extend(drawer_rows(services, prefix, drawer));
+    children
+}
+
+/// The four drawer styles in two rows of two, so the longest name, Strikethrough,
+/// fits its button. The chosen drawer is primary. A tap sends `prefix:drawer:<name>`.
+fn drawer_rows(services: &Services, prefix: &str, drawer: &str) -> Vec<WidgetPod> {
+    let t = &services.theme;
     let styles: Vec<WidgetPod> = kaia_book::HIGHLIGHT_DRAWERS
         .iter()
         .map(|style| {
@@ -569,14 +670,10 @@ fn style_rows(services: &Services, prefix: &str, drawer: &str, color: &str) -> V
             ))
         })
         .collect();
-    // Two rows of two, so the longest name, Strikethrough, fits its button.
     let mut styles = styles.into_iter();
     let first: Vec<WidgetPod> = styles.by_ref().take(2).collect();
     let second: Vec<WidgetPod> = styles.collect();
     vec![
-        group_heading(services, &tr("Color")),
-        WidgetPod::new(Row::new(swatches).gap(t.space.xs)),
-        group_heading(services, &tr("Style")),
         WidgetPod::new(Row::new(first).gap(t.space.sm)),
         WidgetPod::new(Row::new(second).gap(t.space.sm)),
     ]
@@ -598,19 +695,25 @@ pub fn highlight_sheet(services: &Services, screen: Size, annotation: &Annotatio
     sheet(services, screen, Some(&tr("Highlight")), children, None)
 }
 
-/// The selection popover and its annotation actions. `style` is the drawer and the
-/// color that the Highlight button uses.
+/// The selection popover on the bottom edge. `style` is the drawer and the color
+/// of the saved choice.
 pub fn popover(services: &Services, screen: Size, word: &str) -> Window {
-    selection_popover(services, screen, word, false, ("lighten", "yellow"))
+    selection_popover(services, screen, word, false, ("lighten", "yellow"), Edge::Bottom)
 }
 
+/// The selection panel: the word, one row of color dots that highlight at once, and
+/// the actions Note, Dictionary, Copy, Search and More. A grayscale panel has no
+/// color dots, so it shows one Highlight button instead. `style` is the drawer and
+/// the color of the saved choice.
 pub(super) fn selection_popover(
     services: &Services,
     screen: Size,
     word: &str,
     moving: bool,
     style: (&str, &str),
+    edge: Edge,
 ) -> Window {
+    let t = &services.theme;
     if word.is_empty() {
         let mut children = vec![button(
             ButtonStyle::Primary,
@@ -626,9 +729,16 @@ pub(super) fn selection_popover(
                 "sticker-cancel-move",
             ));
         }
-        return sheet(services, screen, Some(&tr("Page sticker")), children, None);
+        return framed(
+            services,
+            screen,
+            edge,
+            t.space.lg,
+            Some(&tr("Page sticker")),
+            children,
+            None,
+        );
     }
-    let t = &services.theme;
     let shown = if word.chars().count() > 40 {
         let cut: String = word.chars().take(39).collect();
         format!("{cut}\u{2026}")
@@ -637,78 +747,37 @@ pub(super) fn selection_popover(
     };
     let heading =
         WidgetPod::new(Label::new(shown, t.font.label.clone(), Tone::InkSecondary)).with_key("sel-word");
-    let row = |items: [(&str, &str, &str); 3]| {
-        WidgetPod::new(
-            Row::new(
-                items
-                    .into_iter()
-                    .map(|(label, action, key)| {
-                        WidgetPod::new(Expanded::new(
-                            button(ButtonStyle::Secondary, label, action, key),
-                            1,
-                        ))
-                    })
-                    .collect(),
-            )
-            .gap(t.space.sm),
-        )
-    };
+    let (drawer, color) = style;
     let mut children = vec![heading];
-    children.extend(style_rows(services, "reader:highlight", style.0, style.1));
-    let rest = vec![
-        WidgetPod::new(
-            Row::new(vec![
-                WidgetPod::new(Expanded::new(
-                    button(
-                        ButtonStyle::Secondary,
-                        &tr("Sticker"),
-                        "reader:sel:sticker",
-                        "sel-sticker",
-                    ),
-                    1,
-                )),
-                WidgetPod::new(Expanded::new(
-                    button(
-                        ButtonStyle::Secondary,
-                        &tr("Share to Notes"),
-                        "reader:sel:share",
-                        "sel-share",
-                    ),
-                    1,
-                )),
-            ])
-            .gap(t.space.sm),
-        ),
-        row([
-            (&tr("Highlight"), "reader:sel:highlight", "sel-highlight"),
-            (&tr("Note"), "reader:sel:note", "sel-note"),
-            (&tr("Copy"), "reader:sel:copy", "sel-copy"),
-        ]),
-        WidgetPod::new(
-            Row::new(vec![
-                WidgetPod::new(Expanded::new(
-                    button(
-                        ButtonStyle::Secondary,
-                        &tr("Dictionary"),
-                        "reader:sel:dict",
-                        "sel-dict",
-                    ),
-                    1,
-                )),
-                WidgetPod::new(Expanded::new(
-                    button(
-                        ButtonStyle::Secondary,
-                        &tr("Search"),
-                        "reader:sel:search",
-                        "sel-search",
-                    ),
-                    1,
-                )),
-            ])
-            .gap(t.space.sm),
-        ),
-    ];
-    children.extend(rest);
+    // Invert ignores the color, so it gets the single Highlight button, as a
+    // grayscale panel does. Dots without an action would leave nothing to tap.
+    if t.color_panel && drawer != "invert" {
+        children.push(color_dots(services, color));
+    } else {
+        children.push(button(
+            ButtonStyle::Primary,
+            &tr("Highlight"),
+            "reader:sel:highlight",
+            "sel-highlight",
+        ));
+    }
+    // Dictionary is the longest label, so it takes a larger share of the row.
+    let action = |label: &str, id: &str, key: &str, share: u32| {
+        WidgetPod::new(Expanded::new(
+            button(ButtonStyle::Secondary, label, id, key),
+            share,
+        ))
+    };
+    children.push(WidgetPod::new(
+        Row::new(vec![
+            action(&tr("Note"), "reader:sel:note", "sel-note", 2),
+            action(&tr("Dictionary"), "reader:sel:dict", "sel-dict", 3),
+            action(&tr("Copy"), "reader:sel:copy", "sel-copy", 2),
+            action(&tr("Search"), "reader:sel:search", "sel-search", 2),
+            action(&tr("More"), "reader:sel:more", "sel-more", 2),
+        ])
+        .gap(t.space.sm),
+    ));
     if moving {
         children.push(button(
             ButtonStyle::Secondary,
@@ -717,7 +786,69 @@ pub(super) fn selection_popover(
             "sticker-cancel-move",
         ));
     }
-    sheet(services, screen, None, children, None)
+    framed(services, screen, edge, t.space.md, None, children, None)
+}
+
+/// One row of the nine highlight colors as dots. A tap highlights the selection in
+/// that color. The saved color is marked.
+fn color_dots(services: &Services, color: &str) -> WidgetPod {
+    let dots: Vec<WidgetPod> = kaia_book::HIGHLIGHT_COLORS
+        .iter()
+        .map(|name| {
+            let rgb = kaia_book::highlight_rgb(name).unwrap_or([0, 0, 0]);
+            let dot = Swatch {
+                color: Color::rgb(rgb[0], rgb[1], rgb[2]),
+                selected: *name == color,
+                action: Some(format!("reader:sel:color:{name}")),
+                round: true,
+            };
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(dot).with_key(format!("color-{name}")),
+                1,
+            ))
+        })
+        .collect();
+    WidgetPod::new(Row::new(dots).gap(services.theme.space.xs))
+}
+
+/// The More sheet of a selection: the drawer styles with the saved one marked,
+/// then Sticker and Share to Notes. Choosing a style returns to the selection panel.
+pub(super) fn selection_more(services: &Services, screen: Size, edge: Edge, drawer: &str) -> Window {
+    let t = &services.theme;
+    let mut children = vec![group_heading(services, &tr("Style"))];
+    children.extend(drawer_rows(services, "reader:highlight", drawer));
+    children.push(WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Sticker"),
+                    "reader:sel:sticker",
+                    "sel-sticker",
+                ),
+                1,
+            )),
+            WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Share to Notes"),
+                    "reader:sel:share",
+                    "sel-share",
+                ),
+                1,
+            )),
+        ])
+        .gap(t.space.sm),
+    ));
+    framed(
+        services,
+        screen,
+        edge,
+        t.space.md,
+        Some(&tr("More")),
+        children,
+        None,
+    )
 }
 
 /// The dictionary sheet without the word actions: the word and its definitions, or
@@ -1429,20 +1560,41 @@ pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::FONT_CHOICES;
-    use crate::surfaces::settings::commands::options_for;
-    use crate::surfaces::settings::keys;
+    use super::{choices_with, FONT_CHOICES};
+    use crate::surfaces::settings::commands::font_options_with;
 
     /// The Text sheet and the Settings radio list offer the same faces, in the same order.
     #[test]
     fn reader_font_choices_match_the_settings_options() {
-        let settings: Vec<&str> = options_for(keys::READING_FONT_FAMILY)
-            .unwrap()
-            .iter()
-            .map(|(value, _)| *value)
+        let user = ["Zeta Mono", "Atkinson Hyperlegible", "alpha sans"].map(str::to_string);
+        let reader: Vec<String> = choices_with(&user)
+            .into_iter()
+            .filter_map(|(_, face)| face)
+            .collect();
+        let settings: Vec<String> = font_options_with(&user)
+            .into_iter()
+            .map(|(value, _)| value)
             .filter(|value| !value.is_empty())
             .collect();
-        let reader: Vec<&str> = FONT_CHOICES.iter().filter_map(|(_, face)| *face).collect();
         assert_eq!(reader, settings);
+        assert_eq!(
+            reader,
+            [
+                "Noto Serif",
+                "Noto Sans",
+                "Atkinson Hyperlegible",
+                "OpenDyslexic",
+                "alpha sans",
+                "Zeta Mono",
+            ]
+        );
+    }
+
+    #[test]
+    fn book_font_comes_first_and_built_in_faces_keep_their_places() {
+        let choices = choices_with(&["Zeta Mono".to_string()]);
+        assert_eq!(choices.len(), FONT_CHOICES.len() + 1);
+        assert_eq!(choices[0].1, None);
+        assert_eq!(choices[FONT_CHOICES.len()].1.as_deref(), Some("Zeta Mono"));
     }
 }

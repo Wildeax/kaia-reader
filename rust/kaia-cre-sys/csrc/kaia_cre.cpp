@@ -704,6 +704,71 @@ void kaia_cre_free_toc(kaia_cre_toc_entry *entries, size_t count) {
     std::free(entries);
 }
 
+int kaia_cre_font_families(kaia_cre_font_family **out, size_t *count) {
+    return guard([&]() -> int {
+        if (!out || !count) {
+            fail("null output");
+        }
+        require_init();
+        *out = nullptr;
+        *count = 0;
+        lString32Collection names;
+        fontMan->getFaceList(names);
+        std::vector<kaia_cre_font_family> entries;
+        try {
+            for (int i = 0; i < names.length(); i++) {
+                lString8 file;
+                int face_index = 0;
+                int family_type = 0;
+                bool has_ot_math = false;
+                bool has_emojis = false;
+                if (!fontMan->getFontFileNameAndFaceIndex(names[i], false, false, file, face_index,
+                                                          family_type, has_ot_math, has_emojis)) {
+                    continue;
+                }
+                kaia_cre_font_family entry{dup_utf8(names[i]), nullptr};
+                try {
+                    entry.file = dup_utf8(std::string(file.c_str()));
+                    entries.push_back(entry);
+                } catch (...) {
+                    free_strings(entry.family, entry.file);
+                    throw;
+                }
+            }
+        } catch (...) {
+            for (auto &e : entries) {
+                free_strings(e.family, e.file);
+            }
+            throw;
+        }
+        if (entries.empty()) {
+            return KAIA_CRE_OK;
+        }
+        kaia_cre_font_family *arr =
+            static_cast<kaia_cre_font_family *>(std::malloc(sizeof(kaia_cre_font_family) * entries.size()));
+        if (!arr) {
+            for (auto &e : entries) {
+                free_strings(e.family, e.file);
+            }
+            fail("out of memory");
+        }
+        std::memcpy(arr, entries.data(), sizeof(kaia_cre_font_family) * entries.size());
+        *count = entries.size();
+        *out = arr;
+        return KAIA_CRE_OK;
+    });
+}
+
+void kaia_cre_free_font_families(kaia_cre_font_family *families, size_t count) {
+    if (!families) {
+        return;
+    }
+    for (size_t i = 0; i < count; i++) {
+        free_strings(families[i].family, families[i].file);
+    }
+    std::free(families);
+}
+
 int kaia_cre_char_boxes(kaia_cre_doc *doc, const char *xp0, const char *xp1, kaia_cre_char_box **out, size_t *count) {
     return guard([&]() -> int {
         if (!out || !count || !xp0) {

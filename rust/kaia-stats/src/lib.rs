@@ -34,3 +34,6 @@ pub const DEFAULT_MIN_READ_SEC: i64 = 5;
 
 /// Longest stay that counts, in seconds (`DEFAULT_MAX_READ_SEC`). A longer stay counts this much.
 pub const DEFAULT_MAX_READ_SEC: i64 = 120;
+
+mod nickel;
+pub use nickel::NickelSession;

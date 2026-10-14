@@ -26,11 +26,20 @@ use crate::surfaces::Route;
 pub struct SettingsSectionSurface {
     name: String,
     typing: bool,
+    kobo_plan: Option<crate::nickel::Plan>,
+    kobo_report: Option<crate::nickel::Report>,
+    kobo_dialog: Option<kaia_events::WindowId>,
 }
 
 impl SettingsSectionSurface {
     pub fn new(name: String) -> Self {
-        Self { name, typing: false }
+        Self {
+            name,
+            typing: false,
+            kobo_plan: None,
+            kobo_report: None,
+            kobo_dialog: None,
+        }
     }
 }
 
@@ -42,6 +51,14 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        if self.kobo_plan.is_some() || self.kobo_report.is_some() {
+            return Some(super::kobo::build(
+                env.services,
+                env.screen,
+                self.kobo_plan.as_ref(),
+                self.kobo_report.as_ref(),
+            ));
+        }
         if lists_dictionaries(&self.name) {
             dict::load(env.services);
         }
@@ -55,6 +72,50 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        match cmd {
+            "settings:data:kobo" => {
+                match crate::nickel::Plan::prepare(&env.services.paths.books_dir, &env.services.library) {
+                    Ok(plan) => {
+                        self.kobo_plan = Some(plan);
+                        self.kobo_report = None;
+                    }
+                    Err(_) => env.notice(tr("Cannot read Kobo data. Close Nickel and try again.")),
+                }
+                return Outcome::Rebuild;
+            }
+            "settings:data:kobo:confirm" if self.kobo_plan.is_some() => {
+                self.kobo_dialog = Some(env.dialog(kaia_ui::composite::Dialog::new(env.theme(), tr("Import from Kobo?"),
+                    tr("Import the records listed in the plan? Reading positions and typography will stay unchanged."),
+                    vec![kaia_ui::composite::DialogButton::new(tr("Cancel"), "settings:data:kobo:cancel"),
+                         kaia_ui::composite::DialogButton::new(tr("Import"), "settings:data:kobo:run")])));
+                return Outcome::Handled;
+            }
+            "settings:data:kobo:cancel" => {
+                if let Some(window) = self.kobo_dialog.take() {
+                    env.ctx.close(window, None);
+                }
+                return Outcome::Handled;
+            }
+            "settings:data:kobo:run" => {
+                let Some(window) = self.kobo_dialog.take() else {
+                    return Outcome::Handled;
+                };
+                env.ctx.close(window, None);
+                if let Some(plan) = self.kobo_plan.take() {
+                    match plan.import(&env.services.paths.data_dir, &mut env.services.library) {
+                        Ok(report) => self.kobo_report = Some(report),
+                        Err(_) => env.notice(tr("Kobo import stopped. Close any open book, wait for the library scan to finish, and try again. Records already imported will be skipped.")),
+                    }
+                }
+                return Outcome::Rebuild;
+            }
+            "settings:data:kobo:close" => {
+                self.kobo_plan = None;
+                self.kobo_report = None;
+                return Outcome::Rebuild;
+            }
+            _ => {}
+        }
         if self.name == "network" {
             let surface = match cmd {
                 "settings:catalogs" => Some(crate::surfaces::catalogs::CatalogSurface::default()),
@@ -71,6 +132,9 @@ impl Surface for SettingsSectionSurface {
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
                     name: self.name.clone(),
                     typing,
+                    kobo_plan: None,
+                    kobo_report: None,
+                    kobo_dialog: None,
                 })))
             }
             Some(Command::Set(key)) => set(&key, args, env),

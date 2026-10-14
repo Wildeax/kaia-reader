@@ -87,6 +87,8 @@ impl Services {
             source,
         })?;
         platform.paths.data_dir = data_dir.clone();
+        // CREngine registers the fonts in this folder, beside the built-in ones.
+        kaia_doc::cre::set_user_font_dir(Some(data_dir.join("fonts")));
 
         let lease_path = data_dir.join("kaia.lock");
         let lease = crate::durable::lock(&lease_path, false).map_err(|source| ServicesError::Io {

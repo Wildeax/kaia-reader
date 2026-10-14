@@ -21,10 +21,72 @@ state. In the Rust app, Kaia owns all reading state:
 | Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
 | Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
 | Stickers and assets | `kaia-storage` | as below |
-| Word list | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `words`, see schema version 3 |
+| Word list | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `words`, see schema versions 3 and 4 |
+| Reading statistics and imported Kobo sessions | `kaia-stats` | `<data dir>/statistics.sqlite3`, including `nickel_sessions` |
 | App settings | `kaia-app` | `<data dir>/settings.json` |
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
+
+## Kobo import
+
+The Rust app offers an import when `<books dir>/.kobo/KoboReader.sqlite`
+exists. It copies the database and any adjacent `-wal` and `-shm` files to a
+private scratch folder. Only that copy is opened, with SQLite read-only flags.
+The importer reads named columns from `DbVersion`, `content`, `Bookmark`,
+`Shelf`, `ShelfContent`, `WordList`, `Ratings` and `KoboPlusReadingSessions`.
+Missing optional columns or tables do not prevent other records from importing.
+A missing schema version stops the plan. Views are refused. A SQLite authorizer
+also blocks reads of tables outside this list, apart from SQLite schema metadata.
+
+The plan shows the schema version, row counts for each source table and counts
+for each kind of record before confirmation. Logs contain the schema version
+and counts only. They contain no titles, notes, reviews or words.
+
+Books match an indexed file by path first, then by a unique title and author
+pair. Paths must resolve under the books folder, outside `.kobo`. A missing
+or ambiguous file is skipped. `kaia-book` owns imported progress, status,
+text-anchored highlights, notes, ratings, reviews and active reading seconds.
+It writes its normal state file with KOReader annotation field names. Text
+search picks the first matching passage. Missing text or a failed match skips
+the highlight and its note. Container paths are not used. Position fields wait
+for Q33 device checks. Typography is not imported.
+
+`kaia-library` owns collections and their members, and caches book status and
+percent. Deleted shelves and deleted memberships are skipped. `kaia-storage`
+owns imported words in its existing word list, with an optional `dict_suffix`.
+`kaia-stats` owns exact session start and end times, start and end percent, and
+idle seconds in `nickel_sessions`. Valid sessions add active time to statistics,
+without guessed page counts or reading positions. The book state also keeps
+this time in `nickel_reading_seconds`, separate from page visits. Device checks
+must confirm session field names, percent units and idle-time units for the
+reader's firmware. Rows with missing or invalid bounds are skipped.
+
+Every owner writes in a staging folder under the data directory first. The
+importer then renames the closed files into place and reopens the library
+connection. A lock excludes app library scans, and an open book prevents the
+import. Target paths that resolve into `.kobo` are refused. Files are replaced
+individually, not as one transaction across all owners. An interrupted publish
+may leave some owners updated. Repeating the import fills the remaining owners.
+
+Duplicate rules:
+
+- Book state keeps `nickel_imports` ids for content, bookmarks and ratings.
+  Each source id imports once per partial MD5. Later Kaia edits and annotation
+  deletions survive another import. Unmatched text is not marked imported.
+- Collection names match without regard to case. Existing memberships are
+  kept, and only missing memberships are added.
+- Words use the existing SQLite `NOCASE` unique key. An existing word keeps its
+  book, context, timestamp and suffix.
+- Sessions match by book identity, start time, end time and both percentages.
+  The first matching session wins, including its idle time.
+
+No queries read `SecureUser`, `OverDriveUser`, `GDriveUser`, `content_keys`,
+`user`, `DropboxItem`, `GDriveItem`, `AnalyticsEvents`, `UsageData`, `AbTest`,
+`Entitlements`, `SubscriptionProducts`, other KoboPlus tables, `Wishlist`,
+`Reviews`, `Tab`, `volume_tabs`, `Achievement`, `Rules`, `Event` or `Activity`.
+Mail and contacts caches are not read. The importer never writes Nickel files
+or KOReader sidecars. Scratch copies, which can contain those tables as raw
+SQLite pages, are removed when planning ends.
 
 ## Location
 
@@ -182,6 +244,16 @@ CREATE INDEX words_created ON words(created_at);
 ```
 
 `words` is the word list. It holds the words the reader saved from dictionary lookups. `word` is unique ignoring case. Saving a word again keeps its `id` and replaces `book_title`, `context` and `created_at`. `created_at` holds the Unix time of the last save. `context` is the sentence around the word. The store clips `book_title` to 300 characters and `context` to 1000. It refuses a word that is empty or longer than 100 characters. The list reads newest first, by `created_at` and then `id`. The sticker export does not carry the word list.
+
+### Schema version 4
+
+```sql
+ALTER TABLE words ADD COLUMN dict_suffix TEXT;
+```
+
+`dict_suffix` keeps the Kobo dictionary suffix when supplied. The importer
+clips it to 100 characters. Older words have NULL. Native word saves retain an
+existing suffix. Q34 does not block importing a supplied suffix as text.
 
 ## Export format
 

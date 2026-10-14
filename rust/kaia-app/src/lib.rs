@@ -44,3 +44,5 @@ mod book_index;
 
 #[cfg(feature = "lua")]
 pub mod plugins;
+
+pub mod nickel;

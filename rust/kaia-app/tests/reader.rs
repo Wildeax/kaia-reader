@@ -524,8 +524,8 @@ fn hold_selects_a_word_and_the_highlight_survives_reopening() {
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel), "the popover opens");
-    assert!(app.find_rect("sel-highlight").is_some());
-    tap_key(&mut app, "sel-highlight");
+    assert!(app.find_rect("color-yellow").is_some());
+    tap_key(&mut app, "color-yellow");
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
 
     // Leave the book and open it again. The highlight is in the Highlights tab.
@@ -830,6 +830,41 @@ fn selection_popover_golden() {
 }
 
 #[test]
+fn selection_panel_takes_a_quarter_of_the_screen_and_moves_up_for_a_low_word() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("selection-edge");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    let screen = app.screen();
+
+    // A word in the upper half: the panel sits at the bottom.
+    hold_at(&mut app, word_point());
+    let more = app.find_rect("sel-more").expect("the panel shows More");
+    assert!(
+        more.y >= screen.h as i32 * 3 / 4,
+        "the bottom panel is in the lower quarter, got y {}",
+        more.y
+    );
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+
+    // A word in the lower half: the panel moves to the top and stays above the word.
+    let low = Point::new(200, screen.h as i32 * 3 / 5);
+    hold_at(&mut app, low);
+    assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
+    let more = app.find_rect("sel-more").expect("the panel shows More");
+    assert!(
+        more.y + more.h as i32 <= screen.h as i32 / 4,
+        "the top panel ends in the top quarter, got bottom {}",
+        more.y + more.h as i32
+    );
+    assert!(
+        more.y + more.h as i32 <= low.y,
+        "the panel does not cover the word"
+    );
+}
+
+#[test]
 fn dictionary_golden() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("golden-dictionary");
@@ -1021,6 +1056,7 @@ fn sticker_picker_page_and_sheet_goldens_and_reopen() {
     wait_reader(&mut app);
     turn_to_text(&mut app);
     hold_at(&mut app, Point::new(240, 190));
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     assert_matches_golden(app.frame(), &golden("reader-sticker-picker.png"), 14);
     tap_key(&mut app, "sticker-pick-star");
@@ -1079,6 +1115,7 @@ fn sticker_needs_repair_and_notes_can_place_it_again() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     tap_key(&mut app, "sticker-pick-heart");
     let mut sticker = stored_stickers(&dir).remove(0);
@@ -1122,6 +1159,7 @@ fn sticker_needs_repair_and_notes_can_place_it_again() {
     tap_key(&mut app, "notes-entry-1");
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     let repaired = store.get_sticker(&id).unwrap();
     assert_eq!(repaired.state, kaia_storage::StickerState::Attached);
@@ -1144,11 +1182,13 @@ fn sticker_text_note_and_shared_selection_are_saved_and_editable() {
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
     let quote = text_of(&mut app, "sel-word");
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-share");
     let books = kaia_app::surfaces::notes::load_books(app.services());
     assert_eq!(books[0].notes[0].note.as_deref(), Some("Shared to Notes"));
     assert_eq!(books[0].notes[0].text.as_deref(), Some(quote.as_str()));
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     tap_key(&mut app, "sticker-text");
     app.update_top::<TextField, _>("sticker-note-field", |f, _| f.set_text("Read this again"));
@@ -1177,6 +1217,7 @@ fn sticker_text_note_and_shared_selection_are_saved_and_editable() {
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     let moved = stored_stickers(&dir).remove(0);
     assert_eq!(moved.id, sticker.id);
@@ -1265,6 +1306,7 @@ fn pdf_selection_creates_a_sticker_and_reopens_it() {
     let x_expected = (point.x as f32 - (screen.w as f32 - size.width * scale) / 2.0) / scale / size.width;
     let y_expected = (point.y as f32 - (screen.h as f32 - size.height * scale) / 2.0) / scale / size.height;
     hold_at(&mut app, point);
+    // A scanned page has no words, so the sheet offers Sticker at once.
     tap_key(&mut app, "sel-sticker");
     tap_key(&mut app, "sticker-pick-question");
     let sticker = stored_stickers(&dir).remove(0);
@@ -1288,6 +1330,7 @@ fn sticker_fades_over_the_line_end_when_the_margin_is_narrow() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "sel-sticker");
     tap_key(&mut app, "sticker-pick-star");
     let sticker = stored_stickers(&dir).remove(0);

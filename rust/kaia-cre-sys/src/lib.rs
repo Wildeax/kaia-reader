@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::ptr;
 
 mod options;
-pub use options::{init_with_options, RuntimeOptions};
+pub use options::{init_with_options, set_user_font_dir, user_font_dir, RuntimeOptions};
 
 /// CSS, hyphenation dictionaries and other data files that ship with KOReader.
 /// Desktop fallback. Runtime options prefer resources beside the executable.
@@ -70,6 +70,12 @@ pub mod ffi {
     }
 
     #[repr(C)]
+    pub struct kaia_cre_font_family {
+        pub family: *mut c_char,
+        pub file: *mut c_char,
+    }
+
+    #[repr(C)]
     pub struct kaia_cre_link_box {
         pub x0: f32,
         pub y0: f32,
@@ -101,6 +107,8 @@ pub mod ffi {
             data_dir: *const c_char,
             registered: *mut c_int,
         ) -> c_int;
+        pub fn kaia_cre_font_families(out: *mut *mut kaia_cre_font_family, count: *mut usize) -> c_int;
+        pub fn kaia_cre_free_font_families(families: *mut kaia_cre_font_family, count: usize);
         pub fn kaia_cre_compare_xpointers(
             doc: *mut kaia_cre_doc,
             a: *const c_char,
@@ -254,6 +262,19 @@ unsafe fn take_string(p: *mut c_char) -> String {
     s
 }
 
+/// Copies an optional C string the shim owns. Null maps to None. The caller
+/// frees the string with its owner.
+///
+/// # Safety
+/// `p` must be null or a valid NUL-terminated string.
+unsafe fn copy_opt_string(p: *mut c_char) -> Option<String> {
+    if p.is_null() {
+        None
+    } else {
+        Some(CStr::from_ptr(p).to_string_lossy().into_owned())
+    }
+}
+
 /// Takes ownership of an optional C string. Null maps to None.
 ///
 /// # Safety
@@ -284,6 +305,42 @@ pub fn init(fonts: &[PathBuf], hyph_dir: &Path) -> Result<usize> {
     let code = unsafe { ffi::kaia_cre_init(ptrs.as_ptr(), ptrs.len(), hyph.as_ptr(), &mut registered) };
     check(code)?;
     Ok(registered.max(0) as usize)
+}
+
+/// A font family that CREngine has registered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredFont {
+    /// The family name as FreeType reports it, such as "Atkinson Hyperlegible".
+    pub family: String,
+    /// The font file CREngine reads for regular text in this family.
+    pub file: PathBuf,
+}
+
+/// Lists the registered font families sorted by name. Needs an initialized
+/// engine: [`init`] or [`init_with_options`] must have succeeded.
+pub fn registered_fonts() -> Result<Vec<RegisteredFont>> {
+    let mut entries: *mut ffi::kaia_cre_font_family = ptr::null_mut();
+    let mut count: usize = 0;
+    // SAFETY: both out pointers are valid for the call.
+    check(unsafe { ffi::kaia_cre_font_families(&mut entries, &mut count) })?;
+    let mut out = Vec::with_capacity(count);
+    if !entries.is_null() {
+        for i in 0..count {
+            // SAFETY: the shim allocated `count` entries at `entries`. Each string
+            // is copied here and left for the single free below.
+            let e = unsafe { &*entries.add(i) };
+            let family = unsafe { copy_opt_string(e.family) }.unwrap_or_default();
+            let file = unsafe { copy_opt_string(e.file) }.unwrap_or_default();
+            out.push(RegisteredFont {
+                family,
+                file: PathBuf::from(file),
+            });
+        }
+        // SAFETY: `entries` came from kaia_cre_font_families. The shim frees
+        // its strings and the array here, once.
+        unsafe { ffi::kaia_cre_free_font_families(entries, count) };
+    }
+    Ok(out)
 }
 
 /// CREngine's `doc_format_t` values that this crate names.

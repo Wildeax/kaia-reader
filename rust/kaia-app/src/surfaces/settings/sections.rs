@@ -1,13 +1,13 @@
 //! The contents of each settings section. [`entries`] reads the settings, the
 //! platform and the device folders and returns the rows of one section.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use kaia_i18n::{format as tr_format, tr};
 use kaia_platform::platform::Kind;
 use kaia_stats::DayTotal;
 
-use super::commands::{options_for, Light};
+use super::commands::{font_options, options_for, rescan_user_fonts, Light};
 use super::entries::{Entry, StepUnit};
 use super::facts::{self, duration, KoreaderFolder, StatsView};
 use super::keys;
@@ -64,9 +64,10 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
 fn reading(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let family = keys::text_or(s, keys::READING_FONT_FAMILY, "");
-    let family_index = options_for(keys::READING_FONT_FAMILY)
-        .and_then(|opts| opts.iter().position(|(v, _)| *v == family))
-        .unwrap_or(0);
+    // Fonts copied into the user folder since the last visit show up in the list.
+    rescan_user_fonts();
+    let faces = font_options();
+    let family_index = faces.iter().position(|(v, _)| *v == family).unwrap_or(0);
     let zones = keys::text_or(s, keys::READING_TAP_ZONES, "default");
     // The section loads the dictionaries before it builds. See `section::lists_dictionaries`.
     let dictionaries = dict::folder(services);
@@ -75,9 +76,13 @@ fn reading(services: &Services) -> Vec<Entry> {
         Entry::Heading(tr("Text")),
         Entry::Radio {
             key: keys::READING_FONT_FAMILY,
-            options: labels(keys::READING_FONT_FAMILY),
+            options: faces.iter().map(|(_, label)| option_label(label)).collect(),
             selected: family_index,
         },
+        Entry::Text(tr_format(
+            &tr("Add .ttf or .otf files to %1. Kaia finds them when you open this section or the font list. A deleted font stays listed until Kaia restarts."),
+            &[&font_folder_label(&services.paths.data_dir)],
+        )),
         Entry::Stepper {
             key: keys::READING_FONT_SIZE,
             label: tr_format(
@@ -498,6 +503,13 @@ fn data(services: &Services) -> Vec<Entry> {
             });
         }
     }
+    if facts::kobo_database(&services.paths).is_some() {
+        out.push(Entry::Button {
+            key: "settings-import-kobo",
+            label: tr("Import from Kobo"),
+            action: "settings:data:kobo".into(),
+        });
+    }
     out.push(Entry::Heading(tr("Notes")));
     out.push(Entry::Button {
         key: "settings-export",
@@ -601,6 +613,15 @@ fn advanced() -> Vec<Entry> {
         });
     }
     out
+}
+
+/// The user font folder as the Settings text shows it: the data folder's name
+/// and `fonts`, such as `.kaia/fonts`.
+fn font_folder_label(data_dir: &Path) -> String {
+    let name = data_dir
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    format!("{name}/fonts")
 }
 
 /// The labels of a radio group, in the order of [`options_for`].

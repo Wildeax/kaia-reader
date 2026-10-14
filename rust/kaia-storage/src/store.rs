@@ -80,7 +80,7 @@ pub struct Migration {
 }
 
 /// The migrations this build supports, in order.
-pub const MIGRATIONS: [Migration; 3] = [
+pub const MIGRATIONS: [Migration; 4] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -92,6 +92,10 @@ pub const MIGRATIONS: [Migration; 3] = [
     Migration {
         version: 3,
         sql: SCHEMA_V3,
+    },
+    Migration {
+        version: 4,
+        sql: "ALTER TABLE words ADD COLUMN dict_suffix TEXT;",
     },
 ];
 

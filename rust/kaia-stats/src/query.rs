@@ -119,35 +119,35 @@ const CAPPED_TOTALS_SQL: &str = "SELECT count(*), sum(durations) FROM (
 
 /// KOReader's `STATISTICS_SQL_BOOK_TOTALS_QUERY`.
 const UNCAPPED_TOTALS_SQL: &str = "SELECT count(DISTINCT page), sum(duration)
-    FROM page_stat
+    FROM kaia_read_time
     WHERE id_book = ?1";
 
 /// Pages and seconds per day from `start_time` (inclusive) to `until` (exclusive), as KOReader's `sqlDaily`.
-const DAY_ROWS_SQL: &str = "SELECT day, count(*), sum(sum_duration) FROM (
-    SELECT strftime('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS day,
+const DAY_ROWS_SQL: &str = "SELECT day, count(page), sum(sum_duration) FROM (
+    SELECT strftime('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS day, page,
            sum(duration) AS sum_duration
-    FROM page_stat
+    FROM kaia_read_time
     WHERE start_time >= ?1 AND start_time < ?2
     GROUP BY id_book, page, day
 )
 GROUP BY day";
 
 const BOOK_SPAN_SQL: &str = "SELECT sum(duration), count(DISTINCT page), min(start_time),
-       (SELECT max(ps2.page) FROM page_stat AS ps2
-        WHERE ps2.id_book = ?1 AND ps2.start_time = max(page_stat.start_time))
-FROM page_stat
+       (SELECT max(ps2.page) FROM kaia_read_time AS ps2
+        WHERE ps2.id_book = ?1 AND ps2.start_time = max(kaia_read_time.start_time))
+FROM kaia_read_time
 WHERE id_book = ?1";
 
 const DAYS_READ_SQL: &str = "SELECT count(*) FROM (
     SELECT strftime('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS day
-    FROM page_stat
+    FROM kaia_read_time
     WHERE id_book = ?1
     GROUP BY day
 )";
 
 const STREAKS_SQL: &str = "WITH days AS (
     SELECT DISTINCT strftime('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS day
-    FROM page_stat
+    FROM kaia_read_time
 ),
 numbered AS (
     SELECT day, CAST(julianday(day) AS INTEGER) - row_number() OVER (ORDER BY day) AS grp
@@ -218,9 +218,9 @@ impl Stats {
 
     fn totals_since(&self, start: i64) -> Result<Totals> {
         let (pages, seconds) = self.conn.query_row(
-            "SELECT count(*), sum(sum_duration) FROM (
-                SELECT sum(duration) AS sum_duration
-                FROM page_stat
+            "SELECT count(page), sum(sum_duration) FROM (
+                SELECT page, sum(duration) AS sum_duration
+                FROM kaia_read_time
                 WHERE start_time >= ?1
                 GROUP BY id_book, page
             )",
@@ -388,9 +388,9 @@ impl Stats {
         self.flush()?;
         let mut stmt = self.conn.prepare(
             "SELECT book.id, book.title, book.authors, book.last_open,
-                    COALESCE(sum(page_stat.duration), 0), count(DISTINCT page_stat.page)
+                    COALESCE(sum(kaia_read_time.duration), 0), count(DISTINCT kaia_read_time.page)
              FROM book
-             LEFT JOIN page_stat ON page_stat.id_book = book.id
+             LEFT JOIN kaia_read_time ON kaia_read_time.id_book = book.id
              GROUP BY book.id
              ORDER BY book.last_open DESC, book.id",
         )?;

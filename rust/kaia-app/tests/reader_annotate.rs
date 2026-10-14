@@ -7,13 +7,13 @@ use std::path::Path;
 use std::time::Duration;
 
 use kaia_app::surfaces::reader::panels::WordRow;
-use kaia_app::App;
-use kaia_app::HeadlessBackend;
-use kaia_app::Route;
-use kaia_display::InputEvent;
-use kaia_events::{Settings, Value};
-use kaia_gfx::Point;
+use kaia_app::{App, AppOptions, HeadlessBackend, Route, ScriptInput, Services};
+use kaia_display::{InputEvent, PanelSpec};
+use kaia_events::{Settings, SystemClock, Value};
+use kaia_gfx::golden::assert_matches_golden;
+use kaia_gfx::{PixelFormat, Point};
 use kaia_input::{Key, Phase, TouchEvent};
+use kaia_platform::{Env, Platform};
 use kaia_storage::Store;
 use kaia_ui::components::{Label, Paragraph};
 use kaia_ui::composite::PagedList;
@@ -21,6 +21,34 @@ use kaia_ui::composite::PagedList;
 mod common;
 
 use common::*;
+
+/// The reader on a grayscale panel of the Libra Colour's size. The shared helpers
+/// build the color panel only, so this one opens its own app.
+fn open_gray_reader(name: &str, dir: &Path) -> App<HeadlessBackend> {
+    let root = dir.join("platform");
+    fs::create_dir_all(&root).unwrap();
+    let env = Env {
+        home: Some(root.clone()),
+        ..Env::default()
+    };
+    let platform = Platform::detect_in(&root, &env).unwrap();
+    pin_english(&dir.join("data"));
+    let panel = PanelSpec {
+        format: PixelFormat::Gray8,
+        ..PanelSpec::LIBRA_COLOUR
+    };
+    let services = Services::open(platform, panel, Some(dir.join("data"))).unwrap();
+    let backend = HeadlessBackend::new(panel, ScriptInput::idle());
+    let options = AppOptions {
+        library_roots: vec![library_with_books(dir)],
+    };
+    let mut app = App::new(backend, services, Box::new(SystemClock::new()), options);
+    app.start().unwrap();
+    wait_for(&mut app, "the library scan", |a| !a.scan_running());
+    app.iterate(Some(Duration::from_millis(10))).unwrap();
+    open_from_library(&mut app, name);
+    app
+}
 
 /// Opens the reader on `name` and waits for the library scan.
 fn open_reader(name: &str, dir: &Path) -> App<HeadlessBackend> {
@@ -175,18 +203,17 @@ fn a_highlight_takes_the_chosen_color_and_style_and_remembers_them() {
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
 
-    tap_key(&mut app, "color-green");
+    // The style is in More. Choosing it saves it and returns to the selection panel.
+    tap_key(&mut app, "sel-more");
+    tap_key(&mut app, "style-underscore");
     assert_eq!(
         app.top_route(),
         Some(&Route::ReaderPanel),
-        "the popover stays open"
+        "the selection panel is back"
     );
-    tap_key(&mut app, "style-underscore");
-    assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
-    assert_eq!(
-        app.services().settings.read("reading.highlight_color").as_str(),
-        Some("green"),
-        "the color is the default for the next highlight"
+    assert!(
+        app.find_rect("sel-more").is_some(),
+        "the compact panel shows again"
     );
     assert_eq!(
         app.services().settings.read("reading.highlight_drawer").as_str(),
@@ -195,14 +222,25 @@ fn a_highlight_takes_the_chosen_color_and_style_and_remembers_them() {
     let saved = Settings::read_exact(&dir.join("data/settings.json"))
         .unwrap()
         .expect("settings.json");
-    assert_eq!(saved.read("reading.highlight_color").as_str(), Some("green"));
     assert_eq!(
         saved.read("reading.highlight_drawer").as_str(),
         Some("underscore")
     );
+    assert!(highlights(&dir).is_empty(), "choosing a style makes no highlight");
 
-    tap_key(&mut app, "sel-highlight");
+    // A color dot highlights at once in that color and saves it as the last choice.
+    tap_key(&mut app, "color-green");
     wait_reader(&mut app);
+    assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
+    assert_eq!(
+        app.services().settings.read("reading.highlight_color").as_str(),
+        Some("green"),
+        "the color is the default for the next highlight"
+    );
+    let saved = Settings::read_exact(&dir.join("data/settings.json"))
+        .unwrap()
+        .expect("settings.json");
+    assert_eq!(saved.read("reading.highlight_color").as_str(), Some("green"));
     assert_eq!(
         highlights(&dir),
         [("underscore".to_string(), "green".to_string())]
@@ -216,17 +254,12 @@ fn a_new_highlight_uses_the_remembered_choice_and_koreader_defaults_without_one(
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
-    tap_key(&mut app, "sel-highlight");
+    tap_key(&mut app, "color-yellow");
     wait_reader(&mut app);
-    let default_color = if app.services().theme.color_panel {
-        "yellow"
-    } else {
-        "gray"
-    };
     assert_eq!(
         highlights(&dir),
-        [("lighten".to_string(), default_color.to_string())],
-        "KOReader's defaults: lighten, and yellow on a color panel or gray on a grayscale one"
+        [("lighten".to_string(), "yellow".to_string())],
+        "KOReader's defaults: lighten, and yellow on a color panel"
     );
 
     app.services_mut()
@@ -236,11 +269,86 @@ fn a_new_highlight_uses_the_remembered_choice_and_koreader_defaults_without_one(
         .settings
         .save("reading.highlight_drawer", Value::from("strikeout"));
     hold_at(&mut app, Point::new(200, 260));
-    tap_key(&mut app, "sel-highlight");
+    tap_key(&mut app, "color-blue");
     wait_reader(&mut app);
     let all = highlights(&dir);
     assert_eq!(all.len(), 2);
     assert_eq!(all[1], ("strikeout".to_string(), "blue".to_string()));
+}
+
+#[test]
+fn a_grayscale_panel_offers_one_highlight_button_and_no_color_dots() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("annotate-gray");
+    let mut app = open_gray_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    assert!(!app.services().theme.color_panel);
+    assert!(
+        app.find_rect("color-yellow").is_none(),
+        "no color dots on grayscale"
+    );
+    assert!(app.find_rect("sel-highlight").is_some(), "one Highlight button");
+    assert_matches_golden(app.frame(), &golden("reader-selection-gray.png"), 14);
+
+    tap_key(&mut app, "sel-highlight");
+    wait_reader(&mut app);
+    assert_eq!(
+        highlights(&dir),
+        [("lighten".to_string(), "gray".to_string())],
+        "the Highlight button uses the grayscale default"
+    );
+}
+
+#[test]
+fn the_more_sheet_marks_the_saved_style_and_returns_to_the_selection_panel() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("annotate-more");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
+    assert!(app.find_rect("style-lighten").is_some());
+    assert!(app.find_rect("sel-share").is_some(), "Share is in More");
+    assert!(app.find_rect("sel-sticker").is_some(), "Sticker is in More");
+    assert!(
+        app.find_rect("color-yellow").is_none(),
+        "the colors stay on the selection panel"
+    );
+    assert_matches_golden(app.frame(), &golden("reader-selection-more.png"), 14);
+
+    tap_key(&mut app, "style-strikeout");
+    assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
+    assert!(app.find_rect("sel-more").is_some(), "back on the selection panel");
+    assert!(app.find_rect("sel-sticker").is_none(), "More is closed");
+    assert_eq!(
+        app.services().settings.read("reading.highlight_drawer").as_str(),
+        Some("strikeout")
+    );
+    // The style is marked on the next visit.
+    tap_key(&mut app, "sel-more");
+    assert!(app.find_rect("style-strikeout").is_some());
+}
+
+#[test]
+fn with_invert_chosen_a_color_panel_offers_the_highlight_button() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("annotate-invert");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
+    tap_key(&mut app, "style-invert");
+    // Invert ignores the color, so dots would have nothing to do.
+    assert!(app.find_rect("color-yellow").is_none(), "no color dots");
+    assert!(app.find_rect("sel-highlight").is_some(), "one Highlight button");
+    tap_key(&mut app, "sel-highlight");
+    wait_reader(&mut app);
+    assert_eq!(
+        highlights(&dir),
+        [("invert".to_string(), "yellow".to_string())],
+        "the highlight uses Invert and keeps the saved color"
+    );
 }
 
 #[test]
@@ -251,7 +359,6 @@ fn tapping_a_highlight_changes_its_style_and_keeps_its_color() {
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
     tap_key(&mut app, "color-red");
-    tap_key(&mut app, "sel-highlight");
     wait_reader(&mut app);
     assert_eq!(highlights(&dir), [("lighten".to_string(), "red".to_string())]);
 

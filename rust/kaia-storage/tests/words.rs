@@ -136,3 +136,24 @@ fn a_version_2_store_upgrades_and_takes_words() {
     let backups = std::fs::read_dir(dir.join("backups")).expect("backups").count();
     assert_eq!(backups, 1, "the upgrade takes a backup first");
 }
+
+#[test]
+fn nickel_words_keep_the_first_record_and_optional_suffix() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = kaia_storage::Store::open(dir.path()).unwrap();
+    assert!(store
+        .import_nickel_word("one", Some("Book"), Some("-en"), 1)
+        .unwrap());
+    assert!(!store.import_nickel_word("ONE", Some("Changed"), None, 2).unwrap());
+    assert!(!store.import_nickel_word("", None, None, 0).unwrap());
+    assert!(store.import_nickel_word("two", None, None, 0).unwrap());
+    let one = store
+        .list_words()
+        .unwrap()
+        .into_iter()
+        .find(|w| w.word == "one")
+        .unwrap();
+    assert_eq!(one.created_at, 1);
+    assert_eq!(one.dict_suffix.as_deref(), Some("-en"));
+    assert_eq!(one.book_title.as_deref(), Some("Book"));
+}

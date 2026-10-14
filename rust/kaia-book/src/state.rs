@@ -77,6 +77,10 @@ pub(crate) struct BookState {
     /// as `preferred_dictionaries` in the book's settings. Names come from the
     /// `.ifo` files, as `bookname`.
     pub preferred_dictionaries: Vec<String>,
+    /// Kobo record ids already imported, retained after edits and deletions.
+    pub nickel_imports: Vec<String>,
+    /// Imported active seconds without a known page.
+    pub nickel_reading_seconds: f64,
 }
 
 impl BookState {
@@ -98,6 +102,8 @@ impl BookState {
             layout_key: None,
             file_change_pending: false,
             preferred_dictionaries: Vec::new(),
+            nickel_imports: Vec::new(),
+            nickel_reading_seconds: 0.0,
         }
     }
 
@@ -184,6 +190,14 @@ impl BookState {
                 ),
             );
         }
+        t.insert(
+            "nickel_reading_seconds".into(),
+            Value::from(self.nickel_reading_seconds),
+        );
+        t.insert(
+            "nickel_imports".into(),
+            Value::array(self.nickel_imports.iter().map(|id| Value::from(id.as_str()))),
+        );
         t
     }
 
@@ -251,6 +265,17 @@ impl BookState {
                 .filter_map(|v| v.as_str().filter(|n| !n.is_empty()).map(str::to_string))
                 .collect();
         }
+        if let Value::Table(ids) = root.get("nickel_imports") {
+            state.nickel_imports = ids
+                .values()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect();
+        }
+        state.nickel_reading_seconds = root
+            .get("nickel_reading_seconds")
+            .as_f64()
+            .filter(|s| s.is_finite() && *s >= 0.0)
+            .unwrap_or(0.0);
         state.repair_ids();
         Some(state)
     }

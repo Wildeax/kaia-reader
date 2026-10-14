@@ -294,6 +294,26 @@ Items are numbered T1-1 to T1-21, T2-1 to T2-8 and T3-1 to T3-19. "Blocked by" n
 
 Goal. Carry a reader's Kobo state into Kaia without writing to Nickel's files and without copying account secrets. This plan is for the Rust importer (T2-3).
 
+### Import status
+
+The Rust importer covers steps 1, 2, 4, 5, 6, 7 and 8, plus progress percent
+and status from step 3. Settings shows a plan with counts, asks for confirmation,
+and reports imported and skipped records. It anchors highlights by text and
+keeps notes with them. Words use the existing `kaia-storage` word list and keep
+`DictSuffix` when present. Sessions keep their times and percentages in
+`kaia-stats`, without guessed pages. Each owner stages its changes before file
+replacement. Repeating an import skips records already stored.
+
+Reading positions wait on Q33. The importer does not read
+`ChapterIDBookmarked`, `ParagraphBookmarked` or `BookmarkWordOffset`. Step 9,
+typography, is not included. Synthetic SQLite and EPUB tests cover this round.
+A real Libra Colour database is still needed to check firmware column names,
+KEPUB matching, repeated passages, session percent and idle-time units, and
+snapshot consistency while Nickel is active. Q34 and Q48 remain device checks.
+
+### Import rules
+
+
 Safety. Copy `KoboReader.sqlite`, and any `-wal` and `-shm` files next to it, into a scratch folder. Open only the copy, read-only. Read columns by name, because the schema has had 176 migrations. Never write under `/mnt/onboard/.kobo`. Count rows per table in a plan step and show the counts before the import runs. Log counts per table, never titles, note text or words. Write results to a staging folder, then move them into place.
 
 Steps.
@@ -354,7 +374,7 @@ Recommendation. Leave the list as it is until the two workflow tests pass. `PLUG
 
 ### 6.5 STATUS.md says the Rust app has no stickers
 
-Status. Open. Stale text.
+Status. Fixed on 2026-10-14. STATUS.md now matches the code.
 
 Evidence. `docs/kaia/STATUS.md` line 27 says the Rust app has no stickers, and that only `kaia-ffi` links the storage crates. Line 133 says the app does not link the sticker crates. The code disagrees. `rust/kaia-app/src/surfaces/reader/stickers.rs` and `sticker_actions.rs` exist, `rust/kaia-app/src/surfaces/reader/mod.rs` lines 27 and 28 declare them, and `rust/kaia-app/Cargo.toml` line 29 depends on `kaia-storage`. Line 47 already says stickers are done on desktop.
 
@@ -362,7 +382,7 @@ Recommendation. Rewrite lines 27 and 133 to match line 47 and the code. The open
 
 ### 6.6 STATUS.md says kaia-calibre is not a dependency
 
-Status. Open. Stale text.
+Status. Fixed on 2026-10-14. STATUS.md now matches the code.
 
 Evidence. `docs/kaia/STATUS.md` line 130 says `kaia-calibre` is not a dependency of `kaia-app`. `rust/kaia-app/Cargo.toml` line 23 lists it.
 
@@ -386,7 +406,7 @@ Next step. A device check with a stock KOReader folder would confirm the fix on 
 
 ### 6.9 Frontlight color path is fixed to LM3630
 
-Status. Open. Needs a device check.
+Status. Selection rule in place. Device check open. `MixerNode::select` in `rust/kaia-platform/src/frontlight.rs` uses `/sys/class/leds/aw99703-bl_FL1/color` when that file exists, and `/sys/class/backlight/lm3630a_led/color` otherwise. The paths come from `frontend/device/kobo/device.lua` (line 439, and the runtime check at lines 747 to 752), because no file under `docs/kaia` records them. Nothing has run on a Libra Colour yet. On a device, run `tools/kaia/device/collect-profile.sh` and read `frontlight_aw99703_color_present` and `frontlight_lm3630_color_present`.
 
 Evidence. `rust/kaia-platform/src/frontlight.rs` line 78 sets the Monza mixer to the `lm3630a_led` color node, and the module comment says the same. KOReader's KoboMonza table also names that node (`frontend/device/kobo/device.lua` line 548). The static pass found that Nickel's selection rule for Monza prefers an AW99703 color node when its control file exists, and falls back to LM3630 otherwise (from code).
 

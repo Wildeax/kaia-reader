@@ -105,6 +105,10 @@ pub enum Command {
     },
     /// Highlights the selection.
     SelHighlight,
+    /// Highlights the selection in this color and saves the color as the last choice.
+    SelColor(String),
+    /// Opens the More sheet of the selection.
+    SelMore,
     /// Opens the note editor for the selection.
     SelNote,
     /// Copies the selected text.
@@ -251,6 +255,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["size", "smaller"] => pinch(args, false)?,
         ["size", "larger"] => pinch(args, true)?,
         ["sel", "highlight"] => Command::SelHighlight,
+        ["sel", "color", name] => Command::SelColor((*name).to_string()),
+        ["sel", "more"] => Command::SelMore,
         ["sel", "note"] => Command::SelNote,
         ["sel", "copy"] => Command::SelCopy,
         ["sel", "dict"] => Command::SelDict,
@@ -278,6 +284,17 @@ mod tests {
         assert_eq!(parse("reader:prev", &[]), Some(Command::Prev));
         let args = [Value::Number(10.0), Value::Number(20.0)];
         assert_eq!(parse("reader:tap", &args), Some(Command::Tap(10.0, 20.0)));
+    }
+
+    #[test]
+    fn parses_selection_ids() {
+        assert_eq!(
+            parse("reader:sel:color:red", &[]),
+            Some(Command::SelColor("red".to_string()))
+        );
+        assert_eq!(parse("reader:sel:more", &[]), Some(Command::SelMore));
+        assert_eq!(parse("reader:sel:highlight", &[]), Some(Command::SelHighlight));
+        assert_eq!(parse("reader:sel:color", &[]), None);
     }
 
     #[test]

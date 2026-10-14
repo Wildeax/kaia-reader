@@ -64,6 +64,17 @@ int kaia_cre_init(const char *const *font_files, size_t font_count, const char *
 /* Uses <data_dir>/hyph. Font files are discovered by the Rust runtime options. */
 int kaia_cre_init_with_data(const char *const *font_files, size_t font_count, const char *data_dir, int *registered);
 
+/* A font family CREngine has registered, with the file it reads for regular text. */
+typedef struct {
+    char *family;
+    char *file;
+} kaia_cre_font_family;
+
+/* Lists the registered font families sorted by name, as FreeType reports them.
+ * Free the array with kaia_cre_free_font_families. Needs an initialized engine. */
+int kaia_cre_font_families(kaia_cre_font_family **out, size_t *count);
+void kaia_cre_free_font_families(kaia_cre_font_family *families, size_t count);
+
 /* Fails with KAIA_CRE_ERROR until kaia_cre_init has succeeded. */
 int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out);
 void kaia_cre_doc_free(kaia_cre_doc *doc);

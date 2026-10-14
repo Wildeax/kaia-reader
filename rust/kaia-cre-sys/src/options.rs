@@ -1,7 +1,23 @@
 use std::ffi::{c_char, CString};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::{check, ffi, path_cstring, Result, DATA_DIR, FONTS_DIR, KAIA_FONTS_DIR};
+
+/// The user's font folder. Its fonts join the built-in folders in every
+/// [`RuntimeOptions`] built after the call to [`set_user_font_dir`].
+static USER_FONT_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Sets the folder that holds the user's fonts, or clears it with None. Kaia
+/// sets it once at start, from its data folder. A missing folder is fine.
+pub fn set_user_font_dir(dir: Option<PathBuf>) {
+    *USER_FONT_DIR.lock().unwrap_or_else(|p| p.into_inner()) = dir;
+}
+
+/// The folder set by [`set_user_font_dir`].
+pub fn user_font_dir() -> Option<PathBuf> {
+    USER_FONT_DIR.lock().unwrap_or_else(|p| p.into_inner()).clone()
+}
 
 /// CREngine resources chosen at runtime. Relative paths use the current directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,6 +25,7 @@ pub struct RuntimeOptions {
     /// Folder containing epub.css, fb2.css and the hyph subfolder.
     pub data_dir: PathBuf,
     /// Font folders searched recursively, excluding KOReader's MuPDF fallbacks.
+    /// The user font folder comes last when it is set.
     pub font_dirs: Vec<PathBuf>,
 }
 
@@ -27,17 +44,13 @@ impl RuntimeOptions {
     /// An explicit options value never falls back to another folder.
     pub fn from_install_dir(install: &Path) -> Self {
         let installed = install.join("data").is_dir() || install.join("fonts").is_dir();
-        if installed {
-            Self {
-                data_dir: install.join("data"),
-                font_dirs: vec![install.join("fonts")],
-            }
+        let (data_dir, mut font_dirs) = if installed {
+            (install.join("data"), vec![install.join("fonts")])
         } else {
-            Self {
-                data_dir: DATA_DIR.into(),
-                font_dirs: vec![FONTS_DIR.into(), KAIA_FONTS_DIR.into()],
-            }
-        }
+            (DATA_DIR.into(), vec![FONTS_DIR.into(), KAIA_FONTS_DIR.into()])
+        };
+        font_dirs.extend(user_font_dir());
+        Self { data_dir, font_dirs }
     }
 
     /// Lists font files in a stable order. Skips symlinked folders to avoid loops.

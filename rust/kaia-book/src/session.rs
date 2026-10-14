@@ -151,6 +151,8 @@ pub struct MigrationReport {
 pub struct OpenOptions {
     /// Kaia's data directory. The state file goes in `<data_dir>/kaia/books/`.
     pub data_dir: PathBuf,
+    /// Keep the saved position and percent while importing records.
+    pub import_only: bool,
     /// Which engine opens the file. See [`Engine`].
     pub engine: Engine,
     /// The viewport of a reflowable layout, in pixels. Books with no saved layout use it.
@@ -174,6 +176,7 @@ impl OpenOptions {
         let data_dir = data_dir.into();
         Self {
             data_dir: data_dir.clone(),
+            import_only: false,
             engine: Engine::Auto,
             viewport: Size { w: 1264, h: 1680 },
             default_layout: TextLayout::default(),
@@ -467,8 +470,10 @@ impl BookSession {
         };
         let (page, position, page_count, layout_gen) = restored;
         facts.toc = engine.call(|w| Ok(w.doc.doc().toc()))?;
-        state.position = Some(position);
-        state.percent = fraction(page, page_count);
+        if !opts.import_only {
+            state.position = Some(position);
+            state.percent = fraction(page, page_count);
+        }
         if !facts.cre && facts.reflowable {
             // MuPDF point positions depend on the layout. Mark them when the
             // layout differs from the one they were made in.
@@ -1944,3 +1949,5 @@ fn fixed_annotation_order(a: &Annotation, b: &Annotation) -> std::cmp::Ordering 
 fn cmp_point(a: (u32, f32, f32), b: (u32, f32, f32)) -> std::cmp::Ordering {
     a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.total_cmp(&b.2))
 }
+
+mod nickel;

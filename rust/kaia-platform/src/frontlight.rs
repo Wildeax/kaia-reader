@@ -1,8 +1,10 @@
 //! Frontlight intensity and warmth for the Libra Colour.
 //!
 //! The Libra Colour (codename `monza`) has a white LED on `mxc_msp430.0`
-//! and a colour mixer on `lm3630a_led`. Intensity is written to the white
-//! LED. Warmth is written to the mixer, inverted. KOReader's values:
+//! and a colour mixer. The mixer is the AW99703 node when its control file
+//! exists, and the LM3630 node otherwise ([`MixerNode::select`]). Intensity
+//! is written to the white LED. Warmth is written to the mixer, inverted.
+//! KOReader's values:
 //! - profile: `frontend/device/kobo/device.lua:532-553`
 //! - natural light scale (`nl_min` 0, `nl_max` 10, `nl_inverted`): `device.lua:549-551`
 //! - warmth scale 0 to 100 mapped to 0 to `nl_max`: `frontend/device/generic/powerd.lua:226-250`
@@ -47,22 +49,79 @@ pub const RAMP_DELAY_LM3630: Duration = Duration::from_millis(25);
 /// The `ntx_io` character device (`base/ffi/kobolight.lua:44`).
 pub const NTX_IO: &str = "/dev/ntx_io";
 
+/// The AW99703 colour mixer control file (`device.lua:439`). KOReader's
+/// runtime check on the same path is `device.lua:747-749`.
+pub const AW99703_COLOR: &str = "/sys/class/leds/aw99703-bl_FL1/color";
+
+/// The LM3630 colour mixer control file (`device.lua:548`). KOReader's
+/// runtime fallback on the same path is `device.lua:750-752`.
+pub const LM3630_COLOR: &str = "/sys/class/backlight/lm3630a_led/color";
+
+/// A colour mixer on the Libra Colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MixerNode {
+    /// The AW99703 controller. It has a hardware smooth ramp (`device.lua:803`).
+    Aw99703,
+    /// The LM3630 controller.
+    Lm3630,
+}
+
+impl MixerNode {
+    /// The control file that warmth writes go to.
+    pub const fn path(self) -> &'static str {
+        match self {
+            MixerNode::Aw99703 => AW99703_COLOR,
+            MixerNode::Lm3630 => LM3630_COLOR,
+        }
+    }
+
+    /// The mixer Nickel uses on the Libra Colour: AW99703 when its control
+    /// file exists, LM3630 otherwise. The rule comes from a static pass over
+    /// Nickel (`docs/kaia/nickel/PARITY.md`, issue 6.9).
+    pub fn select(root: &Root) -> Self {
+        if root.exists(AW99703_COLOR) {
+            MixerNode::Aw99703
+        } else {
+            MixerNode::Lm3630
+        }
+    }
+
+    /// Pause between ramp steps. LM3630 on MTK uses 25 ms (`device.lua:814`).
+    /// Other natural-light mixers default to 0 (`powerd.lua:141`).
+    pub const fn ramp_delay(self) -> Duration {
+        match self {
+            MixerNode::Aw99703 => Duration::ZERO,
+            MixerNode::Lm3630 => RAMP_DELAY_LM3630,
+        }
+    }
+
+    /// Whether a ramp waits for the next UI frame. Only LM3630 on MTK does
+    /// (`device.lua:815-816`).
+    pub const fn delay_ramp_start(self) -> bool {
+        matches!(self, MixerNode::Lm3630)
+    }
+}
+
 /// Paths and scales for one frontlight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontlightConfig {
     /// White LED brightness file (`device.lua:547`).
     pub intensity_path: String,
-    /// Colour mixer file (`device.lua:548`).
+    /// Colour mixer file that warmth writes go to (`device.lua:548`).
     pub mixer_path: String,
+    /// The Libra Colour mixer in use, or `None` when the mixer path is fixed.
+    pub mixer_node: Option<MixerNode>,
+    /// Whether [`SysfsFrontlight::open`] picks the mixer with [`MixerNode::select`].
+    pub select_mixer: bool,
     /// Largest native warmth value (`device.lua:550`).
     pub nl_max: u8,
     /// Whether the mixer counts from cold to warm (`device.lua:551`).
     pub nl_inverted: bool,
-    /// Pause between ramp steps.
+    /// Pause between ramp steps. Set from the mixer node.
     pub ramp_delay: Duration,
     /// Start a ramp on the next UI frame instead of at once, so it does not
     /// interleave with screen refreshes (`delay_ramp_start`, `device.lua:811-817`,
-    /// `powerd.lua:383`, `451`). Set for the `lm3630a_led` mixer on MTK.
+    /// `powerd.lua:383`, `451`). Set from the mixer node.
     pub delay_ramp_start: bool,
     /// The `ntx_io` device node for the brightness ioctl, or `None` to use only sysfs.
     pub ntx_io_path: Option<String>,
@@ -71,18 +130,32 @@ pub struct FrontlightConfig {
 }
 
 impl FrontlightConfig {
-    /// The Libra Colour (`KoboMonza`, `device.lua:532-553`).
+    /// The Libra Colour (`KoboMonza`, `device.lua:532-553`). The mixer starts
+    /// as LM3630, the fallback. [`SysfsFrontlight::open`] replaces it with
+    /// the node that [`MixerNode::select`] finds.
     pub fn monza() -> Self {
-        FrontlightConfig {
+        let mut cfg = FrontlightConfig {
             intensity_path: "/sys/class/backlight/mxc_msp430.0/brightness".to_string(),
-            mixer_path: "/sys/class/backlight/lm3630a_led/color".to_string(),
+            mixer_path: String::new(),
+            mixer_node: None,
+            select_mixer: true,
             nl_max: 10,
             nl_inverted: true,
-            ramp_delay: RAMP_DELAY_LM3630,
-            delay_ramp_start: true,
+            ramp_delay: Duration::ZERO,
+            delay_ramp_start: false,
             ntx_io_path: Some(NTX_IO.to_string()),
             default_intensity: 20,
-        }
+        };
+        cfg.use_mixer(MixerNode::Lm3630);
+        cfg
+    }
+
+    /// Sets the mixer path, the mixer node and the ramp settings for `node`.
+    pub fn use_mixer(&mut self, node: MixerNode) {
+        self.mixer_path = node.path().to_string();
+        self.mixer_node = Some(node);
+        self.ramp_delay = node.ramp_delay();
+        self.delay_ramp_start = node.delay_ramp_start();
     }
 }
 
@@ -281,7 +354,13 @@ impl<W: SysfsWriter> SysfsFrontlight<W> {
     /// only when the light is on at startup. Kaia writes it in both cases so the
     /// mixer is right when the light comes on later. A failed write keeps the
     /// value in memory.
-    pub fn open(cfg: FrontlightConfig, writer: W, root: &Root, saved_warmth: Option<u8>) -> Self {
+    ///
+    /// With `cfg.select_mixer` set, the mixer is chosen first with
+    /// [`MixerNode::select`], so the warmth write goes to the node that exists.
+    pub fn open(mut cfg: FrontlightConfig, writer: W, root: &Root, saved_warmth: Option<u8>) -> Self {
+        if cfg.select_mixer {
+            cfg.use_mixer(MixerNode::select(root));
+        }
         let hw = root
             .read_int(&cfg.intensity_path)
             .and_then(|v| u8::try_from(v).ok())
@@ -305,6 +384,12 @@ impl<W: SysfsWriter> SysfsFrontlight<W> {
     /// The writer, for callers that need to inspect it (tests).
     pub fn writer(&self) -> &W {
         &self.writer
+    }
+
+    /// The config in use. After [`SysfsFrontlight::open`] on the Libra Colour,
+    /// `config().mixer_node` is the mixer that was chosen.
+    pub fn config(&self) -> &FrontlightConfig {
+        &self.cfg
     }
 
     fn write_intensity(&mut self, value: u8) -> Result<(), PlatformError> {
@@ -471,6 +556,8 @@ pub fn desktop_frontlight() -> SysfsFrontlight<NullWriter> {
     let cfg = FrontlightConfig {
         intensity_path: String::new(),
         mixer_path: String::new(),
+        mixer_node: None,
+        select_mixer: false,
         nl_max: 100,
         nl_inverted: false,
         ramp_delay: Duration::ZERO,

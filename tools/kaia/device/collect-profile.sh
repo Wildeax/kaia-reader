@@ -202,6 +202,15 @@ dir_state() {
     fi
 }
 
+# Print yes or no for a file or device node that the frontlight code may use.
+node_state() {
+    if [ -e "$1" ]; then
+        printf 'yes'
+    else
+        printf 'no'
+    fi
+}
+
 # Remove the serial from the whole output and drop lines that look like an
 # e-mail address, a MAC address or a Wi-Fi network name.
 redact() {
@@ -248,6 +257,10 @@ build_profile() {
     emit fb_virtual_size "$(fb_value virtual_size)"
     emit fb_bits_per_pixel "$(fb_value bits_per_pixel)"
     emit fb_rotate "$(fb_value rotate)"
+    # The two Libra Colour mixer candidates (rust/kaia-platform/src/frontlight.rs).
+    # The app picks AW99703 when its control file exists, else LM3630.
+    emit frontlight_aw99703_color_present "$(node_state "${ROOT}/sys/class/leds/aw99703-bl_FL1/color")"
+    emit frontlight_lm3630_color_present "$(node_state "${ROOT}/sys/class/backlight/lm3630a_led/color")"
     fbink_info
     emit storage_onboard_total_kb "${_total_kb}"
     emit storage_onboard_free_kb "${_free_kb}"
@@ -282,7 +295,8 @@ self_test() {
     for _key in profile_format model_id firmware_version kernel_release \
         kernel_machine cpu_features dynamic_loader glibc_version \
         mem_total_kb mem_available_kb fb_virtual_size storage_onboard_free_kb \
-        nickelmenu_present kfmon_present koreader_version kaia_dir_present; do
+        nickelmenu_present kfmon_present koreader_version kaia_dir_present \
+        frontlight_aw99703_color_present frontlight_lm3630_color_present; do
         if ! grep -q "^${_key}=" "${_out}"; then
             echo "self-test: missing key ${_key}" >&2
             _status=1

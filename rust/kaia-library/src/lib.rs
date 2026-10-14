@@ -90,3 +90,5 @@ mod tests {
         assert_send::<Library>();
     }
 }
+
+mod nickel;

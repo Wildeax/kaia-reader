@@ -175,6 +175,12 @@ pub fn user_catalogs(settings: &Settings) -> Vec<(String, String)> {
         .collect()
 }
 
+/// The Nickel database, when this books folder has one.
+pub fn kobo_database(paths: &Paths) -> Option<PathBuf> {
+    let path = paths.books_dir.join(".kobo/KoboReader.sqlite");
+    path.is_file().then_some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

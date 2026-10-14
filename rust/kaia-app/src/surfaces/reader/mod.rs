@@ -924,12 +924,14 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if c.release() && c.panel.is_none() {
                     let word = c.selection.as_ref().map(|s| s.text.clone()).unwrap_or_default();
                     let (drawer, color) = highlight_style(env.services, c.color_panel);
+                    let edge = panels::edge_for(env.screen, c.selection.as_ref());
                     let window = panels::selection_popover(
                         env.services,
                         env.screen,
                         &word,
                         c.moving_sticker.is_some(),
                         (drawer.as_str(), &color),
+                        edge,
                     );
                     return push_panel(rc, &mut c, env.ctx, window);
                 }
@@ -1030,6 +1032,8 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if c.panel.is_none() {
                     return Outcome::Handled;
                 }
+                // Fonts copied into the user folder since the last scan show up in the list.
+                crate::surfaces::settings::commands::rescan_user_fonts();
                 let face = c.session.as_ref().and_then(|s| s.layout().font_family.clone());
                 let window = panels::font_list(env.services, env.screen, panels::font_index(face.as_deref()));
                 let serial = next_serial(&mut c);
@@ -1074,7 +1078,8 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let font = matches!(change, LayoutChange::Font(_));
                 let result = match change {
                     LayoutChange::Font(index) => {
-                        let face = font_face(index);
+                        // The built-in faces come from `font_face`, the user faces from the list.
+                        let face = font_face(index).or_else(|| panels::user_face_at(index));
                         let result = c.change_layout(|l| l.font_family = face);
                         // The font list closes. The sheet below shows the new face on its button.
                         if result.is_ok() {
@@ -1158,17 +1163,25 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 };
                 Outcome::Handled
             }
-            Command::SelHighlight => {
-                let Some(selection) = c.selection.clone() else {
+            Command::SelHighlight => highlight_selection(&mut c, env, None),
+            Command::SelColor(name) => {
+                if kaia_book::highlight_rgb(&name).is_none() {
                     return Outcome::Handled;
-                };
-                let (drawer, color) = highlight_style(env.services, c.color_panel);
-                let result = c
-                    .session
-                    .as_mut()
-                    .map(|s| s.add_highlight(&selection, drawer, &color, None));
-                finish_highlight(&mut c, env, result);
-                Outcome::Navigate(Nav::Pop)
+                }
+                env.services
+                    .settings
+                    .save(HIGHLIGHT_COLOR_KEY, Value::from(name.as_str()));
+                save_settings(env);
+                highlight_selection(&mut c, env, Some(&name))
+            }
+            Command::SelMore => {
+                if c.selection.is_none() {
+                    return Outcome::Handled;
+                }
+                let (drawer, _) = highlight_style(env.services, c.color_panel);
+                let edge = panels::edge_for(env.screen, c.selection.as_ref());
+                let window = panels::selection_more(env.services, env.screen, edge, drawer.as_str());
+                show_panel(rc, &mut c, env.ctx, window, true)
             }
             Command::SelNote => {
                 let Some(selection) = c.selection.clone() else {
@@ -1342,6 +1355,22 @@ fn goto_percent(c: &mut Core, env: &mut SurfaceEnv<'_>, percent: f64, hint: Pain
     }
 }
 
+/// Highlights the selection with the saved drawer, in `color` or else in the saved
+/// color. The popover closes either way.
+fn highlight_selection(c: &mut Core, env: &mut SurfaceEnv<'_>, color: Option<&str>) -> Outcome {
+    let Some(selection) = c.selection.clone() else {
+        return Outcome::Handled;
+    };
+    let (drawer, saved) = highlight_style(env.services, c.color_panel);
+    let color = color.unwrap_or(&saved);
+    let result = c
+        .session
+        .as_mut()
+        .map(|s| s.add_highlight(&selection, drawer, color, None));
+    finish_highlight(c, env, result);
+    Outcome::Navigate(Nav::Pop)
+}
+
 fn finish_highlight(
     c: &mut Core,
     env: &mut SurfaceEnv<'_>,
@@ -1450,12 +1479,14 @@ fn default_style(
         return Outcome::Handled;
     };
     let (drawer, color) = highlight_style(env.services, c.color_panel);
+    let edge = panels::edge_for(env.screen, c.selection.as_ref());
     let window = panels::selection_popover(
         env.services,
         env.screen,
         &word,
         c.moving_sticker.is_some(),
         (drawer.as_str(), &color),
+        edge,
     );
     show_panel(rc, &mut c, env.ctx, window, true)
 }
