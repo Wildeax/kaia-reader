@@ -129,6 +129,17 @@ fn close_removes_the_window_of_that_table_only() {
         &ui,
         "require('ui/uimanager'):getTopmostVisibleWidget() == SECOND"
     ));
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(1) == SECOND"
+    ));
+    // Out of range positions give nil. The lowest 64-bit integer once overflowed.
+    assert!(eval_bool(
+        &ui,
+        "require('ui/uimanager'):getNthTopWidget(0) == nil \
+         and require('ui/uimanager'):getNthTopWidget(2) == nil \
+         and require('ui/uimanager'):getNthTopWidget(-9223372036854775808) == nil"
+    ));
 
     // Closing a widget that was never shown still sends its close events, as in KOReader.
     run(

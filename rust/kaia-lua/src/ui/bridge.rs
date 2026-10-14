@@ -329,7 +329,7 @@ pub(crate) fn install(lua: &Lua, bridge: &Rc<Bridge>) -> mlua::Result<()> {
         "nth_top",
         lua.create_function(move |lua, n: i64| {
             let mirror = b.mirror.borrow();
-            let index = usize::try_from(n - 1).ok();
+            let index = n.checked_sub(1).and_then(|i| usize::try_from(i).ok());
             match index.and_then(|i| mirror.get(i)) {
                 Some(m) => {
                     let table: LuaValue = lua.registry_value(&m.widget)?;
