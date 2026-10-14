@@ -44,6 +44,14 @@ typedef struct {
     char *end;
 } kaia_cre_range;
 
+/* KOReader findAllText fields, in the order documented by kaia_cre_find_all. */
+typedef struct { char *fields[9]; } kaia_cre_text_match;
+int kaia_cre_find_all(kaia_cre_doc *doc, const char *pattern, int insensitive, int regex,
+    int context, int max_hits, kaia_cre_text_match **out, size_t *count);
+void kaia_cre_free_text_matches(kaia_cre_text_match *items, size_t count);
+int kaia_cre_text_range(kaia_cre_doc *doc, const char *start, const char *end, char **out);
+int kaia_cre_word_boundary(kaia_cre_doc *doc, const char *xp, int next, char **out);
+
 /* One rectangle of a link. A link that spans lines has one box per line.
  * `page` is the target page for an internal link that resolves, or -1.
  * `href` is the link target as written in the book. */

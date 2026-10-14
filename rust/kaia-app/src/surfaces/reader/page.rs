@@ -50,6 +50,7 @@ pub struct Mark {
 pub struct PageView {
     pub ink: Option<super::ink::PageInk>,
     pub ink_on: bool,
+    pub ink_pencil: bool,
     pub ink_width: f32,
     pub ink_color: String,
     pub ink_eraser: bool,
@@ -96,6 +97,7 @@ impl PageView {
         Self {
             ink: None,
             ink_on: false,
+            ink_pencil: false,
             ink_width: 3.0,
             ink_color: "black".into(),
             ink_eraser: false,
@@ -495,7 +497,15 @@ impl Widget for PageView {
                 {
                     if let Some(ink) = &mut self.ink {
                         match ink.pen(*pen, self.ink_width, &self.ink_color, self.ink_eraser) {
-                            Ok(Some((rect, hint))) => cx.request_paint_rect(rect, hint),
+                            Ok(Some((rect, hint))) => {
+                                cx.request_paint_rect(rect, hint);
+                                if self.ink_pencil && pen.phase == kaia_input::Phase::Up {
+                                    cx.action(action(
+                                        "reader:ink:pencil-bookmark",
+                                        vec![Value::Bool(!ink.strokes.is_empty())],
+                                    ));
+                                }
+                            }
                             Err(e) => {
                                 cx.request_paint();
                                 cx.action(action("reader:ink:error", vec![Value::Str(e)]));

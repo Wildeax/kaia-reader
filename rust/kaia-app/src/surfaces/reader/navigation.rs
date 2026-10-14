@@ -203,9 +203,13 @@ pub(super) fn interrupt(rc: &Rc<RefCell<Core>>, event: &str, ctx: &mut Ctx) {
     c.gestures.light_start = None;
     c.gestures.light_write = None;
     if let Some(window) = &c.page_window {
-        window.update::<PageView, _>(ctx, PAGE_KEY, |view, _| {
+        window.update::<PageView, _>(ctx, PAGE_KEY, |view, cx| {
             view.brightness = None;
             view.cancel_gestures();
+            if let Some(ink) = &mut view.ink {
+                ink.cancel();
+                cx.request_paint();
+            }
         });
     }
 }

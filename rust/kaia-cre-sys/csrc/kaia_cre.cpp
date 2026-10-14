@@ -1149,3 +1149,96 @@ int kaia_cre_cover(kaia_cre_doc *doc, uint8_t **out, size_t *len) {
 void kaia_cre_free(void *ptr) { std::free(ptr); }
 
 } // extern "C"
+
+int kaia_cre_text_range(kaia_cre_doc *doc, const char *start, const char *end, char **out) {
+    return guard([&]() -> int {
+        if (!start || !end || !out) fail("null text range argument");
+        *out = nullptr;
+        auto a = parse_xpointer(doc, start);
+        auto b = parse_xpointer(doc, end);
+        if (a.isNull() || b.isNull()) return KAIA_CRE_NOT_FOUND;
+        ldomXRange range(a, b);
+        range.sort();
+        *out = dup_utf8(range.getRangeText('\n'));
+        return KAIA_CRE_OK;
+    });
+}
+
+int kaia_cre_word_boundary(kaia_cre_doc *doc, const char *xp, int next, char **out) {
+    return guard([&]() -> int {
+        if (!xp || !out) fail("null word boundary argument");
+        *out = nullptr;
+        ldomXPointerEx p = parse_xpointer(doc, xp);
+        if (p.isNull() || !(next ? p.nextVisibleWordEnd() : p.prevVisibleWordStart()))
+            return KAIA_CRE_NOT_FOUND;
+        *out = dup_utf8(p.toString());
+        return KAIA_CRE_OK;
+    });
+}
+
+void kaia_cre_free_text_matches(kaia_cre_text_match *items, size_t count) {
+    if (!items) return;
+    for (size_t i = 0; i < count; ++i)
+        for (auto field : items[i].fields) std::free(field);
+    std::free(items);
+}
+
+int kaia_cre_find_all(kaia_cre_doc *doc, const char *pattern, int insensitive, int regex,
+        int context, int max_hits, kaia_cre_text_match **out, size_t *count) {
+    return guard([&]() -> int {
+        if (!pattern || !out || !count) fail("null search argument");
+        *out = nullptr;
+        *count = 0;
+        view_of(doc)->Render();
+        ldomXRangeList matches;
+        if (!*pattern || max_hits <= 0) return KAIA_CRE_OK;
+        dom_of(doc)->findText(lString32(pattern), insensitive != 0, false, -1, -1,
+            matches, max_hits, -1, -1, regex != 0, 0);
+        size_t n = matches.length();
+        auto items = static_cast<kaia_cre_text_match *>(std::calloc(n, sizeof(kaia_cre_text_match)));
+        if (n && !items) fail("out of memory");
+        try {
+            for (size_t i = 0; i < n; ++i) {
+                auto range = matches[i];
+                auto &f = items[i].fields;
+                f[0] = dup_utf8(range->getStart().toString());
+                f[1] = dup_utf8(range->getEnd().toString());
+                f[2] = dup_utf8(range->getRangeText('\n'));
+                ldomXPointerEx start = range->getStart();
+                ldomXPointerEx end = range->getEnd();
+                if (!start.isVisibleWordStart()) {
+                    start.prevVisibleWordStart();
+                    ldomXRange prefix(start, range->getStart());
+                    f[3] = dup_utf8(prefix.getRangeText('\n'));
+                    f[4] = dup_utf8(start.toString());
+                }
+                if (!end.isVisibleWordEnd()) {
+                    end.nextVisibleWordEnd();
+                    ldomXRange suffix(range->getEnd(), end);
+                    f[5] = dup_utf8(suffix.getRangeText('\n'));
+                    f[6] = dup_utf8(end.toString());
+                }
+                if (context > 0) {
+                    auto prev = start;
+                    for (int j = 0; j < context && prev.prevVisibleWordStart(); ++j) {}
+                    ldomXRange before(prev, start);
+                    f[7] = dup_utf8(before.getRangeText('\n'));
+                    auto next = end;
+                    auto tmp = end;
+                    for (int j = 0; j < context; ++j) {
+                        if ((j == 0 && end.getNode()->isRoot()) || !tmp.nextVisibleWordEnd()) break;
+                        next = tmp;
+                    }
+                    ldomXRange after(end, next);
+                    f[8] = dup_utf8(after.getRangeText('\n'));
+                }
+            }
+        } catch (...) {
+            kaia_cre_free_text_matches(items, n);
+            throw;
+        }
+        *out = items;
+        *count = n;
+        return KAIA_CRE_OK;
+    });
+}

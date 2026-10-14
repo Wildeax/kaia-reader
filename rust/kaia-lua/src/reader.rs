@@ -17,6 +17,11 @@ pub trait ReaderHost {
     fn annotations(&mut self) -> Vec<Value>;
     fn toc(&self) -> Vec<Value>;
 
+    /// Read-only KOReader text queries. Arguments use Lua's string forms.
+    fn document_query(&mut self, _method: &str, _args: Vec<String>) -> Result<Value, String> {
+        Err("ReaderHost.document_query is unavailable".into())
+    }
+
     fn text_from_positions(&mut self, _start: &Value, _end: &Value) -> Result<String, String> {
         Err("ReaderHost.text_from_positions is unavailable".into())
     }
@@ -49,6 +54,11 @@ pub trait ReaderHost {
     /// Replaces the editable fields of an annotation identified by `kaia_id`.
     fn update_annotation(&mut self, _id: u64, _item: Value) -> Result<(), String> {
         Err("ReaderHost.update_annotation is unavailable".into())
+    }
+
+    /// Replaces a merged annotation list while retaining local ids by position.
+    fn replace_annotations(&mut self, _items: Vec<Value>) -> Result<(), String> {
+        Err("ReaderHost.replace_annotations is unavailable".into())
     }
 
     fn delete_annotation(&mut self, _id: u64) -> Result<(), String> {

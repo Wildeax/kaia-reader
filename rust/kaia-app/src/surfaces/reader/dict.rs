@@ -243,6 +243,32 @@ pub fn install_hint(data_dir: &Path) -> String {
     )
 }
 
+/// Keep the vocabulary sentence separate from the plugin's surrounding words.
+pub(super) struct LookupContext {
+    pub sentence: Option<String>,
+    #[cfg(feature = "lua")]
+    pub surrounding: Option<(String, String)>,
+}
+
+/// Snapshot the lookup context before the native selection clears.
+#[cfg(feature = "lua")]
+pub(super) fn plugin_context(word: &str, context: Option<&LookupContext>) -> Value {
+    let Some((before, after)) = context.and_then(|c| c.surrounding.as_ref()) else {
+        return Value::Nil;
+    };
+    Value::Table(
+        [
+            ("before".into(), Value::from(before.clone())),
+            ("after".into(), Value::from(after.clone())),
+            (
+                "selected_text".into(),
+                Value::Table([("text".into(), Value::from(word))].into()),
+            ),
+        ]
+        .into(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

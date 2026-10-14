@@ -221,6 +221,12 @@ end
 function M.input(event)
     if event.handler ~= "onGesture" then return false end
     local ges = event.args[1]
+    for name, instance in pairs(M.instances) do
+        if name == "footcream" and ges.ges == "tap" then
+            local ok, used = guarded(name, instance._handleTap, instance, ges)
+            if ok and used then return true end
+        end
+    end
     local Screen = require("device").screen
     for _, zone in ipairs(M.touch_zones or {}) do
         local r = zone.screen_zone

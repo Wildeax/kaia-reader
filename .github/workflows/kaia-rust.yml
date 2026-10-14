@@ -84,6 +84,8 @@ jobs:
       - name: Clippy
         working-directory: rust
         run: |
+          # PURE_CRATES holds several "-p crate" arguments and must split into words.
+          # shellcheck disable=SC2086
           cargo clippy --locked --all-targets ${PURE_CRATES} -- -D warnings
           cargo clippy --locked --all-targets -p kaia-ffi --features test-panic -- -D warnings
           cargo clippy --locked --all-targets -p kaia-display --no-default-features -- -D warnings
@@ -91,6 +93,8 @@ jobs:
       - name: Test
         working-directory: rust
         run: |
+          # PURE_CRATES holds several "-p crate" arguments and must split into words.
+          # shellcheck disable=SC2086
           cargo test --locked ${PURE_CRATES}
           cargo test --locked -p kaia-ffi --features test-panic
           cargo test --locked -p kaia-display --no-default-features

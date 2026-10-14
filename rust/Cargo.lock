@@ -904,6 +904,7 @@ dependencies = [
  "kaia-sync",
  "kaia-ui",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "url",
 ]
@@ -978,6 +979,7 @@ version = "0.1.0"
 dependencies = [
  "kaia-cre-sys",
  "kaia-djvu-sys",
+ "kaia-events",
  "kaia-gfx",
  "kaia-mupdf-sys",
  "serde_json",

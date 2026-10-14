@@ -9,6 +9,10 @@ return function(ui, reader, strict)
         end
         error("ReaderHost did not return the added annotation")
     end
+    function annotation:replaceItems(items)
+        reader.replace_annotations(items)
+        self.annotations = reader.annotations()
+    end
     function annotation:getItemIndex(item)
         for index, saved in ipairs(self.annotations) do
             if saved == item or (item.kaia_id and saved.kaia_id == item.kaia_id) then return index end
@@ -43,10 +47,27 @@ return function(ui, reader, strict)
         return type(item.page) == "string" and reader.page_for_xpointer(item.page) or item.page
     end
     function ui.highlight:deleteHighlight(index) ui.bookmark:removeItemByIndex(index) end
-    function ui.highlight:getSelectedWordContext() return nil, nil end
+    function ui.highlight:getSelectedWordContext(nb_words)
+        local context = rawget(self, "lookup_context")
+        if not context or not self.selected_text then return end
+        local before, after = context.before or "", context.after or ""
+        local count = math.max(0, math.floor(nb_words or 0)) + 1
+        local starts = {}
+        for start in before:gmatch("()%S+%s*") do starts[#starts + 1] = start end
+        if #starts > count then before = before:sub(starts[#starts - count + 1]) end
+        local n = 0
+        for ending in after:gmatch("%s*%S+()") do
+            n = n + 1
+            if n == count then after = after:sub(1, ending - 1); break end
+        end
+        return before, after
+    end
+    function ui.document:getSelectedWordContext(_, nb_words)
+        return ui.highlight:getSelectedWordContext(nb_words)
+    end
     -- No active selection exists until the host supplies one.
     setmetatable(ui.highlight, { __index = function(_, key)
-        if key == "selected_text" then return nil end
+        if key == "selected_text" or key == "onTap" or key == "onHold" then return nil end
         error("highlight." .. tostring(key) .. " is unavailable", 2)
     end })
     function ui.toc:getTocTitleByPage(page)

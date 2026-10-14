@@ -77,8 +77,9 @@ Registered view modules and additional footer text can paint through
 The app connects these methods, overlays and lifecycle events. Device callbacks
 use kaia-platform for battery, charging, frontlight, warmth and suspend requests.
 The app idle policy honors pause_auto_suspend and standby holds. Dictionary
-lookups and plugin buttons use the native dictionary panel. Selection context,
-coverbrowser's native library adapter and terminal process ownership remain
+lookups and plugin buttons use the native dictionary panel. Lookups now carry
+selection context for Anki offline cards.
+Coverbrowser's native library adapter and terminal process ownership remain
 incomplete. Server and hardware operations are
 excluded from desktop tests. See [the per-plugin status table](../inventory/PLUGIN_STATUS.md)
 for test names, untested baseline steps and changes needed outside kaia-lua.
@@ -115,3 +116,44 @@ statistics, perceptionexpander, systemstat, batterystat, vocabulary builder,
 readingstreak and Anki, plus failure and device fixtures. Those tests make no
 server requests. They do not establish physical Kobo behavior or full community
 plugin compatibility.
+
+## Community adapters, B-19 through B-22
+
+The four pinned plugins pass scoped desktop workflows. Their source fixtures
+stay unchanged; the compatibility layer adapts their classes before creating
+instances. See [community workflows](../inventory/COMMUNITY_PLUGINS.md) for
+individual tests and limits.
+
+Pencil's enable, tool and undo callbacks issue native ink commands. Native pen
+events retain their single Rust input owner and use the existing page transforms
+and `kaia-storage` ink store. Completed strokes create a host bookmark at the
+current location. Erasing the last stroke removes that bookmark. Suspend cancels
+unfinished strokes, and unloading Pencil releases its drawing mode. Enabling
+Pencil persists the preference for restart. Upstream raw input replacement,
+framebuffer drawing and image-preview storage do not run.
+
+Footcream uses `findAllText`, text-range and word-boundary queries, xpointer
+comparison, page xpointers and screen rectangles from CREngine. App queries run
+on the document worker; screen rectangles include the native reader header
+offset. Searches support case-insensitive literals or regex, with at most 20,000
+matches and 1,000 context words. Its scanner uses the synchronous fallback rather
+than forking a Rust process. The adapter registers the underline overlay and tap
+handler. DataStorage directs its cache to `<data>/footcream`. EPUB rewrite
+modes, report uploads and plugin update downloads are disabled.
+
+Anki receives the selected occurrence and surrounding text from the native
+lookup before the selection clears. Context stops at the current page. The
+native dictionary panel exposes its button. The adapter skips AnkiConnect's
+availability probe and uses the pinned offline queue under Kaia settings.
+The desktop test writes one card with its word, definition and context, checks
+that it survives restart, and rejects any socket or HTTP request. Online sync,
+translation and audio are outside this supported workflow.
+
+HighlightSync uses its pinned local merge algorithm. Its
+`doc_settings:getSidecarDir` adapter accepts only the open book and returns
+`<data>/plugin-books/<partial-md5>`. `annotation:replaceItems` validates the complete result and commits it
+through BookSession. Matching highlight positions retain host IDs; new positions
+receive host IDs instead of incoming IDs. Edited text, notes and edit timestamps
+survive reopen. Invalid batches leave the prior annotations intact. The adapter
+refreshes the Lua annotation table after saving and avoids document reload.
+Remote sync reports the local-only limit before attempting a connection.

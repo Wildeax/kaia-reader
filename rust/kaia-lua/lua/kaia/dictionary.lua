@@ -10,7 +10,9 @@ return function(ui)
         KAIA_DEVICE("lookup", word)
     end
     function dictionary:lookup(word) self:onLookupWord(word) end
-    function dictionary:setLookup(word, text)
+    function dictionary:setLookup(word, text, context)
+        ui.highlight.selected_text = context and context.selected_text or nil
+        ui.highlight.lookup_context = context
         popup = {
             ui = ui, word = word, lookupword = word, selected_link = nil,
             window_list = {}, dict_index = 1, results = {{ word = word, definition = text, dict = "Kaia dictionary" }},

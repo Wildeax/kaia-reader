@@ -9,6 +9,7 @@ pub struct BookReader {
     session: BookSession,
     document: Box<dyn Document>,
     settings: BTreeMap<String, Value>,
+    cre: Option<kaia_doc::cre::CreDocument>,
 }
 
 impl BookReader {
@@ -29,6 +30,7 @@ impl BookReader {
             Value::from(session.identity().partial_md5.clone()),
         );
         Self {
+            cre: None,
             session,
             document,
             settings,
@@ -55,6 +57,17 @@ impl ReaderHost for BookReader {
         self.document
             .page_text(page.saturating_sub(1))
             .map(|p| p.text)
+            .map_err(|e| e.to_string())
+    }
+    fn document_query(&mut self, method: &str, args: Vec<String>) -> Result<Value, String> {
+        if self.cre.is_none() {
+            self.cre =
+                Some(kaia_doc::cre::CreDocument::open(self.session.path()).map_err(|e| e.to_string())?);
+        }
+        self.cre
+            .as_ref()
+            .unwrap()
+            .plugin_query(method, &args, self.current_page() - 1)
             .map_err(|e| e.to_string())
     }
     fn xpointer_for_page(&self, page: u32) -> Result<String, String> {
@@ -106,41 +119,7 @@ impl ReaderHost for BookReader {
             .annotations()
             .unwrap()
             .into_iter()
-            .map(|a| {
-                let mut fields = kaia_events::Table::new();
-                fields.insert(Key::from("kaia_id"), Value::from(a.id as i64));
-                fields.insert(Key::from("pageno"), Value::from(a.pageno.unwrap_or(1) as i64));
-                if let Some(color) = a.color {
-                    fields.insert(Key::from("color"), Value::from(color));
-                }
-                fields.insert(Key::from("datetime"), Value::from(a.datetime));
-                if let Some(text) = a.text {
-                    fields.insert(Key::from("text"), Value::from(text));
-                }
-                if let Some(note) = a.note {
-                    fields.insert(Key::from("note"), Value::from(note));
-                }
-                if let Some(chapter) = a.chapter {
-                    fields.insert(Key::from("chapter"), Value::from(chapter));
-                }
-                if let Some(drawer) = a.drawer {
-                    fields.insert(Key::from("drawer"), Value::from(drawer));
-                }
-                if let Some(pos) = a.pos0 {
-                    fields.insert(Key::from("pos0"), position_value(pos));
-                }
-                if let Some(pos) = a.pos1 {
-                    fields.insert(Key::from("pos1"), position_value(pos));
-                }
-                fields.insert(
-                    Key::from("page"),
-                    match a.page {
-                        Location::Page(page) => Value::from(page as i64 + 1),
-                        Location::Engine(xp) => Value::from(xp),
-                    },
-                );
-                Value::Table(fields)
-            })
+            .map(|a| a.to_value())
             .collect()
     }
     fn toc(&self) -> Vec<Value> {
@@ -202,6 +181,11 @@ impl ReaderHost for BookReader {
                 .map_err(|e| e.to_string())?;
         }
         Ok(())
+    }
+    fn replace_annotations(&mut self, items: Vec<Value>) -> Result<(), String> {
+        self.session
+            .replace_plugin_annotations(&items)
+            .map_err(|e| e.to_string())
     }
     fn delete_annotation(&mut self, id: u64) -> Result<(), String> {
         self.session.delete_annotation(id).map_err(|e| e.to_string())

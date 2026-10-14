@@ -268,19 +268,7 @@ const SENTENCE_WINDOW: usize = 200;
 /// has no sentence end, the sentence is cut at the edge of the window.
 pub fn sentence_around(page: &PageText, needle: &str, near: Option<RectF>) -> Option<String> {
     let flat = Flat::new(page);
-    let hits = flat.find_all(needle);
-    let hit = match near {
-        Some(target) => hits
-            .into_iter()
-            .filter_map(|range| {
-                let (first, _) = flat.span(&range)?;
-                let distance = center_distance(page.chars.get(first)?.bbox, target);
-                Some((distance, range))
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map(|(_, range)| range)?,
-        None => hits.into_iter().next()?,
-    };
+    let hit = selection_range(page, &flat, needle, near)?;
     let (window, found) = flat.snippet(&hit, SENTENCE_WINDOW);
     let chars: Vec<char> = window.chars().collect();
     let found = found.start.min(chars.len())..found.end.min(chars.len());
@@ -300,6 +288,34 @@ pub fn sentence_around(page: &PageText, needle: &str, near: Option<RectF>) -> Op
         .collect::<Vec<_>>()
         .join(" ");
     (!sentence.is_empty()).then_some(sentence)
+}
+
+/// Text on either side of the selected occurrence, bounded by the current page.
+pub fn selection_context(page: &PageText, needle: &str, near: Option<RectF>) -> Option<(String, String)> {
+    let flat = Flat::new(page);
+    let hit = selection_range(page, &flat, needle, near)?;
+    let (text, range) = flat.snippet(&hit, usize::MAX / 2);
+    let chars: Vec<_> = text.chars().collect();
+    Some((
+        chars[..range.start].iter().collect(),
+        chars[range.end..].iter().collect(),
+    ))
+}
+
+fn selection_range(page: &PageText, flat: &Flat, needle: &str, near: Option<RectF>) -> Option<Range<usize>> {
+    let hits = flat.find_all(needle);
+    match near {
+        Some(target) => hits
+            .into_iter()
+            .filter_map(|range| {
+                let (first, _) = flat.span(&range)?;
+                let distance = center_distance(page.chars.get(first)?.bbox, target);
+                Some((distance, range))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, range)| range),
+        None => hits.into_iter().next(),
+    }
 }
 
 /// The distance between the centres of two boxes, in page points.

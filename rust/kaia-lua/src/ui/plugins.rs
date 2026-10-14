@@ -32,6 +32,17 @@ pub struct PluginOptions {
 pub(super) fn install_reader(lua: &Lua, host: Rc<RefCell<dyn ReaderHost>>) -> mlua::Result<()> {
     let api = lua.create_table()?;
     let h = Rc::clone(&host);
+    api.set(
+        "document_query",
+        lua.create_function(move |lua, (method, args): (String, Vec<String>)| {
+            let value = h
+                .borrow_mut()
+                .document_query(&method, args)
+                .map_err(mlua::Error::RuntimeError)?;
+            convert::to_lua(lua, &value).map_err(|e| mlua::Error::RuntimeError(e.to_string()))
+        })?,
+    )?;
+    let h = Rc::clone(&host);
     api.set("file", lua.create_function(move |_, ()| Ok(h.borrow().file()))?)?;
     let h = Rc::clone(&host);
     api.set(
@@ -95,6 +106,19 @@ pub(super) fn install_reader(lua: &Lua, host: Rc<RefCell<dyn ReaderHost>>) -> ml
             let item = convert::from_lua(&item).map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
             h.borrow_mut()
                 .update_annotation(id, item)
+                .map_err(mlua::Error::RuntimeError)
+        })?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
+        "replace_annotations",
+        lua.create_function(move |_, items: Table| {
+            let items = items
+                .sequence_values::<LuaValue>()
+                .map(|item| convert::from_lua(&item?).map_err(|e| mlua::Error::RuntimeError(e.to_string())))
+                .collect::<mlua::Result<Vec<_>>>()?;
+            h.borrow_mut()
+                .replace_annotations(items)
                 .map_err(mlua::Error::RuntimeError)
         })?,
     )?;

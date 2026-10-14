@@ -15,6 +15,7 @@ djvu = ["dep:kaia-djvu-sys"]
 cre = ["dep:kaia-cre-sys"]
 
 [dependencies]
+kaia-events = { path = "../kaia-events" }
 kaia-gfx = { path = "../kaia-gfx" }
 kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 kaia-cre-sys = { path = "../kaia-cre-sys", optional = true }

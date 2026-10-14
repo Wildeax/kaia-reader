@@ -146,7 +146,7 @@ impl<B: Backend> App<B> {
                         close();
                         p.reload = true;
                     }
-                    Request::Dictionary(word, text) => { lua.dictionary_lookup(&word, &text).map_err(|e| e.to_string())?; }
+                    Request::Dictionary(word, text, context) => { lua.dictionary_lookup_context(&word, &text, &context).map_err(|e| e.to_string())?; }
                     Request::DictionaryActions => { lua.dictionary_actions().map_err(|e| e.to_string())?; }
                     Request::Reload => p.reload = true,
                     Request::Event(event) => {
@@ -211,6 +211,17 @@ impl<B: Backend> App<B> {
                 }
                 "lookup" => {
                     self.command("reader:dictionary-word", &[value]);
+                    Ok(())
+                }
+                "ink" => {
+                    if let Some(action) = value.as_str().filter(|s| {
+                        matches!(
+                            *s,
+                            "pencil-on" | "pencil-off" | "pencil-pen" | "pencil-eraser" | "undo"
+                        )
+                    }) {
+                        self.command(&format!("reader:ink:{action}"), &[]);
+                    }
                     Ok(())
                 }
                 "dictionary_close" => {
