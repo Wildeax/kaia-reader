@@ -82,7 +82,9 @@ fn saved_zone(dir: &Path) -> Option<String> {
 fn open_time_zone_page(app: &mut App<HeadlessBackend>) {
     app.start().unwrap();
     tap_key(app, "nav-settings");
-    tap_key(app, "settings-device");
+    // The root list is paged, so open Device by its command, not by its row.
+    app.command("settings:device", &[]);
+    app.process(Vec::new()).unwrap();
     app.command("settings:timezone", &[]);
     assert_eq!(
         app.top_route(),

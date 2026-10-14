@@ -107,9 +107,10 @@ impl Default for LookupOptions {
 }
 
 /// Every dictionary found under one folder.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Library {
     dicts: Vec<Dictionary>,
+    kobo: Vec<crate::kobo::KoboDictionary>,
     errors: Vec<(PathBuf, Error)>,
 }
 
@@ -126,6 +127,7 @@ impl Library {
         ifos.sort();
         let mut library = Library {
             dicts: Vec::new(),
+            kobo: Vec::new(),
             errors: Vec::new(),
         };
         for ifo in ifos {
@@ -135,6 +137,53 @@ impl Library {
             }
         }
         Ok(library)
+    }
+
+    /// Combines sources, keeping only one copy of a file reached through aliases.
+    pub fn append(&mut self, other: Self) {
+        for dict in other.dicts {
+            if !self
+                .dicts
+                .iter()
+                .any(|d| fs::canonicalize(d.path()).ok() == fs::canonicalize(dict.path()).ok())
+            {
+                self.dicts.push(dict);
+            }
+        }
+        self.kobo.extend(other.kobo);
+        self.errors.extend(other.errors);
+    }
+
+    /// Reads Nickel's dictionary folder without creating or changing anything.
+    pub fn add_kobo_dir(&mut self, dir: &Path) {
+        let Ok(files) = fs::read_dir(dir) else {
+            return;
+        };
+        let mut paths: Vec<_> = files
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| s.starts_with("dicthtml") && s.ends_with(".zip"))
+            })
+            .collect();
+        paths.sort();
+        for path in paths {
+            match crate::kobo::KoboDictionary::open(&path) {
+                Ok(dict) => self.kobo.push(dict),
+                Err(error) => self.errors.push((path, error)),
+            }
+        }
+    }
+
+    /// Names of StarDict and readable Kobo dictionaries.
+    pub fn names(&self) -> Vec<String> {
+        self.dicts
+            .iter()
+            .map(|d| d.name().to_owned())
+            .chain(self.kobo.iter().map(|d| d.name().to_owned()))
+            .collect()
     }
 
     /// The dictionaries that opened, in lookup order.
@@ -170,7 +219,38 @@ impl Library {
                 .then_with(|| a.name().cmp(b.name()))
                 .then_with(|| a.path().cmp(b.path()))
         });
-        run(&refs, word, opts)
+        let mut results = run(&refs, word, opts);
+        let mut kobo_matches = Vec::new();
+        for dict in &self.kobo {
+            if opts.disabled.contains(dict.name())
+                || (opts.exclusive
+                    && !opts
+                        .dictionaries
+                        .as_ref()
+                        .is_some_and(|names| names.iter().any(|n| n == dict.name())))
+            {
+                continue;
+            }
+            if let Ok(entries) = dict.lookup(word) {
+                kobo_matches.extend(entries);
+            }
+        }
+        if kobo_matches.is_empty() {
+            return results;
+        }
+        // Fuzzy guesses apply only when no source has a direct match.
+        results.retain(|entry| entry.matched != Match::Fuzzy);
+        results.extend(kobo_matches);
+        results.sort_by_key(|entry| {
+            (
+                opts.dictionaries
+                    .as_ref()
+                    .and_then(|names| names.iter().position(|n| n == &entry.dict_name))
+                    .unwrap_or(usize::MAX),
+                entry.dict_name.clone(),
+            )
+        });
+        results
     }
 }
 
@@ -182,7 +262,7 @@ fn collect_ifos(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> std::io::Re
         // Follow symbolic links, with a depth limit to stop cycles.
         let file_type = fs::metadata(&path)?.file_type();
         if file_type.is_dir() {
-            if depth < MAX_DEPTH && entry.file_name() != "res" {
+            if depth < MAX_DEPTH && entry.file_name() != "res" && entry.file_name() != ".partial" {
                 // An unreadable subfolder is skipped; the other folders still load.
                 let _ = collect_ifos(&path, depth + 1, out);
             }

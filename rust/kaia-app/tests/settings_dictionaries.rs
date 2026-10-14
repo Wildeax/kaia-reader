@@ -219,3 +219,124 @@ fn without_a_dictionary_the_reading_page_has_no_dictionary_settings_row() {
         "no dictionary, no settings row"
     );
 }
+
+fn write_kobo(root: &Path, protected: bool) {
+    use std::io::Write;
+    fs::create_dir_all(root).unwrap();
+    let mut zip = zip::ZipWriter::new(fs::File::create(root.join("dicthtml-en.zip")).unwrap());
+    zip.start_file("re.html", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    if protected {
+        zip.write_all(&[0xa5; 32]).unwrap();
+    } else {
+        zip.write_all(b"<html><w><a name=\"reader\" /><p>Kobo definition</p></w></html>")
+            .unwrap();
+    }
+    zip.finish().unwrap();
+}
+
+#[test]
+fn kobo_and_stardict_share_order_switches_and_book_preference() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-kobo-dictionaries");
+    write_two_dictionaries(&dir.join("data"));
+    let mut app = app_with_books(&dir);
+    let kobo = app.services().paths.books_dir.join(".kobo/dict");
+    write_kobo(&kobo, false);
+    // A second StarDict source must also load, even when Kaia's folder has entries.
+    write_dictionary(
+        &app.services().paths.books_dir.join(".adds/koreader/data"),
+        "extra",
+        "Other source",
+        "reader",
+        "Other definition",
+    );
+    app.services_mut().dictionary = None;
+    open_dictionary_settings(&mut app);
+    assert_eq!(app.services().dictionary.as_ref().unwrap().names().len(), 4);
+    app.command("settings:dicts:up:2", &[]);
+    app.command("settings:dicts:up:1", &[]);
+    assert_eq!(
+        saved_names(&app.services().settings_path(), "dictionary.order")[0],
+        "Kobo en"
+    );
+    app.command("settings:dicts:toggle:0", &[]);
+    assert_eq!(
+        saved_names(&app.services().settings_path(), "dictionary.disabled"),
+        ["Kobo en"]
+    );
+    app.command("settings:dicts:toggle:0", &[]);
+    app.iterate(Some(Duration::ZERO)).unwrap();
+    kaia_gfx::golden::assert_matches_golden(app.frame(), &golden("settings_kobo_dictionaries.png"), 14);
+    leave_settings(&mut app);
+    let body = lookup(&mut app, "juliet.epub", "reader");
+    assert!(body.find("Kobo definition").unwrap() < body.find("alpha definition").unwrap());
+    app.command("reader:dict:first", &[]);
+    app.services_mut()
+        .settings
+        .save("dictionary.disabled", Value::array([Value::from("Kobo en")]));
+    app.key(Key::Back).unwrap();
+    app.command("reader:dictionary-word", &[Value::from("reader")]);
+    wait_reader(&mut app);
+    assert!(text_of(&mut app, "dict-body").contains("Kobo definition"));
+    // Removing the book preference restores the global off switch.
+    app.command("reader:dict:first", &[]);
+    wait_reader(&mut app);
+    assert!(!text_of(&mut app, "dict-body").contains("Kobo definition"));
+}
+
+#[test]
+fn encrypted_kobo_note_is_visible_when_no_dictionary_opens() {
+    use kaia_app::surfaces::settings::{entries::Entry, sections};
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-kobo-encrypted");
+    let mut app = app_with_books(&dir);
+    write_kobo(&app.services().paths.books_dir.join(".kobo/dict"), true);
+    app.services_mut().dictionary = None;
+    open_dictionary_settings(&mut app);
+    assert!(sections::entries("dictionaries", app.services(), 0)
+        .iter()
+        .any(|entry| matches!(entry, Entry::Text(text) if text.contains("Encrypted or unsupported"))));
+}
+
+#[test]
+fn dictionary_download_page_requires_opt_in_and_airplane_blocks_requests() {
+    use kaia_app::dictionary_downloads::ALLOW_KEY;
+    use kaia_app::surfaces::settings::{entries::Entry, keys, sections};
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-dictionary-downloads");
+    let mut app = app_with_books(&dir);
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-reading");
+    assert!(!kaia_app::dictionary_downloads::allowed(&app.services().settings));
+    assert!(sections::entries("dictionary-downloads", app.services(), 0).is_empty());
+    let route = app.top_route().cloned();
+    app.command("settings:dictionary-downloads", &[]);
+    assert_eq!(app.top_route(), route.as_ref());
+    app.command(&format!("settings:set:{ALLOW_KEY}"), &[Value::Bool(true)]);
+    assert!(Settings::open(&app.services().settings_path())
+        .read(ALLOW_KEY)
+        .as_bool()
+        .unwrap());
+    assert!(sections::entries("reading", app.services(), 0).iter().any(|entry| matches!(entry, Entry::Row { action: Some(action), .. } if action == "settings:dictionary-downloads")));
+    app.command("settings:dictionary-downloads", &[]);
+    app.iterate(Some(Duration::ZERO)).unwrap();
+    kaia_gfx::golden::assert_matches_golden(app.frame(), &golden("settings_dictionary_downloads.png"), 14);
+    app.services_mut()
+        .settings
+        .save(keys::NETWORK_AIRPLANE_MODE, Value::Bool(true));
+    let id = &kaia_dict::download::catalog()[0].id;
+    app.command(&format!("settings:dictionary-install:{id}"), &[]);
+    assert!(!app.services().dictionary_downloads.busy());
+    assert!(app
+        .notices()
+        .iter()
+        .any(|s| s == "Airplane mode is on. Turn it off to use Wi-Fi."));
+    assert!(!dir.join("data/dict/.partial").exists());
+    app.command(&format!("settings:set:{ALLOW_KEY}"), &[Value::Bool(false)]);
+    app.services_mut()
+        .settings
+        .save(keys::NETWORK_AIRPLANE_MODE, Value::Bool(false));
+    app.command(&format!("settings:dictionary-install:{id}"), &[]);
+    assert!(!app.services().dictionary_downloads.busy());
+}
