@@ -11,6 +11,10 @@
 //! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
+//! | `reading.header_title` | bool | false | Reader header shows the book title at the left. |
+//! | `reading.header_chapter` | bool | false | Reader header shows the current TOC chapter at the right. |
+//! | `reading.header_clock` | bool | false | Reader header shows the clock at the right, read on redraw. |
+//! | `reading.header_battery` | bool | false | Reader header shows the battery level at the right, read on redraw. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
 //! | `reading.footer_percent` | bool | false | Reader footer shows the reading percent. |
 //! | `reading.footer_time_chapter` | bool | false | Reader footer shows the time left in the chapter, or in the book before the first chapter. |
@@ -60,6 +64,10 @@ pub const READING_FONT_WEIGHT_PREFIX: &str = "reading.font_weight.";
 pub const FONT_WEIGHT_BOOK_FONT: &str = "(book)";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
+pub const READING_HEADER_TITLE: &str = "reading.header_title";
+pub const READING_HEADER_CHAPTER: &str = "reading.header_chapter";
+pub const READING_HEADER_CLOCK: &str = "reading.header_clock";
+pub const READING_HEADER_BATTERY: &str = "reading.header_battery";
 /// Reader footer items, each on or off. See the Footer sheet of the reader.
 pub const READING_FOOTER_PAGE: &str = "reading.footer_page";
 pub const READING_FOOTER_PERCENT: &str = "reading.footer_percent";

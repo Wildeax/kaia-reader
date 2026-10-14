@@ -65,6 +65,10 @@ pub struct PageView {
     pub position: Option<(u32, usize)>,
     /// The persistent footer, rebuilt from the current page on every frame.
     pub footer: String,
+    /// The title at the left and the chapter or device status at the right.
+    pub header: (String, String),
+    header_content: Option<(super::header::Header, String, kaia_book::PageInfo)>,
+    pub header_height: u32,
     footer_content: Option<(super::footer::Footer, kaia_book::PageInfo, f64)>,
     pub(crate) footer_battery: Option<u8>,
     /// The strip reserved by the book layout, including its vertical space.
@@ -92,6 +96,9 @@ impl PageView {
             message: None,
             position: None,
             footer: String::new(),
+            header: (String::new(), String::new()),
+            header_content: None,
+            header_height: 0,
             footer_content: None,
             footer_battery: None,
             footer_height: 0,
@@ -103,6 +110,16 @@ impl PageView {
             held_key: None,
             repeats: 0,
         }
+    }
+
+    pub(super) fn set_header(
+        &mut self,
+        header: super::header::Header,
+        title: String,
+        info: kaia_book::PageInfo,
+    ) {
+        self.header = header.text(&title, &info, &super::footer::Status::default());
+        self.header_content = Some((header, title, info));
     }
 
     pub(super) fn set_footer(&mut self, footer: super::footer::Footer, info: kaia_book::PageInfo, pace: f64) {
@@ -119,7 +136,7 @@ impl PageView {
         self.repeats = 0;
     }
 
-    /// The page image centred above the footer, as `paint` draws it.
+    /// The page image centred between the header and footer, as `paint` draws it.
     /// The book area when no page is shown.
     fn placed(&self, bounds: Rect) -> Rect {
         let bounds = self.content_bounds(bounds);
@@ -136,7 +153,8 @@ impl PageView {
 
     fn content_bounds(&self, bounds: Rect) -> Rect {
         Rect {
-            h: bounds.h.saturating_sub(self.footer_height),
+            y: bounds.y + self.header_height as i32,
+            h: bounds.h.saturating_sub(self.header_height + self.footer_height),
             ..bounds
         }
     }
@@ -294,7 +312,7 @@ impl Widget for PageView {
             cx.dim(*rect, 80);
             cx.border(*rect, 0, 2, ink);
         }
-        // Kaia's footer goes under stickers and plugin overlays, so a plugin can draw
+        // Kaia's header and footer go under stickers and plugin overlays, so a plugin can draw
         // in the footer strip as it does in KOReader.
         if self.footer_height > 0 {
             if let Some((footer, info, pace)) = &self.footer_content {
@@ -330,6 +348,35 @@ impl Widget for PageView {
                     ),
                 );
             });
+        }
+        if self.header_height > 0 {
+            if let Some((header, title, info)) = &self.header_content {
+                self.header = header.text(title, info, &super::footer::Status::now(self.footer_battery));
+            }
+            let rect = Rect::new(bounds.x, bounds.y, bounds.w, self.header_height);
+            cx.fill_rect(rect, surface);
+            let style = cx.theme.style(&cx.theme.font.caption, Tone::InkSecondary);
+            let margin = cx.theme.space.lg;
+            let available = bounds.w.saturating_sub(2 * margin);
+            let width = if !self.header.0.is_empty() && !self.header.1.is_empty() {
+                available.saturating_sub(cx.theme.space.md) / 2
+            } else {
+                available
+            };
+            for (value, right) in [(&self.header.0, false), (&self.header.1, true)] {
+                let text = cx.fonts.layout(value, &style, width, Some(1), true);
+                let x = if right {
+                    bounds.x + bounds.w.saturating_sub(margin + text.width) as i32
+                } else {
+                    bounds.x + margin as i32
+                };
+                cx.clipped(rect, |cx| {
+                    cx.text(
+                        &text,
+                        Point::new(x, rect.y + rect.h.saturating_sub(text.height) as i32 / 2),
+                    );
+                });
+            }
         }
         for sticker in &self.stickers {
             sticker.paint(cx);

@@ -17,6 +17,7 @@
 mod commands;
 pub(crate) mod dict;
 mod footer;
+mod header;
 mod navigation;
 mod overlay;
 pub mod page;
@@ -463,7 +464,8 @@ impl Surface for ReaderSurface {
         let screen = env.screen;
         let mut opts = OpenOptions::new(env.services.paths.data_dir.clone());
         let footer = footer::Footer::from_settings(&env.services.settings);
-        opts.viewport = footer.viewport(screen, env.theme());
+        let header = header::Header::from_settings(&env.services.settings);
+        opts.viewport = header.viewport(&footer, screen, env.theme());
         opts.default_layout = koreader_default_layout(screen, &env.services.settings);
         opts.pixel_format = env.services.theme.pixel_format();
         let color_panel = env.services.theme.color_panel;
@@ -478,6 +480,8 @@ impl Surface for ReaderSurface {
                 &c.title,
                 row.authors.as_deref().unwrap_or("N/A"),
             );
+            c.header_height = header.height(env.theme());
+            c.header = header;
             c.footer_height = footer.height(env.theme());
             c.viewport = opts.viewport;
             c.footer = footer;
@@ -571,8 +575,9 @@ impl Surface for ReaderSurface {
             let dimension = |i: usize| ev.args.get(i).and_then(Value::as_i64).unwrap_or(0).max(0) as u32;
             let size = kaia_gfx::Size::new(dimension(0), dimension(1));
             let mut c = self.core.borrow_mut();
-            let size = c.footer.viewport(size, env.theme());
+            let size = c.header.viewport(&c.footer, size, env.theme());
             c.footer_height = c.footer.height(env.theme());
+            c.header_height = c.header.height(env.theme());
             c.viewport = size;
             let result = c
                 .session
@@ -828,7 +833,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     .rev()
                     .find(|s| {
                         s.hit_rect(env.theme().touch_target)
-                            .contains(Point::new(x as i32, y as i32))
+                            .contains(Point::new(x as i32, y as i32 - c.header_height as i32))
                     })
                     .map(|s| s.id.clone())
                 {
@@ -841,7 +846,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if let Some(link) = c
                     .links
                     .iter()
-                    .find(|(rect, _)| rect.contains(Point::new(x as i32, y as i32)))
+                    .find(|(rect, _)| rect.contains(Point::new(x as i32, y as i32 - c.header_height as i32)))
                     .map(|(_, link)| link.clone())
                 {
                     if let Some(text) = link.note {
@@ -934,7 +939,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if c.release() && c.panel.is_none() {
                     let word = c.selection.as_ref().map(|s| s.text.clone()).unwrap_or_default();
                     let (drawer, color) = highlight_style(env.services, c.color_panel);
-                    let edge = panels::edge_for(env.screen, c.selection.as_ref());
+                    let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
                     let window = panels::selection_popover(
                         env.services,
                         env.screen,
@@ -953,7 +958,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let was_visible = c.footer.is_visible();
                 c.footer.set(item, on);
                 if c.footer.is_visible() != was_visible {
-                    let viewport = c.footer.viewport(env.screen, env.theme());
+                    let viewport = c.header.viewport(&c.footer, env.screen, env.theme());
                     if let Some(session) = c.session.as_mut() {
                         match session.set_viewport(viewport) {
                             Ok(()) => c.layout_pending |= session.is_reflowable(),
@@ -966,6 +971,33 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     }
                     c.viewport = viewport;
                     c.footer_height = c.footer.height(env.theme());
+                    c.header_height = c.header.height(env.theme());
+                }
+                env.services.settings.save(item.key(), Value::Bool(on));
+                save_settings(env);
+                c.refresh_overlay(env.ctx);
+                c.repaint_page(env.ctx, PaintHint::Full);
+                Outcome::Handled
+            }
+            Command::Header(item, on) => {
+                let previous = c.header.is_on(item);
+                let old_height = c.header.height(env.theme());
+                c.header.set(item, on);
+                if c.header.height(env.theme()) != old_height {
+                    let viewport = c.header.viewport(&c.footer, env.screen, env.theme());
+                    if let Some(session) = c.session.as_mut() {
+                        match session.set_viewport(viewport) {
+                            Ok(()) => c.layout_pending |= session.is_reflowable(),
+                            Err(e) => {
+                                c.header.set(item, previous);
+                                env.notice(tr_format(&tr("Cannot resize the page. %1"), &[&e.to_string()]));
+                                return Outcome::Handled;
+                            }
+                        }
+                    }
+                    c.viewport = viewport;
+                    c.footer_height = c.footer.height(env.theme());
+                    c.header_height = c.header.height(env.theme());
                 }
                 env.services.settings.save(item.key(), Value::Bool(on));
                 save_settings(env);
@@ -1040,7 +1072,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     }
                     PanelName::Layout => layout_window(&c, env),
                     PanelName::More => panels::more(env.services, env.screen),
-                    PanelName::Footer => panels::footer_sheet(env.services, env.screen, &c.footer),
+                    PanelName::Footer => panels::footer_sheet(env.services, env.screen, &c.header, &c.footer),
                 };
                 show_panel(rc, &mut c, env.ctx, window, replace)
             }
@@ -1218,7 +1250,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     return Outcome::Handled;
                 }
                 let (drawer, _) = highlight_style(env.services, c.color_panel);
-                let edge = panels::edge_for(env.screen, c.selection.as_ref());
+                let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
                 let window = panels::selection_more(env.services, env.screen, edge, drawer.as_str());
                 show_panel(rc, &mut c, env.ctx, window, true)
             }
@@ -1480,7 +1512,7 @@ fn highlight_style(services: &Services, color_panel: bool) -> (Drawer, String) {
 
 /// The highlight under a tap, if there is one. Bookmarks have no area, so they never match.
 fn highlight_at(c: &mut Core, x: f64, y: f64) -> Option<kaia_book::Annotation> {
-    let point = Point::new(x as i32, y as i32);
+    let point = Point::new(x as i32, y as i32 - c.header_height as i32);
     let viewport = c.viewport;
     let session = c.session.as_mut()?;
     // Listing the highlights costs engine calls, so a book with none skips it.
@@ -1544,7 +1576,7 @@ fn default_style(
         return Outcome::Handled;
     };
     let (drawer, color) = highlight_style(env.services, c.color_panel);
-    let edge = panels::edge_for(env.screen, c.selection.as_ref());
+    let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
     let window = panels::selection_popover(
         env.services,
         env.screen,

@@ -244,7 +244,7 @@ fn persistent_footer_golden() {
 }
 
 #[test]
-fn clock_and_battery_follow_a_page_redraw_without_a_page_turn() {
+fn header_and_footer_clock_and_battery_follow_a_page_redraw_without_a_page_turn() {
     struct Battery(std::rc::Rc<std::cell::Cell<u8>>);
     impl kaia_platform::Battery for Battery {
         fn capacity(&self) -> Option<u8> {
@@ -264,11 +264,15 @@ fn clock_and_battery_follow_a_page_redraw_without_a_page_turn() {
     app.services_mut().platform.battery = Box::new(Battery(level.clone()));
     set_item(&mut app, "clock", true);
     set_item(&mut app, "battery", true);
+    set_header(&mut app, "clock", true);
+    set_header(&mut app, "battery", true);
     let (before, _, page) = page_state(&mut app);
     assert!(before.contains("Battery 64%"), "{before}");
+    assert!(header_state(&mut app).0 .1.contains("Battery 64%"));
     level.set(63);
     app.update_top::<PageView, _>(PAGE_KEY, |view, cx| {
         view.footer.clear();
+        view.header.1.clear();
         cx.request_paint();
     });
     let clock_before = chrono::Local::now().format("%H:%M").to_string();
@@ -280,6 +284,213 @@ fn clock_and_battery_follow_a_page_redraw_without_a_page_turn() {
         after.contains(&clock_before) || after.contains(&clock_after),
         "{after}"
     );
+    let header = header_state(&mut app).0 .1;
+    assert!(header.contains("Battery 63%"), "{header}");
+    assert!(
+        header.contains(&clock_before) || header.contains(&clock_after),
+        "{header}"
+    );
     assert!(std::sync::Arc::ptr_eq(&page, &same_page));
     assert!(!app.reader_busy());
+}
+
+fn set_header(app: &mut App<HeadlessBackend>, item: &str, on: bool) {
+    app.command(&format!("reader:header:{item}"), &[Value::Bool(on)]);
+    wait_reader(app);
+}
+
+fn header_state(app: &mut App<HeadlessBackend>) -> ((String, String), u32) {
+    let mut state = None;
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| {
+        state = Some((view.header.clone(), view.header_height));
+    });
+    state.expect("the reading page")
+}
+
+#[test]
+fn header_and_footer_reserve_both_strips_and_restore_height() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("header-height");
+    let mut app = open_reader("juliet.epub", &dir);
+    assert_eq!(header_state(&mut app), ((String::new(), String::new()), 0));
+    let (_, footer, _) = page_state(&mut app);
+    set_header(&mut app, "title", true);
+    let ((title, _), header) = header_state(&mut app);
+    assert!(!title.is_empty());
+    assert_eq!(header, footer);
+    let (_, _, page) = page_state(&mut app);
+    assert_eq!(page.height(), app.screen().h - header - footer);
+    set_header(&mut app, "chapter", true);
+    let (_, _, same_page) = page_state(&mut app);
+    assert!(std::sync::Arc::ptr_eq(&page, &same_page));
+    set_header(&mut app, "title", false);
+    assert_eq!(header_state(&mut app).1, header);
+    set_header(&mut app, "chapter", false);
+    assert_eq!(header_state(&mut app).1, 0);
+    assert_eq!(page_state(&mut app).2.height(), app.screen().h - footer);
+    set_item(&mut app, "page", false);
+    assert_eq!(page_state(&mut app).2.height(), app.screen().h);
+    set_header(&mut app, "title", true);
+    assert_eq!(page_state(&mut app).2.height(), app.screen().h - header);
+}
+
+#[test]
+fn header_chapter_changes_at_the_toc_boundary() {
+    use kaia_app::surfaces::reader::panels::ContentItem;
+    use kaia_ui::composite::PagedList;
+
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("header-chapters");
+    let mut app = open_reader("juliet.epub", &dir);
+    set_header(&mut app, "chapter", true);
+    app.command("reader:panel:contents", &[]);
+    wait_reader(&mut app);
+    let mut chapters = Vec::new();
+    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
+        chapters = list
+            .items()
+            .iter()
+            .map(|item| {
+                let page = item.detail.strip_prefix("Page ").unwrap().parse::<u32>().unwrap() - 1;
+                (item.label.trim().to_string(), page)
+            })
+            .collect();
+    });
+    tap_key(&mut app, "panel-close");
+    let boundary = chapters
+        .windows(2)
+        .find(|pair| pair[1].1 > pair[0].1 + 1 && pair[1].0 != pair[0].0)
+        .unwrap();
+    let (before, _) = &boundary[0];
+    let (after, page) = &boundary[1];
+    app.command("reader:location", &[Value::Number(f64::from(page - 1))]);
+    wait_reader(&mut app);
+    assert_eq!(header_state(&mut app).0 .1, *before);
+    app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(header_state(&mut app).0 .1, *after);
+}
+
+#[test]
+fn header_switches_save_and_reopen_with_both_groups_visible() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("header-sheet");
+    let mut app = open_reader("juliet.epub", &dir);
+    open_overlay(&mut app);
+    tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-footer");
+    for key in [
+        "header-title",
+        "header-chapter",
+        "header-clock",
+        "header-battery",
+        "footer-battery",
+    ] {
+        let rect = app.find_rect(key).unwrap();
+        assert!(
+            rect.y >= 0 && rect.y + rect.h as i32 <= app.screen().h as i32,
+            "{key}: {rect:?}"
+        );
+    }
+    for item in ["title", "chapter", "clock", "battery"] {
+        tap_key(&mut app, &format!("header-{item}"));
+        assert_eq!(
+            saved_settings(&dir)
+                .read(format!("reading.header_{item}"))
+                .as_bool(),
+            Some(true)
+        );
+    }
+    close_panels(&mut app);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    let ((title, status), height) = header_state(&mut app);
+    assert!(!title.is_empty() && height > 0);
+    assert!(status.contains(':'));
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    open_from_library(&mut app, "juliet.epub");
+    assert_eq!(header_state(&mut app).1, height);
+    assert_eq!(header_state(&mut app).0 .0, title);
+}
+
+#[test]
+fn header_fixed_pages_fit_between_both_strips() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("header-pdf");
+    let mut app = open_reader("2col.pdf", &dir);
+    let (_, footer, before) = page_state(&mut app);
+    set_header(&mut app, "title", true);
+    let header = header_state(&mut app).1;
+    let (_, _, page) = page_state(&mut app);
+    assert!(page.height() <= app.screen().h - header - footer);
+    assert!(page.width() <= app.screen().w);
+    assert!(page.height() < before.height());
+    set_header(&mut app, "title", false);
+    assert_eq!(page_state(&mut app).2.size(), before.size());
+}
+
+#[test]
+fn header_and_footer_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("golden-header-footer");
+    let mut app = open_reader("juliet.epub", &dir);
+    set_header(&mut app, "title", true);
+    set_header(&mut app, "chapter", true);
+    set_item(&mut app, "time_chapter", true);
+    turn_to_text(&mut app);
+    let path = golden("reader-header-footer.png");
+    if !path.exists() {
+        kaia_gfx::png::write_pixmap(app.frame(), &golden("reader-header-footer.actual.png")).unwrap();
+    }
+    assert_matches_golden(app.frame(), &path, 14);
+}
+
+#[test]
+fn header_and_footer_sheet_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("golden-header-footer-sheet");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    app.command("reader:panel:footer", &[]);
+    wait_reader(&mut app);
+    let path = golden("reader-header-footer-sheet.png");
+    if !path.exists() {
+        kaia_gfx::png::write_pixmap(app.frame(), &golden("reader-header-footer-sheet.actual.png")).unwrap();
+    }
+    assert_matches_golden(app.frame(), &path, 14);
+}
+
+#[test]
+fn header_keeps_selection_and_highlight_taps_on_the_text() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("header-selection");
+    let mut app = open_reader("juliet.epub", &dir);
+    set_header(&mut app, "title", true);
+    turn_to_text(&mut app);
+    let header = header_state(&mut app).1;
+    let point = Point::new(200, 120 + header as i32);
+    app.command(
+        "reader:hold",
+        &[
+            Value::Number(f64::from(point.x)),
+            Value::Number(f64::from(point.y)),
+        ],
+    );
+    wait_reader(&mut app);
+    let mut selected = Vec::new();
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| selected = view.selection.clone());
+    assert!(selected.iter().any(|r| r.contains(point)), "{selected:?}");
+    app.command("reader:release", &[]);
+    wait_reader(&mut app);
+    tap_key(&mut app, "color-yellow");
+    let mut marks = Vec::new();
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| {
+        marks = view.marks.iter().map(|m| m.rect).collect()
+    });
+    assert_eq!(marks, selected);
+    app.tap(point).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
+    assert!(app.find_rect("style-underscore").is_some());
 }

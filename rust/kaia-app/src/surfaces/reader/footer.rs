@@ -118,15 +118,10 @@ impl Footer {
     /// At the Libra Colour theme size this is 40 + 16 = 56 pixels.
     pub fn height(&self, theme: &kaia_ui::Theme) -> u32 {
         if self.is_visible() {
-            let style = theme.style(&theme.font.caption, kaia_ui::Tone::InkSecondary);
-            style.line_height.ceil() as u32 + theme.space.sm
+            strip_height(theme)
         } else {
             0
         }
-    }
-
-    pub fn viewport(&self, screen: kaia_book::Size, theme: &kaia_ui::Theme) -> kaia_book::Size {
-        kaia_book::Size::new(screen.w, screen.h.saturating_sub(self.height(theme)).max(1))
     }
 
     pub fn is_on(&self, item: Item) -> bool {
@@ -136,6 +131,12 @@ impl Footer {
     pub fn set(&mut self, item: Item, on: bool) {
         self.on[index(item)] = on;
     }
+}
+
+/// One caption line and the space above and below it, shared by both strips.
+pub(super) fn strip_height(theme: &kaia_ui::Theme) -> u32 {
+    let style = theme.style(&theme.font.caption, kaia_ui::Tone::InkSecondary);
+    style.line_height.ceil() as u32 + theme.space.sm
 }
 
 fn index(item: Item) -> usize {

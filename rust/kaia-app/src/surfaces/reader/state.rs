@@ -71,9 +71,11 @@ pub struct Core {
     pub(super) opened: bool,
     pub(super) events: std::collections::VecDeque<kaia_events::Event>,
     pending_hint: PaintHint,
-    /// The book area, excluding the persistent footer strip.
+    /// The book area, excluding the header and footer strips.
     pub viewport: Size,
     pub footer_height: u32,
+    pub header_height: u32,
+    pub header: super::header::Header,
     /// Why the book cannot be read, shown on the page.
     pub error: Option<String>,
     pub page_window: Option<Window>,
@@ -131,6 +133,8 @@ impl Core {
             pending_hint: PaintHint::Full,
             viewport: Size { w: 1, h: 1 },
             footer_height: 0,
+            header_height: 0,
+            header: super::header::Header::default(),
             error: None,
             page_window: None,
             overlay: None,
@@ -280,6 +284,9 @@ impl Core {
             .unwrap_or_default();
         let hint = self.pending_hint;
         let error = self.error.clone();
+        let header = self.header.clone();
+        let title = self.title.clone();
+        let header_height = self.header_height;
         let footer = self.footer.clone();
         let pace = self.seconds_per_page;
         let footer_height = self.footer_height;
@@ -288,6 +295,8 @@ impl Core {
                 view.page = frame.page;
             }
             view.message = error;
+            view.set_header(header, title, info.clone());
+            view.header_height = header_height;
             view.set_footer(footer, info.clone(), pace);
             view.footer_height = footer_height;
             view.marks = frame.marks;
@@ -295,6 +304,16 @@ impl Core {
             view.stickers = frame.stickers;
             view.hits = frame.hits;
             view.selection = selection;
+            for mark in &mut view.marks {
+                mark.rect.y += header_height as i32;
+            }
+            for rect in view.hits.iter_mut().chain(view.selection.iter_mut()) {
+                rect.y += header_height as i32;
+            }
+            for sticker in &mut view.stickers {
+                sticker.rect.y += header_height as i32;
+                sticker.anchor_line.y += header_height as i32;
+            }
             view.position = Some((info.page, info.page_count));
             cx.request_paint_with(hint);
         });
@@ -474,6 +493,7 @@ impl Core {
         };
         self.selecting = true;
         self.pending_hint = PaintHint::Partial;
+        let point = Point::new(point.x, point.y - self.header_height as i32);
         let viewport = self.viewport;
         self.job = Some(super::work::spawn(viewport, move || {
             let point = page_point(&mut session, point, viewport);
@@ -509,6 +529,7 @@ impl Core {
         let Some(mut session) = self.session.take() else {
             return;
         };
+        let point = Point::new(point.x, point.y - self.header_height as i32);
         let viewport = self.viewport;
         self.pending_hint = PaintHint::Partial;
         self.job = Some(super::work::spawn(viewport, move || {

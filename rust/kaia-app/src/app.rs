@@ -1389,7 +1389,7 @@ impl<B: Backend> App<B> {
                     window.invalidate();
                 }
             }
-            // Footer status follows an existing redraw and never schedules one.
+            // Header and footer status follow an existing redraw and never schedule one.
             let battery = self.services.platform.battery.capacity();
             for window in &windows {
                 window.update::<crate::surfaces::reader::page::PageView, _>(

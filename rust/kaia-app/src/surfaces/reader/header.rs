@@ -1,0 +1,155 @@
+//! The optional top line. The book title sits at the left. The chapter, clock
+//! and battery sit at the right, separated by vertical bars. Each side gets
+//! half the line when both have text, or the whole line when the other is empty.
+//! Both sides use one caption line with an ellipsis when the text does not fit.
+
+use kaia_book::{PageInfo, Size};
+use kaia_events::Settings;
+use kaia_i18n::{format as tr_format, tr};
+use kaia_ui::Theme;
+
+use super::footer::{Footer, Status};
+use crate::surfaces::settings::keys;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Item {
+    Title,
+    Chapter,
+    Clock,
+    Battery,
+}
+
+impl Item {
+    pub const ALL: [Self; 4] = [Self::Title, Self::Chapter, Self::Clock, Self::Battery];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Chapter => "chapter",
+            Self::Clock => "clock",
+            Self::Battery => "battery",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|item| item.id() == id)
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Title => keys::READING_HEADER_TITLE,
+            Self::Chapter => keys::READING_HEADER_CHAPTER,
+            Self::Clock => keys::READING_HEADER_CLOCK,
+            Self::Battery => keys::READING_HEADER_BATTERY,
+        }
+    }
+
+    pub fn label(self) -> String {
+        match self {
+            Self::Title => tr("Book title"),
+            Self::Chapter => tr("Chapter title"),
+            Self::Clock => tr("Clock"),
+            Self::Battery => tr("Battery"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Header {
+    on: [bool; 4],
+}
+
+impl Header {
+    pub fn from_settings(settings: &Settings) -> Self {
+        Self {
+            on: Item::ALL.map(|item| keys::bool_or(settings, item.key(), false)),
+        }
+    }
+
+    pub fn is_on(&self, item: Item) -> bool {
+        self.on[item as usize]
+    }
+
+    pub fn set(&mut self, item: Item, on: bool) {
+        self.on[item as usize] = on;
+    }
+
+    pub fn height(&self, theme: &Theme) -> u32 {
+        if self.on.iter().any(|on| *on) {
+            super::footer::strip_height(theme)
+        } else {
+            0
+        }
+    }
+
+    /// Reserve both strips before the book lays out or fits a fixed page.
+    pub fn viewport(&self, footer: &Footer, screen: Size, theme: &Theme) -> Size {
+        Size::new(
+            screen.w,
+            screen
+                .h
+                .saturating_sub(self.height(theme) + footer.height(theme))
+                .max(1),
+        )
+    }
+
+    /// `PageInfo::chapter` is the session's TOC entry for the current page.
+    pub fn text(&self, title: &str, info: &PageInfo, status: &Status) -> (String, String) {
+        let left = if self.is_on(Item::Title) { title } else { "" }.to_string();
+        let mut right = Vec::new();
+        if self.is_on(Item::Chapter) {
+            if let Some(chapter) = info.chapter.as_ref().filter(|s| !s.is_empty()) {
+                right.push(chapter.clone());
+            }
+        }
+        if self.is_on(Item::Clock) && !status.clock.is_empty() {
+            right.push(status.clock.clone());
+        }
+        if self.is_on(Item::Battery) {
+            if let Some(level) = status.battery {
+                right.push(tr_format(&tr("Battery %1%"), &[&level.to_string()]));
+            }
+        }
+        (left, right.join(" | "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn header_items_default_off_and_join_only_available_text() {
+        let mut header = Header::default();
+        let mut info = PageInfo {
+            page: 0,
+            page_count: 10,
+            percent: 0.1,
+            chapter: Some("First chapter".into()),
+            pages_left_in_chapter: Some(2),
+            location: kaia_book::Location::Page(0),
+        };
+        let status = Status {
+            clock: "09:41".into(),
+            battery: Some(64),
+        };
+        assert_eq!(
+            header.text("Book", &info, &status),
+            (String::new(), String::new())
+        );
+        for item in Item::ALL {
+            assert_eq!(Item::from_id(item.id()), Some(item));
+            header.set(item, true);
+        }
+        assert_eq!(
+            header.text("Book", &info, &status),
+            ("Book".into(), "First chapter | 09:41 | Battery 64%".into())
+        );
+        info.chapter = None;
+        assert_eq!(
+            header.text("Book", &info, &Status::default()),
+            ("Book".into(), String::new())
+        );
+        assert_eq!(Item::from_id("unknown"), None);
+    }
+}
