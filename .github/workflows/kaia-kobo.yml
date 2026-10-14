@@ -50,9 +50,12 @@ jobs:
         target: [kobo, kobov5]
     env:
       LOG_DIR: ci-logs
-      RUST_CACHE: ${{ runner.temp }}/kaia-rust-cache
-      SMOKE_ROOT: ${{ runner.temp }}/kaia-smoke
     steps:
+
+      - name: Set build paths
+        run: |
+          echo "RUST_CACHE=${RUNNER_TEMP}/kaia-rust-cache" >> "${GITHUB_ENV}"
+          echo "SMOKE_ROOT=${RUNNER_TEMP}/kaia-smoke" >> "${GITHUB_ENV}"
 
       # The KOReader build and the Docker images may need more space than the
       # runner image leaves free. This step removes preinstalled toolchains that
