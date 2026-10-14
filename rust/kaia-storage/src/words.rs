@@ -30,6 +30,17 @@ pub struct Word {
 }
 
 impl Store {
+    /// Imports a saved word with its context and suffix. The first spelling wins.
+    pub fn import_word(&mut self, word: &Word) -> Result<bool, StoreError> {
+        if word.word.trim().is_empty() || word.word.chars().count() > WORD_MAX_CHARS {
+            return Ok(false);
+        }
+        Ok(self.conn().execute(
+            "INSERT OR IGNORE INTO words (word, book_title, context, created_at, dict_suffix) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![word.word, clipped(word.book_title.as_deref(), BOOK_TITLE_MAX_CHARS), clipped(word.context.as_deref(), CONTEXT_MAX_CHARS), word.created_at, clipped(word.dict_suffix.as_deref(), 100)],
+        )? == 1)
+    }
+
     /// Imports a Kobo word only when its case-insensitive spelling is new.
     pub fn import_nickel_word(
         &mut self,

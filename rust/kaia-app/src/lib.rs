@@ -46,3 +46,5 @@ mod book_index;
 pub mod plugins;
 
 pub mod nickel;
+
+pub mod lua_import;

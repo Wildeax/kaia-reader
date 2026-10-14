@@ -67,7 +67,10 @@ pub(crate) fn koreader_px(screen: kaia_gfx::Size, units: f64) -> f32 {
 /// the way KOReader scales them. The font is 22 units, the side margins 10 units
 /// and the top and bottom margins 15 units. Line spacing (100 %) and the other
 /// options keep the defaults of `kaia_book`. A book with a saved layout keeps it.
-fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Settings) -> TextLayout {
+pub(crate) fn koreader_default_layout(
+    screen: kaia_gfx::Size,
+    settings: &kaia_events::Settings,
+) -> TextLayout {
     let base = TextLayout::default();
     let font_family = settings
         .read("reading.font_family")
@@ -76,7 +79,24 @@ fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Setti
         .map(str::to_owned);
     // The weight is saved per family, so the default face brings its own weight.
     let font_weight = crate::surfaces::settings::keys::font_weight(settings, font_family.as_deref()) as f32;
+    let margin = |key: &str, default| {
+        koreader_px(
+            screen,
+            settings
+                .read(key)
+                .as_f64()
+                .filter(|n| n.is_finite())
+                .unwrap_or(default)
+                .clamp(0.0, 140.0),
+        )
+    };
     TextLayout {
+        line_spacing: settings
+            .read("reading.line_spacing")
+            .as_f64()
+            .filter(|n| n.is_finite())
+            .unwrap_or(1.0)
+            .clamp(0.5, 3.0) as f32,
         font_size: koreader_px(
             screen,
             settings
@@ -89,10 +109,10 @@ fn koreader_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Setti
         font_family,
         font_weight,
         margins: Margins {
-            top: koreader_px(screen, 15.0),
-            right: koreader_px(screen, 10.0),
-            bottom: koreader_px(screen, 15.0),
-            left: koreader_px(screen, 10.0),
+            top: margin("reading.margin_top", 15.0),
+            right: margin("reading.margin_right", 10.0),
+            bottom: margin("reading.margin_bottom", 15.0),
+            left: margin("reading.margin_left", 10.0),
         },
         ..base
     }

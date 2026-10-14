@@ -198,13 +198,14 @@ pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
             if let Err(e) = result {
                 env.notice(tr_format(&tr("cannot set the light: %1"), &[&e.to_string()]));
             }
-            if name == "warmth" {
-                env.services
-                    .settings
-                    .save("display.warmth", Value::Number(f64::from(v)));
-                if args.get(1).and_then(Value::as_bool) != Some(true) {
-                    super::save(env);
-                }
+            let key = if name == "warmth" {
+                "display.warmth"
+            } else {
+                "display.frontlight"
+            };
+            env.services.settings.save(key, Value::Number(f64::from(v)));
+            if args.get(1).and_then(Value::as_bool) != Some(true) {
+                super::save(env);
             }
             Outcome::Handled
         }

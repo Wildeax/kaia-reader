@@ -498,6 +498,115 @@ fn zoom_from_sidecar(root: &Value) -> Option<ZoomMode> {
     }
 }
 
+/// A parsed sidecar ready for a confirmed import. No engine or source writer is opened.
+pub struct PlannedImport {
+    state: crate::state::BookState,
+    pub report: ImportReport,
+    pub highlights: usize,
+    pub bookmarks: usize,
+    pub notes: usize,
+}
+
+impl PlannedImport {
+    pub fn prepare(book: &Path, candidates: &[PathBuf]) -> crate::Result<Option<Self>> {
+        let Some((root, source, lossy)) = read_first(candidates) else {
+            return Ok(None);
+        };
+        let format = kaia_doc::format::detect(book)?;
+        let fixed = matches!(
+            format,
+            kaia_doc::Format::Pdf
+                | kaia_doc::Format::Cbz
+                | kaia_doc::Format::Xps
+                | kaia_doc::Format::Djvu
+                | kaia_doc::Format::Svg
+        );
+        let imported = map_sidecar(&root, fixed, &source);
+        let io = |source| crate::BookError::Io {
+            path: book.to_owned(),
+            source,
+        };
+        let identity = crate::DocumentId {
+            partial_md5: crate::partial_md5(book).map_err(io)?,
+            file_size: std::fs::metadata(book).map_err(io)?.len(),
+        };
+        let mut state = crate::state::BookState::new(identity, imported.layout.unwrap_or_default());
+        state.position = imported.position;
+        state.percent = imported.percent.unwrap_or(0.0);
+        state.zoom = imported.zoom.unwrap_or_default();
+        state.status = imported.status;
+        state.rating = imported.rating;
+        state.summary_note = imported.summary_note;
+        state.preferred_dictionaries = imported.preferred_dictionaries;
+        state.imported_from = Some(source.display().to_string());
+        let mut highlights = 0;
+        let mut bookmarks = 0;
+        let mut notes = 0;
+        for mut annotation in imported.annotations {
+            if annotation.drawer.is_some() {
+                highlights += 1;
+            } else {
+                bookmarks += 1;
+            }
+            if annotation.note.is_some() {
+                notes += 1;
+            }
+            annotation.id = state.assign_id();
+            state.annotations.push(annotation);
+        }
+        let mut report = imported.report;
+        report.lossy = lossy;
+        Ok(Some(Self {
+            state,
+            report,
+            highlights,
+            bookmarks,
+            notes,
+        }))
+    }
+
+    pub fn percent(&self) -> f64 {
+        self.state.percent
+    }
+
+    /// Keeps the original source name when the parser read a private snapshot.
+    pub fn source_path(&mut self, source: PathBuf) {
+        self.state.imported_from = Some(source.display().to_string());
+        self.report.source = source;
+    }
+
+    /// Existing state, including its backup, wins. Repeated imports preserve later edits.
+    pub fn import(&self, book: &Path, data: &Path, default_layout: &TextLayout) -> crate::Result<bool> {
+        let hash = crate::partial_md5(book).map_err(|source| crate::BookError::Io {
+            path: book.to_owned(),
+            source,
+        })?;
+        if hash != self.state.doc.partial_md5
+            || std::fs::metadata(book)
+                .map_err(|source| crate::BookError::Io {
+                    path: book.to_owned(),
+                    source,
+                })?
+                .len()
+                != self.state.doc.file_size
+        {
+            return Err(crate::BookError::Invalid("book changed after the preview".into()));
+        }
+        let _guard = crate::session::hold_closed_book(book, data, &hash)?
+            .ok_or_else(|| crate::BookError::AlreadyOpen(book.to_owned()))?;
+        let path = data.join("kaia/books").join(format!("{hash}.json"));
+        if path.exists() || path.with_extension("json.old").exists() {
+            return Ok(false);
+        }
+        let mut state = self.state.clone();
+        if !self.report.layout {
+            state.layout = default_layout.clone();
+        }
+        crate::state::write_state(&path, &state).map_err(|source| crate::BookError::Io { path, source })?;
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

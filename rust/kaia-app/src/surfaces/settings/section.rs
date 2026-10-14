@@ -26,6 +26,8 @@ use crate::surfaces::Route;
 pub struct SettingsSectionSurface {
     name: String,
     typing: bool,
+    lua_plan: Option<crate::lua_import::Plan>,
+    lua_report: Option<crate::lua_import::Report>,
     kobo_plan: Option<crate::nickel::Plan>,
     kobo_report: Option<crate::nickel::Report>,
     kobo_dialog: Option<kaia_events::WindowId>,
@@ -36,6 +38,8 @@ impl SettingsSectionSurface {
         Self {
             name,
             typing: false,
+            lua_plan: None,
+            lua_report: None,
             kobo_plan: None,
             kobo_report: None,
             kobo_dialog: None,
@@ -51,6 +55,14 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        if self.lua_plan.is_some() || self.lua_report.is_some() {
+            return Some(super::lua_import::build(
+                env.services,
+                env.screen,
+                self.lua_plan.as_ref(),
+                self.lua_report.as_ref(),
+            ));
+        }
         if self.kobo_plan.is_some() || self.kobo_report.is_some() {
             return Some(super::kobo::build(
                 env.services,
@@ -73,6 +85,45 @@ impl Surface for SettingsSectionSurface {
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         match cmd {
+            "settings:data:lua" => {
+                if let Some(source) = crate::lua_import::find(&env.services.paths) {
+                    match crate::lua_import::Plan::prepare(
+                        &source,
+                        &env.services.paths.data_dir,
+                        &env.services.library,
+                    ) {
+                        Ok(mut plan) => {
+                            plan.viewport = env.screen;
+                            self.lua_plan = Some(plan);
+                            self.lua_report = None;
+                        }
+                        Err(_) => {
+                            env.notice(tr("Cannot read Lua app data. Close the Lua app and try again."))
+                        }
+                    }
+                }
+                return Outcome::Rebuild;
+            }
+            "settings:data:lua:confirm" => {
+                if let Some(plan) = self.lua_plan.take() {
+                    match plan.import(&env.services.paths.data_dir, &mut env.services.library, &mut env.services.settings) {
+                        Ok(report) => {
+                            if report.imported.get("Settings") > 0 {
+                                if let Some(n) = env.services.settings.read("display.frontlight").as_i64() { let _ = env.services.platform.frontlight.set_intensity(n.clamp(0,100) as u8); }
+                                if let Some(n) = env.services.settings.read("display.warmth").as_i64() { let _ = env.services.platform.frontlight.set_warmth(n.clamp(0,100) as u8); }
+                            }
+                            self.lua_report = Some(report);
+                        }
+                        Err(_) => env.notice(tr("Import stopped. Close any open book, wait for the library scan, and try again. Existing data will be skipped.")),
+                    }
+                }
+                return Outcome::Rebuild;
+            }
+            "settings:data:lua:close" => {
+                self.lua_plan = None;
+                self.lua_report = None;
+                return Outcome::Rebuild;
+            }
             "settings:storage" => {
                 return Outcome::Navigate(Nav::Push(Box::new(super::storage::StorageSurface::default())));
             }
@@ -135,6 +186,8 @@ impl Surface for SettingsSectionSurface {
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
                     name: self.name.clone(),
                     typing,
+                    lua_plan: None,
+                    lua_report: None,
                     kobo_plan: None,
                     kobo_report: None,
                     kobo_dialog: None,
@@ -338,12 +391,13 @@ fn light(which: commands::Light, args: &[Value], env: &mut SurfaceEnv<'_>) -> Ou
     if let Err(e) = result {
         env.notice(tr_format(&tr("cannot set the light: %1"), &[&e.to_string()]));
     }
-    if which == commands::Light::Warmth {
-        env.services
-            .settings
-            .save("display.warmth", Value::Number(f64::from(v)));
-        save(env);
-    }
+    let key = if which == commands::Light::Warmth {
+        "display.warmth"
+    } else {
+        "display.frontlight"
+    };
+    env.services.settings.save(key, Value::Number(f64::from(v)));
+    save(env);
     Outcome::Handled
 }
 

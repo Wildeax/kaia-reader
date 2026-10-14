@@ -338,3 +338,5 @@ mod tests {
 }
 
 mod kobo;
+
+mod lua_import;
