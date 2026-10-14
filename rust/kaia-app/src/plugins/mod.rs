@@ -56,7 +56,7 @@ pub(crate) enum Request {
     Event(Event),
     Menu(String),
     Reload,
-    Dictionary(String, String),
+    Dictionary(String, String, Value),
     DictionaryActions,
 }
 

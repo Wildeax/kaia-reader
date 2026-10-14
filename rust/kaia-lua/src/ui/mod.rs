@@ -338,8 +338,19 @@ impl LuaUi {
 
     /// Supplies a native dictionary result to plugin popup hooks.
     pub fn dictionary_lookup(&mut self, word: &str, text: &str) -> Result<(), Error> {
-        let function: Function = self.lua.load("return function(word, text) local u = KAIA_PLUGIN and KAIA_PLUGIN.ui; if u and u.dictionary then u.dictionary:setLookup(word, text) end end").eval().map_err(lua_error)?;
-        function.call::<()>((word, text)).map_err(lua_error)?;
+        self.dictionary_lookup_context(word, text, &Value::Nil)
+    }
+
+    /// Supplies the selection snapshot with a native lookup result.
+    pub fn dictionary_lookup_context(
+        &mut self,
+        word: &str,
+        text: &str,
+        context: &Value,
+    ) -> Result<(), Error> {
+        let function: Function = self.lua.load("return function(word, text, context) local u = KAIA_PLUGIN and KAIA_PLUGIN.ui; if u and u.dictionary then u.dictionary:setLookup(word, text, context) end end").eval().map_err(lua_error)?;
+        let context = crate::convert::to_lua(&self.lua, context)?;
+        function.call::<()>((word, text, context)).map_err(lua_error)?;
         self.drain();
         Ok(())
     }

@@ -1045,6 +1045,93 @@ impl BookSession {
         Ok(id)
     }
 
+    /// Keeps one native Pencil bookmark at the current ink location.
+    pub fn set_ink_bookmark(&mut self, active: bool) -> Result<()> {
+        self.ensure_idle()?;
+        let location = self.current().location;
+        let existing =
+            self.state.annotations.iter().any(|a| {
+                a.page == location && a.ext.as_ref().is_some_and(|e| e.get("pencil_native").truthy())
+            });
+        if existing == active {
+            return Ok(());
+        }
+        let mut items: Vec<_> = self
+            .state
+            .annotations
+            .iter()
+            .filter(|a| {
+                !(a.page == location && a.ext.as_ref().is_some_and(|e| e.get("pencil_native").truthy()))
+            })
+            .map(Annotation::to_value)
+            .collect();
+        if active {
+            let page = match location {
+                Location::Page(p) => Value::from(p as i64 + 1),
+                Location::Engine(xp) => Value::from(xp),
+            };
+            items.push(Value::Table(
+                [
+                    ("page".into(), page),
+                    ("datetime".into(), Value::from(now_datetime())),
+                    ("text".into(), Value::from("Pencil annotation")),
+                    (
+                        "ext".into(),
+                        Value::Table([("pencil_native".into(), Value::Bool(true))].into()),
+                    ),
+                ]
+                .into(),
+            ));
+        }
+        self.replace_plugin_annotations(&items)
+    }
+
+    /// Stores a plugin merge in one save. Remote ids never replace local ids.
+    /// Matching positions retain their ids, including when the text was edited.
+    pub fn replace_plugin_annotations(&mut self, items: &[Value]) -> Result<()> {
+        self.ensure_idle()?;
+        let same_anchor = |a: &Annotation, b: &Annotation| {
+            if a.pos0.is_some() && a.pos1.is_some() {
+                a.pos0 == b.pos0 && a.pos1 == b.pos1
+            } else {
+                a.pos0 == b.pos0 && a.pos1 == b.pos1 && a.page == b.page && a.text == b.text
+            }
+        };
+        let mut merged = Vec::new();
+        let mut next_id = self.state.next_id;
+        for item in items {
+            let mut a = Annotation::from_value(item)
+                .ok_or_else(|| BookError::Invalid("invalid plugin annotation".into()))?;
+            if a.drawer.as_deref().is_some_and(|d| Drawer::parse(d).is_none())
+                || (a.drawer.is_some() && (a.pos0.is_none() || a.pos1.is_none()))
+            {
+                return Err(BookError::Invalid("invalid plugin highlight".into()));
+            }
+            if merged.iter().any(|b| same_anchor(&a, b)) {
+                return Err(BookError::Invalid("duplicate plugin annotation position".into()));
+            }
+            a.id = match self.state.annotations.iter().find(|b| same_anchor(&a, b)) {
+                Some(local) => local.id,
+                None => {
+                    let id = next_id;
+                    next_id += 1;
+                    id
+                }
+            };
+            merged.push(a);
+        }
+        let old = self.state.clone();
+        self.state.annotations = merged;
+        self.state.next_id = next_id;
+        self.dirty = true;
+        if let Err(error) = self.save() {
+            self.state = old;
+            return Err(error);
+        }
+        self.order.keys.clear();
+        Ok(())
+    }
+
     /// Sets or clears the note of an annotation.
     pub fn edit_note(&mut self, id: AnnotationId, note: Option<&str>) -> Result<()> {
         let now = now_datetime();
@@ -1387,6 +1474,20 @@ impl BookSession {
             .engine
             .call(move |w| w.page_text(page).map(|t| (*t).clone()))?;
         Ok(crate::text::sentence_around(
+            &text,
+            &selection.text,
+            selection.page_rects.first().copied(),
+        ))
+    }
+
+    /// Returns page text around the selected occurrence, before the selection clears.
+    pub fn selection_context(&mut self, selection: &Selection) -> Result<Option<(String, String)>> {
+        self.ensure_idle()?;
+        let page = selection.page;
+        let text = self
+            .engine
+            .call(move |w| w.page_text(page).map(|t| (*t).clone()))?;
+        Ok(crate::text::selection_context(
             &text,
             &selection.text,
             selection.page_rects.first().copied(),

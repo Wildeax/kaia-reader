@@ -30,6 +30,7 @@ pub(super) enum Query {
     Xpointer(u32),
     PageFor(String),
     Dimensions(u32),
+    Compat(String, Vec<String>, u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +39,7 @@ pub(super) enum Answer {
     /// A 0-based page.
     Page(u32),
     Size(f32, f32),
+    Value(kaia_events::Value),
 }
 
 enum Job {
@@ -268,6 +270,13 @@ impl TextDocument {
     fn answer(&self, query: &Query) -> Result<Answer, String> {
         let err = |e: kaia_doc::DocError| e.to_string();
         match query {
+            Query::Compat(method, args, page) => match self {
+                Self::Cre(doc) => doc
+                    .plugin_query(method, args, *page)
+                    .map(Answer::Value)
+                    .map_err(err),
+                Self::Other(_) => Err("text queries need CREngine".into()),
+            },
             Query::PageText(page) => self
                 .doc()
                 .page_text(*page)

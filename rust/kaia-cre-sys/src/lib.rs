@@ -93,7 +93,35 @@ pub mod ffi {
         pub end: *mut c_char,
     }
 
+    #[repr(C)]
+    pub struct kaia_cre_text_match {
+        pub fields: [*mut c_char; 9],
+    }
+
     extern "C" {
+        pub fn kaia_cre_find_all(
+            doc: *mut kaia_cre_doc,
+            pattern: *const c_char,
+            insensitive: c_int,
+            regex: c_int,
+            context: c_int,
+            max_hits: c_int,
+            out: *mut *mut kaia_cre_text_match,
+            count: *mut usize,
+        ) -> c_int;
+        pub fn kaia_cre_free_text_matches(items: *mut kaia_cre_text_match, count: usize);
+        pub fn kaia_cre_text_range(
+            doc: *mut kaia_cre_doc,
+            start: *const c_char,
+            end: *const c_char,
+            out: *mut *mut c_char,
+        ) -> c_int;
+        pub fn kaia_cre_word_boundary(
+            doc: *mut kaia_cre_doc,
+            xp: *const c_char,
+            next: c_int,
+            out: *mut *mut c_char,
+        ) -> c_int;
         pub fn kaia_cre_last_error() -> *const c_char;
         pub fn kaia_cre_init(
             font_files: *const *const c_char,
@@ -783,6 +811,81 @@ impl Doc {
             unsafe { ffi::kaia_cre_free(out.cast()) };
         }
         Ok(hits)
+    }
+
+    /// KOReader search fields: start, end, text, prefix, prefix start, suffix,
+    /// suffix end, previous context and next context.
+    pub fn find_all_text(
+        &mut self,
+        pattern: &str,
+        insensitive: bool,
+        regex: bool,
+        context: u32,
+        max_hits: u32,
+    ) -> Result<Vec<[Option<String>; 9]>> {
+        let pattern = cstring(pattern)?;
+        let mut out = ptr::null_mut();
+        let mut count = 0;
+        // SAFETY: live handle, valid string and output pointers. The C wrapper owns allocation.
+        check(unsafe {
+            ffi::kaia_cre_find_all(
+                self.raw(),
+                pattern.as_ptr(),
+                insensitive as c_int,
+                regex as c_int,
+                context.min(1000) as c_int,
+                max_hits.min(20000) as c_int,
+                &mut out,
+                &mut count,
+            )
+        })?;
+        let mut items = Vec::with_capacity(count);
+        for i in 0..count {
+            // SAFETY: the wrapper returned count initialized entries. Copy strings before freeing them.
+            let fields = unsafe { &(*out.add(i)).fields };
+            items.push(std::array::from_fn(|j| {
+                if fields[j].is_null() {
+                    None
+                } else {
+                    // SAFETY: each field is a null-terminated string owned by the C allocation.
+                    Some(
+                        unsafe { std::ffi::CStr::from_ptr(fields[j]) }
+                            .to_string_lossy()
+                            .into_owned(),
+                    )
+                }
+            }));
+        }
+        // SAFETY: free the array and its strings exactly once after copying them.
+        unsafe { ffi::kaia_cre_free_text_matches(out, count) };
+        Ok(items)
+    }
+
+    pub fn text_range(&mut self, start: &str, end: &str) -> Result<Option<String>> {
+        let start = cstring(start)?;
+        let end = cstring(end)?;
+        let mut out = ptr::null_mut();
+        // SAFETY: live handle, valid strings and output pointer.
+        let status = unsafe { ffi::kaia_cre_text_range(self.raw(), start.as_ptr(), end.as_ptr(), &mut out) };
+        if status == 1 {
+            return Ok(None);
+        }
+        check(status)?;
+        // SAFETY: the wrapper returned an owned string or null.
+        Ok(unsafe { take_opt_string(out) })
+    }
+
+    pub fn word_boundary(&mut self, xp: &str, next: bool) -> Result<Option<String>> {
+        let xp = cstring(xp)?;
+        let mut out = ptr::null_mut();
+        // SAFETY: live handle, valid string and output pointer.
+        let status = unsafe { ffi::kaia_cre_word_boundary(self.raw(), xp.as_ptr(), next as c_int, &mut out) };
+        if status == 1 {
+            return Ok(None);
+        }
+        check(status)?;
+        // SAFETY: the wrapper returned an owned string or null.
+        Ok(unsafe { take_opt_string(out) })
     }
 
     pub fn metadata(&mut self) -> Result<Meta> {

@@ -48,3 +48,6 @@ kaia-platform = { path = "../kaia-platform" }
 kaia-ui = { path = "../kaia-ui" }
 
 rusqlite = { version = "0.40", features = ["bundled", "backup", "hooks"] }
+
+[dev-dependencies]
+serde_json = "1"

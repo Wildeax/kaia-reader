@@ -1322,10 +1322,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let word = kaia_dict::clean_selection(&selection.text);
                 // Read the session before the selection clears. Clearing repaints the
                 // page, and the repaint takes the session until its frame comes back.
-                let context = c
-                    .session
-                    .as_mut()
-                    .and_then(|s| s.selection_sentence(&selection).ok().flatten());
+                let context = c.session.as_mut().map(|s| dict::LookupContext {
+                    sentence: s.selection_sentence(&selection).ok().flatten(),
+                    #[cfg(feature = "lua")]
+                    surrounding: s.selection_context(&selection).ok().flatten(),
+                });
                 let preferred = preferred_dictionaries(&c);
                 c.clear_selection(env.ctx);
                 open_dictionary(rc, &mut c, env, &word, context, preferred)
@@ -1709,7 +1710,7 @@ fn open_dictionary(
     c: &mut Core,
     env: &mut SurfaceEnv<'_>,
     word: &str,
-    context: Option<String>,
+    context: Option<dict::LookupContext>,
     preferred: Vec<String>,
 ) -> Outcome {
     let answer = dict::lookup(word, env.services, &preferred);
@@ -1720,6 +1721,7 @@ fn open_dictionary(
         .push(crate::plugins::Request::Dictionary(
             word.into(),
             answer.text.clone(),
+            dict::plugin_context(word, context.as_ref()),
         ));
     let preferred_now = answer
         .first
@@ -1737,7 +1739,7 @@ fn open_dictionary(
     );
     c.lookup = Some(LookupState {
         word: word.to_string(),
-        context,
+        context: context.and_then(|c| c.sentence),
         dictionary: answer.first,
         book_title: c.title.clone(),
     });

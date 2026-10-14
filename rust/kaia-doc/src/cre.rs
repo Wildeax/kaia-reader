@@ -339,6 +339,94 @@ impl CreDocument {
         self.doc_mut()?.set_embedded_styles(enabled).map_err(engine_err)
     }
 
+    /// KOReader text queries used by reader plugins. Coordinates are page pixels.
+    pub fn plugin_query(&self, method: &str, args: &[String], page: u32) -> Result<kaia_events::Value> {
+        use kaia_events::{Key, Value};
+        let arg = |i: usize| args.get(i).map(String::as_str).unwrap_or("");
+        let string = |s: Option<String>| s.map(Value::from).unwrap_or_default();
+        match method {
+            "findAllText" => {
+                let fields = [
+                    "start",
+                    "end",
+                    "matched_text",
+                    "matched_word_prefix",
+                    "matched_word_prefix_start",
+                    "matched_word_suffix",
+                    "matched_word_suffix_end",
+                    "prev_text",
+                    "next_text",
+                ];
+                let hits = self
+                    .doc_mut()?
+                    .find_all_text(
+                        arg(0),
+                        arg(1) == "true",
+                        arg(4) == "true",
+                        arg(2).parse().unwrap_or(0),
+                        arg(3).parse().unwrap_or(1000),
+                    )
+                    .map_err(engine_err)?;
+                if hits.is_empty() {
+                    return Ok(Value::Nil);
+                }
+                Ok(Value::array(hits.into_iter().map(|hit| {
+                    Value::Table(
+                        fields
+                            .iter()
+                            .zip(hit)
+                            .filter_map(|(key, value)| value.map(|v| (Key::from(*key), Value::from(v))))
+                            .collect(),
+                    )
+                })))
+            }
+            "getTextFromXPointers" => Ok(string(
+                self.doc_mut()?.text_range(arg(0), arg(1)).map_err(engine_err)?,
+            )),
+            "getPrevVisibleWordStart" | "getNextVisibleWordEnd" => Ok(string(
+                self.doc_mut()?
+                    .word_boundary(arg(0), method == "getNextVisibleWordEnd")
+                    .map_err(engine_err)?,
+            )),
+            "compareXPointers" => Ok(self
+                .compare_xpointers(arg(0), arg(1))?
+                .map(|n| Value::from(n as i64))
+                .unwrap_or_default()),
+            "getPageXPointer" => Ok(Value::from(
+                self.page_xpointer(arg(0).parse::<u32>().unwrap_or(1).saturating_sub(1))?,
+            )),
+            "getScreenBoxesFromPositions" => {
+                let boxes = self.char_boxes(page, arg(0), Some(arg(1)))?;
+                let mut lines: Vec<(i32, [f32; 4])> = Vec::new();
+                for b in boxes {
+                    if let Some((line, rect)) = lines.last_mut().filter(|(line, _)| *line == b.line) {
+                        let _ = line;
+                        rect[0] = rect[0].min(b.rect[0]);
+                        rect[1] = rect[1].min(b.rect[1]);
+                        rect[2] = rect[2].max(b.rect[2]);
+                        rect[3] = rect[3].max(b.rect[3]);
+                    } else {
+                        lines.push((b.line, b.rect));
+                    }
+                }
+                Ok(Value::array(lines.into_iter().map(|(_, r)| {
+                    Value::Table(
+                        [
+                            (Key::from("x"), Value::from(r[0] as f64)),
+                            (Key::from("y"), Value::from(r[1] as f64)),
+                            (Key::from("w"), Value::from((r[2] - r[0]) as f64)),
+                            (Key::from("h"), Value::from((r[3] - r[1]) as f64)),
+                        ]
+                        .into(),
+                    )
+                })))
+            }
+            _ => Err(DocError::InvalidArgument(format!(
+                "plugin document method {method}"
+            ))),
+        }
+    }
+
     /// The xpointer at the top of a page.
     pub fn page_xpointer(&self, page: u32) -> Result<String> {
         self.check_page(page)?;
@@ -585,13 +673,18 @@ impl Document for CreDocument {
     }
 
     fn metadata(&self) -> Metadata {
-        let Meta { title, authors, .. } = self
+        let Meta {
+            title,
+            authors,
+            language,
+        } = self
             .doc_mut()
             .and_then(|mut d| d.metadata().map_err(engine_err))
             .unwrap_or_default();
         Metadata {
             title: title.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
             author: authors.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+            language: language.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
         }
     }
 

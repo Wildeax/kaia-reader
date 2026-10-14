@@ -170,7 +170,7 @@ fn pencil_requires_stylus_event_delivery() {
     let _guard = serial();
     let data = TempDir::new("pencil");
     let ui = load(&data, "juliet.epub", &["pencil"]);
-    blocked(&ui, "pencil", "ReaderUI.active_widgets is unavailable");
+    blocked(&ui, "pencil", "Pencil needs the native ink host");
     assert!(value(&ui, "next(KAIA_PLUGIN.view_modules) == nil").truthy());
 }
 
@@ -213,42 +213,182 @@ fn foldermemory_requires_library_display_hooks() {
 }
 
 #[test]
-fn footcream_requires_document_text_search() {
+fn footcream_scans_epub_and_paints_a_tappable_conversion() {
     let _guard = serial();
     let data = TempDir::new("footcream");
-    let mut ui = load(&data, "juliet.epub", &["footcream"]);
+    let book = data.path().join("juliet.epub");
+    std::fs::copy(common::repo_root().join("test/juliet.epub"), &book).unwrap();
+    let original = std::fs::read(&book).unwrap();
+    let sidecar = data.path().join("juliet.sdr");
+    std::fs::create_dir(&sidecar).unwrap();
+    std::fs::write(sidecar.join("untouched.txt"), "KOReader sidecar").unwrap();
+    let mut ui = load(&data, book.to_str().unwrap(), &["footcream"]);
     healthy(&ui);
-    // ReaderReady starts the plugin's document setup before scanning units.
     ui.send_reader_event("ReaderReady", &[]);
-    blocked(&ui, "footcream", "document.findAllText is unavailable");
-    assert!(value(&ui, "next(KAIA_PLUGIN.menus) == nil").truthy());
+    healthy(&ui);
+    ui.exec(
+        "scan",
+        "KAIA_PLUGIN.instances.footcream:_startScan(require('apps/reader/readerui').document)",
+    )
+    .unwrap();
+    healthy(&ui);
+    assert!(value(&ui, "#KAIA_PLUGIN.instances.footcream._all_matches > 0").truthy());
+    ui.exec(
+        "show-match",
+        r#"
+        local R = require('apps/reader/readerui')
+        local hit = KAIA_PLUGIN.instances.footcream._all_matches[1]
+        local page = R.document:getPageFromXPointer(hit.start)
+        assert(page > 1, 'scan must find a unit beyond the first page')
+        R.rolling:gotoPage(page)
+        local all, n = R.document:findAllText('feet|mile', true, 3, 100, true)
+        assert(all and n > 1 and all[1].matched_text and all[1].prev_text)
+    "#,
+    )
+    .unwrap();
+    close_windows(&mut ui);
+    let mut page = kaia_gfx::Pixmap::new(
+        common::UI_SCREEN.w,
+        common::UI_SCREEN.h,
+        kaia_gfx::PixelFormat::Gray8,
+    );
+    page.fill_rect(
+        kaia_gfx::Rect::from_size(common::UI_SCREEN),
+        kaia_gfx::Color::WHITE,
+    );
+    let clean = page.clone();
+    ui.paint_reader_overlays(&mut page).unwrap();
+    assert_ne!(page.data(), clean.data(), "the conversion underline must paint");
+    ui.exec(
+        "conversion-box",
+        r#"
+        local b = KAIA_PLUGIN.instances.footcream._current_boxes[1].box
+        HIT_X, HIT_Y = b.x + b.w / 2, b.y + b.h / 2
+    "#,
+    )
+    .unwrap();
+    let x = value(&ui, "HIT_X").as_f64().unwrap() as i32;
+    let y = value(&ui, "HIT_Y").as_f64().unwrap() as i32;
+    assert!(ui.reader_input(&kaia_input::Gesture::Tap {
+        pos: kaia_gfx::Point::new(x, y),
+        time_us: 0
+    }));
+    assert!(ui.window_count() > 0, "tap must show the conversion");
+    healthy(&ui);
+    ui.exec(
+        "protected-book",
+        r#"
+        local p = KAIA_PLUGIN.instances.footcream
+        p:_applyMetricEdition(p.ui.document, true)
+        p:_doApplyMetricEdition(p.ui.document)
+        p:_revertMetricEdition(p.ui.document)
+    "#,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(&book).unwrap(), original);
+    assert_eq!(std::fs::read_dir(&sidecar).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read_to_string(sidecar.join("untouched.txt")).unwrap(),
+        "KOReader sidecar"
+    );
+    assert!(std::fs::read_dir(data.path().join("footcream")).unwrap().count() > 0);
+    drop(ui);
+    let mut ui = load(&data, book.to_str().unwrap(), &["footcream"]);
+    ui.send_reader_event("ReaderReady", &[]);
+    assert!(value(&ui, "#KAIA_PLUGIN.instances.footcream._all_matches > 0").truthy());
+    healthy(&ui);
 }
 
 #[test]
-fn highlightsync_opens_settings_then_rejects_sidecar_sync() {
+fn highlightsync_local_merge_keeps_host_ids_and_reopens() {
     let _guard = serial();
     let data = TempDir::new("highlightsync");
-    let mut ui = load(&data, "juliet.epub", &["highlightsync"]);
+    let book = data.path().join("juliet.epub");
+    std::fs::copy(common::repo_root().join("test/juliet.epub"), &book).unwrap();
+    let sidecar = data.path().join("juliet.sdr");
+    std::fs::create_dir(&sidecar).unwrap();
+    let marker = sidecar.join("untouched.txt");
+    std::fs::write(&marker, "KOReader owns this folder").unwrap();
+    let original = std::fs::read(&book).unwrap();
+    let mut ui = load(&data, book.to_str().unwrap(), &["highlightsync"]);
     ui.send_reader_event("ReaderReady", &[]);
     ui.open_plugin_menu("highlight_sync").unwrap();
     tap(&mut ui, "Sync Cloud");
     healthy(&ui);
-    assert!(ui.window_count() > 0);
     close_windows(&mut ui);
-    ui.exec("sync-fixture", r#"
+    ui.exec(
+        "local-sync",
+        r#"
         local R = require('apps/reader/readerui')
+        local json = require('rapidjson')
         local xp = R.document:getXPointer()
         R.annotation:addItem{page=xp, pos0=xp, pos1=xp, text='A highlight', note='A note', drawer='lighten'}
-        KAIA_PLUGIN.instances.highlightsync.settings.sync_server = {type='webdav', url='https://example.invalid'}
-    "#).unwrap();
-    ui.open_plugin_menu("highlight_sync").unwrap();
-    // The main action must stop before creating a KOReader sidecar or contacting a server.
-    ui.send_reader_event("SyncBookHighlights", &[]);
-    blocked(&ui, "highlightsync", "doc_settings.getSidecarDir is unavailable");
+        local original = R.annotation.annotations[1]
+        SAVED_ID = original.kaia_id
+        SidecarDir = R.doc_settings:getSidecarDir(R.document.file)
+        local data = require("datastorage"):getDataDir()
+        assert(SidecarDir:sub(1, #data) == data)
+        FileName = 'local-merge'
+        DataAnnotations = R.annotation.annotations
+        local incoming = require('util').tableDeepCopy(original)
+        incoming.kaia_id = 99999
+        incoming.note = 'Incoming edit'
+        incoming.text = 'Edited highlight'
+        incoming.text_edited = true
+        incoming.datetime_updated = '2099-01-01 12:00:00'
+        local function write(name, items)
+            local f = assert(io.open(SidecarDir .. '/' .. name, 'w'))
+            f:write(json.encode(items)); f:close()
+            return SidecarDir .. '/' .. name
+        end
+        local cached = write('cached.json', {original})
+        local income = write('income.json', {incoming})
+        local plugin = KAIA_PLUGIN.instances.highlightsync
+        assert(plugin:onSync(nil, cached, income, true))
+        assert(R.annotation.annotations[1].kaia_id == SAVED_ID)
+        assert(R.annotation.annotations[1].note == 'Incoming edit')
+        assert(R.annotation.annotations[1].datetime_updated == incoming.datetime_updated)
+        R.annotation.annotations[1].note = 'New local edit'
+        R.annotation.annotations[1].datetime_updated = '2100-01-01 12:00:00'
+        R.annotation:replaceItems(R.annotation.annotations)
+        DataAnnotations = R.annotation.annotations
+        assert(plugin:onSync(nil, cached, income, false))
+        assert(#R.annotation.annotations == 1)
+        assert(R.annotation.annotations[1].note == 'New local edit')
+        assert(R.annotation.annotations[1].kaia_id == SAVED_ID)
+        local before = json.encode(KAIA_READER.annotations())
+        local ok = pcall(KAIA_READER.replace_annotations, {R.annotation.annotations[1], {page=false}})
+        assert(not ok and json.encode(KAIA_READER.annotations()) == before)
+        -- The adapter rejects remote sync before any socket call.
+        plugin.settings.sync_server = {type='webdav', url='https://example.invalid'}
+        plugin:SyncBookHighlights(false, true)
+    "#,
+    )
+    .unwrap();
+    healthy(&ui);
+    let id = value(&ui, "SAVED_ID");
+    drop(ui);
+    let ui = load(&data, book.to_str().unwrap(), &["highlightsync"]);
+    assert_eq!(value(&ui, "KAIA_READER.annotations()[1].kaia_id"), id);
     assert_eq!(
-        value(&ui, "#require('apps/reader/readerui').annotation.annotations"),
-        Value::from(1i64)
+        value(&ui, "KAIA_READER.annotations()[1].note"),
+        Value::from("New local edit")
     );
+    assert_eq!(
+        value(&ui, "KAIA_READER.annotations()[1].text"),
+        Value::from("Edited highlight")
+    );
+    assert_eq!(
+        value(&ui, "KAIA_READER.annotations()[1].text_edited"),
+        Value::from(true)
+    );
+    assert_eq!(std::fs::read(book).unwrap(), original);
+    assert_eq!(
+        std::fs::read_to_string(marker).unwrap(),
+        "KOReader owns this folder"
+    );
+    assert_eq!(std::fs::read_dir(sidecar).unwrap().count(), 1);
+    healthy(&ui);
 }
 
 #[test]

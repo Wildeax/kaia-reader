@@ -83,6 +83,7 @@ pub struct TocEntry {
 pub struct Metadata {
     pub title: Option<String>,
     pub author: Option<String>,
+    pub language: Option<String>,
 }
 
 /// One character of page text with its box.

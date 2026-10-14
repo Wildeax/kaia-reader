@@ -125,7 +125,7 @@ impl Annotation {
 
     /// The KOReader table form. `page` holds an xpointer string or a 1-based
     /// page number, and the positions hold KOReader's shapes.
-    pub(crate) fn to_value(&self) -> Value {
+    pub fn to_value(&self) -> Value {
         let mut t = Table::new();
         let mut put = |k: &str, v: Value| {
             if !v.is_nil() {

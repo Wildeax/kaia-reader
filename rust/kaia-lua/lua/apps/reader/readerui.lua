@@ -14,6 +14,7 @@ if props.has_pages == nil then props.has_pages = is_pdf end
 local document = strict("document", {
     file = reader.file(),
     is_pdf = is_pdf,
+    provider = is_pdf and "mupdf" or "crengine",
     -- True when the book had no saved or imported reading state before this open.
     is_new = reader.is_new(),
     is_pic = false,
@@ -39,9 +40,36 @@ local document = strict("document", {
     getProps = function() return reader.properties() end,
 })
 
+for _, method in ipairs({"findAllText", "getTextFromXPointers", "getPrevVisibleWordStart",
+    "getNextVisibleWordEnd", "compareXPointers", "getPageXPointer"}) do
+    document[method] = function(_, ...)
+        local args = {...}
+        for i = 1, select("#", ...) do args[i] = tostring(args[i]) end
+        local result = reader.document_query(method, args)
+        if method == "findAllText" then return result, result and #result end
+        return result
+    end
+end
+local selected_boxes = document.getScreenBoxesFromPositions
+function document:getScreenBoxesFromPositions(a, b, ...)
+    if type(a) == "string" and type(b) == "string" then
+        return reader.document_query("getScreenBoxesFromPositions", {a, b}) or {}
+    end
+    return selected_boxes(self, a, b, ...)
+end
+document.getDocumentProps = document.getProps
+
 local settings_data = { summary = reader.get_setting("summary") or {} }
 
 local settings = setmetatable({
+    -- Plugin caches use a content identity below Kaia data, never book sidecars.
+    getSidecarDir = function(_, file)
+        assert(file == reader.file(), "plugin storage is limited to the open book")
+        local id = assert(require("util").partialMD5(file), "cannot identify plugin book")
+        local path = require("datastorage"):getDataDir() .. "/plugin-books/" .. id
+        assert(require("util").makePath(path))
+        return path
+    end,
     readSetting = function(self, key, default)
         local value = self.data[key]
         if value == nil then value = reader.get_setting(key) end
@@ -120,6 +148,8 @@ local annotation = strict("annotation", {
 
 local view = strict("view", {
     flipping = false,
+    -- The native page has already painted when the plugin overlay calls this.
+    paintTo = function() end,
     state = setmetatable({}, { __index = function(_, key)
         if key == "page" then return reader.current_page() end
         error("view.state." .. tostring(key) .. " is unavailable", 2)
@@ -193,12 +223,14 @@ local ui = {
     }),
 }
 
+ui.view.dialog = ui
+
 if KAIA_DEVICE then ui.dictionary = require("kaia/dictionary")(ui) end
 
 require("kaia/reader_modules")(ui, reader, strict)
 
 return setmetatable(ui, { __index = function(_, key)
-    if key == "cloudstorage" or key == "pagemap" or key == "profiles"
+    if key == "Mokuro" or key == "cloudstorage" or key == "pagemap" or key == "profiles"
         or key == "dictionary" or key == "paging" or key == "rolling"
         or key == "statistics" or key == "typeset" or key == "vocabbuilder" or key == "disable_double_tap" or key == "link" or key == "file_chooser" then return nil end
     error("ReaderUI." .. tostring(key) .. " is unavailable", 2)

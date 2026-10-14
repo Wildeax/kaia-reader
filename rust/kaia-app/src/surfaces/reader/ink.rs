@@ -390,6 +390,15 @@ pub(super) fn command(
         return Some(Outcome::Handled);
     }
     let mut c = rc.borrow_mut();
+    if action == "pencil-bookmark" {
+        if let Some(session) = c.session.as_mut() {
+            if let Err(e) = session.set_ink_bookmark(args.first().and_then(|v| v.as_bool()).unwrap_or(false))
+            {
+                env.notice(e.to_string());
+            }
+        }
+        return Some(Outcome::Handled);
+    }
     let window = c.page_window.clone()?;
     if action == "delete" {
         use kaia_ui::composite::{Dialog, DialogButton};
@@ -410,8 +419,20 @@ pub(super) fn command(
     let mut tool = String::new();
     let mut width_label = String::new();
     let mut color_content = false;
+    let mut pencil_bookmark = None;
     window.update::<super::page::PageView, _>(env.ctx, super::page::PAGE_KEY, |view, cx| {
         match action {
+            "pencil-on" | "pencil-off" => {
+                view.ink_pencil = action == "pencil-on";
+                view.ink_on = view.ink_pencil;
+                if !view.ink_on {
+                    if let Some(ink) = &mut view.ink {
+                        ink.cancel();
+                    }
+                }
+            }
+            "pencil-pen" => view.ink_eraser = false,
+            "pencil-eraser" => view.ink_eraser = true,
             "toggle" => {
                 view.ink_on = !view.ink_on;
                 if !view.ink_on {
@@ -446,6 +467,9 @@ pub(super) fn command(
             "undo" | "delete-confirm" => {
                 if let Some(ink) = &mut view.ink {
                     error = ink.delete(action == "delete-confirm").err();
+                    if error.is_none() && view.ink_pencil {
+                        pencil_bookmark = Some(!ink.strokes.is_empty());
+                    }
                 }
             }
             _ => {}
@@ -470,8 +494,11 @@ pub(super) fn command(
         };
         cx.request_paint();
     });
+    if let (Some(active), Some(session)) = (pencil_bookmark, c.session.as_mut()) {
+        error = session.set_ink_bookmark(active).err().map(|e| e.to_string());
+    }
     c.ink_color_content |= color_content;
-    if action == "toggle" {
+    if matches!(action, "toggle" | "pencil-on" | "pencil-off") {
         window.update::<kaia_ui::components::Stack, _>(env.ctx, "ink-root", |root, cx| {
             root.children_mut()[1].set_visible(on);
             cx.request_layout();

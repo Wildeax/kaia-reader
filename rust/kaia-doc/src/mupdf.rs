@@ -119,6 +119,7 @@ impl Document for MupdfDocument {
                 .filter(|s| !s.is_empty())
         };
         Metadata {
+            language: None,
             title: get("info:Title"),
             author: get("info:Author"),
         }

@@ -76,6 +76,10 @@ impl Host {
                     Value::from(s.metadata().author.clone().unwrap_or_default()),
                 ),
                 (Key::from("has_pages"), Value::from(!s.is_reflowable())),
+                (
+                    Key::from("language"),
+                    s.metadata().language.clone().map(Value::from).unwrap_or_default(),
+                ),
             ]
             .into(),
         );
@@ -320,6 +324,33 @@ impl ReaderHost for Host {
             .into(),
         ))
     }
+    fn document_query(&mut self, method: &str, args: Vec<String>) -> Result<Value, String> {
+        let query = Query::Compat(method.into(), args, self.current_page().saturating_sub(1));
+        let result = self
+            .document
+            .borrow_mut()
+            .answer(&query, std::time::Duration::from_secs(30));
+        let Some(result) = result else {
+            return Err("plugin text query is not ready".into());
+        };
+        match result? {
+            Answer::Value(mut value) => {
+                if method == "getScreenBoxesFromPositions" {
+                    let offset = self.core.borrow().header_height;
+                    if let Value::Table(boxes) = &mut value {
+                        for b in boxes.values_mut() {
+                            let y = b.get("y").as_f64().unwrap_or(0.0) + offset as f64;
+                            if let Value::Table(fields) = b {
+                                fields.insert(Key::from("y"), Value::from(y));
+                            }
+                        }
+                    }
+                }
+                Ok(value)
+            }
+            _ => Err("invalid plugin text answer".into()),
+        }
+    }
     fn text_from_positions(&mut self, start: &Value, end: &Value) -> Result<String, String> {
         let c = self.core.borrow();
         let selection = c
@@ -361,41 +392,7 @@ impl ReaderHost for Host {
             .and_then(|s| s.annotations().ok())
             .unwrap_or_default()
             .into_iter()
-            .map(|a| {
-                let mut fields = kaia_events::Table::new();
-                fields.insert(Key::from("kaia_id"), Value::from(a.id as i64));
-                fields.insert(Key::from("pageno"), Value::from(a.pageno.unwrap_or(1) as i64));
-                if let Some(color) = a.color {
-                    fields.insert(Key::from("color"), Value::from(color));
-                }
-                fields.insert(Key::from("datetime"), Value::from(a.datetime));
-                if let Some(text) = a.text {
-                    fields.insert(Key::from("text"), Value::from(text));
-                }
-                if let Some(note) = a.note {
-                    fields.insert(Key::from("note"), Value::from(note));
-                }
-                if let Some(chapter) = a.chapter {
-                    fields.insert(Key::from("chapter"), Value::from(chapter));
-                }
-                if let Some(drawer) = a.drawer {
-                    fields.insert(Key::from("drawer"), Value::from(drawer));
-                }
-                if let Some(pos) = a.pos0 {
-                    fields.insert(Key::from("pos0"), position_value(pos));
-                }
-                if let Some(pos) = a.pos1 {
-                    fields.insert(Key::from("pos1"), position_value(pos));
-                }
-                fields.insert(
-                    Key::from("page"),
-                    match a.page {
-                        Location::Page(page) => Value::from(page as i64 + 1),
-                        Location::Engine(xp) => Value::from(xp),
-                    },
-                );
-                Value::Table(fields)
-            })
+            .map(|a| a.to_value())
             .collect()
     }
     fn add_annotation(&mut self, item: Value) -> Result<u64, String> {
@@ -455,6 +452,17 @@ impl ReaderHost for Host {
                 )
                 .map_err(|e| e.to_string())?;
         }
+        self.refresh_annotations();
+        Ok(())
+    }
+    fn replace_annotations(&mut self, items: Vec<Value>) -> Result<(), String> {
+        self.core
+            .borrow_mut()
+            .session
+            .as_mut()
+            .ok_or_else(|| tr("The reader is busy"))?
+            .replace_plugin_annotations(&items)
+            .map_err(|e| e.to_string())?;
         self.refresh_annotations();
         Ok(())
     }
