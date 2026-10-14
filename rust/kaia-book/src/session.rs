@@ -877,12 +877,27 @@ impl BookSession {
             let Some(page) = w.doc.xpointer_page(&locator)? else {
                 return Ok(None);
             };
-            let origin = w
-                .doc
-                .char_boxes(page, &locator, None)?
-                .and_then(|boxes| boxes.first().map(|b| kaia_doc::PointF { x: b.1.x0, y: b.1.y0 }))
-                .unwrap_or(kaia_doc::PointF { x: 0.0, y: 0.0 });
-            Ok(Some((page, origin)))
+            Ok(Some((page, origin_on_page(w, page, &locator)?)))
+        })
+    }
+
+    /// The text origin of each locator that lies on `page`, in one engine call.
+    /// The entry is None for a locator on another page or one that is not in the
+    /// document. The result has the same order as `locators`.
+    pub fn ink_origins(&mut self, page: u32, locators: &[String]) -> Result<Vec<Option<kaia_doc::PointF>>> {
+        self.ensure_idle()?;
+        let locators = locators.to_vec();
+        self.engine.call(move |w| {
+            let mut origins = Vec::with_capacity(locators.len());
+            for locator in &locators {
+                let on_page = w.doc.xpointer_page(locator)? == Some(page);
+                origins.push(if on_page {
+                    Some(origin_on_page(w, page, locator)?)
+                } else {
+                    None
+                });
+            }
+            Ok(origins)
         })
     }
 
@@ -2015,3 +2030,17 @@ fn cmp_point(a: (u32, f32, f32), b: (u32, f32, f32)) -> std::cmp::Ordering {
 }
 
 mod nickel;
+
+/// The top left of the first visible character at or after a locator on `page`.
+/// The origin is zero when no visible character follows the locator.
+fn origin_on_page(
+    w: &mut Worker,
+    page: u32,
+    locator: &str,
+) -> std::result::Result<kaia_doc::PointF, DocError> {
+    let origin = w
+        .doc
+        .first_char_box(page, locator)?
+        .map(|b| kaia_doc::PointF { x: b.1.x0, y: b.1.y0 });
+    Ok(origin.unwrap_or(kaia_doc::PointF { x: 0.0, y: 0.0 }))
+}

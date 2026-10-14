@@ -13,7 +13,7 @@ use std::io;
 use std::path::Path;
 
 use kaia_doc::{Location, Margins};
-use kaia_events::{Settings, Table, Value};
+use kaia_events::{Key, Settings, Table, Value};
 
 use crate::annotation::Annotation;
 use crate::layout::TextLayout;
@@ -418,6 +418,64 @@ fn read_one(path: &Path) -> io::Result<Option<Result<BookState, Option<i64>>>> {
     Ok(Some(BookState::from_table(settings.table()).ok_or(None)))
 }
 
+/// The rating of the book whose state file is at `path`, read from the file's
+/// `summary.rating`. Opens no document. A missing file is `NotFound`. A file of
+/// another format or a newer version is `InvalidData`.
+pub fn read_rating(path: &Path) -> io::Result<Option<u8>> {
+    let settings = Settings::read_exact(path)?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no state file"))?;
+    check_state_format(&settings)?;
+    Ok(settings
+        .read("summary")
+        .get("rating")
+        .as_i64()
+        .filter(|r| (1..=5).contains(r))
+        .map(|r| r as u8))
+}
+
+/// Sets the rating in the state file at `path`. `None` or zero clears it, and
+/// 1 to 5 set it. The other keys of the file stay as they are, and the file is
+/// written atomically. Returns `Ok(false)` when there is no file, so the book
+/// has not been opened and its sidecar import has not run. Values above 5 are
+/// `InvalidInput`.
+pub fn write_rating(path: &Path, rating: Option<u8>) -> io::Result<bool> {
+    let Some(mut settings) = Settings::read_exact(path)? else {
+        return Ok(false);
+    };
+    check_state_format(&settings)?;
+    let mut summary = settings.read("summary").as_table().cloned().unwrap_or_default();
+    match rating {
+        Some(r @ 1..=5) => {
+            summary.insert("rating".into(), Value::from(r as i64));
+        }
+        None | Some(0) => {
+            summary.remove(&Key::from("rating"));
+        }
+        Some(r) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("rating {r} is outside 0 to 5"),
+            ));
+        }
+    }
+    settings.save("summary", Value::Table(summary));
+    settings.flush_book(path)?;
+    Ok(true)
+}
+
+/// Refuses a file that is not a Kaia state file of a version this code writes.
+fn check_state_format(settings: &Settings) -> io::Result<()> {
+    if settings.read("format").as_str() != Some(STATE_FORMAT)
+        || settings.read("version").as_i64() != Some(STATE_VERSION)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "not a Kaia state file of this version",
+        ));
+    }
+    Ok(())
+}
+
 /// Writes the state file atomically. The previous version stays as `.old`.
 pub(crate) fn write_state(path: &Path, state: &BookState) -> io::Result<()> {
     #[cfg(all(test, unix))]
@@ -563,5 +621,63 @@ mod tests {
         let mut t = state().to_table();
         t.insert("format".into(), Value::from("something-else"));
         assert!(BookState::from_table(&t).is_none());
+    }
+
+    fn write_file(dir: &std::path::Path) -> std::path::PathBuf {
+        let path = dir.join("state.json");
+        write_state(&path, &state()).unwrap();
+        path
+    }
+
+    #[test]
+    fn rating_is_set_read_and_cleared_without_touching_other_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_file(dir.path());
+        assert_eq!(read_rating(&path).unwrap(), Some(4), "the fixture is rated 4");
+
+        assert!(write_rating(&path, Some(4)).unwrap());
+        assert_eq!(read_rating(&path).unwrap(), Some(4));
+        assert!(write_rating(&path, Some(2)).unwrap());
+        assert_eq!(
+            read_rating(&path).unwrap(),
+            Some(2),
+            "a change replaces the rating"
+        );
+
+        let StateLoad::Loaded(loaded) = read_state(&path).unwrap() else {
+            panic!("the state file loads");
+        };
+        assert_eq!(loaded.rating, Some(2));
+        assert_eq!(loaded.status.as_deref(), Some("reading"));
+        assert_eq!(loaded.title.as_deref(), Some("Frankenstein"));
+
+        assert!(write_rating(&path, None).unwrap());
+        assert_eq!(read_rating(&path).unwrap(), None);
+        assert!(write_rating(&path, Some(3)).unwrap());
+        assert!(write_rating(&path, Some(0)).unwrap());
+        assert_eq!(read_rating(&path).unwrap(), None, "zero clears too");
+    }
+
+    #[test]
+    fn rating_writes_refuse_missing_and_foreign_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.json");
+        assert_eq!(read_rating(&missing).unwrap_err().kind(), io::ErrorKind::NotFound);
+        assert!(!write_rating(&missing, Some(5)).unwrap());
+        assert!(!missing.exists(), "no file is created for an unopened book");
+
+        let path = write_file(dir.path());
+        assert_eq!(
+            write_rating(&path, Some(6)).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        let mut t = state().to_table();
+        t.insert("version".into(), Value::from(STATE_VERSION + 1));
+        Settings::from_table(t).flush_book(&path).unwrap();
+        assert_eq!(read_rating(&path).unwrap_err().kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            write_rating(&path, Some(1)).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
     }
 }

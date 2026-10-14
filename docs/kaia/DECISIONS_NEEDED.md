@@ -1,37 +1,32 @@
-# Decisions needed
+# Owner decisions
 
-These are the items in group C of `BACKLOG.md`. Each one needs a choice from the project owner before it can be built or closed. Each row gives the options and a recommended answer. Reply "accept all", or name the rows you want changed.
+These are the items in group C of `BACKLOG.md`. The project owner decided B-81 to B-99 on 2026-10-14. Each row records the choice and what it means for the build. Items marked "build" are in group A of `BACKLOG.md` as B-120 and later.
 
 Rules that apply to every row: no network access unless the user turns the feature on, no telemetry, and no code or data whose license Kaia cannot ship.
 
-## Features
+## Decided
 
-| Id | Decision | Options | Recommended |
+| Id | Decision | Choice | What follows |
 |---|---|---|---|
-| B-81 | WebDAV export of notes and highlights (T2-4) | Leave out; one-way export to a WebDAV folder the user sets; two-way sync | One-way export, off by default. One Markdown file and one JSON file per book, written when the user taps Export or closes a book. No sync back. |
-| B-82 | Dictionary downloads (T2-6) | Leave out; download from the dictionary list KOReader uses; another source | Use KOReader's list, off by default, behind a switch that says files come from the internet. Pin a SHA-256 for each file in the repository and refuse a file that does not match. |
-| B-83 | CBR comics (T3-15) | Leave out; libarchive (BSD license, already in KOReader's build); unrar (license not compatible with AGPL) | libarchive. It reads most RAR files, ships under a compatible license, and KOReader already builds it. Cap the unpacked size per page. |
-| B-84 | Factory reset (T3-18) | Kaia settings only; all Kaia data; wider | Two buttons: "Reset settings" and "Erase all Kaia data". Neither touches books, Nickel or KOReader files. Both ask for a typed confirmation and suggest a backup first. |
-| B-85 | Japanese, Chinese and Korean input (T3-4) | Leave out; add an input engine | Leave out of the first release. Latin keyboards only, as today. Revisit after release. |
-| B-86 | Hyphenation for more languages (T3-7) | One language, as now; the pattern files KOReader ships | Use the patterns KOReader ships with CREngine, under their existing licenses, and pick the language from the book. |
-| B-87 | Notebook export to Word, PDF and images (T3-16) | Leave out; add formats | Leave out of the first release. Keep the current notes export. |
-| B-88 | Read aloud and screen reader (T3-2) | Leave out; add an offline speech engine | Leave out. The firmware has no offline engine, and adding one is a large separate project. |
-| B-89 | Handwriting recognition (T3-1) | Leave out; license an engine | Leave out. Ink stays as drawn strokes. |
-| B-90 | Network time (T3-13) | Manual time only; sync from a time server | A switch, off by default, that syncs the clock from pool.ntp.org when Wi-Fi is on. |
-| B-91 | Lua app writing Nickel's brightness setting (issue 6.3) | Never write; write only when the user opts in | Never write by default. Add a switch "Match Nickel's brightness" for users who want it. |
-| B-92 | Translate (sends text to Google) and Wikipedia lookups (issue 6.1) | Remove; keep behind an opt-in with a warning | Remove Translate. Keep Wikipedia behind a switch, off by default, that says the selected text leaves the device. |
-| B-93 | Update channel | Manual install of packages from GitHub Releases; an in-app update feed | Manual install of signed packages from GitHub Releases for the first release. No in-app feed yet. |
-| B-94 | Product name | Keep "Kaia Reader" after a trademark check; choose another name | Run a trademark search before the first public release. Keep the name if it is clear. |
-| B-95 | Books removed from the device (T1-18) | Keep their reading data for 30 days; remove at once | Keep 30 days, as now. A folder that is not mounted counts as missing, not deleted. |
-| B-96 | Ambient light sensor (T3-19) | Leave out; experiment | Leave out. The stock firmware does not use it on the Libra Colour. |
-| B-97 | Experimental features list (T3-5) | Keep the list empty; name features | Keep it empty until a feature needs it. |
-
-## Scope of smaller gaps
-
-| Id | Decision | Recommended to build | Recommended to leave out |
-|---|---|---|---|
-| B-98 | Reading and library gaps from the feature table | In-book search history, per-book statistics, Home controls, double-tap to look up a word | Favorites and tags (collections cover them), zoom modes beyond fit and width, auto-highlight, a separate dyslexic mode (the OpenDyslexic font covers it) |
-| B-99 | Device and format gaps from the feature table | Sleep screen with book info, standby timeout, screenshots | Screen lock PIN, LED and water-mode controls, VCOM checks, captive portal login, cloud browsing, audio, offline Wikipedia, image book formats beyond CBZ and CBR, the stock onboarding flow |
+| B-81 | WebDAV export of notes and highlights (T2-4) | One-way export, off by default | Build. One Markdown file and one JSON file per book, written on Export or when a book closes. Nothing syncs back. |
+| B-82 | Dictionaries (T2-6) | Kobo's local dictionaries and free downloads | Build. Kaia reads the dictionaries Nickel already put on the device, if they are readable (a device check). It also offers the free Wiktionary-based dictionaries from KOReader's list as an opt-in download, off by default, each file verified by SHA-256. Nickel's dictionaries are never downloaded or redistributed by Kaia. |
+| B-83 | CBR comics (T3-15) | libarchive | Build. libarchive is BSD licensed and already in KOReader's build. The unpacked size per page is capped. |
+| B-84 | Factory reset (T3-18) | Two scoped buttons | Build. "Reset settings" and "Erase all Kaia data". Neither touches book files, Nickel or KOReader. Both need a typed confirmation and suggest a backup. |
+| B-85 | Japanese, Chinese and Korean input (T3-4) | Leave out of the first release | Closed for now. Latin keyboards only. |
+| B-86 | Hyphenation (T3-7) | KOReader's TeX patterns | Build. The hyph-utf8 patterns KOReader ships, the same source Nickel uses, chosen by the book's language with a manual override. |
+| B-87 | Notebook export (T3-16) | Add PDF export | Build. A PDF of notes and highlights per book, written with MuPDF, which Kaia already links. Word and image archives stay out. |
+| B-88 | Read aloud and screen reader (T3-2) | Leave out for now | Closed for now. The firmware has no offline speech engine and the device has no speaker. |
+| B-89 | Handwriting recognition (T3-1) | Leave out, keep ink | Closed. Nickel's engine (MyScript) is closed and its license does not fit AGPL. |
+| B-90 | Network time (T3-13) | NTP, off by default | Build. A switch that sets the clock from pool.ntp.org when Wi-Fi is on. |
+| B-91 | Lua app writing Nickel's brightness (issue 6.3) | Keep writing by default | No code change. Record in `specs/STORAGE.md` that the Lua app writes Nickel's light settings by default, as KOReader does. |
+| B-92 | Translate and Wikipedia (issue 6.1) | Keep both, opt-in | Build. Each one off by default behind a switch that warns the selected text leaves the device. |
+| B-93 | Update channel | Signed GitHub releases now, in-app updater later | Build. Signed packages with checksums on GitHub Releases for the first releases. An opt-in in-app updater with signature checks and rollback comes after device testing. |
+| B-94 | Product name | Keep "Kaia Reader", no search | Closed. |
+| B-95 | Removed books (T1-18) | Keep reading data forever | Build. Reading data of a removed book is never deleted automatically. |
+| B-96 | Ambient light sensor (T3-19) | Experiment after device tests | Moved to group B. Check the sensor on the device first; if it works, add opt-in auto brightness. |
+| B-97 | Experimental features (T3-5) | Put new features there first | Build. Large new features ship behind an experimental switch until their device tests pass. |
+| B-98 | Reading and library gaps | Build all four | Build. In-book search history; per-book statistics; Home controls and double-tap lookup; favorites and tags; extra PDF zoom modes. |
+| B-99 | Device gaps | PIN, screenshots, sleep screen and standby | Build. Screen lock PIN; screenshots; sleep screen with book info; standby timeout. Captive portal login stays out. |
 
 ## Later, after device testing
 

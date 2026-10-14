@@ -19,6 +19,8 @@ state. In the Rust app, Kaia owns all reading state:
 | Data | Owner in the Rust app | Location |
 |---|---|---|
 | Position, layout, highlights, notes, bookmarks, status, rating, reading time | `kaia-book` | `<data dir>/kaia/books/<partial_md5>.json` (`kaia_events::Settings` format, atomic writes) |
+
+The rating is `summary.rating`, 1 to 5, or absent. The Library's book details write it through `kaia_book::write_rating` without opening the document, and only for a book that already has a state file, so a first open can still import its KOReader sidecar. The Kobo import writes the same key.
 | Library index, covers, collections, history | `kaia-library` | `<data dir>/library.sqlite3` |
 | Stickers and assets | `kaia-storage` | as below |
 | Page ink strokes | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `ink_strokes`, schema version 5 |
@@ -27,6 +29,8 @@ state. In the Rust app, Kaia owns all reading state:
 | App settings | `kaia-app` | `<data dir>/settings.json` |
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
+
+One exception writes a Nickel file, by the owner's decision (B-91, 2026-10-14): the Lua app keeps KOReader's default `KOBO_SYNC_BRIGHTNESS_WITH_NICKEL` (`defaults.lua`), so it writes the frontlight state, level and warmth into Nickel's `Kobo eReader.conf` (`frontend/device/kobo/powerd.lua`). Going back to Nickel then keeps the same light. The Rust app writes no Nickel file.
 
 The `layout` table of a book state holds `font_weight`, a KOReader font weight value (0 is regular, -1 to 3 in the Text and layout sheet). A missing key reads as 0.
 

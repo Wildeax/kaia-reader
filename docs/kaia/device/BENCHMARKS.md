@@ -209,3 +209,84 @@ The workload is the same file. A device has no shell environment, so settings co
 The JSON gives software completion only (the `page_turn_ms` values and the open and paint times). Visible latency needs the camera method in `MEASUREMENT_METHOD.md`. Film the screen and the rig LED at 240 frames per second or faster. Use the LED frame as T0 and the first frame with the full new page as T2. Calibrate the clock offset once per rig. Do not report software time as latency alone.
 
 Device runs follow the same thresholds, but they are a separate series. Do not compare a debug-build desktop number with a device number.
+
+## Rust app, desktop release
+
+Status: partial measurement of the R1 page turn exit check (REWRITE_PLAN.md R1: page turn under 100 ms on the desktop release build). The check fails. Every EPUB that completed a run has a page turn of about 250 to 320 ms at p50, and the reader's ink anchor call takes most of that time. Rendering takes about 2 ms. The check should be rerun after the ink anchor is fixed. The raw files sit outside the repository, as the Lua results do: `~/kaia-bench/rust-page-turn-2026-10-14-partial/` holds `page-turns.csv`, `run.txt` and `summary.md`.
+
+### Machine and build
+
+- Machine: Apple M5 Pro, 18 cores, 24 GB memory, macOS 26.3 (25D2125), arm64. Headless backend, Libra Colour panel spec, 1264 x 1680.
+- Commit: `61a72323e`. The working tree had 20 changed paths from other work in progress (library and settings surfaces in `kaia-app`, `kaia-book/src/state.rs`, `kaia-library`). The binary was built from that tree, so it includes those edits.
+- Build: `cargo build --release -p kaia-app --example page_turn_bench`, rustc 1.99.0, release profile as committed (`opt-level = "s"`, `lto = "thin"`, `panic = "unwind"`), `kaia-app` default features (desktop, lua).
+- Engine libraries: MuPDF and CREngine come from KOReader's debug staging (`base/build/arm64-apple-darwin25.3.0-debug`), built with `-Og -g`. These numbers therefore do not use the engine's release flags. A release staging was not built, so the engine part of the cost may be lower with it.
+- The binary runs from `resources/`, because MuPDF opens its fonts from `./fonts`.
+
+### Method
+
+- Harness: `rust/kaia-app/examples/page_turn_bench.rs`. Runner: `tools/kaia/bench/rust-page-turn.sh`, with `--quick` (juliet and paper) or `--books LIST`. Summary: `tools/kaia/bench/rust_page_turn_summary.py`.
+- Timed span: `App::command("reader:next")` or `reader:prev`, to the first app step after the reader is idle that presents a new frame to the headless display. The step that presents the frame is the paint stage. The time before it is the wait stage: the reader job on its worker thread plus the 20 ms pump tick.
+- Engine split: the app does not report its job stages, so a second session on the same book replays the job's calls in the job's order: go to, render, save, marks, bookmark, page transform, links, sticker and ink store reads, ink anchor. The replay is an estimate. `wait_residual_ms` is the wait stage minus the replayed total, and it holds the pump tick and any job work the replay does not cover.
+- Plan: 5 warm-up forward turns (not in the statistics), then 50 measured forward and 20 measured backward turns, at the default layout. Reflowable EPUBs also run at 85 px (the largest font the Text settings allow at this panel). The default layout is KOReader's 22 units scaled to 47 px, with margins of 22 and 32 px.
+- Limits: a turn over 120 s stops that book and keeps its turns. Each layout stops measuring after 900 s of wall time. Books with too few pages run fewer measured turns, and the summary lists them.
+- Statistics: nearest-rank p50, p95 and max over measured turns.
+
+### Results (partial run, end to end, ms)
+
+| Book | Config | Direction | Turns | p50 | p95 | Max | Under 100 ms |
+|---|---|---|---:|---:|---:|---:|---|
+| juliet.epub (EPUB) | default | forward | 50 | 286.4 | 312.9 | 316.7 | no |
+| juliet.epub | default | backward | 20 | 270.0 | 282.1 | 295.8 | no |
+| juliet.epub | 85 px | forward | 50 | 306.7 | 321.2 | 331.5 | no |
+| juliet.epub | 85 px | backward | 20 | 298.4 | 305.4 | 314.2 | no |
+| 11.epub (EPUB) | default | forward | 50 | 268.2 | 314.3 | 320.3 | no |
+| 11.epub | default | backward | 20 | 244.1 | 260.1 | 260.5 | no |
+| 11.epub | 85 px | forward | 50 | 299.4 | 320.2 | 330.9 | no |
+| 11.epub | 85 px | backward | 20 | 288.3 | 301.2 | 306.1 | no |
+| leaves.epub (EPUB) | default | forward | 10 | 30964.3 | 31319.2 | 31319.2 | no |
+| leaves.epub | 85 px | forward | 10 | 31056.6 | 31322.2 | 31322.2 | no |
+| paper.pdf (PDF, 22 pages) | default | forward | 16 | 13.4 | 37.9 | 37.9 | yes |
+| paper.pdf | default | backward | 20 | 14.3 | 21.4 | 21.6 | yes |
+| sample.pdf (PDF, 45 pages) | default | forward | 39 | 18.5 | 197.7 | 298.0 | no |
+| sample.pdf | default | backward | 20 | 25.4 | 155.1 | 205.0 | no |
+
+Pooled over the EPUB default runs (juliet and 11, 140 forward and backward turns): p50 271 ms, p95 313 ms, max 320 ms.
+
+leaves.epub stopped after 10 measured turns in each layout, when one turn passed the 120 s limit. Every turn of leaves takes about 31 s. Its first warm-up turn took 31 s too, so this is not a one-time index cost.
+
+### Where the time goes (default layout, p50 per turn, ms)
+
+| Book | Wait (job plus pump) | Paint | Engine render | Engine save | Ink anchor | Replayed engine total |
+|---|---:|---:|---:|---:|---:|---:|
+| juliet.epub | 275.1 | 2.6 | 2.0 | 12.1 | 239.5 | 255.4 |
+| 11.epub | 255.0 | 2.5 | 2.5 | 12.5 | 223.2 | 239.2 |
+| leaves.epub | 30961.3 | 3.1 | 0.2 | 13.4 | 30200.0 | 30217.1 |
+| paper.pdf | 11.9 | 2.3 | 1.1 | 11.2 | 0.0 | 12.5 |
+| sample.pdf | 22.0 | 2.4 | 10.5 | 12.0 | 0.0 | 22.3 |
+
+The command call takes under 0.1 ms. The pump tick adds up to 20 ms to the wait. Paint, which covers the page update and the present, takes 2 to 3 ms at p50.
+
+### Pass or fail
+
+The check fails. EPUB page turns take 250 to 320 ms at p50 and p95 for juliet and 11, and leaves takes about 31 s. Only paper.pdf passes, with a p95 of 38 ms. sample.pdf fails at p95 (198 ms) for the reasons below.
+
+### The dominant stage: ink anchoring
+
+On every turn of a reflowable book, the reader job calls `BookSession::ink_anchor` for the current page. It runs in `kaia-app/src/surfaces/reader/ink.rs` (`frame`), which `work.rs` calls for each turn. The call happens even when the page has no ink strokes, and the origin it returns is used only for stroke placement. Inside the book engine, `ink_anchor` calls CREngine `char_boxes`. A sample of the leaves run during a turn showed the engine thread in `ldomNode::getChildIndex`, `ldomXPointer::getRect` and `ldomXPointerEx::initIndex`, under `kaia_cre_char_boxes`. Rendering the page takes about 2 ms, so the check cannot pass until this call is skipped or cached. The fix belongs to the ink code and was not made in this task.
+
+Other findings from the same run:
+
+- The state save runs on every turn and costs about 12 ms.
+- Backward turns in PDFs miss the page cache. Prerendering only goes forward, so a backward PDF turn renders the page again: 140 to 160 ms in sample.pdf.
+- Some forward turns in sample.pdf show a wait residual of 100 to 280 ms, even when the replayed render was a cache hit. The replay does not cover that time. A likely cause is the app session's background prerender holding the engine thread between jobs. That is a hypothesis and was not verified.
+
+### Not measured
+
+- 1342.epub, 1661.epub, 2701.epub, 345.epub and 84.epub. The run was stopped before they finished, so they have no rows.
+- 2col.pdf (2 pages) and tall.pdf (1 page). Too few pages for the warm-up.
+- The 85 px run for PDFs. They are fixed layout, so the font setting does not apply.
+- Engine release flags, the Kobo panel, and the e-ink refresh time. The headless present is the end point, so the visible time on the panel is not included.
+
+### How to rerun
+
+`tools/kaia/bench/rust-page-turn.sh --quick` runs juliet and paper in about 2 minutes. `tools/kaia/bench/rust-page-turn.sh --books 84,11` runs chosen books. The full corpus is slow because of leaves and 1342. Pass an output folder as the last argument to keep results apart from the default folder.

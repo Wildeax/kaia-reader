@@ -13,6 +13,10 @@ unsafe_code = "forbid"
 name = "kaia"
 path = "src/main.rs"
 
+[[example]]
+name = "page_turn_bench"
+path = "examples/page_turn_bench.rs"
+
 [features]
 default = ["desktop", "lua"]
 lua = ["dep:kaia-lua"]

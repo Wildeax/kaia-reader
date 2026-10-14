@@ -33,6 +33,8 @@
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
 //! | `library.layout` | string | `covers` | Layout of the Books tab: `covers` or `list`. Kept between runs, also while another tab is open. |
+//! | `library.source` | string | empty | Source filter of the Books tab: `calibre`, `opds` or `other`. Empty shows every source. Kept between runs. |
+//! | `library.format` | string | empty | File type filter of the Books tab, as a lowercase extension such as `epub`. Empty shows every type. Kept between runs. |
 //! | `sync.auto` | bool | false | Automatic sync: a book pulls the remote position when it opens and when reading resumes. Off means no pull on open or resume. KOReader's "Automatically keep documents in sync". |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
 //! | `sync.username` | string | empty | Progress sync account name. |

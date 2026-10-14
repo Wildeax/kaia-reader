@@ -1,10 +1,14 @@
 //! Reads for the Home and Library surfaces: the book lists with their covers,
 //! the view preferences kept in settings, and the status line text.
 
+use std::path::PathBuf;
+
+use kaia_book::state as book_state;
 use kaia_events::{Settings, Value};
 use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::Pixmap;
 use kaia_i18n::{format as tr_format, tr};
+use kaia_library::storage::{Source, Sources};
 use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
 use kaia_ui::composite::BookInfo;
 
@@ -23,6 +27,10 @@ pub struct Prefs {
     pub sort: SortChoice,
     pub chip: Option<Chip>,
     pub collection: Option<i64>,
+    /// Books from one source. None shows every source.
+    pub source: Option<Source>,
+    /// Books of one file type, as a lowercase extension. None shows every type.
+    pub format: Option<String>,
     pub show_finished: bool,
 }
 
@@ -34,6 +42,8 @@ impl Default for Prefs {
             sort: SortChoice::Title,
             chip: None,
             collection: None,
+            source: None,
+            format: None,
             show_finished: true,
         }
     }
@@ -71,12 +81,20 @@ impl Prefs {
             Some("finished") => Some(Chip::Finished),
             _ => None,
         };
+        let source = text("library.source")
+            .as_deref()
+            .and_then(|key| Source::ALL.into_iter().find(|s| s.key() == key));
+        let format = text("library.format")
+            .filter(|f| !f.is_empty())
+            .map(|f| f.to_ascii_lowercase());
         Prefs {
             view,
             layout,
             sort,
             chip,
             collection: settings.read("library.collection").as_i64(),
+            source,
+            format,
             show_finished: !settings.is_false("library.show_finished"),
         }
     }
@@ -116,6 +134,14 @@ impl Prefs {
             "library.collection",
             self.collection.map_or(Value::Nil, |id| Value::Number(id as f64)),
         );
+        settings.save(
+            "library.source",
+            Value::Str(self.source.map_or("", Source::key).into()),
+        );
+        settings.save(
+            "library.format",
+            Value::Str(self.format.clone().unwrap_or_default()),
+        );
     }
 }
 
@@ -132,7 +158,8 @@ pub fn sort_for(choice: SortChoice) -> Sort {
     }
 }
 
-/// The index filter for the chips and the collection.
+/// The index filter for the status, the collection and the file type. The
+/// source is not in the index, so [`list`] applies it.
 pub fn filter_for(prefs: &Prefs) -> Filter {
     Filter {
         status: prefs.chip.map(|c| match c {
@@ -141,6 +168,7 @@ pub fn filter_for(prefs: &Prefs) -> Filter {
             Chip::Finished => Status::Complete,
         }),
         collection: prefs.collection,
+        format: prefs.format.clone(),
         ..Filter::default()
     }
 }
@@ -251,15 +279,90 @@ pub fn all(library: &Library) -> Vec<Book> {
         .collect()
 }
 
-/// Books in the order and filter the prefs give. A book whose file is gone is
-/// left out, even when the index still has its row.
+/// Books in the order and filter the prefs give, without the source filter. A
+/// book whose file is gone is left out, even when the index still has its row.
+/// The Books tab uses [`list_in`], which also applies the source.
 pub fn list(library: &Library, prefs: &Prefs) -> Vec<Book> {
+    filter_listed(library, prefs, None)
+}
+
+/// Books in the order and filter the prefs give, source included. The source
+/// reads the download folder and its Calibre cache, and only when it is set. A
+/// source that cannot be read matches no book.
+pub fn list_in(services: &Services, prefs: &Prefs) -> Vec<Book> {
+    let sources = prefs
+        .source
+        .map(|wanted| (wanted, crate::surfaces::settings::storage::sources(services)));
+    filter_listed(&services.library, prefs, sources)
+}
+
+fn filter_listed(
+    library: &Library,
+    prefs: &Prefs,
+    sources: Option<(Source, std::io::Result<Sources>)>,
+) -> Vec<Book> {
     library
         .books(sort_for(prefs.sort), &filter_for(prefs), 0, ALL)
         .unwrap_or_default()
         .into_iter()
         .filter(|b| b.path.exists() && (prefs.show_finished || b.status != Status::Complete))
+        .filter(|b| match &sources {
+            None => true,
+            Some((wanted, Ok(sources))) => sources.source(&b.path) == *wanted,
+            Some((_, Err(_))) => false,
+        })
         .collect()
+}
+
+/// The formats of the books in the library, for the file type picker.
+pub fn formats(library: &Library) -> Vec<String> {
+    library.formats().unwrap_or_default()
+}
+
+/// Where Kaia keeps the state file of a book: `<data>/kaia/books/<partial MD5>.json`.
+pub fn state_file(services: &Services, partial_md5: &str) -> PathBuf {
+    services
+        .paths
+        .data_dir
+        .join("kaia/books")
+        .join(format!("{partial_md5}.json"))
+}
+
+/// The rating of a book, as the details page shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rating {
+    /// The book has no state file. Its first open creates the file and imports
+    /// any KOReader or Kobo data, so a rating set before that would stop the import.
+    Unopened,
+    /// The state file cannot be read, or has another format or version.
+    Unreadable,
+    /// One to five stars, or None when the book is not rated.
+    Stars(Option<u8>),
+}
+
+/// Sets the rating of a book in its state file. Zero clears it. Returns
+/// `Ok(false)` when the book has no state file yet, so nothing is written.
+pub fn set_rating(services: &Services, book: i64, stars: u8) -> Result<bool, String> {
+    let row = services
+        .library
+        .book(book)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| tr("Book not found"))?;
+    let path = state_file(services, &row.partial_md5);
+    book_state::write_rating(&path, (stars > 0).then_some(stars)).map_err(|e| e.to_string())
+}
+
+/// The rating of a book, from its state file. Kobo ratings appear here once
+/// their import has written the file.
+pub fn rating(services: &Services, book: &Book) -> Rating {
+    let path = state_file(services, &book.partial_md5);
+    if !path.exists() {
+        return Rating::Unopened;
+    }
+    match book_state::read_rating(&path) {
+        Ok(stars) => Rating::Stars(stars),
+        Err(_) => Rating::Unreadable,
+    }
 }
 
 /// Decodes the cover of a book at `size`. None when the book has none or the

@@ -178,6 +178,11 @@ pub mod ffi {
             count: *mut usize,
         ) -> c_int;
         pub fn kaia_cre_free_boxes(boxes: *mut kaia_cre_char_box);
+        pub fn kaia_cre_first_char_box(
+            doc: *mut kaia_cre_doc,
+            xp: *const c_char,
+            out: *mut kaia_cre_char_box,
+        ) -> c_int;
         pub fn kaia_cre_search(
             doc: *mut kaia_cre_doc,
             pattern: *const c_char,
@@ -749,6 +754,31 @@ impl Doc {
             unsafe { ffi::kaia_cre_free_boxes(out) };
         }
         Ok(boxes)
+    }
+
+    /// The first visible character at or after an xpointer, on the page on screen.
+    /// Call [`Doc::goto_page`] first. None when no visible character follows it.
+    pub fn first_char_box(&mut self, start: &str) -> Result<Option<CharBox>> {
+        let s = cstring(start)?;
+        let mut out = ffi::kaia_cre_char_box {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 0.0,
+            y1: 0.0,
+            line: 0,
+            codepoint: 0,
+        };
+        // SAFETY: live handle; `s` is a valid C string for the call; `out` is a valid out pointer.
+        let code = unsafe { ffi::kaia_cre_first_char_box(self.raw(), s.as_ptr(), &mut out) };
+        match code {
+            ffi::KAIA_CRE_OK => Ok(Some(CharBox {
+                rect: [out.x0, out.y0, out.x1, out.y1],
+                line: out.line,
+                ch: char::from_u32(out.codepoint).unwrap_or('\u{fffd}'),
+            })),
+            ffi::KAIA_CRE_NOT_FOUND => Ok(None),
+            _ => Err(Error::Engine(last_error())),
+        }
     }
 
     /// Searches the whole document. Hits come in reading order.

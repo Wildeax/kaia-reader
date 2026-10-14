@@ -202,6 +202,22 @@ fn filters_by_status_format_folder_and_collection() {
 }
 
 #[test]
+fn formats_lists_each_format_in_the_library_once_in_order() {
+    let (tmp, root) = setup();
+    fixture_set(&root);
+    let mut lib = open_library(tmp.path());
+    assert!(
+        lib.formats().unwrap().is_empty(),
+        "an empty library has no formats"
+    );
+    scan(&mut lib, std::slice::from_ref(&root));
+    assert_eq!(
+        lib.formats().unwrap(),
+        vec!["epub".to_string(), "pdf".to_string()]
+    );
+}
+
+#[test]
 fn manual_collection_order_follows_insertion() {
     let (tmp, root) = setup();
     let files = fixture_set(&root);

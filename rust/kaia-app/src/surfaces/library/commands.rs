@@ -4,6 +4,7 @@
 //! without the suffix.
 
 use kaia_events::Value;
+use kaia_library::storage::Source;
 
 use crate::book_index::Mark;
 
@@ -51,17 +52,35 @@ pub enum Command {
     Sort(SortChoice),
     /// `library:filter`: open the filter panel.
     OpenFilter,
-    /// `library:filter:all`: show every book, with no status and no collection.
+    /// `library:filter:all`: show every status. The other filters stay.
     AllBooks,
-    /// `library:filter:<status>`: show the books with that status. It replaces the
-    /// collection filter.
+    /// `library:filter:<status>`: show the books with that status. The collection,
+    /// source and file type filters stay.
     Chip(Chip),
     /// `library:filter:collection`: open the collection picker for the filter.
     FilterCollection,
     /// `library:collection:<id>` or `library:collection:none`: filter by a collection
-    /// (None clears the collection filter). Picking a collection drops the status
-    /// filter. The picker uses it too.
+    /// (None clears the collection filter). The status and other filters stay.
+    /// The picker uses it too.
     PickCollection(Option<i64>),
+    /// `library:filter:source:<calibre|opds|other>` or `library:filter:source:all`:
+    /// show the books from one source. None shows every source.
+    Source(Option<Source>),
+    /// `library:filter:type`: open the file type picker.
+    OpenFileType,
+    /// `library:format:<extension>` or `library:format:all`: show the books of one
+    /// file type. None shows every type.
+    PickFormat(Option<String>),
+    /// `library:rating:open:<book>`: show the rating sheet of a book.
+    OpenRating(i64),
+    /// `library:rating:back:<book>`: leave the rating sheet for the details.
+    BackRating(i64),
+    /// `library:rating:<book>:<stars>`: set the rating of a book from 1 to 5, or
+    /// clear it with 0.
+    SetRating {
+        book: i64,
+        rating: u8,
+    },
     /// `library:search:open` and `library:search:close`.
     SearchOpen,
     SearchClose,
@@ -204,6 +223,32 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ("filter", Some("not-started")) => Command::Chip(Chip::NotStarted),
         ("filter", Some("finished")) => Command::Chip(Chip::Finished),
         ("filter", Some("collection")) => Command::FilterCollection,
+        ("filter", Some("type")) => Command::OpenFileType,
+        ("filter", Some(t)) if t.starts_with("source:") => Command::Source(match &t["source:".len()..] {
+            "all" => None,
+            "calibre" => Some(Source::Calibre),
+            "opds" => Some(Source::Opds),
+            "other" => Some(Source::Other),
+            _ => return None,
+        }),
+        ("format", Some("all")) => Command::PickFormat(None),
+        ("format", Some(f)) if !f.is_empty() && f.chars().all(|c| c.is_ascii_alphanumeric()) => {
+            Command::PickFormat(Some(f.to_ascii_lowercase()))
+        }
+        ("rating", Some(t)) => match t.split_once(':')? {
+            ("open", book) => Command::OpenRating(book.parse().ok()?),
+            ("back", book) => Command::BackRating(book.parse().ok()?),
+            (book, stars) => {
+                let rating: u8 = stars.parse().ok()?;
+                if rating > 5 {
+                    return None;
+                }
+                Command::SetRating {
+                    book: book.parse().ok()?,
+                    rating,
+                }
+            }
+        },
         ("collection", Some("none")) => Command::PickCollection(None),
         ("collection", _) => Command::PickCollection(Some(tail_id.or(arg_id)?)),
         ("search", Some("open")) => Command::SearchOpen,
@@ -310,6 +355,46 @@ mod tests {
         assert_eq!(parse("library:filter", &none()), Some(Command::OpenFilter));
         assert_eq!(parse("library:filter:all", &none()), Some(Command::AllBooks));
         assert_eq!(parse("library:view:books", &none()), Some(Command::BooksTab));
+    }
+
+    #[test]
+    fn parses_source_type_and_rating_actions() {
+        assert_eq!(
+            parse("library:filter:source:opds", &none()),
+            Some(Command::Source(Some(Source::Opds)))
+        );
+        assert_eq!(
+            parse("library:filter:source:all", &none()),
+            Some(Command::Source(None))
+        );
+        assert_eq!(parse("library:filter:source:nope", &none()), None);
+        assert_eq!(parse("library:filter:type", &none()), Some(Command::OpenFileType));
+        assert_eq!(
+            parse("library:format:epub", &none()),
+            Some(Command::PickFormat(Some("epub".into())))
+        );
+        assert_eq!(
+            parse("library:format:all", &none()),
+            Some(Command::PickFormat(None))
+        );
+        assert_eq!(parse("library:format:ep/ub", &none()), None);
+        assert_eq!(
+            parse("library:rating:42:4", &none()),
+            Some(Command::SetRating { book: 42, rating: 4 })
+        );
+        assert_eq!(
+            parse("library:rating:42:0", &none()),
+            Some(Command::SetRating { book: 42, rating: 0 })
+        );
+        assert_eq!(parse("library:rating:42:6", &none()), None);
+        assert_eq!(
+            parse("library:rating:open:42", &none()),
+            Some(Command::OpenRating(42))
+        );
+        assert_eq!(
+            parse("library:rating:back:42", &none()),
+            Some(Command::BackRating(42))
+        );
     }
 
     #[test]

@@ -373,6 +373,17 @@ impl CreDocument {
         doc.char_boxes(start, end).map_err(engine_err)
     }
 
+    /// The first character on the page on screen at or after an xpointer, with its
+    /// box in page units. None when no visible character follows it. Call
+    /// [`goto_page`](Self::goto_page) for the page first. Unlike `char_boxes` with no
+    /// end, the cost does not grow with the document.
+    pub fn first_char_box(&self, page: u32, start: &str) -> Result<Option<CharBox>> {
+        self.check_page(page)?;
+        let mut doc = self.doc_mut()?;
+        doc.goto_page(page).map_err(engine_err)?;
+        doc.first_char_box(start).map_err(engine_err)
+    }
+
     /// The share of a page covered by images, from 0 to 1, measured against the
     /// view of the current layout. None when CREngine cannot measure it.
     pub fn image_share(&self, page: u32) -> Result<Option<f32>> {
@@ -887,6 +898,20 @@ mod tests {
         };
         let part = doc.render_clip(0, 1.0, PixelFormat::Gray8, clip).expect("clip");
         assert_eq!((part.width(), part.height()), (300, 200));
+    }
+
+    /// The first character from the walk to the end of the document, which is the
+    /// old ink anchor, must equal the new first-character lookup on each page.
+    #[test]
+    fn first_char_box_matches_the_first_box_of_the_full_walk() {
+        let doc = open_at(&juliet(), 1264.0, 1680.0, 24.0);
+        let count = doc.page_count() as u32;
+        for page in [0, count / 2] {
+            let xp = doc.page_xpointer(page).expect("xpointer");
+            let full = doc.char_boxes(page, &xp, None).expect("full walk");
+            let first = doc.first_char_box(page, &xp).expect("first box");
+            assert_eq!(first, full.first().copied(), "page {page} xpointer {xp}");
+        }
     }
 
     #[test]

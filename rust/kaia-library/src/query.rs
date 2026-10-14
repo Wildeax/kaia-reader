@@ -255,6 +255,17 @@ impl Library {
         self.query_books(&sql, [title])
     }
 
+    /// The formats of the books in the library, as lowercase extensions, in
+    /// alphabetical order. A format counts when a book with it is in the library
+    /// and its file is there, so a filter never offers a format with no books.
+    pub fn formats(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT format FROM books WHERE missing_since IS NULL ORDER BY format")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// The book that follows `book_id` in its series: the book with the smallest
     /// series number above the book's own, and then the first by title. Books
     /// with no number do not count. None when the book has no series number, or

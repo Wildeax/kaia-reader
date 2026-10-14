@@ -154,6 +154,23 @@ impl EngineDoc {
         }
     }
 
+    /// The first visible character at or after `start` on the page, under the
+    /// engine's range rules. None when no visible character follows it, or for MuPDF.
+    #[cfg_attr(not(feature = "cre"), allow(unused_variables))]
+    pub fn first_char_box(&self, page: u32, start: &str) -> Result<Option<CharBox>, DocError> {
+        match self {
+            #[cfg(feature = "cre")]
+            EngineDoc::Cre(d) => Ok(d.first_char_box(page, start)?.map(|b| {
+                (
+                    b.ch,
+                    RectF::new(b.rect[0], b.rect[1], b.rect[2], b.rect[3]),
+                    b.line,
+                )
+            })),
+            EngineDoc::Mupdf(_) => Ok(None),
+        }
+    }
+
     /// Sets the CREngine options that the layout does not carry. A no-op for MuPDF.
     #[cfg_attr(not(feature = "cre"), allow(unused_variables))]
     pub fn set_cre_options(&mut self, hyphenation: bool, embedded_styles: bool) -> Result<(), DocError> {

@@ -6,6 +6,7 @@
 use kaia_events::Value;
 use kaia_gfx::{Pixmap, Size};
 use kaia_i18n::{format as tr_format, tr, tr_n};
+use kaia_library::storage::Source;
 use kaia_library::{Book, Collection, Library};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Paragraph, ProgressBar, Row, SizedBox, Spacer,
@@ -18,7 +19,7 @@ use kaia_ui::{Theme, Tone, WidgetPod};
 
 use crate::surfaces::common::short;
 use crate::surfaces::library::commands::{Chip, SortChoice, View};
-use crate::surfaces::library::data::{self, AuthorGroup, SeriesGroup};
+use crate::surfaces::library::data::{self, AuthorGroup, Rating, SeriesGroup};
 use crate::surfaces::library::press::Pressable;
 
 /// One row of a list: a title, a line of detail, an optional cover, and the
@@ -196,15 +197,26 @@ pub fn books_controls(t: &Theme, filter: &str, sort: &str, layout: View) -> Widg
     )
 }
 
-/// The name of the filter in force: the status, the collection, or both joined
-/// with a comma. "All books" when neither is set.
-pub fn filter_name(chip: Option<Chip>, collection: Option<&str>) -> String {
+/// The name of the filter in force: each active filter, joined with a comma.
+/// "All books" when none is set.
+pub fn filter_name(
+    chip: Option<Chip>,
+    collection: Option<&str>,
+    source: Option<Source>,
+    format: Option<&str>,
+) -> String {
     let mut parts = Vec::new();
     if let Some(chip) = chip {
         parts.push(chip_name(chip));
     }
     if let Some(name) = collection {
         parts.push(name.to_string());
+    }
+    if let Some(source) = source {
+        parts.push(source_name(source));
+    }
+    if let Some(format) = format {
+        parts.push(format_name(format));
     }
     if parts.is_empty() {
         tr("All books")
@@ -219,6 +231,24 @@ fn chip_name(chip: Chip) -> String {
         Chip::Reading => tr("Reading"),
         Chip::NotStarted => tr("Not started"),
         Chip::Finished => tr("Finished"),
+    }
+}
+
+/// The name of a source filter, as the filter sheet and the filter button show it.
+pub fn source_name(source: Source) -> String {
+    match source {
+        Source::Calibre => tr("Calibre"),
+        Source::Opds => tr("OPDS downloads"),
+        Source::Other => tr("Other"),
+    }
+}
+
+/// The name of a file type filter. The text format is `txt`, which reads as "Text".
+pub fn format_name(format: &str) -> String {
+    if format == "txt" {
+        tr("Text")
+    } else {
+        format.to_uppercase()
     }
 }
 
@@ -566,7 +596,13 @@ pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
 /// The filter panel: the statuses and the collection as buttons, the choice in
 /// force filled. A button fits the page where a row list would not, so the panel
 /// keeps its Cancel on screen.
-pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> WidgetPod {
+pub fn filter_panel(
+    t: &Theme,
+    chip: Option<Chip>,
+    collection: Option<&str>,
+    source: Option<Source>,
+    format: Option<&str>,
+) -> WidgetPod {
     let choice = |active: bool| {
         if active {
             ButtonStyle::Primary
@@ -583,11 +619,8 @@ pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> 
             .gap(t.space.sm),
         )
     };
-    let all = button(
-        choice(chip.is_none() && collection.is_none()),
-        &tr("All books"),
-        "library:filter:all",
-    );
+    let full = |button: WidgetPod| WidgetPod::new(Row::new(vec![WidgetPod::new(Expanded::new(button, 1))]));
+    let all = button(choice(chip.is_none()), &tr("All books"), "library:filter:all");
     let reading = button(
         choice(chip == Some(Chip::Reading)),
         &chip_name(Chip::Reading),
@@ -609,6 +642,15 @@ pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> 
         &collection_label,
         "library:filter:collection",
     );
+    let any_source = button(
+        choice(source.is_none()),
+        &tr("All sources"),
+        "library:filter:source:all",
+    );
+    let source_button =
+        |which: Source, action: &str| button(choice(source == Some(which)), &source_name(which), action);
+    let type_label = format.map_or_else(|| tr("File type"), format_name);
+    let type_button = button(choice(format.is_some()), &type_label, "library:filter:type");
     sheet(
         t,
         &tr("Show books"),
@@ -617,10 +659,16 @@ pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> 
                 Column::new(vec![
                     pair(all, reading),
                     pair(not_started, finished),
-                    WidgetPod::new(Row::new(vec![WidgetPod::new(Expanded::new(
-                        collection_button,
-                        1,
-                    ))])),
+                    full(collection_button),
+                    pair(
+                        any_source,
+                        source_button(Source::Calibre, "library:filter:source:calibre"),
+                    ),
+                    pair(
+                        source_button(Source::Opds, "library:filter:source:opds"),
+                        source_button(Source::Other, "library:filter:source:other"),
+                    ),
+                    full(type_button),
                 ])
                 .gap(t.space.sm)
                 .cross_align(CrossAlign::Stretch)
@@ -631,8 +679,43 @@ pub fn filter_panel(t: &Theme, chip: Option<Chip>, collection: Option<&str>) -> 
     )
 }
 
-/// The collection picker. For a book it adds the book to a collection or starts a
-/// new one; without a book it filters the covers.
+/// A row of a picker. The chosen row shows a value, so the choice does not depend on colour.
+fn picker_row(name: String, action: String, chosen: bool) -> ListRow {
+    let row = ListRow::new(name).on_action(action);
+    if chosen {
+        row.value(tr("Showing"))
+    } else {
+        row
+    }
+}
+
+/// The file type picker: every type in the library, and All types. The current
+/// one shows a value.
+pub fn file_type_panel(t: &Theme, formats: &[String], current: Option<&str>) -> WidgetPod {
+    let mut rows = vec![WidgetPod::new(picker_row(
+        tr("All types"),
+        "library:format:all".into(),
+        current.is_none(),
+    ))
+    .with_key("format-all")];
+    for format in formats {
+        let row = picker_row(
+            format_name(format),
+            format!("library:format:{format}"),
+            current == Some(format.as_str()),
+        );
+        rows.push(WidgetPod::new(row).with_key(format!("format-{format}")));
+    }
+    if formats.is_empty() {
+        rows.push(body_text(t, &tr("No books yet.")));
+    }
+    let children = vec![
+        WidgetPod::new(Column::new(rows).cross_align(CrossAlign::Stretch).shrink()),
+        button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
+    ];
+    sheet(t, &tr("File type"), children)
+}
+
 pub fn collection_panel(
     t: &Theme,
     collections: &[Collection],
@@ -748,8 +831,8 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
     )
 }
 
-/// The details of one book: cover and facts, the description, and the actions.
-/// `remove` is the action that takes the book out of the collection being
+/// The details of one book: cover and facts, the rating, the description, and the
+/// actions. `remove` is the action that takes the book out of the collection being
 /// viewed. None when the book is not in that collection.
 pub fn details_panel(
     t: &Theme,
@@ -757,6 +840,7 @@ pub fn details_panel(
     cover: Option<Pixmap>,
     close: &str,
     remove: Option<String>,
+    rating: Rating,
 ) -> WidgetPod {
     let title = crate::surfaces::common::display_title(book);
     let mut facts = vec![WidgetPod::new(Label::new(
@@ -764,13 +848,27 @@ pub fn details_panel(
         t.font.book_title.clone(),
         Tone::Ink,
     ))];
+    // The authors and the series share a row, so the sheet keeps its height.
     let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
+    let mut author_row = Vec::new();
     if !authors.is_empty() {
-        facts.push(WidgetPod::new(Label::new(
-            authors,
-            t.font.body.clone(),
-            Tone::InkSecondary,
+        author_row.push(WidgetPod::new(Expanded::new(
+            WidgetPod::new(Label::new(authors, t.font.body.clone(), Tone::InkSecondary)),
+            1,
         )));
+    }
+    if let Some(series) = book.series.as_deref().filter(|s| !s.trim().is_empty()) {
+        let line = match book.series_index {
+            Some(number) => tr_format(&tr("Series: %1, book %2"), &[series, &number.to_string()]),
+            None => tr_format(&tr("Series: %1"), &[series]),
+        };
+        author_row.push(
+            WidgetPod::new(Label::new(line, t.font.caption.clone(), Tone::InkSecondary))
+                .with_key("details-series"),
+        );
+    }
+    if !author_row.is_empty() {
+        facts.push(WidgetPod::new(Row::new(author_row).gap(t.space.sm)));
     }
     facts.push(WidgetPod::new(ProgressBar::new(book.percent as f32)));
     facts.push(body_text(t, &data::status_label(book)));
@@ -811,16 +909,16 @@ pub fn details_panel(
         ])
         .gap(t.space.md),
     )];
+    let id = book.id;
     if let Some(desc) = book.description.as_deref().filter(|d| !d.trim().is_empty()) {
         children.push(WidgetPod::new(
             Paragraph::new(desc.to_string(), t.font.body.clone(), Tone::InkSecondary).max_lines(4),
         ));
     }
-    let id = book.id;
-    children.push(button(
-        ButtonStyle::Primary,
-        &tr("Open"),
-        &format!("library:open:{id}"),
+    children.push(pair(
+        t,
+        button(ButtonStyle::Primary, &tr("Open"), &format!("library:open:{id}")),
+        rating_button(rating, id),
     ));
     children.push(pair(
         t,
@@ -860,6 +958,65 @@ pub fn details_panel(
         button(ButtonStyle::Secondary, &tr("Close"), close),
     ));
     sheet(t, &tr("Book details"), children)
+}
+
+/// The rating button of the details: the current value. It opens the rating sheet.
+/// A book with no state file shows the same button, and the sheet explains why.
+fn rating_button(rating: Rating, book: i64) -> WidgetPod {
+    let label = match rating {
+        Rating::Stars(Some(n)) => tr_format(&tr("Rating: %1 of 5"), &[&n.to_string()]),
+        Rating::Stars(None) => tr("Not rated"),
+        Rating::Unopened | Rating::Unreadable => tr("Rating"),
+    };
+    button(
+        ButtonStyle::Secondary,
+        &label,
+        &format!("library:rating:open:{book}"),
+    )
+}
+
+/// The rating sheet: the current value, one button for each star count and
+/// Clear, then Back to the details. A book with no state file gets no stars,
+/// because its first open must run the import before a rating is kept.
+pub fn rating_panel(t: &Theme, book: i64, rating: Rating) -> WidgetPod {
+    let mut children = Vec::new();
+    match rating {
+        Rating::Unopened => children.push(body_text(t, &tr("Open the book once to rate it."))),
+        Rating::Unreadable => children.push(body_text(t, &tr("Cannot read this book's rating."))),
+        Rating::Stars(stars) => {
+            let value = match stars {
+                Some(n) => tr_format(&tr("Rating: %1 of 5"), &[&n.to_string()]),
+                None => tr("Not rated"),
+            };
+            children.push(body_text(t, &value));
+            let mut buttons: Vec<WidgetPod> = (1..=5u8)
+                .map(|n| {
+                    let style = if stars == Some(n) {
+                        ButtonStyle::Primary
+                    } else {
+                        ButtonStyle::Secondary
+                    };
+                    let action = format!("library:rating:{book}:{n}");
+                    WidgetPod::new(Expanded::new(button(style, &n.to_string(), &action), 1))
+                })
+                .collect();
+            buttons.push(WidgetPod::new(Expanded::new(
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Clear"),
+                    &format!("library:rating:{book}:0"),
+                ),
+                2,
+            )));
+            children.push(WidgetPod::new(Row::new(buttons).gap(t.space.sm)));
+        }
+    }
+    children.push(button(
+        ButtonStyle::Secondary,
+        &tr("Back"),
+        &format!("library:rating:back:{book}"),
+    ));
+    sheet(t, &tr("Rating"), children)
 }
 
 /// The bar of select mode: the count of checked books, select all and none, the

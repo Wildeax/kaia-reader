@@ -93,6 +93,17 @@ impl Store {
         Ok(())
     }
 
+    /// The number of strokes in a book. A single indexed count, so a reader can
+    /// skip the ink work of a book with no ink.
+    pub fn ink_count(&self, doc: &str) -> Result<u64, StoreError> {
+        let count: i64 =
+            self.conn()
+                .query_row("SELECT count(*) FROM ink_strokes WHERE doc = ?1", [doc], |r| {
+                    r.get(0)
+                })?;
+        Ok(count as u64)
+    }
+
     /// Counts by the page number recorded when the ink was written.
     pub fn ink_counts(&self) -> Result<Vec<(DocumentId, u32, u64)>, StoreError> {
         let mut query = self.conn().prepare("SELECT d.partial_md5, d.file_size, d.title, i.page, count(*) FROM ink_strokes i JOIN documents d ON d.partial_md5 = i.doc GROUP BY i.doc, i.page ORDER BY i.doc, i.page")?;

@@ -43,6 +43,8 @@ pub(super) fn frame(session: &mut BookSession, viewport: Size) -> Result<PageInk
     if session.is_reflowable() && locator.is_none() {
         return Err("This book engine has no text positions for ink.".into());
     }
+    // The page origin is eager. Frames cannot see the ink mode, so a lazy origin
+    // needs the pen path in page.rs and the state in state.rs.
     let origin = match &locator {
         Some(xp) => session
             .ink_anchor(xp)
@@ -52,16 +54,24 @@ pub(super) fn frame(session: &mut BookSession, viewport: Size) -> Result<PageInk
         None => (0.0, 0.0),
     };
     let mut strokes = Vec::new();
-    for stroke in store.ink(&doc.partial_md5).map_err(|e| e.to_string())? {
-        let anchor = match &stroke.locator {
-            Some(xp) => session
-                .ink_anchor(xp)
-                .map_err(|e| e.to_string())?
-                .map(|(page, p)| (page, (p.x, p.y))),
-            None => Some((stroke.page, (0.0, 0.0))),
-        };
-        if let Some((_, origin)) = anchor.filter(|(page, _)| *page == info.page) {
-            strokes.push(Drawing { stroke, origin });
+    // A book without strokes has no stroke work at all.
+    if store.ink_count(&doc.partial_md5).map_err(|e| e.to_string())? > 0 {
+        let stored = store.ink(&doc.partial_md5).map_err(|e| e.to_string())?;
+        // One engine call resolves every stroke with a locator. The results follow
+        // the order of `located`, which lists the same strokes in the same order.
+        let located: Vec<String> = stored.iter().filter_map(|s| s.locator.clone()).collect();
+        let mut origins = session
+            .ink_origins(info.page, &located)
+            .map_err(|e| e.to_string())?
+            .into_iter();
+        for stroke in stored {
+            let origin = match &stroke.locator {
+                Some(_) => origins.next().flatten().map(|p| (p.x, p.y)),
+                None => (stroke.page == info.page).then_some((0.0, 0.0)),
+            };
+            if let Some(origin) = origin {
+                strokes.push(Drawing { stroke, origin });
+            }
         }
     }
     let offset = Point::new(
@@ -498,4 +508,89 @@ pub(super) fn command(
         env.notice(tr_format(&tr("Cannot save ink. %1"), &[&e]));
     }
     Some(Outcome::Handled)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaia_book::OpenOptions;
+    use kaia_storage::{InkPoint, InkStroke};
+    use std::path::Path;
+
+    const VIEW: Size = Size { w: 1264, h: 1680 };
+
+    fn juliet() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/juliet.epub")
+    }
+
+    fn open(dir: &tempfile::TempDir) -> BookSession {
+        let mut opts = OpenOptions::new(dir.path().join("data"));
+        opts.viewport = VIEW;
+        BookSession::open(juliet(), opts).expect("open juliet")
+    }
+
+    fn stroke(page: u32, locator: Option<String>) -> InkStroke {
+        InkStroke {
+            id: 0,
+            page,
+            locator,
+            points: vec![
+                InkPoint {
+                    x: 10.0,
+                    y: 10.0,
+                    pressure: 500,
+                },
+                InkPoint {
+                    x: 40.0,
+                    y: 60.0,
+                    pressure: 500,
+                },
+            ],
+            width: 3.0,
+            color: "black".into(),
+        }
+    }
+
+    #[test]
+    fn a_book_without_strokes_has_no_stroke_drawings_on_any_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut session = open(&dir);
+        for page in [0, 1, 5] {
+            session.go_to(Location::Page(page)).expect("go to page");
+            let ink = frame(&mut session, VIEW).expect("frame");
+            assert!(ink.strokes.is_empty(), "page {page} has no ink");
+        }
+    }
+
+    #[test]
+    fn stored_strokes_show_on_their_page_and_nowhere_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut session = open(&dir);
+        session.go_to(Location::Page(2)).expect("go to page");
+        let Location::Engine(locator) = session.current().location else {
+            panic!("juliet has text positions");
+        };
+        let (_, expected) = session
+            .ink_anchor(&locator)
+            .expect("anchor")
+            .expect("locator in document");
+        let doc = super::super::stickers::identity(&session);
+        let mut store = Store::open(&dir.path().join("data/kaia")).unwrap();
+        store
+            .add_ink(&doc, &stroke(2, Some(locator.clone())))
+            .expect("save text stroke");
+        store
+            .add_ink(&doc, &stroke(2, None))
+            .expect("save fixed stroke on the same page number");
+        drop(store);
+
+        let ink = frame(&mut session, VIEW).expect("frame on page 2");
+        assert_eq!(ink.strokes.len(), 2, "both strokes are on page 2");
+        assert_eq!(ink.strokes[0].origin, (expected.x, expected.y));
+        assert_eq!(ink.strokes[1].origin, (0.0, 0.0));
+
+        session.go_to(Location::Page(3)).expect("go to page");
+        let ink = frame(&mut session, VIEW).expect("frame on page 3");
+        assert!(ink.strokes.is_empty(), "page 3 shows no page 2 strokes");
+    }
 }

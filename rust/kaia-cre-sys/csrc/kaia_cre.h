@@ -141,6 +141,12 @@ void kaia_cre_free_toc(kaia_cre_toc_entry *entries, size_t count);
 int kaia_cre_char_boxes(kaia_cre_doc *doc, const char *xp0, const char *xp1, kaia_cre_char_box **out, size_t *count);
 void kaia_cre_free_boxes(kaia_cre_char_box *boxes);
 
+/* The first visible character at or after `xp` on the page on screen (call
+ * kaia_cre_goto_page first). The walk stops at that character, so the cost
+ * does not grow with the document. Returns KAIA_CRE_NOT_FOUND when no visible
+ * character follows `xp`. The box has line 0. */
+int kaia_cre_first_char_box(kaia_cre_doc *doc, const char *xp, kaia_cre_char_box *out);
+
 /* Searches the whole document. */
 int kaia_cre_search(kaia_cre_doc *doc, const char *pattern, int case_insensitive, int max_hits, kaia_cre_range **out, size_t *count);
 void kaia_cre_free_ranges(kaia_cre_range *ranges, size_t count);

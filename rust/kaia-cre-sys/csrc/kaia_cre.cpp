@@ -932,6 +932,54 @@ int kaia_cre_char_boxes(kaia_cre_doc *doc, const char *xp0, const char *xp1, kai
 
 void kaia_cre_free_boxes(kaia_cre_char_box *boxes) { std::free(boxes); }
 
+int kaia_cre_first_char_box(kaia_cre_doc *doc, const char *xp, kaia_cre_char_box *out) {
+    return guard([&]() -> int {
+        if (!out || !xp) {
+            fail("null argument");
+        }
+        LVDocView *view = view_of(doc);
+        view->Render();
+        ldomDocument *dom = dom_of(doc);
+        ldomXPointer start = dom->createXPointer(lString32(xp));
+        if (start.isNull()) {
+            return KAIA_CRE_NOT_FOUND;
+        }
+        // Same walk as kaia_cre_char_boxes, but it stops at the first character
+        // on the page. A walk to the end of the document costs time in proportion
+        // to the book size.
+        ldomXPointerEx cur(start);
+        ldomXPointerEx last(dom->getRootNode(), dom->getRootNode()->getChildCount());
+        ldomNode *text_node = nullptr;
+        lString32 text;
+        const long kMaxSteps = 2000000;
+        for (long steps = 0; cur.compare(last) < 0 && steps < kMaxSteps; steps++) {
+            if (cur.isText()) {
+                ldomNode *node = cur.getNode();
+                if (node != text_node) {
+                    text_node = node;
+                    text = node->getText();
+                }
+                int off = cur.getOffset();
+                lvRect rc;
+                if (off >= 0 && off < text.length() && ldomXPointer(node, off).getRectEx(rc) &&
+                    doc_to_window_rect(view, rc)) {
+                    out->x0 = static_cast<float>(rc.left);
+                    out->y0 = static_cast<float>(rc.top);
+                    out->x1 = static_cast<float>(rc.right);
+                    out->y1 = static_cast<float>(rc.bottom);
+                    out->line = 0;
+                    out->codepoint = static_cast<uint32_t>(text[off]);
+                    return KAIA_CRE_OK;
+                }
+            }
+            if (!cur.nextVisibleChar()) {
+                break;
+            }
+        }
+        return KAIA_CRE_NOT_FOUND;
+    });
+}
+
 int kaia_cre_search(kaia_cre_doc *doc, const char *pattern, int case_insensitive, int max_hits, kaia_cre_range **out,
                     size_t *count) {
     return guard([&]() -> int {

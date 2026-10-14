@@ -60,8 +60,10 @@ type Live = Rc<RefCell<Option<Window>>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Panel {
     Sort,
-    /// The filter for the Books tab: a status, a collection, or none.
+    /// The filter for the Books tab: a status, a collection, a source and a file type.
     Filter,
+    /// The file type picker of the filter.
+    FileType,
     CollectionName {
         id: Option<i64>,
     },
@@ -79,6 +81,10 @@ pub enum Panel {
     },
     /// The details of `book`.
     Details {
+        book: i64,
+    },
+    /// The rating sheet of `book`.
+    Rating {
         book: i64,
     },
 }
@@ -329,14 +335,12 @@ impl LibrarySurface {
             }
             Command::AllBooks => {
                 self.prefs.chip = None;
-                self.prefs.collection = None;
                 self.panel = None;
                 self.save_prefs(env);
                 Outcome::Rebuild
             }
             Command::Chip(chip) => {
                 self.prefs.chip = Some(chip);
-                self.prefs.collection = None;
                 self.panel = None;
                 self.save_prefs(env);
                 Outcome::Rebuild
@@ -345,11 +349,33 @@ impl LibrarySurface {
                 self.panel = Some(Panel::Collection { book: None });
                 Outcome::Rebuild
             }
+            Command::Source(source) => {
+                self.prefs.source = source;
+                self.panel = None;
+                self.save_prefs(env);
+                Outcome::Rebuild
+            }
+            Command::OpenFileType => {
+                self.panel = Some(Panel::FileType);
+                Outcome::Rebuild
+            }
+            Command::PickFormat(format) => {
+                self.prefs.format = format;
+                self.panel = None;
+                self.save_prefs(env);
+                Outcome::Rebuild
+            }
+            Command::OpenRating(id) => {
+                self.panel = Some(Panel::Rating { book: id });
+                Outcome::Rebuild
+            }
+            Command::BackRating(id) => {
+                self.panel = Some(Panel::Details { book: id });
+                Outcome::Rebuild
+            }
+            Command::SetRating { book, rating } => self.set_rating(env, book, rating),
             Command::PickCollection(id) => {
                 self.prefs.collection = id;
-                if id.is_some() {
-                    self.prefs.chip = None;
-                }
                 if self.prefs.view == View::Collections {
                     self.prefs.view = View::Covers;
                 }
@@ -606,7 +632,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::SelectAll => {
-                self.selected = data::list(&env.services.library, &self.prefs)
+                self.selected = data::list_in(env.services, &self.prefs)
                     .iter()
                     .map(|b| b.id)
                     .collect();
@@ -622,6 +648,17 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
         }
+    }
+
+    /// Sets the rating of a book and returns to its details. Zero clears the
+    /// rating. A book with no state file keeps its sheet and gets a notice.
+    fn set_rating(&mut self, env: &mut SurfaceEnv<'_>, id: i64, rating: u8) -> Outcome {
+        match data::set_rating(env.services, id, rating) {
+            Ok(true) => self.panel = Some(Panel::Details { book: id }),
+            Ok(false) => env.notice(tr("Open the book once before rating it.")),
+            Err(e) => env.notice(tr_format(&tr("cannot save the rating: %1"), &[&e])),
+        }
+        Outcome::Rebuild
     }
 
     /// Marks one book finished from its details. The result is a toast, or a notice
@@ -806,7 +843,7 @@ impl LibrarySurface {
 
     /// Select mode: the books of the view as rows with check boxes. A tap checks a book.
     fn select_content(&self, env: &SurfaceEnv<'_>, t: &Theme) -> Vec<WidgetPod> {
-        let books = data::list(&env.services.library, &self.prefs);
+        let books = data::list_in(env.services, &self.prefs);
         if books.is_empty() {
             return common::empty_library(t);
         }
@@ -854,7 +891,7 @@ impl LibrarySurface {
                 vec![views::collections(&t, &collections)]
             }
             View::Covers | View::List => {
-                let books = data::list(&env.services.library, &self.prefs);
+                let books = data::list_in(env.services, &self.prefs);
                 if books.is_empty() {
                     return common::empty_library(&t);
                 }
@@ -884,8 +921,15 @@ impl LibrarySurface {
             Panel::Sort => views::sort_panel(t, self.prefs.sort),
             Panel::Filter => {
                 let collection = collection_name(lib, self.prefs.collection);
-                views::filter_panel(t, self.prefs.chip, collection.as_deref())
+                views::filter_panel(
+                    t,
+                    self.prefs.chip,
+                    collection.as_deref(),
+                    self.prefs.source,
+                    self.prefs.format.as_deref(),
+                )
             }
+            Panel::FileType => views::file_type_panel(t, &data::formats(lib), self.prefs.format.as_deref()),
             Panel::Collection { book } => {
                 let collections = lib.collections().unwrap_or_default();
                 views::collection_panel(t, &collections, book, self.prefs.collection)
@@ -893,6 +937,10 @@ impl LibrarySurface {
             Panel::Name { .. } | Panel::CollectionName { .. } => views::name_panel(t, &self.name),
             Panel::Confirm { book } => match lib.book(book).ok().flatten() {
                 Some(row) => views::confirm_panel(t, &row),
+                None => gone(t),
+            },
+            Panel::Rating { book } => match lib.book(book).ok().flatten() {
+                Some(row) => views::rating_panel(t, book, data::rating(env.services, &row)),
                 None => gone(t),
             },
             Panel::Details { book } => match lib.book(book).ok().flatten() {
@@ -904,7 +952,8 @@ impl LibrarySurface {
                         .collection
                         .filter(|&cid| data::in_collection(lib, book, cid))
                         .map(|cid| format!("library:remove:{book}:{cid}"));
-                    views::details_panel(t, &row, cover, "library:panel:close", remove)
+                    let rating = data::rating(env.services, &row);
+                    views::details_panel(t, &row, cover, "library:panel:close", remove, rating)
                 }
                 None => gone(t),
             },
@@ -928,7 +977,12 @@ impl LibrarySurface {
             head.push(views::view_tabs(&t, self.prefs.view));
             if matches!(self.prefs.view, View::Covers | View::List) {
                 let collection = collection_name(&env.services.library, self.prefs.collection);
-                let filter = views::filter_name(self.prefs.chip, collection.as_deref());
+                let filter = views::filter_name(
+                    self.prefs.chip,
+                    collection.as_deref(),
+                    self.prefs.source,
+                    self.prefs.format.as_deref(),
+                );
                 let sort = views::sort_name(self.prefs.sort);
                 head.push(views::books_controls(&t, &filter, &sort, self.prefs.view));
             }
