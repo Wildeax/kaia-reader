@@ -147,7 +147,7 @@ Reading positions wait on Q33, which asks what the position fields mean. The Web
 
 #### Build and CI
 
-- The committed `settings_reading.png` golden fails in the kaia-lua CI job on the Linux runner, on `332f37ace` and `89bdcb717`. About 34,000 samples differ. This page did not find the cause.
+- The `settings_reading.png` failure on `332f37ace` and `89bdcb717` came from the Dictionary folder row printing the host-specific temporary path. Commit `7bfb863a7` shortened that row to the last two path components. The golden passes on Linux in kaia-lua run `38611826467`, with the existing tolerance of 14. That run fails later in the annotation tests.
 
 ## How to try it
 
