@@ -87,6 +87,11 @@ pub struct Core {
     pub pump_due: bool,
     pub layout_pending: bool,
     pub closed: bool,
+    /// True while reader plugins wait for their document thread. The pump keeps
+    /// ticking then, so the reader sees the answer without input.
+    pub(super) plugin_waiting: bool,
+    /// Set by the open job: true when the book had no saved or imported state.
+    fresh: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Core {
@@ -126,6 +131,8 @@ impl Core {
             layout_pending: false,
             seconds_per_page: 60.0,
             closed: false,
+            plugin_waiting: false,
+            fresh: Default::default(),
         }
     }
 
@@ -135,11 +142,26 @@ impl Core {
             return;
         }
         let path = path.to_owned();
+        let fresh = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.fresh = fresh.clone();
         self.job = Some(super::work::spawn(self.viewport, move || {
-            BookSession::open(path, opts)
-                .map(|s| (s, None, None))
-                .map_err(|e| WorkError::Open(e.to_string()))
+            let session = BookSession::open(path, opts).map_err(|e| WorkError::Open(e.to_string()))?;
+            // Opening writes a state file only for an import or a migration, and
+            // the frame saves after this task. So the file is missing here exactly
+            // when the book had no state of its own.
+            let new = session.import_report().is_none()
+                && session.migration_report().is_none()
+                && session.state_issue().is_none()
+                && !session.state_path().exists();
+            fresh.store(new, std::sync::atomic::Ordering::Relaxed);
+            Ok((session, None, None))
         }));
+    }
+
+    /// True when the open book had no saved or imported reading state before
+    /// this open. KOReader calls such a book new.
+    pub fn book_is_new(&self) -> bool {
+        self.fresh.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// The reading progress to store in the library, or None without a book.
@@ -154,6 +176,7 @@ impl Core {
             || !self.queued.is_empty()
             || self.search_dirty
             || self.layout_pending
+            || self.plugin_waiting
             || self.session.as_ref().is_some_and(|s| s.search_running())
     }
 

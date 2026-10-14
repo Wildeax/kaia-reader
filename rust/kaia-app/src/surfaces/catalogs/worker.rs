@@ -10,7 +10,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use kaia_calibre::{Connection, DeviceInfo, Server, Storage};
+use kaia_calibre::{check_target, Connection, DeviceInfo, Server, Storage};
 use kaia_gfx::{
     image::{decode_rgb, DecodeLimits},
     Pixmap,
@@ -249,16 +249,15 @@ fn run(
             let storage = BookStorage {
                 tx: tx.clone(),
                 stop: stop.clone(),
+                root: root.to_path_buf(),
+                database: database.to_path_buf(),
             };
             let mut connection = Connection::connect(&server, password, DeviceInfo::default(), root, storage)
                 .map_err(|_| "Cannot connect to Calibre.")?
                 .with_cancellation(stop.clone());
             progress(tx, "Connected. Send books from Calibre.");
             loop {
-                match connection
-                    .run_once()
-                    .map_err(|_| "Calibre connection ended. Check the server and password.")?
-                {
+                match connection.run_once().map_err(calibre_error)? {
                     kaia_calibre::Event::BookReceived { path, .. } => {
                         progress(tx, "Adding book to the library...");
                         let id = index_file(database, &path)?;
@@ -328,6 +327,10 @@ fn index_file(database: &Path, path: &Path) -> Result<i64, String> {
 struct BookStorage {
     tx: Sender<Reply>,
     stop: Arc<AtomicBool>,
+    /// The downloads root. Every target must lie under it and pass the name rules.
+    root: PathBuf,
+    /// The library database, for the files it indexes.
+    database: PathBuf,
 }
 impl Storage for BookStorage {
     fn free_space(&self, root: &Path) -> io::Result<u64> {
@@ -337,6 +340,7 @@ impl Storage for BookStorage {
         fs2::total_space(root)
     }
     fn write_file_atomically(&self, path: &Path, source: &mut dyn Read, length: u64) -> io::Result<()> {
+        check_target(&self.root, path)?;
         let parent = path.parent().ok_or_else(|| io::Error::other("No books folder"))?;
         fs::create_dir_all(parent)?;
         let mut part = tempfile::NamedTempFile::new_in(parent)?;
@@ -369,7 +373,27 @@ impl Storage for BookStorage {
         Ok(())
     }
     fn delete(&self, path: &Path) -> io::Result<()> {
+        check_target(&self.root, path)?;
         fs::remove_file(path)
+    }
+    fn is_indexed(&self, path: &Path) -> bool {
+        let Ok(path) = fs::canonicalize(path) else {
+            return false;
+        };
+        Library::open(&self.database)
+            .ok()
+            .and_then(|library| library.book_by_path(&path).ok().flatten())
+            .is_some()
+    }
+}
+
+/// The text for a connection error. A refused file has its own text, and every
+/// other error means that the connection ended.
+fn calibre_error(error: io::Error) -> String {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        "Calibre sent a file this app does not accept.".into()
+    } else {
+        "Calibre connection ended. Check the server and password.".into()
     }
 }
 
@@ -439,6 +463,9 @@ pub fn worker_text(english: &str) -> String {
         "Cannot connect to Calibre." => tr("Cannot connect to Calibre."),
         "Calibre connection ended. Check the server and password." => {
             tr("Calibre connection ended. Check the server and password.")
+        }
+        "Calibre sent a file this app does not accept." => {
+            tr("Calibre sent a file this app does not accept.")
         }
         "Cannot open the library." => tr("Cannot open the library."),
         "Cannot find the book." => tr("Cannot find the book."),

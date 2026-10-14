@@ -35,6 +35,36 @@ local function isFile(file)
     return lfs.attributes(file, "mode") == "file"
 end
 
+-- Kaia: when the setting is not "doc", DocSettings removes a file or folder
+-- only inside Kaia's own folders. A file next to the book may belong to stock
+-- KOReader, and a sidecar can name a cache file anywhere. A "." or ".." part is
+-- refused. The Rust plugin host applies the same rule in
+-- rust/kaia-lua/lua/docsettings_guard.lua.
+local KAIA_FOLDERS = {
+    DOCSETTINGS_DIR,
+    DOCSETTINGS_HASH_DIR,
+    HISTORY_DIR,
+    DataStorage:getDataDir() .. "/cache",
+}
+
+-- Kaia: true when DocSettings may remove `path`. In the "doc" mode, every path
+-- is allowed, as in upstream KOReader. Otherwise `path` must be inside one of
+-- KAIA_FOLDERS.
+local function mayRemove(path)
+    if G_reader_settings:readSetting("document_metadata_folder", "doc") == "doc" then
+        return true
+    end
+    if type(path) == "string" and not ("/" .. path .. "/"):find("/%.%.?/") then
+        for _, folder in ipairs(KAIA_FOLDERS) do
+            if path:sub(1, #folder + 1) == folder .. "/" then
+                return true
+            end
+        end
+    end
+    logger.dbg("DocSettings: not removing", tostring(path), "outside Kaia's folders")
+    return false
+end
+
 local is_history_location_enabled = isDir(HISTORY_DIR)
 
 local doc_hash_cache = {}
@@ -292,10 +322,11 @@ function DocSettings:open(doc_path)
             end
         end
         -- Kaia: a bad book-folder candidate may belong to KOReader. Skip it.
+        -- A bad candidate outside Kaia's folders, such as kpdfview, is skipped too.
         if G_reader_settings:readSetting("document_metadata_folder", "doc") ~= "doc"
                 and new:isInDocLocation(candidate_path) then
             logger.dbg("DocSettings:", candidate_path, "is invalid, skipped.")
-        else
+        elseif mayRemove(candidate_path) then
             logger.dbg("DocSettings:", candidate_path, "is invalid, removed.")
             os.remove(candidate_path)
         end
@@ -366,7 +397,9 @@ function DocSettings:flush(data, no_custom_metadata)
                     filepath, filename = util.splitFilePathName(metadata_file)
                     if filepath ~= sidecar_dir_slash then
                         ffiutil.copyFile(metadata_file, sidecar_dir_slash .. filename)
-                        if not (keep_doc_location and self:isInDocLocation(metadata_file)) then
+                        -- Kaia: remove the old copy only inside Kaia's folders.
+                        if not (keep_doc_location and self:isInDocLocation(metadata_file))
+                                and mayRemove(metadata_file) then
                             os.remove(metadata_file)
                         end
                         self:getCustomCoverFile(true) -- reset cache
@@ -378,7 +411,9 @@ function DocSettings:flush(data, no_custom_metadata)
                     filepath, filename = util.splitFilePathName(metadata_file)
                     if filepath ~= sidecar_dir_slash then
                         ffiutil.copyFile(metadata_file, sidecar_dir_slash .. filename)
-                        if not (keep_doc_location and self:isInDocLocation(metadata_file)) then
+                        -- Kaia: remove the old copy only inside Kaia's folders.
+                        if not (keep_doc_location and self:isInDocLocation(metadata_file))
+                                and mayRemove(metadata_file) then
                             os.remove(metadata_file)
                         end
                         self:getCustomMetadataFile(true) -- reset cache
@@ -434,7 +469,9 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
             end
         end
         for candidate_path in pairs(candidate_paths) do
-            if isFile(candidate_path) and not (keep_doc_location and self:isInDocLocation(candidate_path)) then
+            -- Kaia: never remove a file outside Kaia's folders, such as kpdfview.
+            if isFile(candidate_path) and not (keep_doc_location and self:isInDocLocation(candidate_path))
+                    and mayRemove(candidate_path) then
                 if (not sidecar_to_keep)
                         or (candidate_path ~= sidecar_to_keep and candidate_path ~= sidecar_to_keep .. ".old") then
                     os.remove(candidate_path)
@@ -445,13 +482,16 @@ function DocSettings:purge(sidecar_to_keep, data_to_purge, keep_doc_location)
     end
 
     -- Remove custom
+    -- Kaia: skip a custom file outside Kaia's folders.
     if data_to_purge.custom_cover_file
-            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_cover_file)) then
+            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_cover_file))
+            and mayRemove(data_to_purge.custom_cover_file) then
         os.remove(data_to_purge.custom_cover_file)
         self:getCustomCoverFile(true) -- reset cache
     end
     if data_to_purge.custom_metadata_file
-            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_metadata_file)) then
+            and not (keep_doc_location and self:isInDocLocation(data_to_purge.custom_metadata_file))
+            and mayRemove(data_to_purge.custom_metadata_file) then
         os.remove(data_to_purge.custom_metadata_file)
         self:getCustomMetadataFile(true) -- reset cache
     end
@@ -470,7 +510,8 @@ end
 
 --- Removes sidecar dir iff empty.
 function DocSettings.removeSidecarDir(dir)
-    if dir and isDir(dir) then
+    -- Kaia: an empty folder outside Kaia's folders may belong to KOReader.
+    if dir and isDir(dir) and mayRemove(dir) then
         if dir:match("^"..DOCSETTINGS_DIR) or dir:match("^"..DOCSETTINGS_HASH_DIR) then
             util.removePath(dir) -- remove empty parent folders
         else
@@ -516,7 +557,8 @@ function DocSettings.updateLocation(doc_path, new_doc_path, copy)
         if has_sidecar_file then
             DocSettings.saveSettingsArcFile(doc_settings, custom_metadata_file)
             local cache_file_path = doc_settings:readSetting("cache_file_path")
-            if cache_file_path then
+            -- Kaia: the sidecar can name a file anywhere, so check the path first.
+            if cache_file_path and mayRemove(cache_file_path) then
                 os.remove(cache_file_path)
             end
         end
@@ -697,7 +739,8 @@ function DocSettings.saveSettingsArcFile(doc_settings, custom_metadata_file, on_
     local arc_file = DocSettings.getSettingsArcFile(doc_settings:readSetting("partial_md5_checksum"))
     if not on_closing then -- on deletion, called by DocSettings.updateLocation()
         if G_reader_settings:hasNot("document_metadata_arc_on_deletion") then
-            if arc_file and isFile(arc_file) then
+            -- Kaia: the archive folder is a user setting, so remove only archives inside Kaia's folders.
+            if arc_file and isFile(arc_file) and mayRemove(arc_file) then
                 -- arc file has been saved previously, but the checkbox is unchecked in the deletion dialog
                 os.remove(arc_file)
                 os.remove(arc_file .. ".old")

@@ -1,7 +1,27 @@
 //! Lua reader calls use the same session as the native reader.
+//!
+//! Lua callbacks run on the app thread, so nothing here may open or lay out a
+//! document. Page counts, the position, the TOC and the current xpointer come
+//! from the native session. Page text, other xpointers and page sizes come from
+//! a second document on its own thread ([`super::plugin_doc`]). The reader
+//! attaches plugins only after that document is laid out and the current page
+//! text is cached, so `onReaderReady` reads the book as it does in KOReader.
+//!
+//! An answer that is not cached costs one engine call on that thread. The app
+//! thread waits up to [`ANSWER_WAIT`] for it, and only while the document is
+//! laid out. Otherwise the host answers with the newest answer from an earlier
+//! layout, or with what the native session knows: the current position for an
+//! xpointer, the current page for a page number, empty text for page text, and
+//! the screen for a page size. KOReader would block instead. A Lua error here
+//! would stop the plugin, so these calls do not fail for a book that is still
+//! laying out.
+//!
+//! Font sizes cross this boundary in KOReader units, as `configurable.font_size`
+//! and `SetFontSize` use them. The session stores engine pixels. The host
+//! converts with [`super::koreader_px`], the rule of the native settings path.
+use super::plugin_doc::{Answer, PluginDoc, Query, ANSWER_WAIT};
 use super::state::Core;
-use kaia_book::{Drawer, Location, Pos, Selection};
-use kaia_doc::Document;
+use kaia_book::{Drawer, Location, Pos, Selection, Size, TextLayout};
 use kaia_events::{Key, Settings, Value};
 use kaia_i18n::tr;
 use kaia_lua::ReaderHost;
@@ -12,25 +32,29 @@ use std::rc::Rc;
 pub(super) struct Host {
     core: Rc<RefCell<Core>>,
     file: String,
-    document: RefCell<TextDocument>,
-    text_layout: RefCell<Option<kaia_book::TextLayout>>,
+    cre: bool,
+    is_new: bool,
+    viewport: Size,
+    document: RefCell<PluginDoc>,
     props: Value,
     toc: Vec<Value>,
     settings: Settings,
     settings_path: PathBuf,
-    page: u32,
     pages: u32,
+    /// The last native position: a 1-based page and, for CREngine, its xpointer.
+    position: RefCell<(u32, Option<String>)>,
 }
 impl Host {
     pub fn new(core: Rc<RefCell<Core>>, data: &std::path::Path) -> Result<Self, String> {
         let c = core.borrow();
         let s = c.session.as_ref().ok_or_else(|| tr("The reader is busy"))?;
         let file = s.path().to_string_lossy().to_string();
-        let document = if s.uses_cre() {
-            TextDocument::Cre(kaia_doc::cre::CreDocument::open(s.path()).map_err(|e| e.to_string())?)
-        } else {
-            TextDocument::Other(kaia_doc::open(s.path()).map_err(|e| e.to_string())?)
-        };
+        let document = PluginDoc::spawn(
+            s.path().to_owned(),
+            s.uses_cre(),
+            s.is_reflowable().then(|| s.layout().clone()),
+            c.viewport,
+        );
         let settings_path = data
             .join("plugin-books")
             .join(format!("{}.json", s.identity().partial_md5));
@@ -71,40 +95,86 @@ impl Host {
             .collect();
         let page = s.current().page + 1;
         let pages = s.page_count() as u32;
+        let position = (page, engine_position(s));
+        let cre = s.uses_cre();
+        let is_new = c.book_is_new();
+        let viewport = c.viewport;
         drop(c);
         Ok(Self {
             core,
             file,
+            cre,
+            is_new,
+            viewport,
             document: RefCell::new(document),
-            text_layout: RefCell::new(None),
             props,
             toc,
             settings,
             settings_path,
-            page,
             pages,
+            position: RefCell::new(position),
         })
     }
-}
-enum TextDocument {
-    Cre(kaia_doc::cre::CreDocument),
-    Other(Box<dyn Document>),
-}
-impl TextDocument {
-    fn doc(&self) -> &dyn Document {
-        match self {
-            Self::Cre(doc) => doc,
-            Self::Other(doc) => doc.as_ref(),
-        }
+
+    /// Called from the reader's tick: follows the native layout, reads the
+    /// thread's answers and asks for the current page's text ahead of time.
+    pub fn tick(&self) {
+        self.follow();
+        let page = self.current_page();
+        let mut doc = self.document.borrow_mut();
+        doc.poll();
+        doc.ask(Query::PageText(page.saturating_sub(1)));
     }
-    fn doc_mut(&mut self) -> &mut dyn Document {
-        match self {
-            Self::Cre(doc) => doc,
-            Self::Other(doc) => doc.as_mut(),
-        }
+
+    /// True when the document is laid out for the native layout and the current
+    /// page's text is cached. The reader attaches plugins then.
+    pub fn ready(&self) -> bool {
+        let page = self.current_page();
+        let doc = self.document.borrow();
+        doc.idle() && doc.has(&Query::PageText(page.saturating_sub(1)))
     }
-}
-impl Host {
+
+    /// True while the plugin document opens or lays out. That work holds the
+    /// engine lock, so the reader avoids engine calls from the app thread then.
+    pub fn laying_out(&self) -> bool {
+        !self.document.borrow().idle()
+    }
+
+    /// Why plugins cannot read this book, if they cannot.
+    pub fn failure(&self) -> Option<String> {
+        self.document.borrow().failure()
+    }
+
+    /// The layout error of the plugin document, if its last layout failed.
+    pub fn layout_error(&self) -> Option<String> {
+        self.document.borrow().layout_error().map(str::to_owned)
+    }
+
+    /// Sends the native layout to the plugin document when it changed. Waits
+    /// for the native layout to finish first: both use the engine lock, and the
+    /// reader's own page comes first.
+    fn follow(&self) {
+        let c = self.core.borrow();
+        if c.layout_pending || c.job.is_some() {
+            return;
+        }
+        let Some(s) = c.session.as_ref() else {
+            return;
+        };
+        *self.position.borrow_mut() = (s.current().page + 1, engine_position(s));
+        let layout = s.is_reflowable().then(|| s.layout().clone());
+        self.document.borrow_mut().follow(layout, c.viewport);
+    }
+
+    /// The answer to `query`: cached, or computed within [`ANSWER_WAIT`], or the
+    /// newest answer from an earlier layout.
+    fn fetch(&self, query: Query) -> Option<Result<Answer, String>> {
+        self.follow();
+        let mut doc = self.document.borrow_mut();
+        doc.answer(&query, ANSWER_WAIT)
+            .or_else(|| doc.stale(&query).map(Ok))
+    }
+
     fn refresh_annotations(&self) {
         self.core
             .borrow_mut()
@@ -112,40 +182,41 @@ impl Host {
             .push_back(("reader:plugin-refresh".into(), vec![]));
     }
 
-    // BookSession owns navigation. This read-only document supplies text methods
-    // that its public API does not expose, with the same engine and layout.
-    fn sync_text_layout(&self) -> Result<(), String> {
-        let c = self.core.borrow();
-        let s = c.session.as_ref().ok_or_else(|| tr("The reader is busy"))?;
-        if !s.is_reflowable() || self.text_layout.borrow().as_ref() == Some(s.layout()) {
-            return Ok(());
-        }
-        let l = s.layout();
-        let mut doc = self.document.borrow_mut();
-        if let TextDocument::Cre(cre) = &mut *doc {
-            cre.set_hyphenation(l.hyphenation.then_some("English_US.pattern"))
-                .map_err(|e| e.to_string())?;
-            cre.set_embedded_styles(l.embedded_styles)
-                .map_err(|e| e.to_string())?;
-        }
-        doc.doc_mut()
-            .set_layout(&kaia_doc::Layout {
-                width: c.viewport.w as f32,
-                height: c.viewport.h as f32,
-                em: l.font_size,
-                margins: Some(l.margins),
-                line_height: Some(l.line_spacing),
-                font_family: l.font_family.clone(),
-                css_extra: if l.justify {
-                    "body { text-align: justify !important; }\n".into()
-                } else {
-                    String::new()
-                },
-            })
-            .map_err(|e| e.to_string())?;
-        *self.text_layout.borrow_mut() = Some(l.clone());
-        Ok(())
+    fn screen(&self) -> kaia_gfx::Size {
+        self.viewport
     }
+
+    /// The session's font size in KOReader units.
+    fn font_units(&self, layout: &TextLayout) -> f64 {
+        koreader_units(self.screen(), layout.font_size)
+    }
+}
+
+/// The xpointer of the session's position, for CREngine books.
+fn engine_position(s: &kaia_book::BookSession) -> Option<String> {
+    match s.current().location {
+        Location::Engine(xp) if s.uses_cre() => Some(xp),
+        _ => None,
+    }
+}
+
+/// KOReader units for `px` engine pixels: the inverse of [`super::koreader_px`].
+/// That function rounds up, so several unit values give the same pixels. This
+/// picks a whole number of units when one fits, then a half, then a tenth, as
+/// KOReader stores sizes such as 22 or 22.5. The result always maps back to `px`.
+pub(super) fn koreader_units(screen: kaia_gfx::Size, px: f32) -> f64 {
+    let scale = f64::from(screen.w.min(screen.h).max(1)) / 600.0;
+    let exact = f64::from(px) / scale;
+    for steps in [1.0, 2.0, 10.0, 100.0] {
+        let scaled = exact * steps;
+        for candidate in [scaled.round(), scaled.floor(), scaled.ceil()] {
+            let units = candidate / steps;
+            if super::koreader_px(screen, units) == px {
+                return units;
+            }
+        }
+    }
+    exact
 }
 impl ReaderHost for Host {
     fn file(&self) -> String {
@@ -156,7 +227,7 @@ impl ReaderHost for Host {
             .borrow()
             .session
             .as_ref()
-            .map_or(self.page, |s| s.current().page + 1)
+            .map_or(self.position.borrow().0, |s| s.current().page + 1)
     }
     fn page_count(&self) -> u32 {
         self.core
@@ -179,44 +250,54 @@ impl ReaderHost for Host {
         Ok(())
     }
     fn page_text(&mut self, page: u32) -> Result<String, String> {
-        self.sync_text_layout()?;
-        self.document
-            .borrow()
-            .doc()
-            .page_text(page.saturating_sub(1))
-            .map(|p| p.text)
-            .map_err(|e| e.to_string())
+        match self.fetch(Query::PageText(page.saturating_sub(1))) {
+            Some(Ok(Answer::Text(text))) => Ok(text),
+            Some(Err(e)) => Err(e),
+            // Not laid out yet: no text rather than an error that stops the plugin.
+            _ => Ok(String::new()),
+        }
     }
     fn xpointer_for_page(&self, page: u32) -> Result<String, String> {
-        self.sync_text_layout()?;
-        match &*self.document.borrow() {
-            TextDocument::Cre(doc) => doc
-                .page_xpointer(page.saturating_sub(1))
-                .map_err(|e| e.to_string()),
-            _ => Err(tr("This book uses page numbers")),
+        if !self.cre {
+            return Err(tr("This book uses page numbers"));
+        }
+        self.follow();
+        let (current, position) = self.position.borrow().clone();
+        // KOReader's getXPointer is the reading position, which the session has.
+        if page == current {
+            if let Some(xp) = position {
+                return Ok(xp);
+            }
+        }
+        match self.fetch(Query::Xpointer(page.saturating_sub(1))) {
+            Some(Ok(Answer::Text(xp))) => Ok(xp),
+            Some(Err(e)) => Err(e),
+            _ => position.ok_or_else(|| tr("The reader is busy")),
         }
     }
     fn page_for_xpointer(&self, xp: &str) -> Result<u32, String> {
-        self.sync_text_layout()?;
-        self.document
-            .borrow()
-            .doc()
-            .resolve(&Location::Engine(xp.into()))
-            .map(|p| p + 1)
-            .map_err(|e| e.to_string())
+        self.follow();
+        let (current, position) = self.position.borrow().clone();
+        if position.as_deref() == Some(xp) {
+            return Ok(current);
+        }
+        match self.fetch(Query::PageFor(xp.to_owned())) {
+            Some(Ok(Answer::Page(page))) => Ok(page + 1),
+            Some(Err(e)) => Err(e),
+            _ => Ok(current),
+        }
     }
     fn native_page_dimensions(&self, page: u32) -> Result<Value, String> {
-        self.sync_text_layout()?;
-        let size = self
-            .document
-            .borrow()
-            .doc()
-            .page_size(page.saturating_sub(1))
-            .map_err(|e| e.to_string())?;
+        let (width, height) = match self.fetch(Query::Dimensions(page.saturating_sub(1))) {
+            Some(Ok(Answer::Size(w, h))) => (w, h),
+            Some(Err(e)) => return Err(e),
+            // A reflowable page has the size of the screen.
+            _ => (self.viewport.w as f32, self.viewport.h as f32),
+        };
         Ok(Value::Table(
             [
-                (Key::from("w"), Value::from(size.width as f64)),
-                (Key::from("h"), Value::from(size.height as f64)),
+                (Key::from("w"), Value::from(width as f64)),
+                (Key::from("h"), Value::from(height as f64)),
             ]
             .into(),
         ))
@@ -401,11 +482,15 @@ impl ReaderHost for Host {
             .map_err(|e| e.to_string())
     }
 
+    fn is_new(&self) -> bool {
+        self.is_new
+    }
+
     fn get_setting(&self, key: &str) -> Value {
         let c = self.core.borrow();
         if let Some(s) = c.session.as_ref() {
             match key {
-                "font_size" => return Value::from(s.layout().font_size as f64),
+                "font_size" => return Value::from(self.font_units(s.layout())),
                 "font_face" => {
                     return s
                         .layout()
@@ -416,7 +501,7 @@ impl ReaderHost for Host {
                 }
                 "configurable" => {
                     return Value::Table(
-                        [(Key::from("font_size"), Value::from(s.layout().font_size as f64))].into(),
+                        [(Key::from("font_size"), Value::from(self.font_units(s.layout())))].into(),
                     )
                 }
                 _ => {}
@@ -426,11 +511,13 @@ impl ReaderHost for Host {
     }
     fn set_setting(&mut self, key: &str, value: Value) -> Result<(), String> {
         if key == "font_size" || key == "font_face" {
+            let screen = self.screen();
             let mut c = self.core.borrow_mut();
             c.change_layout(|l| {
                 if key == "font_size" {
-                    if let Some(size) = value.as_f64().filter(|v| v.is_finite()) {
-                        l.font_size = size.clamp(8.0, 200.0) as f32;
+                    // KOReader units, scaled as ReaderFont scales them for the engine.
+                    if let Some(units) = value.as_f64().filter(|v| v.is_finite() && *v > 0.0) {
+                        l.font_size = super::koreader_px(screen, units).clamp(8.0, 200.0);
                     }
                 } else {
                     l.font_family = value.as_str().map(str::to_owned);

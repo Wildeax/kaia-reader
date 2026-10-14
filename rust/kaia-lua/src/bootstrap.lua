@@ -91,4 +91,11 @@ G_defaults = defaults
 -- The same settings file as reader.lua (lines 37 to 43), in the Kaia data folder.
 G_reader_settings = require("luasettings"):open(data_dir .. "/settings.reader.lua")
 
+-- Sidecars go to Kaia's data folder, never next to a book. The guard pins the
+-- metadata location and loads DocSettings so that it cannot remove or rename
+-- files outside Kaia's folders. See docsettings_guard.lua.
+local sidecar_guard = require("docsettings_guard")
+sidecar_guard.pin(G_reader_settings)
+sidecar_guard.install(G_reader_settings)
+
 return true

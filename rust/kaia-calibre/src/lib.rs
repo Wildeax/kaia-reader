@@ -6,10 +6,15 @@ use std::collections::VecDeque;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+mod policy;
+
+pub use policy::{check_lpath, check_target, Refusal, BOOK_EXTENSIONS};
+use policy::{refused, safe_path, NOT_REPLACED};
 
 const BROADCAST_PORTS: [u16; 5] = [54982, 48123, 39001, 44044, 59678];
 const MAX_JSON: usize = 16 * 1024 * 1024;
@@ -156,6 +161,11 @@ pub trait Storage {
     fn total_space(&self, root: &Path) -> io::Result<u64>;
     fn write_file_atomically(&self, path: &Path, source: &mut dyn Read, length: u64) -> io::Result<()>;
     fn delete(&self, path: &Path) -> io::Result<()>;
+    /// True when the library index lists a book at `path`. A connection may read
+    /// or replace such a book even when its own book list does not name it.
+    fn is_indexed(&self, _path: &Path) -> bool {
+        false
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -317,20 +327,18 @@ impl<S: Storage> Connection<S> {
             }
             SEND_BOOK => return self.receive_book(&arg),
             SEND_BOOK_METADATA => {
-                if let Some(data) = arg.get("data") { self.upsert_book(data); write_metadata_cache(&self.root, &self.books)?; }
+                if let Some(data) = arg.get("data") { self.update_book(data); write_metadata_cache(&self.root, &self.books)?; }
             }
             DELETE_BOOK => return self.delete_books(&arg),
-            GET_BOOK_FILE_SEGMENT => {
-                let path = safe_path(&self.root, required_str(&arg, "lpath")?)?;
-                match File::open(path) {
-                    Ok(mut file) => {
-                        let len = file.metadata()?.len();
-                        self.send(OK, json!({"fileLength":len}))?;
-                        io::copy(&mut file, &mut self.writer)?;
-                    }
-                    Err(_) => self.send(NOOP, json!({}))?,
+            GET_BOOK_FILE_SEGMENT => match self.readable_book(required_str(&arg, "lpath")?) {
+                Some(mut file) => {
+                    let len = file.metadata()?.len();
+                    self.send(OK, json!({"fileLength":len}))?;
+                    io::copy(&mut file, &mut self.writer)?;
                 }
-            }
+                // A refused name gets the same reply as a missing file.
+                None => self.send(NOOP, json!({}))?,
+            },
             DISPLAY_MESSAGE => return Ok(Event::Message { text: arg.get("message").and_then(Value::as_str).unwrap_or("").into(), kind: arg.get("messageKind").and_then(Value::as_u64) }),
             ERROR => return Ok(Event::Message { text: arg.get("message").and_then(Value::as_str).unwrap_or("Calibre error").into(), kind: Some(ERROR) }),
             OK => {}
@@ -342,7 +350,11 @@ impl<S: Storage> Connection<S> {
     fn receive_book(&mut self, arg: &Value) -> io::Result<Event> {
         let length = required_u64(arg, "length")?;
         let lpath = required_str(arg, "lpath")?;
-        let path = safe_path(&self.root, lpath)?;
+        // Every refusal comes before the acknowledgment and before any byte of the book is read.
+        let path = match self.upload_target(lpath) {
+            Ok(path) => path,
+            Err(err) => return Err(self.refuse(err)),
+        };
         if self.storage.free_space(&self.root)? < length.saturating_add(128 * 1024) {
             self.send(opcode::ERROR, json!({"message":"No space left on device"}))?;
             return Ok(Event::None);
@@ -357,7 +369,12 @@ impl<S: Storage> Connection<S> {
         if limited.limit() != 0 {
             return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "short book"));
         }
-        let metadata = arg.get("metadata").cloned().unwrap_or(Value::Null);
+        // The list entry names the file that was written, whatever the metadata says.
+        let mut metadata = match arg.get("metadata") {
+            Some(Value::Object(map)) => Value::Object(map.clone()),
+            _ => json!({}),
+        };
+        metadata["lpath"] = json!(lpath);
         self.upsert_book(&metadata);
         write_metadata_cache(&self.root, &self.books)?;
         Ok(Event::BookReceived { path, metadata })
@@ -395,11 +412,67 @@ impl<S: Storage> Connection<S> {
 
     fn upsert_book(&mut self, book: &Value) {
         let slim = slim_book(book);
+        // Only a name that passes the rules enters the list. The list decides what the server may read.
+        let allowed = slim["lpath"]
+            .as_str()
+            .is_some_and(|lpath| check_lpath(lpath).is_ok());
+        if !allowed {
+            return;
+        }
         if let Some(existing) = self.books.iter_mut().find(|old| old["lpath"] == slim["lpath"]) {
             *existing = slim;
         } else {
             self.books.push(slim);
         }
+    }
+
+    /// Updates the entry of a book that the list already names. Metadata for any
+    /// other name is ignored, so a server cannot list a book that it did not send.
+    fn update_book(&mut self, book: &Value) {
+        let slim = slim_book(book);
+        if let Some(existing) = self.books.iter_mut().find(|old| old["lpath"] == slim["lpath"]) {
+            *existing = slim;
+        }
+    }
+
+    /// A book this connection may read or replace: one in its own book list, or
+    /// one that the library indexes.
+    fn known_book(&self, lpath: &str, path: &Path) -> bool {
+        self.books.iter().any(|book| book["lpath"] == lpath) || self.storage.is_indexed(path)
+    }
+
+    /// The open file for a read. A refused name, a link, a file that is not a
+    /// known book and a missing file all give `None`, so the server cannot tell
+    /// them apart.
+    fn readable_book(&self, lpath: &str) -> Option<File> {
+        let path = safe_path(&self.root, lpath).ok()?;
+        if !self.known_book(lpath, &path) {
+            return None;
+        }
+        let file = File::open(&path).ok()?;
+        file.metadata().ok()?.is_file().then_some(file)
+    }
+
+    /// The path for an upload. A new name is allowed. An existing name must be a
+    /// known regular file, so a server cannot replace a settings file or a folder.
+    fn upload_target(&self, lpath: &str) -> io::Result<PathBuf> {
+        let path = safe_path(&self.root, lpath)?;
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if !metadata.is_file() || !self.known_book(lpath, &path) => {
+                Err(refused(NOT_REPLACED))
+            }
+            Ok(_) => Ok(path),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(path),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Tells the server why a file was refused. Other errors go back without a reply.
+    fn refuse(&mut self, err: io::Error) -> io::Error {
+        if err.kind() == io::ErrorKind::PermissionDenied {
+            let _ = self.send(opcode::ERROR, json!({"message": err.to_string()}));
+        }
+        err
     }
 
     fn read_message(&mut self) -> io::Result<Option<(u64, Value)>> {
@@ -512,28 +585,6 @@ fn required_str<'a>(value: &'a Value, key: &str) -> io::Result<&'a str> {
 fn required_u64(value: &Value, key: &str) -> io::Result<u64> {
     value.get(key).and_then(Value::as_u64).ok_or_else(|| invalid(key))
 }
-fn safe_path(root: &Path, lpath: &str) -> io::Result<PathBuf> {
-    let relative = Path::new(lpath);
-    if lpath.is_empty()
-        || !relative
-            .components()
-            .all(|part| matches!(part, Component::Normal(_)))
-    {
-        return Err(invalid("unsafe book path"));
-    }
-    let mut path = root.to_path_buf();
-    for part in relative.components() {
-        path.push(part);
-        match fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.file_type().is_symlink() => return Err(invalid("symlink in book path")),
-            Ok(_) => {}
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
-            Err(err) => return Err(err),
-        }
-    }
-    Ok(path)
-}
-
 fn slim_book(book: &Value) -> Value {
     let mut map = Map::new();
     for field in FIELDS {
@@ -811,7 +862,15 @@ mod tests {
         client.run_once().unwrap();
         recv(&mut peer);
         assert_eq!(read_drive_info(&root).unwrap()["device_name"], "Reader");
-        fs::write(root.join("book.epub"), b"book").unwrap();
+        // The driver serves only the books on its list. A received book joins the list.
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"book.epub","length":4,"metadata":{"lpath":"book.epub","uuid":"book"}}),
+        );
+        peer.write_all(b"book").unwrap();
+        assert!(matches!(client.run_once().unwrap(), Event::BookReceived { .. }));
+        assert_eq!(recv(&mut peer).0, opcode::OK);
         send(
             &mut peer,
             opcode::GET_BOOK_FILE_SEGMENT,
@@ -880,6 +939,249 @@ mod tests {
         assert!(fs::read_to_string(root.join("metadata.calibre"))
             .unwrap()
             .contains("\"last_modified\": null"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A settings file in a hidden folder: a read, then an upload to the same name.
+    /// The read gets the NOOP that a missing file gets, and the upload is refused
+    /// before any byte is written.
+    #[test]
+    fn settings_file_is_neither_read_nor_replaced() {
+        let (mut client, mut peer, root) = pair();
+        fs::create_dir_all(root.join(".kaia")).unwrap();
+        let settings = root.join(".kaia/settings.json");
+        fs::write(&settings, br#"{"opds":{"password":"secret"}}"#).unwrap();
+        send(
+            &mut peer,
+            opcode::GET_BOOK_FILE_SEGMENT,
+            json!({"lpath":".kaia/settings.json"}),
+        );
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer), (opcode::NOOP, json!({})));
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":".kaia/settings.json","length":2,"metadata":{"lpath":".kaia/settings.json","uuid":"overwrite"}}),
+        );
+        peer.write_all(b"{}").unwrap();
+        assert_eq!(
+            client.run_once().unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(recv(&mut peer).0, opcode::ERROR);
+        assert_eq!(fs::read(&settings).unwrap(), br#"{"opds":{"password":"secret"}}"#);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn kobo_database_is_not_read() {
+        let (mut client, mut peer, root) = pair();
+        fs::create_dir_all(root.join(".kobo")).unwrap();
+        fs::write(root.join(".kobo/KoboReader.sqlite"), b"SQLite format 3\0").unwrap();
+        send(
+            &mut peer,
+            opcode::GET_BOOK_FILE_SEGMENT,
+            json!({"lpath":".kobo/KoboReader.sqlite"}),
+        );
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer), (opcode::NOOP, json!({})));
+        // The next reply is the OK for the eject. File bytes would have come first.
+        send(&mut peer, opcode::NOOP, json!({"ejecting":true}));
+        assert_eq!(client.run_once().unwrap(), Event::Disconnected);
+        assert_eq!(recv(&mut peer).0, opcode::OK);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unlisted_book_is_not_read() {
+        let (mut client, mut peer, root) = pair();
+        fs::write(root.join("Loose.epub"), b"loose").unwrap();
+        send(
+            &mut peer,
+            opcode::GET_BOOK_FILE_SEGMENT,
+            json!({"lpath":"Loose.epub"}),
+        );
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer), (opcode::NOOP, json!({})));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// An executable or script is refused with an error, and no OK acknowledges it.
+    #[test]
+    fn executables_and_scripts_are_refused_before_any_write() {
+        for name in ["Run.exe", "setup.sh"] {
+            let (mut client, mut peer, root) = pair();
+            send(
+                &mut peer,
+                opcode::SEND_BOOK,
+                json!({"lpath":name,"length":4,"metadata":{"lpath":name,"uuid":"x"}}),
+            );
+            peer.write_all(b"MZ\x90\x00").unwrap();
+            assert_eq!(
+                client.run_once().unwrap_err().kind(),
+                io::ErrorKind::PermissionDenied,
+                "{name}"
+            );
+            assert_eq!(
+                recv(&mut peer),
+                (
+                    opcode::ERROR,
+                    json!({"message":"The file type is not supported."})
+                ),
+                "{name}"
+            );
+            assert_eq!(fs::read_dir(&root).unwrap().count(), 0, "{name}");
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    /// The driver's own cache files and hidden or sidecar names are never written.
+    #[test]
+    fn driver_files_hidden_and_sidecar_names_are_never_written() {
+        for name in [
+            "metadata.calibre",
+            "driveinfo.calibre",
+            ".metadata.calibre",
+            ".adds/kaia/Book.epub",
+            "Book.sdr/Book.epub",
+        ] {
+            let (mut client, mut peer, root) = pair();
+            fs::write(root.join("metadata.calibre"), b"[]").unwrap();
+            send(
+                &mut peer,
+                opcode::SEND_BOOK,
+                json!({"lpath":name,"length":4,"metadata":{"lpath":name,"uuid":"x"}}),
+            );
+            peer.write_all(b"data").unwrap();
+            assert_eq!(
+                client.run_once().unwrap_err().kind(),
+                io::ErrorKind::PermissionDenied,
+                "{name}"
+            );
+            assert_eq!(recv(&mut peer).0, opcode::ERROR, "{name}");
+            assert_eq!(fs::read(root.join("metadata.calibre")).unwrap(), b"[]", "{name}");
+            assert!(!root.join(".adds").exists(), "{name}");
+            assert!(!root.join("Book.sdr").exists(), "{name}");
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    /// A book that the driver does not list is not replaced, even though the
+    /// name passes the rules.
+    #[test]
+    fn unlisted_book_is_not_replaced() {
+        let (mut client, mut peer, root) = pair();
+        fs::write(root.join("Loose.epub"), b"loose").unwrap();
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"Loose.epub","length":4,"metadata":{"lpath":"Loose.epub","uuid":"x"}}),
+        );
+        peer.write_all(b"new!").unwrap();
+        assert_eq!(
+            client.run_once().unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            recv(&mut peer),
+            (
+                opcode::ERROR,
+                json!({"message":"Kaia does not replace this file."})
+            )
+        );
+        assert_eq!(fs::read(root.join("Loose.epub")).unwrap(), b"loose");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A book is stored, and the same book sent again replaces the first copy.
+    #[test]
+    fn book_upload_and_resend_both_work() {
+        let (mut client, mut peer, root) = pair();
+        let bodies: [&[u8]; 2] = [b"one!", b"two!"];
+        for body in bodies {
+            send(
+                &mut peer,
+                opcode::SEND_BOOK,
+                json!({"lpath":"Author/Book.epub","length":4,"metadata":{"lpath":"Author/Book.epub","uuid":"id-1","title":"Book"}}),
+            );
+            peer.write_all(body).unwrap();
+            assert!(matches!(client.run_once().unwrap(), Event::BookReceived { .. }));
+            assert_eq!(recv(&mut peer).0, opcode::OK);
+        }
+        assert_eq!(fs::read(root.join("Author/Book.epub")).unwrap(), b"two!");
+        assert_eq!(read_metadata_cache(&root).unwrap().len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Metadata alone never lists a book. Only a received file joins the list, so
+    /// a hidden name or an unlisted book stays unreadable.
+    #[test]
+    fn metadata_alone_does_not_list_a_book() {
+        let (mut client, mut peer, root) = pair();
+        fs::write(root.join("Loose.epub"), b"loose").unwrap();
+        for lpath in [".kaia/settings.json", "Loose.epub"] {
+            send(
+                &mut peer,
+                opcode::SEND_BOOK_METADATA,
+                json!({"data":{"lpath":lpath,"uuid":"x"}}),
+            );
+            client.run_once().unwrap();
+        }
+        send(&mut peer, opcode::GET_BOOK_COUNT, json!({}));
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer).1["count"], 0);
+        send(
+            &mut peer,
+            opcode::GET_BOOK_FILE_SEGMENT,
+            json!({"lpath":"Loose.epub"}),
+        );
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer), (opcode::NOOP, json!({})));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The list entry for a received book names the file that was written. Its
+    /// metadata cannot point the entry at another file.
+    #[test]
+    fn book_metadata_cannot_list_another_file() {
+        let (mut client, mut peer, root) = pair();
+        fs::write(root.join("Manual.epub"), b"manual").unwrap();
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"New.epub","length":4,"metadata":{"lpath":"Manual.epub","uuid":"x"}}),
+        );
+        peer.write_all(b"new!").unwrap();
+        assert!(matches!(client.run_once().unwrap(), Event::BookReceived { .. }));
+        assert_eq!(recv(&mut peer).0, opcode::OK);
+        send(
+            &mut peer,
+            opcode::GET_BOOK_FILE_SEGMENT,
+            json!({"lpath":"Manual.epub"}),
+        );
+        client.run_once().unwrap();
+        assert_eq!(recv(&mut peer), (opcode::NOOP, json!({})));
+        assert_eq!(fs::read(root.join("New.epub")).unwrap(), b"new!");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn links_in_the_book_path_are_refused() {
+        let (mut client, mut peer, root) = pair();
+        fs::create_dir_all(root.join("real")).unwrap();
+        std::os::unix::fs::symlink(root.join("real"), root.join("shelf")).unwrap();
+        send(
+            &mut peer,
+            opcode::SEND_BOOK,
+            json!({"lpath":"shelf/Book.epub","length":4,"metadata":{"lpath":"shelf/Book.epub","uuid":"x"}}),
+        );
+        peer.write_all(b"data").unwrap();
+        assert_eq!(
+            client.run_once().unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(recv(&mut peer).0, opcode::ERROR);
+        assert!(!root.join("real/Book.epub").exists());
         fs::remove_dir_all(root).unwrap();
     }
 }

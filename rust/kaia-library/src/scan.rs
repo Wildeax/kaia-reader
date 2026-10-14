@@ -11,9 +11,9 @@ use std::time::{Instant, UNIX_EPOCH};
 use kaia_doc::Format;
 use rusqlite::{params, OptionalExtension, Row, TransactionBehavior};
 
-use crate::error::Result;
+use crate::error::{LibraryError, Result};
 use crate::extract::{extract_guarded, Cover, Extracted, COVER_MIME};
-use crate::types::{Progress, ScanReport};
+use crate::types::{Book, Progress, ScanReport};
 use crate::{now_unix, Library};
 use kaia_id::partial_md5;
 
@@ -53,6 +53,17 @@ impl Stored {
     fn settled(&self) -> bool {
         self.extracted || self.failure.is_some()
     }
+}
+
+/// How a file finds its row in the index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Matching {
+    /// A scan. A file at a new path may be the row of a file that moved, found
+    /// by its content.
+    Scan,
+    /// One file added on request. Only the row at its own path is reused, so a
+    /// copy of a book gets its own id.
+    Path,
 }
 
 impl Library {
@@ -98,7 +109,7 @@ impl Library {
                 total,
                 path: &f.path,
             });
-            self.index_one(f, &mut seen, &mut report)?;
+            self.index_one(f, Matching::Scan, &mut seen, &mut report)?;
         }
 
         if cancel.load(Ordering::Relaxed) {
@@ -110,9 +121,62 @@ impl Library {
         Ok(report)
     }
 
+    /// Adds one book file to the index and returns its row.
+    ///
+    /// A row at this path that a scan has marked missing is replaced, with its
+    /// history and collections, so the file gets a new id. A row at this path
+    /// that is still live is refreshed the way a scan refreshes a changed file.
+    /// An unchanged row is returned as it is.
+    ///
+    /// Unlike [`Library::scan`], a file at a new path never takes over the row
+    /// of another file with the same content. A copy therefore gets its own id,
+    /// and the book it was copied from keeps its history and collections.
+    ///
+    /// Metadata and the cover come from the same extraction a scan runs. A
+    /// failed extraction is recorded in the row and is not an error. The
+    /// extraction runs the document engine, so call this from a worker thread.
+    ///
+    /// Each write commits before the next step, as in a scan. The attempt count
+    /// is committed before extraction starts, so a crash inside the engine counts
+    /// against the file the next time it is scanned.
+    pub fn index_file(&mut self, path: &Path) -> Result<Book> {
+        let real = fs::canonicalize(path)?;
+        let (meta, format) = book_file(&real)?;
+        // Reading the file first means an unreadable file changes nothing. The
+        // hash is computed again by index_one below.
+        partial_md5(&real)?;
+        // book_file has checked that the path is UTF-8.
+        let path_text = real.to_str().unwrap_or_default();
+        self.conn.execute(
+            "DELETE FROM books WHERE path = ?1 AND missing_since IS NOT NULL",
+            [path_text],
+        )?;
+        let found = Found {
+            path: real.clone(),
+            size: meta.len(),
+            mtime: mtime_secs(&meta),
+            format,
+        };
+        let mut report = ScanReport::default();
+        let id = self
+            .index_one(&found, Matching::Path, &mut HashSet::new(), &mut report)?
+            .ok_or_else(|| {
+                LibraryError::Io(std::io::Error::other(format!("cannot read {}", real.display())))
+            })?;
+        self.book(id)?.ok_or(LibraryError::NotFound(id))
+    }
+
     /// Decides what to do with one file and does it. Each book is committed on
     /// its own, so a scan that is cancelled or killed keeps the books it finished.
-    fn index_one(&mut self, f: &Found, seen: &mut HashSet<i64>, report: &mut ScanReport) -> Result<()> {
+    /// Returns the id of the row the file settled in, or None when the file
+    /// could not be read.
+    fn index_one(
+        &mut self,
+        f: &Found,
+        matching: Matching,
+        seen: &mut HashSet<i64>,
+        report: &mut ScanReport,
+    ) -> Result<Option<i64>> {
         let stored = self.stored_by_path(&f.path)?;
         if let Some(s) = &stored {
             // FAT stores local timestamps at two-second resolution. A time
@@ -128,7 +192,7 @@ impl Library {
                 }
                 seen.insert(s.id);
                 report.unchanged += 1;
-                return Ok(());
+                return Ok(Some(s.id));
             }
         }
 
@@ -139,7 +203,7 @@ impl Library {
                 if let Some(s) = &stored {
                     seen.insert(s.id);
                 }
-                return Ok(());
+                return Ok(None);
             }
         };
 
@@ -159,7 +223,7 @@ impl Library {
                 // settled keeps its attempt count.
                 (s.id, if same { s.attempts } else { 0 }, same)
             }
-            None => match self.find_moved(&f.path, &md5, f.size)? {
+            None => match self.find_moved(&f.path, &md5, f.size, matching)? {
                 Some(m) => {
                     let path = f.path.to_str().unwrap_or_default();
                     self.conn.execute(
@@ -169,7 +233,7 @@ impl Library {
                     report.moved += 1;
                     if m.settled() {
                         seen.insert(m.id);
-                        return Ok(());
+                        return Ok(Some(m.id));
                     }
                     // The content is the same, only the path changed.
                     (m.id, m.attempts, true)
@@ -204,7 +268,7 @@ impl Library {
                 ],
             )?;
             report.failed += 1;
-            return Ok(());
+            return Ok(Some(id));
         }
 
         let attempts = prev_attempts + 1;
@@ -242,10 +306,11 @@ impl Library {
             }
         }
         tx.commit()?;
-        Ok(())
+        Ok(Some(id))
     }
 
-    /// Marks unseen rows missing. A later populated scan purges old missing rows.
+    /// Marks unseen rows missing, unless their file is still there. A later
+    /// populated scan purges old missing rows.
     fn remove_vanished(
         &mut self,
         complete_roots: &[PathBuf],
@@ -269,6 +334,12 @@ impl Library {
                 continue;
             }
             let p = Path::new(&path);
+            // The file is still there, so the walk missed it. The likely cause is
+            // a book moved while this scan ran. Its row stays as it is, and the
+            // next scan settles it.
+            if p.exists() {
+                continue;
+            }
             if complete_roots.iter().any(|root| p.starts_with(root)) {
                 match missing_since {
                     Some(since) if since < now - MISSING_RETENTION_SECS => {
@@ -305,8 +376,11 @@ impl Library {
     }
 
     /// A row with the same content and size whose file is no longer at its
-    /// stored path.
-    fn find_moved(&self, path: &Path, md5: &str, size: u64) -> Result<Option<Stored>> {
+    /// stored path. Only a scan looks for these. See [`Matching`].
+    fn find_moved(&self, path: &Path, md5: &str, size: u64, matching: Matching) -> Result<Option<Stored>> {
+        if matching == Matching::Path {
+            return Ok(None);
+        }
         let mut stmt = self.conn.prepare(
             "SELECT id, path, size, mtime, partial_md5, extracted, failure, attempts, missing_since
              FROM books WHERE partial_md5 = ?1 AND size = ?2 ORDER BY id",
@@ -439,6 +513,34 @@ fn write_cover(tx: &rusqlite::Transaction<'_>, id: i64, cover: Option<&Cover>) -
     Ok(())
 }
 
+/// The metadata and lowercase format of a book file. Fails for a folder, a
+/// missing file, a name without a book extension and a path that is not UTF-8.
+/// Callers pass the real path, so the index keeps canonical paths.
+pub(crate) fn book_file(path: &Path) -> Result<(fs::Metadata, String)> {
+    let meta = fs::metadata(path)?;
+    if !meta.is_file() {
+        return Err(LibraryError::InvalidArgument(format!(
+            "{} is not a file",
+            path.display()
+        )));
+    }
+    let format = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|e| Format::from_extension(e).is_some());
+    let Some(format) = format else {
+        return Err(LibraryError::InvalidArgument(format!(
+            "{} is not a supported book",
+            path.display()
+        )));
+    };
+    if path.to_str().is_none() {
+        return Err(LibraryError::InvalidArgument("the path is not UTF-8".into()));
+    }
+    Ok((meta, format))
+}
+
 /// Adds `path` if its name has a book extension. Symlinked files are stored
 /// under their real path, so every path in the index is canonical.
 fn add_file(path: &Path, size: u64, mtime: i64, found: &mut BTreeMap<PathBuf, Found>) {
@@ -512,7 +614,7 @@ fn walk_dir(dir: &Path, depth: usize, found: &mut BTreeMap<PathBuf, Found>, canc
     complete
 }
 
-fn mtime_secs(meta: &fs::Metadata) -> i64 {
+pub(crate) fn mtime_secs(meta: &fs::Metadata) -> i64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())

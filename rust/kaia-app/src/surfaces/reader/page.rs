@@ -161,11 +161,23 @@ impl Widget for PageView {
         }
         #[cfg(feature = "lua")]
         if let Some(ui) = self.plugins.as_ref().and_then(|ui| ui.upgrade()) {
-            cx.draw_region(bounds, |page, _| {
-                if let Err(e) = ui.borrow().paint_reader_overlays(page) {
-                    eprintln!("kaia: plugin overlay: {e}");
-                }
-            });
+            // Lua paints into a copy of the page, which costs a page conversion
+            // each way. Skip it when no plugin registered a view module.
+            let overlays = ui
+                .borrow()
+                .host()
+                .eval(
+                    "reader-overlays",
+                    "return KAIA_PLUGIN ~= nil and next(KAIA_PLUGIN.view_modules) ~= nil",
+                )
+                .map_or(true, |v| v.as_bool() != Some(false));
+            if overlays {
+                cx.draw_region(bounds, |page, _| {
+                    if let Err(e) = ui.borrow().paint_reader_overlays(page) {
+                        eprintln!("kaia: plugin overlay: {e}");
+                    }
+                });
+            }
         }
     }
 

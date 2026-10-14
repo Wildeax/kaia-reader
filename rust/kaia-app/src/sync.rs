@@ -257,24 +257,36 @@ impl ProgressSync {
     pub fn busy(&self) -> bool {
         self.in_flight > 0 || !self.pending.is_empty()
     }
-    pub fn finish(&mut self, settings: &Settings, _now: Duration) -> Result<(), String> {
-        self.enabled.store(false, Ordering::SeqCst);
-        if settings.is_true("sync.enabled") {
-            let keys: Vec<_> = self.pending.keys().cloned().collect();
-            for key in keys {
-                let (_, progress, path) = self.pending.get(&key).unwrap();
-                SyncQueue::new(path)
-                    .push(progress.clone(), now_unix())
-                    .map_err(|e| e.to_string())?;
-                self.pending.remove(&key);
-            }
-        } else {
+
+    /// Writes every pending update to the durable queue. An update leaves `pending`
+    /// only after its write succeeds. A failed write returns the error and leaves that
+    /// update and the later ones pending, so a later call retries them. With sync off,
+    /// the pending updates are dropped without a write.
+    pub fn persist_pending(&mut self, settings: &Settings) -> Result<(), String> {
+        if !settings.is_true("sync.enabled") {
             self.pending.clear();
+            return Ok(());
         }
-        self.sender.take();
-        // An in-flight request may finish. Queued requests stay on disk for the next run.
-        self.worker.take();
+        let keys: Vec<_> = self.pending.keys().cloned().collect();
+        for key in keys {
+            let (_, progress, path) = self.pending.get(&key).unwrap();
+            SyncQueue::new(path)
+                .push(progress.clone(), now_unix())
+                .map_err(|e| e.to_string())?;
+            self.pending.remove(&key);
+        }
         Ok(())
+    }
+
+    /// Stops the worker for shutdown and drops the pending updates that could not be
+    /// written. Call it after the last [`ProgressSync::persist_pending`]. The worker is
+    /// not joined, so shutdown does not wait on the network. An in-flight request may
+    /// finish in the background, and queued requests stay on disk for the next run.
+    pub fn close(&mut self) {
+        self.enabled.store(false, Ordering::SeqCst);
+        self.sender.take();
+        self.worker.take();
+        self.pending.clear();
     }
 }
 
@@ -290,7 +302,7 @@ mod review2_tests {
             ..ProgressSync::default()
         };
         let now = std::time::Instant::now();
-        sync.finish(&Settings::new(), Duration::ZERO).unwrap();
+        sync.close();
         assert!(now.elapsed() < Duration::from_millis(100));
     }
     #[test]

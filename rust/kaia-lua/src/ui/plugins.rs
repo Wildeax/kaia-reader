@@ -59,6 +59,11 @@ pub(super) fn install_reader(lua: &Lua, host: Rc<RefCell<dyn ReaderHost>>) -> ml
     )?;
     let h = Rc::clone(&host);
     api.set(
+        "is_new",
+        lua.create_function(move |_, ()| Ok(h.borrow().is_new()))?,
+    )?;
+    let h = Rc::clone(&host);
+    api.set(
         "properties",
         lua.create_function(move |lua, ()| {
             convert::to_lua(lua, &h.borrow().properties())

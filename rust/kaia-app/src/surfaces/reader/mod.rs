@@ -20,6 +20,8 @@ pub mod page;
 pub mod panels;
 mod persistence;
 #[cfg(feature = "lua")]
+mod plugin_doc;
+#[cfg(feature = "lua")]
 mod plugins;
 mod state;
 mod sticker_actions;
@@ -98,6 +100,18 @@ pub struct ReaderSurface {
     plugin_layout: Option<TextLayout>,
     #[cfg(feature = "lua")]
     plugin_annotations: Option<(i64, i64)>,
+    /// The host that plugins use, or will use once its document is ready.
+    #[cfg(feature = "lua")]
+    plugin_host: Option<Rc<RefCell<plugins::Host>>>,
+    /// Plugins run for this book: they are on and this is the top reader.
+    #[cfg(feature = "lua")]
+    plugin_wanted: bool,
+    /// The plugin document could not open. Plugins stay off for this reader.
+    #[cfg(feature = "lua")]
+    plugin_failed: bool,
+    /// The layout changed and DocumentRerendered waits for the plugin document.
+    #[cfg(feature = "lua")]
+    plugin_rerender: bool,
     persistence: persistence::Persistence,
     remote: Option<kaia_book::Location>,
     core: Rc<RefCell<Core>>,
@@ -121,16 +135,42 @@ impl ReaderSurface {
             plugin_layout: None,
             #[cfg(feature = "lua")]
             plugin_annotations: None,
+            #[cfg(feature = "lua")]
+            plugin_host: None,
+            #[cfg(feature = "lua")]
+            plugin_wanted: false,
+            #[cfg(feature = "lua")]
+            plugin_failed: false,
+            #[cfg(feature = "lua")]
+            plugin_rerender: false,
             persistence: persistence::Persistence::default(),
             remote: None,
             core: Rc::new(RefCell::new(Core::new(book))),
         }
     }
+
+    /// True while plugins for this book wait for their first attach. The app
+    /// then holds plugin callbacks and navigation, as it does while a book opens.
+    #[cfg(feature = "lua")]
+    fn plugin_attaching(&self) -> bool {
+        self.plugin_wanted && !self.plugin_attached && !self.plugin_failed
+    }
+
+    /// Connects reader plugins and sends them the reader's events.
+    ///
+    /// Nothing here opens or lays out a document on the app thread. The plugin
+    /// host's document opens on its own thread. The reader attaches plugins when
+    /// that document is laid out, so `DocSettingsLoad` and `ReaderReady` see a
+    /// ready book. After a layout change, `DocumentRerendered` waits the same way.
+    /// Ready means laid out for the native layout, with the current page's text
+    /// cached. Page updates go out at once, and the host asks for the new page's
+    /// text.
     #[cfg(feature = "lua")]
     fn plugin_tick(&mut self, env: &mut SurfaceEnv<'_>) {
-        if !env.services.settings.is_true(crate::plugins::ENABLED)
-            || env.services.plugins.active_book != Some(self.book)
-        {
+        self.plugin_wanted = env.services.settings.is_true(crate::plugins::ENABLED)
+            && env.services.plugins.active_book == Some(self.book);
+        if !self.plugin_wanted {
+            self.core.borrow_mut().plugin_waiting = false;
             return;
         }
         {
@@ -140,24 +180,57 @@ impl ReaderSurface {
             }
         }
         if !self.plugin_attached || env.services.plugins.reader_book != Some(self.book) {
-            match plugins::Host::new(self.core.clone(), &env.services.paths.data_dir) {
-                Ok(host) => {
-                    env.services
-                        .plugins
-                        .requests
-                        .push(crate::plugins::Request::Reader(Rc::new(RefCell::new(host))));
-                    self.plugin_attached = true;
-                    env.services.plugins.reader_book = Some(self.book);
-                }
-                Err(e) => {
-                    env.notice(tr_format(
-                        &tr("Cannot connect reader plugins: %1"),
-                        &[&e.to_string()],
-                    ));
-                    return;
-                }
+            if self.plugin_failed {
+                return;
             }
+            if self.plugin_attached {
+                // Another reader took the plugins. Start again with a new host.
+                self.plugin_attached = false;
+                self.plugin_host = None;
+            }
+            let host = match &self.plugin_host {
+                Some(host) => host.clone(),
+                None => match plugins::Host::new(self.core.clone(), &env.services.paths.data_dir) {
+                    Ok(host) => {
+                        let host = Rc::new(RefCell::new(host));
+                        self.plugin_host = Some(host.clone());
+                        host
+                    }
+                    Err(e) => {
+                        self.plugin_failed = true;
+                        env.notice(tr_format(
+                            &tr("Cannot connect reader plugins: %1"),
+                            &[&e.to_string()],
+                        ));
+                        return;
+                    }
+                },
+            };
+            host.borrow().tick();
+            let failure = host.borrow().failure();
+            if let Some(e) = failure {
+                self.plugin_failed = true;
+                self.plugin_host = None;
+                self.core.borrow_mut().plugin_waiting = false;
+                env.notice(tr_format(&tr("Cannot connect reader plugins: %1"), &[&e]));
+                return;
+            }
+            if !host.borrow().ready() {
+                self.core.borrow_mut().plugin_waiting = true;
+                schedule_if_pending(&self.core, env.ctx);
+                return;
+            }
+            env.services
+                .plugins
+                .requests
+                .push(crate::plugins::Request::Reader(host));
+            self.plugin_attached = true;
+            env.services.plugins.reader_book = Some(self.book);
         }
+        let Some(host) = self.plugin_host.clone() else {
+            return;
+        };
+        host.borrow().tick();
         let page = self.core.borrow().session.as_ref().map(|s| s.current().page + 1);
         if page != self.plugin_page {
             self.plugin_page = page;
@@ -165,39 +238,53 @@ impl ReaderSurface {
                 .plugins
                 .event("PageUpdate", vec![Value::from(page.unwrap_or(1) as i64)]);
         }
-        let mut core = self.core.borrow_mut();
-        let session = core.session.as_mut().unwrap();
-        let layout = session.layout().clone();
-        if self.plugin_layout.as_ref().is_some_and(|old| old != &layout) {
+        let layout = self.core.borrow().session.as_ref().map(|s| s.layout().clone());
+        if self.plugin_layout.is_some() && self.plugin_layout != layout {
+            self.plugin_rerender = true;
+        }
+        self.plugin_layout = layout;
+        let laying_out = host.borrow().laying_out();
+        let ready = host.borrow().ready();
+        if self.plugin_rerender && ready {
+            self.plugin_rerender = false;
+            if let Some(e) = host.borrow().layout_error() {
+                eprintln!("kaia: plugin document layout: {e}");
+            }
             env.services.plugins.event("DocumentRerendered", vec![]);
         }
-        self.plugin_layout = Some(layout);
-        if let Ok(items) = session.annotations() {
-            let counts = (
-                items.iter().filter(|a| a.drawer.is_some()).count() as i64,
-                items.iter().filter(|a| a.note.is_some()).count() as i64,
-            );
-            if let Some(old) = self.plugin_annotations.filter(|old| *old != counts) {
-                env.services.plugins.event(
-                    "AnnotationsModified",
-                    vec![Value::Table(
-                        [
-                            (
-                                kaia_events::Key::from("nb_highlights_added"),
-                                Value::from(counts.0 - old.0),
-                            ),
-                            (
-                                kaia_events::Key::from("nb_notes_added"),
-                                Value::from(counts.1 - old.1),
-                            ),
-                        ]
-                        .into(),
-                    )],
+        self.core.borrow_mut().plugin_waiting = !ready;
+        schedule_if_pending(&self.core, env.ctx);
+        // Annotation order needs the engine lock, which a plugin layout holds.
+        // Read the counts after that layout, so the app thread does not wait.
+        if !laying_out {
+            let mut core = self.core.borrow_mut();
+            let session = core.session.as_mut().unwrap();
+            if let Ok(items) = session.annotations() {
+                let counts = (
+                    items.iter().filter(|a| a.drawer.is_some()).count() as i64,
+                    items.iter().filter(|a| a.note.is_some()).count() as i64,
                 );
+                if let Some(old) = self.plugin_annotations.filter(|old| *old != counts) {
+                    env.services.plugins.event(
+                        "AnnotationsModified",
+                        vec![Value::Table(
+                            [
+                                (
+                                    kaia_events::Key::from("nb_highlights_added"),
+                                    Value::from(counts.0 - old.0),
+                                ),
+                                (
+                                    kaia_events::Key::from("nb_notes_added"),
+                                    Value::from(counts.1 - old.1),
+                                ),
+                            ]
+                            .into(),
+                        )],
+                    );
+                }
+                self.plugin_annotations = Some(counts);
             }
-            self.plugin_annotations = Some(counts);
         }
-        drop(core);
         if let (Some(ui), Some(window)) = (&env.services.plugins.ui, &self.core.borrow().page_window) {
             let ui = Rc::downgrade(ui);
             window.update::<PageView, _>(env.ctx, PAGE_KEY, move |view, cx| {
@@ -335,6 +422,10 @@ impl ReaderSurface {
 
 impl Surface for ReaderSurface {
     fn busy(&self) -> bool {
+        #[cfg(feature = "lua")]
+        if self.plugin_attaching() {
+            return true;
+        }
         let c = self.core.borrow();
         c.job.is_some() || c.layout_pending || !c.queued.is_empty() || !c.events.is_empty()
     }

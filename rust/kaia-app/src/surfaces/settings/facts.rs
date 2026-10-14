@@ -209,7 +209,10 @@ mod tests {
         assert_eq!(collections_file(&dir), dir.join("collection.lua"));
         // Stock KOReader writes it in settings/, which wins.
         fs::write(dir.join("settings").join("collection.lua"), "return {}").unwrap();
-        assert_eq!(collections_file(&dir), dir.join("settings").join("collection.lua"));
+        assert_eq!(
+            collections_file(&dir),
+            dir.join("settings").join("collection.lua")
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

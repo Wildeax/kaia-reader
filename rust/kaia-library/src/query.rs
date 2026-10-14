@@ -8,6 +8,7 @@ use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row, TransactionBehavior};
 
 use crate::error::{LibraryError, Result};
+use crate::scan::{book_file, mtime_secs};
 use crate::types::{Book, Collection, CoverImage, CoverSize, Filter, Sort, SortKey, Status};
 use crate::{now_unix, Library};
 
@@ -276,6 +277,69 @@ impl Library {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// Points the book with `book_id` at `to`, a file that already holds the
+    /// same book. The id stays, so the history, reading progress, status, cover
+    /// and collections stay with the book. The file at `to` must match the
+    /// stored row: the same size, partial MD5 and format. Nothing changes when a
+    /// check fails.
+    ///
+    /// A row at `to` that a scan has marked missing is removed with its history
+    /// and collections, because the file now at `to` replaces it. A row at `to`
+    /// that is still live is an error. The book file is not touched, so the
+    /// caller writes `to` before it calls this.
+    pub fn move_book(&mut self, book_id: i64, to: &Path) -> Result<Book> {
+        let real = fs::canonicalize(to)?;
+        let (meta, format) = book_file(&real)?;
+        let md5 = kaia_id::partial_md5(&real)?;
+        let path = real
+            .to_str()
+            .ok_or_else(|| LibraryError::InvalidArgument("the path is not UTF-8".into()))?;
+
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let stored: (i64, String, String) = tx
+            .query_row(
+                "SELECT size, partial_md5, format FROM books WHERE id = ?1",
+                [book_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?
+            .ok_or(LibraryError::NotFound(book_id))?;
+        if stored != (meta.len() as i64, md5, format) {
+            return Err(LibraryError::InvalidArgument(format!(
+                "the file at {} does not match book {book_id} in the index",
+                real.display()
+            )));
+        }
+        tx.execute(
+            "DELETE FROM books WHERE path = ?1 AND id != ?2 AND missing_since IS NOT NULL",
+            params![path, book_id],
+        )?;
+        let taken: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM books WHERE path = ?1 AND id != ?2)",
+            params![path, book_id],
+            |r| r.get(0),
+        )?;
+        if taken {
+            return Err(LibraryError::InvalidArgument(format!(
+                "another book is indexed at {}",
+                real.display()
+            )));
+        }
+        tx.execute(
+            "UPDATE books SET path = ?2, size = ?3, mtime = ?4, missing_since = NULL WHERE id = ?1",
+            params![book_id, path, meta.len() as i64, mtime_secs(&meta)],
+        )?;
+        let book = tx.query_row(
+            &format!("SELECT {} FROM books WHERE id = ?1", cols("")),
+            [book_id],
+            book_from_row,
+        )?;
+        tx.commit()?;
+        Ok(book)
     }
 
     /// Deletes a book row and its indexed covers, collections and history.

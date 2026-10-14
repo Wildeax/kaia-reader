@@ -14,7 +14,8 @@ if props.has_pages == nil then props.has_pages = is_pdf end
 local document = strict("document", {
     file = reader.file(),
     is_pdf = is_pdf,
-    is_new = false,
+    -- True when the book had no saved or imported reading state before this open.
+    is_new = reader.is_new(),
     is_pic = false,
     info = props,
     configurable = setmetatable({}, { __index = function(_, key)
@@ -38,8 +39,9 @@ local document = strict("document", {
     getProps = function() return reader.properties() end,
 })
 
-local settings = strict("doc_settings", {
-    data = { summary = reader.get_setting("summary") or {} },
+local settings_data = { summary = reader.get_setting("summary") or {} }
+
+local settings = setmetatable({
     readSetting = function(self, key, default)
         local value = self.data[key]
         if value == nil then value = reader.get_setting(key) end
@@ -68,6 +70,19 @@ local settings = strict("doc_settings", {
     nilOrTrue = function(self, key) return self:readSetting(key) ~= false end,
     makeTrue = function(self, key) self:saveSetting(key, true) end,
     makeFalse = function(self, key) self:saveSetting(key, false) end,
+}, {
+    __index = function(_, key)
+        if key == "data" then return settings_data end
+        error("doc_settings." .. tostring(key) .. " is unavailable", 2)
+    end,
+    -- DocSettingsLoad handlers may replace the whole table, as docsettingtweak
+    -- does with directory defaults. KOReader's modules read the new values
+    -- after that event, so the host applies them now.
+    __newindex = function(object, key, value)
+        if key ~= "data" then return rawset(object, key, value) end
+        settings_data = value or {}
+        for name, item in pairs(settings_data) do reader.set_setting(name, item) end
+    end,
 })
 
 if KAIA_DEVICE then

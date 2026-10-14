@@ -1,5 +1,6 @@
 //! One lazy Lua runtime, driven by the app thread.
-mod library;
+/// File manager host for plugins. Public so the integration tests can drive it.
+pub mod library;
 
 use kaia_i18n::tr;
 use std::cell::RefCell;

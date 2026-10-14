@@ -254,6 +254,87 @@ describe("Kaia sidecar coexistence", function()
         assert.are.equal("old backup", readFile(ko_sidecar .. ".old"))
     end)
 
+    it("keeps KOReader's legacy kpdfview file next to the book when purging", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local legacy = book .. ".kpdfview.lua"
+        writeFile(legacy, 'return { ["percent_finished"] = 0.1 }\n')
+        DocSettings:open(book):purge()
+        assert.are.equal('return { ["percent_finished"] = 0.1 }\n', readFile(legacy))
+        assertKoreaderSidecarIntact()
+    end)
+
+    it("does not delete an empty kpdfview file next to the book when opening", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local legacy = book .. ".kpdfview.lua"
+        writeFile(legacy, "")
+        assert.are.equal(0.25, DocSettings:open(book):readSetting("percent_finished"))
+        assert.are.equal("", readFile(legacy))
+        assertKoreaderSidecarIntact()
+    end)
+
+    it("does not delete a cache file that KOReader's sidecar names outside Kaia's folders", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local outside = dir .. "/stock-cache.bin"
+        writeFile(outside, "KOReader cache")
+        writeFile(ko_sidecar, ('return { ["percent_finished"] = 0.25, ["cache_file_path"] = %q }\n'):format(outside))
+        DocSettings.updateLocation(book)
+        assert.are.equal("KOReader cache", readFile(outside))
+        assert.are.equal(0.25, dofile(ko_sidecar).percent_finished)
+    end)
+
+    it("does not delete a cache path that climbs out of Kaia's cache folder", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        util.makePath(DataStorage:getDataDir() .. "/cache")
+        local outside = dir .. "/climbed-cache.bin"
+        local climbing = DataStorage:getDataDir() .. "/cache/../kaia-coexist-test/climbed-cache.bin"
+        writeFile(outside, "KOReader cache")
+        writeFile(ko_sidecar, ('return { ["percent_finished"] = 0.25, ["cache_file_path"] = %q }\n'):format(climbing))
+        DocSettings.updateLocation(book)
+        assert.are.equal("KOReader cache", readFile(outside))
+    end)
+
+    it("deletes a cache file that KOReader's sidecar names inside Kaia's cache folder", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local cache_dir = DataStorage:getDataDir() .. "/cache/cr3cache"
+        util.makePath(cache_dir)
+        local cache_file = cache_dir .. "/kaia-coexist-test.cache"
+        writeFile(cache_file, "Kaia cache")
+        writeFile(ko_sidecar, ('return { ["percent_finished"] = 0.25, ["cache_file_path"] = %q }\n'):format(cache_file))
+        DocSettings.updateLocation(book)
+        assert.is_nil(lfs.attributes(cache_file))
+        assert.are.equal(0.25, dofile(ko_sidecar).percent_finished)
+    end)
+
+    it("moves and purges Kaia's own copy as before", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local own = DocSettings:open(book)
+        own:saveSetting("kaia_only", "moved")
+        own:flush()
+        local old_copy = DocSettings:getSidecarDir(book, "dir") .. "/metadata.epub.lua"
+        local moved = dir .. "/moved.epub"
+        table.insert(paths, moved)
+        DocSettings.updateLocation(book, moved)
+        assert.is_nil(lfs.attributes(old_copy))
+        assert.are.equal("moved", DocSettings:open(moved):readSetting("kaia_only"))
+        assertKoreaderSidecarIntact()
+    end)
+
+    it("does not remove an empty folder outside Kaia's folders", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "dir")
+        local empty = dir .. "/empty.sdr"
+        util.makePath(empty)
+        DocSettings.removeSidecarDir(empty)
+        assert.are.equal("directory", lfs.attributes(empty, "mode"))
+    end)
+
+    it("still removes the kpdfview file next to the book in the book folder mode", function()
+        G_reader_settings:saveSetting("document_metadata_folder", "doc")
+        local legacy = book .. ".kpdfview.lua"
+        writeFile(legacy, 'return { ["percent_finished"] = 0.1 }\n')
+        DocSettings:open(book):purge()
+        assert.is_nil(lfs.attributes(legacy))
+    end)
+
     it("keeps upstream behavior when the user chooses the book folder", function()
         G_reader_settings:saveSetting("document_metadata_folder", "doc")
         local ds = DocSettings:open(book)

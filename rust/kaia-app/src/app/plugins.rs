@@ -32,6 +32,7 @@ impl<B: Backend> App<B> {
                 std::fs::create_dir_all(p.library.borrow().data.join("plugins"))
                     .map_err(|e| e.to_string())?;
                 let host = LuaHost::new(p.paths.clone()).map_err(|e| e.to_string())?;
+                check_metadata_location(&host)?;
                 let device = p.device.clone();
                 host.register("KAIA_DEVICE", move |args| {
                     let key = args
@@ -270,5 +271,21 @@ impl<B: Backend> App<B> {
             self.rebuild(self.router.depth() - 1);
         }
         true
+    }
+}
+
+/// Plugins run only when DocSettings writes to Kaia's data folder. The guard in
+/// `bootstrap.lua` pins the metadata location, and this checks that it did.
+fn check_metadata_location(host: &LuaHost) -> Result<(), String> {
+    let location = host
+        .eval(
+            "metadata-location",
+            "return G_reader_settings:readSetting('document_metadata_folder')",
+        )
+        .map_err(|e| e.to_string())?;
+    if location.as_str() == Some("dir") {
+        Ok(())
+    } else {
+        Err(format!("sidecar location is {location:?}, not dir"))
     }
 }

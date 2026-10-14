@@ -73,11 +73,20 @@ pub struct FrameStats {
     pub refreshes: u64,
 }
 
-/// What the loop does next.
+/// What the loop does next. `Exit` means the exit was accepted: the reader and the
+/// queued sync updates are saved. The caller then calls [`App::shutdown`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flow {
     Continue,
     Exit,
+}
+
+/// Why a request to quit was refused. The loop keeps running and shows the reason.
+enum Refusal {
+    /// The reader could not save. It shows its own message.
+    Reader,
+    /// The sync queue could not be written. The text is the error, for the log.
+    SyncQueue(String),
 }
 
 /// Settings for [`App::new`].
@@ -116,6 +125,13 @@ pub struct App<B: Backend> {
     input_clock_offset_us: i64,
     exit_at: Option<Duration>,
     quitting: bool,
+    /// A request to quit was refused because the sync queue could not be written. Later
+    /// refusals of that kind show the prompt instead of the toast.
+    sync_save_failed: bool,
+    /// The prompt that offers to exit without the sync update, while it is open.
+    sync_prompt: Option<kaia_events::WindowId>,
+    /// The user chose to exit without the queued sync update.
+    sync_drop_confirmed: bool,
     pending_navigation: Option<(String, Vec<Value>)>,
     /// Set by `KAIA_TRACE_INPUT`. Logs every gesture and the top route to stderr.
     trace_input: bool,
@@ -169,6 +185,9 @@ impl<B: Backend> App<B> {
             input_clock_offset_us: 0,
             exit_at: None,
             quitting: false,
+            sync_save_failed: false,
+            sync_prompt: None,
+            sync_drop_confirmed: false,
             pending_navigation: None,
             trace_input: std::env::var_os("KAIA_TRACE_INPUT").is_some(),
         }
@@ -197,7 +216,8 @@ impl<B: Backend> App<B> {
     }
 
     /// Runs the loop until the backend quits, [`App::quit`] is called, or the exit
-    /// time set by [`App::exit_after`] passes. Then it saves the settings.
+    /// time set by [`App::exit_after`] passes, and the exit is accepted. Then it shuts
+    /// down. A refused exit keeps the loop running.
     pub fn run(&mut self) -> Result<(), DisplayError> {
         let result = loop {
             match self.iterate(None) {
@@ -206,6 +226,10 @@ impl<B: Backend> App<B> {
                 Ok(Flow::Continue) => {}
             }
         };
+        if result.is_err() {
+            // The loop stopped on an error, so no exit check ran. Save the reader here.
+            self.broadcast_app(Event::new("SaveState"));
+        }
         self.shutdown();
         result
     }
@@ -245,7 +269,7 @@ impl<B: Backend> App<B> {
         self.process(vec![InputEvent::Key(ev)])
     }
 
-    /// Stops the loop after the current iteration.
+    /// Asks the loop to stop after the current iteration. A refused exit keeps it running.
     pub fn quit(&mut self) {
         self.quitting = true;
     }
@@ -255,34 +279,81 @@ impl<B: Backend> App<B> {
         self.exit_at = Some(self.ctx.scheduler.now() + d);
     }
 
-    /// Saves the settings and stops the library scan. [`App::run`] calls it on exit.
+    /// Hides the screens, writes the sync queue once more, stops the sync worker and
+    /// the library scan, and saves the settings. The caller calls it after
+    /// [`App::iterate`] returns [`Flow::Exit`]. [`App::run`] does too.
+    ///
+    /// It cannot refuse. The loop wrote the queued sync updates before it returned
+    /// `Exit`, so a failure here only reaches the log.
     pub fn shutdown(&mut self) {
-        if !self.can_hide_all() {
-            self.quitting = false;
-            return;
-        }
-        self.broadcast_app(Event::new("SaveState"));
         self.hide_all();
         #[cfg(feature = "lua")]
         self.pump_plugins();
-        if let Err(error) = self
-            .services
-            .sync
-            .finish(&self.services.settings, self.ctx.scheduler.now())
-        {
-            env!(self).notice(tr_format(
-                &tr("Cannot save queued sync. Free storage, then try again. %1"),
-                &[error.to_string().as_str()],
-            ));
-            self.quitting = false;
-            return;
+        // Hiding the reader pushes its position once more. The loop already wrote
+        // that position, so a failed write here only loses the repeat. It is logged.
+        if let Err(error) = self.services.sync.persist_pending(&self.services.settings) {
+            eprintln!("kaia: dropping sync updates that could not be written: {error}");
         }
+        self.services.sync.close();
         if let Some(scan) = self.scan.take() {
             scan.cancel();
         }
         if let Err(e) = self.services.settings.flush(&self.services.settings_path()) {
             eprintln!("kaia: cannot save settings: {e}");
         }
+    }
+
+    /// The checks that can keep the app open. The loop runs them on each request to
+    /// stop, before any screen is hidden. A refusal leaves the reader and the pending
+    /// sync updates in place, so the next request runs the checks again.
+    fn prepare_exit(&mut self) -> Result<(), Refusal> {
+        if !self.can_hide_all() {
+            return Err(Refusal::Reader);
+        }
+        self.broadcast_app(Event::new("SaveState"));
+        if let Err(error) = self.services.sync.persist_pending(&self.services.settings) {
+            if !self.sync_drop_confirmed {
+                return Err(Refusal::SyncQueue(error));
+            }
+            eprintln!("kaia: exiting without saving a sync update: {error}");
+        }
+        Ok(())
+    }
+
+    /// Tells the user why an exit was refused. The first refused sync write shows a
+    /// toast. The next request to stop shows a prompt that offers to exit without the
+    /// update, which is the way out when the queue stays unwritable. The prompt is not
+    /// shown twice while it is open.
+    fn refuse_exit(&mut self, refusal: Refusal) {
+        self.sync_drop_confirmed = false;
+        let Refusal::SyncQueue(error) = refusal else {
+            return;
+        };
+        eprintln!("kaia: the sync queue could not be written, the app stays open: {error}");
+        if !self.sync_save_failed {
+            self.sync_save_failed = true;
+            env!(self).notice(tr("Could not save the reading position for sync. Try again."));
+            return;
+        }
+        if self
+            .sync_prompt
+            .is_some_and(|id| self.stack.options(id).is_some())
+        {
+            return;
+        }
+        let mut env = env!(self);
+        let prompt = kaia_ui::composite::Dialog::new(
+            env.theme(),
+            tr("Sync position not saved"),
+            tr(
+                "The reading position could not be saved for sync. Exiting now drops that update. The book keeps its own saved position.",
+            ),
+            vec![
+                kaia_ui::composite::DialogButton::new(tr("Keep reading"), "dialog:dismiss"),
+                kaia_ui::composite::DialogButton::new(tr("Exit anyway"), "sync:exit-anyway"),
+            ],
+        );
+        self.sync_prompt = Some(env.dialog(prompt));
     }
 
     pub fn services(&self) -> &Services {
@@ -448,11 +519,16 @@ impl<B: Backend> App<B> {
             if self.reader_busy() {
                 return Ok(Flow::Continue);
             }
-            if self.can_hide_all() {
-                self.quitting = true;
-            } else {
-                self.quitting = false;
-                self.exit_at = None;
+            match self.prepare_exit() {
+                Ok(()) => self.quitting = true,
+                Err(refusal) => {
+                    self.refuse_exit(refusal);
+                    self.quitting = false;
+                    self.exit_at = None;
+                    // Paint the toast or the prompt now, not at the next input.
+                    self.show_input_result()?;
+                    return Ok(Flow::Continue);
+                }
             }
         }
         Ok(if self.quitting { Flow::Exit } else { Flow::Continue })
@@ -769,6 +845,14 @@ impl<B: Backend> App<B> {
         }
         if id == "dialog:dismiss" {
             self.back();
+            return;
+        }
+        // The prompt from `refuse_exit`. The user accepts losing the update. The next
+        // exit check tries the write once more and exits without it if the write fails.
+        if id == "sync:exit-anyway" {
+            self.back();
+            self.sync_drop_confirmed = true;
+            self.quitting = true;
             return;
         }
         if id == "reader:acknowledge-change"

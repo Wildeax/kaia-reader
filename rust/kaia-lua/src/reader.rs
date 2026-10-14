@@ -59,6 +59,12 @@ pub trait ReaderHost {
         Err("ReaderHost.flush_settings is unavailable".into())
     }
 
+    /// True when the book had no saved or imported reading state before this
+    /// open, as KOReader's `document.is_new`. Directory defaults use it.
+    fn is_new(&self) -> bool {
+        false
+    }
+
     fn get_setting(&self, key: &str) -> Value;
     fn set_setting(&mut self, key: &str, value: Value) -> Result<(), String>;
 }
