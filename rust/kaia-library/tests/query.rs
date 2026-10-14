@@ -611,3 +611,252 @@ fn the_engine_joins_several_creators_with_a_line_feed_that_authors_split_on() {
     let by_babbage = Library::books_by_author(&books, "charles babbage");
     assert_eq!(by_babbage.len(), 1, "the second author finds the book too");
 }
+
+/// Adds a book row straight to the table, with the given metadata. The search
+/// and suggestion tables update through their triggers.
+fn add_book(
+    conn: &rusqlite::Connection,
+    title: &str,
+    authors: Option<&str>,
+    series: Option<&str>,
+    opened: Option<i64>,
+) -> i64 {
+    let n: i64 = conn
+        .query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM books", [], |r| r.get(0))
+        .unwrap();
+    conn.execute(
+        "INSERT INTO books (path, size, mtime, partial_md5, format, added_at, title, authors, series, last_opened_at)
+         VALUES (?1, 1, 1, ?1, 'epub', 1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![format!("/books/{n}.epub"), title, authors, series, opened],
+    )
+    .unwrap();
+    n
+}
+
+fn suggestion_texts(lib: &Library, query: &str, limit: usize) -> Vec<(String, &'static str)> {
+    lib.suggestions(query, limit)
+        .unwrap()
+        .into_iter()
+        .map(|s| (s.text, s.kind))
+        .collect()
+}
+
+#[test]
+fn suggestions_put_prefixes_first_then_word_starts_then_recent_books() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    add_book(&raw, "Dune", Some("Frank Herbert"), None, Some(10));
+    add_book(&raw, "Dunwich Horror", None, None, None);
+    add_book(&raw, "The Dunes", None, None, Some(50));
+    // An author who starts with "dun", opened most recently, comes first.
+    add_book(&raw, "The Gods", Some("Dunsany"), None, Some(500));
+
+    assert_eq!(
+        suggestion_texts(&lib, "dun", 10),
+        [
+            ("Dunsany".to_string(), "author"),
+            ("Dune".to_string(), "title"),
+            ("Dunwich Horror".to_string(), "title"),
+            ("The Dunes".to_string(), "title"),
+        ],
+        "prefix matches by recency, never-opened last, then the word match"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "dun", 2).len(),
+        2,
+        "the limit cuts the list"
+    );
+}
+
+#[test]
+fn suggestions_ignore_case_and_match_each_word_at_a_word_start() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    add_book(&raw, "Dune", Some("Frank Herbert"), Some("Dune Saga"), None);
+
+    let upper = suggestion_texts(&lib, "DUN", 10);
+    assert_eq!(upper, suggestion_texts(&lib, "dun", 10), "case does not matter");
+    assert_eq!(
+        upper,
+        [("Dune".to_string(), "title"), ("Dune Saga".to_string(), "series"),],
+        "a title and a series that start with the text"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "herb", 10),
+        [("Frank Herbert".to_string(), "author")],
+        "a word inside an author name matches"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "frank h", 10),
+        [("Frank Herbert".to_string(), "author")],
+        "a phrase at the start of the name matches"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "herbert frank", 10),
+        [("Frank Herbert".to_string(), "author")],
+        "word order does not matter for a word match"
+    );
+    assert!(
+        suggestion_texts(&lib, "ert", 10).is_empty(),
+        "a text inside a word does not match"
+    );
+}
+
+#[test]
+fn suggestions_count_titles_authors_and_series_but_not_descriptions() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    let id = add_book(&raw, "Plain", None, None, None);
+    raw.execute(
+        "UPDATE books SET description = 'Arrakis spice trade' WHERE id = ?1",
+        [id],
+    )
+    .unwrap();
+    assert!(
+        suggestion_texts(&lib, "arr", 10).is_empty(),
+        "a word only in the description suggests nothing"
+    );
+    assert_eq!(
+        lib.search("arr", 10).unwrap().len(),
+        1,
+        "the search still finds it"
+    );
+}
+
+#[test]
+fn suggestions_list_each_author_once_and_skip_missing_books() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    add_book(
+        &raw,
+        "One",
+        Some("Ursula K. Le Guin\nAnnie Proulx"),
+        None,
+        Some(1),
+    );
+    add_book(&raw, "Two", Some("Ursula K. Le Guin"), None, Some(2));
+    let gone = add_book(&raw, "Lost Guin", Some("Ursula K. Le Guin"), None, Some(3));
+    raw.execute("UPDATE books SET missing_since = 1 WHERE id = ?1", [gone])
+        .unwrap();
+
+    assert_eq!(
+        suggestion_texts(&lib, "ursula", 10),
+        [("Ursula K. Le Guin".to_string(), "author")],
+        "one suggestion for the author of two books, and none from the missing book"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "ann", 10),
+        [("Annie Proulx".to_string(), "author")],
+        "each name of a book with two authors is its own suggestion"
+    );
+}
+
+#[test]
+fn suggestions_are_empty_for_blank_or_symbol_only_text() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    add_book(&raw_connection(tmp.path()), "Dune", None, None, None);
+    assert!(lib.suggestions("", 5).unwrap().is_empty());
+    assert!(lib.suggestions("   ", 5).unwrap().is_empty());
+    assert!(lib.suggestions(" -- ** ", 5).unwrap().is_empty());
+    assert!(lib.suggestions("dune", 0).unwrap().is_empty());
+}
+
+#[test]
+fn suggestions_do_not_fold_accents_so_the_plain_letters_find_nothing() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    add_book(&raw_connection(tmp.path()), "Éclair", None, None, None);
+    assert_eq!(
+        suggestion_texts(&lib, "Écl", 5),
+        [("Éclair".to_string(), "title")],
+        "the same accent matches"
+    );
+    assert!(
+        suggestion_texts(&lib, "ecl", 5).is_empty(),
+        "the suggestion check compares ASCII letters only"
+    );
+    assert_eq!(
+        lib.search("ecl", 5).unwrap().len(),
+        1,
+        "the search index folds accents"
+    );
+}
+
+#[test]
+fn books_titled_finds_the_books_with_one_title() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    let one = add_book(&raw, "Leaves", None, None, None);
+    add_book(&raw, "Dune", None, None, None);
+    add_book(&raw, "dune", None, None, None);
+    let gone = add_book(&raw, "Gone", None, None, None);
+    raw.execute("UPDATE books SET missing_since = 1 WHERE id = ?1", [gone])
+        .unwrap();
+
+    let ids = |t: &str| -> Vec<i64> { lib.books_titled(t).unwrap().into_iter().map(|b| b.id).collect() };
+    assert_eq!(ids("LEAVES"), vec![one], "one book, any case");
+    assert_eq!(ids("Dune").len(), 2, "two books with the title");
+    assert!(ids("Leave").is_empty(), "a prefix is not the title");
+    assert!(ids("Gone").is_empty(), "a missing book is left out");
+}
+
+/// Keystrokes on a library of 2,000 books each take under 50 ms. The test
+/// prints the time of each query.
+#[test]
+fn suggestions_on_2000_books_take_under_50_ms() {
+    const WORDS: [&str; 10] = [
+        "silent", "river", "garden", "winter", "ocean", "lantern", "harbor", "meadow", "copper", "signal",
+    ];
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let mut raw = raw_connection(tmp.path());
+    let tx = raw.transaction().unwrap();
+    for i in 0..2000i64 {
+        let title = format!(
+            "{} {} {}",
+            WORDS[(i % 10) as usize],
+            WORDS[((i / 10) % 10) as usize],
+            i
+        );
+        let author = format!("Author {:03}", i % 150);
+        let series = (i % 3 == 0).then(|| format!("Series {}", i % 40));
+        let opened = (i % 4 == 0).then_some(i);
+        tx.execute(
+            "INSERT INTO books (path, size, mtime, partial_md5, format, added_at, title, authors, series, last_opened_at)
+             VALUES (?1, 1, 1, ?1, 'epub', 1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![format!("/books/{i}.epub"), title, author, series, opened],
+        )
+        .unwrap();
+    }
+    tx.commit().unwrap();
+    // "silent" opens 380 titles: every tenth book, and the books whose tens digit is 0.
+    assert_eq!(lib.search("silent", 5000).unwrap().len(), 380);
+
+    let mut worst = std::time::Duration::ZERO;
+    for query in [
+        "s",
+        "si",
+        "silent ri",
+        "author 1",
+        "series 2",
+        "lan",
+        "meadow copper 1",
+    ] {
+        let start = std::time::Instant::now();
+        let found = lib.suggestions(query, 5).unwrap();
+        let took = start.elapsed();
+        println!(
+            "suggestions {query:?}: {} rows in {:.2} ms",
+            found.len(),
+            took.as_secs_f64() * 1e3
+        );
+        worst = worst.max(took);
+    }
+    assert!(worst.as_millis() < 50, "slowest suggestion took {worst:?}");
+}

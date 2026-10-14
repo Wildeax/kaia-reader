@@ -41,6 +41,13 @@ const SEARCH_DEBOUNCE: f64 = 0.2;
 /// Books in the search results at most.
 const SEARCH_LIMIT: usize = 200;
 
+/// The search field shows the recent searches, and no suggestions, until it has
+/// this many characters.
+const SUGGEST_MIN_CHARS: usize = 2;
+
+/// Suggestions at most, listed above the books.
+const SUGGESTION_LIMIT: usize = 5;
+
 /// How often the screen asks the batch worker for its report.
 const MARK_POLL: f64 = 0.1;
 
@@ -89,8 +96,11 @@ pub struct LibrarySurface {
     /// Bumped by each query. A debounced search runs only for the latest one.
     generation: Rc<Cell<u64>>,
     /// The rows of the search page: the results, or the recent searches when the
-    /// field is empty. Shared with the debounced search.
+    /// field is short. Shared with the debounced search.
     results: Rc<RefCell<Vec<Line>>>,
+    /// The suggestions listed at the top of the results, as (text, kind), in row
+    /// order. A tap on a suggestion row reads its entry here.
+    suggestions: Rc<RefCell<Vec<(String, &'static str)>>>,
     /// The folder the Folders view shows, when the user went into one.
     folder: Option<PathBuf>,
     /// The folder on screen and the root above it, from the last build.
@@ -131,6 +141,7 @@ impl LibrarySurface {
             name: String::new(),
             generation: Rc::new(Cell::new(0)),
             results: Rc::new(RefCell::new(Vec::new())),
+            suggestions: Rc::new(RefCell::new(Vec::new())),
             folder: None,
             current: PathBuf::new(),
             root: PathBuf::new(),
@@ -171,20 +182,22 @@ impl LibrarySurface {
     }
 
     /// Sends the search for the current query after the debounce delay. A newer
-    /// key cancels the older search, so only the last one runs. With no text the
-    /// recent searches show at once.
+    /// key cancels the older search, so only the last one runs. Until the field
+    /// has [`SUGGEST_MIN_CHARS`] characters, the recent searches show at once.
     fn search_changed(&mut self, env: &mut SurfaceEnv<'_>) {
         let gen = self.generation.get() + 1;
         self.generation.set(gen);
         let query = self.query.clone();
-        if query.trim().is_empty() {
+        if query.trim().chars().count() < SUGGEST_MIN_CHARS {
             let lines = recent_lines(&env.services.library);
             *self.results.borrow_mut() = lines.clone();
+            self.suggestions.borrow_mut().clear();
             show_results(&self.window, env.ctx, lines);
             return;
         }
         let generation = self.generation.clone();
         let results = self.results.clone();
+        let suggestions = self.suggestions.clone();
         let live = self.window.clone();
         let db = env.services.library_path();
         let show_finished = self.prefs.show_finished;
@@ -192,10 +205,11 @@ impl LibrarySurface {
             if generation.get() != gen {
                 return;
             }
-            let lines = match Library::open(&db) {
-                Ok(lib) => search_lines(&lib, &query, show_finished),
-                Err(_) => Vec::new(),
+            let (lines, found) = match Library::open(&db) {
+                Ok(lib) => search_rows(&lib, &query, show_finished),
+                Err(_) => (Vec::new(), Vec::new()),
             };
+            *suggestions.borrow_mut() = found;
             *results.borrow_mut() = lines.clone();
             show_results(&live, ctx, lines);
         });
@@ -349,12 +363,14 @@ impl LibrarySurface {
                 self.panel = None;
                 self.generation.set(self.generation.get() + 1);
                 *self.results.borrow_mut() = recent_lines(&env.services.library);
+                self.suggestions.borrow_mut().clear();
                 Outcome::Rebuild
             }
             Command::SearchClose => {
                 self.record_query(env);
                 self.search = false;
                 self.generation.set(self.generation.get() + 1);
+                self.suggestions.borrow_mut().clear();
                 Outcome::Rebuild
             }
             Command::SearchChanged(text) => {
@@ -377,6 +393,28 @@ impl LibrarySurface {
                 };
                 self.query = text.clone();
                 let _ = env.services.library.record_search(&text);
+                let lines = search_lines(&env.services.library, &text, self.prefs.show_finished);
+                *self.results.borrow_mut() = lines;
+                self.suggestions.borrow_mut().clear();
+                Outcome::Rebuild
+            }
+            Command::Suggestion(n) => {
+                let Some((text, kind)) = self.suggestions.borrow().get(n).cloned() else {
+                    return Outcome::Handled;
+                };
+                self.suggestions.borrow_mut().clear();
+                self.query = text.clone();
+                let _ = env.services.library.record_search(&text);
+                if kind == "title" {
+                    // One book with this title opens at once. Several show their results.
+                    let books = env.services.library.books_titled(&text).unwrap_or_default();
+                    if let [book] = books.as_slice() {
+                        return Outcome::Navigate(Nav::OpenBook {
+                            book: book.id,
+                            location: None,
+                        });
+                    }
+                }
                 let lines = search_lines(&env.services.library, &text, self.prefs.show_finished);
                 *self.results.borrow_mut() = lines;
                 Outcome::Rebuild
@@ -954,6 +992,63 @@ fn search_lines(lib: &Library, query: &str, show_finished: bool) -> Vec<Line> {
         .collect()
 }
 
+/// The suggestions for `query` and the books it finds, as the rows of the
+/// search page: the suggestions first, then the books. Each suggestion row shows
+/// its kind under the text. Also returns the suggestions as (text, kind), in row
+/// order, for the taps. A heading row would take a whole row of the page, so
+/// there is none.
+fn search_rows(lib: &Library, query: &str, show_finished: bool) -> (Vec<Line>, Vec<(String, &'static str)>) {
+    let found: Vec<(String, &'static str)> = lib
+        .suggestions(query, SUGGESTION_LIMIT)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s.text, s.kind))
+        .collect();
+    let mut lines: Vec<Line> = found
+        .iter()
+        .enumerate()
+        .map(|(n, (text, kind))| {
+            plain_row(
+                format!("suggest-{n}"),
+                common::short(text),
+                kind_label(kind),
+                format!("library:search:suggest:{n}"),
+                true,
+            )
+        })
+        .collect();
+    lines.extend(search_lines(lib, query, show_finished));
+    (lines, found)
+}
+
+/// The name of a suggestion kind as the search page shows it.
+fn kind_label(kind: &str) -> String {
+    match kind {
+        "title" => tr("Title"),
+        "author" => tr("Author"),
+        _ => tr("Series"),
+    }
+}
+
+/// A row that shows `title` and `detail`. A disabled row shows no tap.
+fn plain_row(key: String, title: String, detail: String, tap: String, enabled: bool) -> Line {
+    Line {
+        key,
+        title,
+        detail,
+        cover: None,
+        tap,
+        hold: None,
+        enabled,
+        checked: None,
+    }
+}
+
+/// A row that names the list below it. It cannot be tapped.
+fn heading_row(key: &str, text: String) -> Line {
+    plain_row(key.into(), text, String::new(), String::new(), false)
+}
+
 /// The recent searches as rows, newest first. Tapping a row runs that search. The
 /// first row is a heading. Empty when there are no recent searches.
 fn recent_lines(lib: &Library) -> Vec<Line> {
@@ -961,26 +1056,12 @@ fn recent_lines(lib: &Library) -> Vec<Line> {
     if recent.is_empty() {
         return Vec::new();
     }
-    let row = |key: String, title: String, tap: String, enabled: bool| Line {
-        key,
-        title,
-        detail: String::new(),
-        cover: None,
-        tap,
-        hold: None,
-        enabled,
-        checked: None,
-    };
-    let mut lines = vec![row(
-        "recent-heading".into(),
-        tr("Recent searches"),
-        String::new(),
-        false,
-    )];
+    let mut lines = vec![heading_row("recent-heading", tr("Recent searches"))];
     for (n, text) in recent.iter().enumerate() {
-        lines.push(row(
+        lines.push(plain_row(
             format!("recent-{n}"),
             common::short(text),
+            String::new(),
             format!("library:search:recent:{n}"),
             true,
         ));

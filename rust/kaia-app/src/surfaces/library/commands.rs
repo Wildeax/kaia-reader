@@ -73,6 +73,8 @@ pub enum Command {
     RecentSearch(usize),
     /// `library:search:recent:clear`: forget the recent searches.
     ClearRecentSearches,
+    /// `library:search:suggest:<n>`: search for the n-th suggestion, or open its book.
+    Suggestion(usize),
     /// `library:folder:<n>` or `library:folder:up`.
     Folder(FolderStep),
     /// `library:series:<n>` opens a series, and `library:series:up` closes it.
@@ -211,6 +213,9 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             "clear" => Command::ClearRecentSearches,
             n => Command::RecentSearch(n.parse().ok()?),
         },
+        ("search", Some(t)) if t.starts_with("suggest:") => {
+            Command::Suggestion(t["suggest:".len()..].parse().ok()?)
+        }
         ("folder", Some("up")) => Command::Folder(FolderStep::Up),
         ("folder", Some(n)) => Command::Folder(FolderStep::Into(n.parse().ok()?)),
         ("series", Some("up")) => Command::Series(SeriesStep::Up),
@@ -393,6 +398,11 @@ mod tests {
             parse("library:search:recent:clear", &none()),
             Some(Command::ClearRecentSearches)
         );
+        assert_eq!(
+            parse("library:search:suggest:4", &none()),
+            Some(Command::Suggestion(4))
+        );
+        assert_eq!(parse("library:search:suggest:x", &none()), None);
         assert_eq!(parse("library:select:on", &none()), Some(Command::SelectOn));
         assert_eq!(
             parse("library:select:toggle:12", &[Value::Bool(true)]),

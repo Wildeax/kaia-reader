@@ -75,6 +75,11 @@ fn reading(services: &Services) -> Vec<Entry> {
     let faces = font_options();
     let family_index = faces.iter().position(|(v, _)| *v == family).unwrap_or(0);
     let zones = keys::text_or(s, keys::READING_TAP_ZONES, "default");
+    let page_turn = keys::text_or(
+        s,
+        keys::READING_PAGE_TURN_WAVEFORM,
+        keys::PAGE_TURN_WAVEFORMS[0].0,
+    );
     // The section loads the dictionaries before it builds. See `section::lists_dictionaries`.
     let dictionaries = dict::folder(services);
     let found = dict::installed(services).len();
@@ -124,6 +129,11 @@ fn reading(services: &Services) -> Vec<Entry> {
             max: f64::from(keys::FULL_REFRESH_PAGES_MAX),
             step: 1.0,
             unit: StepUnit::ChapterOrPages,
+        },
+        Entry::Radio {
+            key: keys::READING_PAGE_TURN_WAVEFORM,
+            options: labels(keys::READING_PAGE_TURN_WAVEFORM),
+            selected: keys::preset_index(&keys::PAGE_TURN_WAVEFORMS, &page_turn),
         },
         Entry::Heading(tr("Dictionary")),
         Entry::Row {
@@ -740,6 +750,8 @@ fn option_label(label: &str) -> String {
         "Default" => tr("Default"),
         "Left-handed" => tr("Left-handed"),
         "Page turn only" => tr("Page turn only"),
+        "Cleaner page turns" => tr("Cleaner page turns"),
+        "Faster page turns" => tr("Faster page turns"),
         "Book cover" => tr("Book cover"),
         "Blank" => tr("Blank"),
         other => other.to_string(),

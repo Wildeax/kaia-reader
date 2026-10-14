@@ -63,6 +63,15 @@ fn paint(page: Pixmap, color_panel: bool, marks: Vec<Mark>) -> Pixmap {
     render(view, SCREEN, &theme(color_panel), &assets())
 }
 
+/// Paints `page` with `marks` at the highlight shade `shade`.
+fn paint_at_shade(page: Pixmap, color_panel: bool, marks: Vec<Mark>, shade: f64) -> Pixmap {
+    let mut view = PageView::new();
+    view.page = Some(Arc::new(page));
+    view.marks = marks;
+    view.highlight_shade = shade;
+    render(view, SCREEN, &theme(color_panel), &assets())
+}
+
 fn mark(style: MarkStyle, color: Option<[u8; 3]>) -> Mark {
     Mark {
         rect: BOX,
@@ -134,6 +143,73 @@ fn a_grayscale_panel_dims_the_box_and_ignores_its_color() {
     );
     assert_eq!(at(&colored, 85, 85), DIMMED, "white dimmed by 40 is 215");
     assert_eq!(at(&colored, 79, 80), WHITE);
+}
+
+#[test]
+fn the_default_shade_draws_the_pixels_of_the_box_before_the_setting() {
+    // The default shade, 0.2, dims a gray box by 40 and tints a color box by its color.
+    let gray = vec![mark(MarkStyle::Box, None)];
+    let colored = vec![mark(MarkStyle::Box, Some(YELLOW))];
+    for color_panel in [false, true] {
+        for marks in [&gray, &colored] {
+            let default = paint(white(), color_panel, marks.clone());
+            let explicit = paint_at_shade(white(), color_panel, marks.clone(), 0.2);
+            assert_eq!(
+                default.data(),
+                explicit.data(),
+                "0.2 is the default on color_panel={color_panel}"
+            );
+        }
+    }
+    let dimmed = paint_at_shade(white(), true, gray, 0.2);
+    assert_eq!(at(&dimmed, 85, 85), DIMMED, "white dimmed by 40 is 215");
+    let tinted = paint_at_shade(white(), true, colored, 0.2);
+    assert_eq!(at(&tinted, 85, 85), YELLOW, "white times the color is the color");
+}
+
+#[test]
+fn a_higher_shade_darkens_a_gray_box() {
+    // White dimmed by 20, 40, 120 and 200: 235, 215, 135 and 55.
+    let values: Vec<u8> = [0.1, 0.2, 0.6, 1.0]
+        .into_iter()
+        .map(|shade| {
+            let frame = paint_at_shade(white(), true, vec![mark(MarkStyle::Box, None)], shade);
+            at(&frame, 85, 85)[0]
+        })
+        .collect();
+    assert_eq!(values, [235, 215, 135, 55], "each step darkens the box");
+
+    let gray_panel = paint_at_shade(white(), false, vec![mark(MarkStyle::Box, None)], 0.6);
+    assert_eq!(
+        at(&gray_panel, 85, 85),
+        [135, 135, 135],
+        "a grayscale panel follows the shade too"
+    );
+    assert_eq!(
+        at(&gray_panel, 79, 80),
+        WHITE,
+        "the page outside the box is not dimmed"
+    );
+}
+
+#[test]
+fn a_lower_shade_pales_a_color_on_a_color_panel() {
+    // The yellow factor is (255, 255, 51). At 0.1 it moves halfway to white in blue: 153.
+    let pale = paint_at_shade(white(), true, vec![mark(MarkStyle::Box, Some(YELLOW))], 0.1);
+    assert_eq!(
+        at(&pale, 85, 85),
+        [255, 255, 153],
+        "a lighter shade is a paler yellow"
+    );
+    assert_eq!(at(&pale, 79, 80), WHITE);
+
+    // At 0.4 the blue factor goes past black and stops at 0.
+    let deep = paint_at_shade(white(), true, vec![mark(MarkStyle::Box, Some(YELLOW))], 0.4);
+    assert_eq!(
+        at(&deep, 85, 85),
+        [255, 255, 0],
+        "a higher shade is a deeper yellow"
+    );
 }
 
 #[test]
@@ -250,4 +326,32 @@ fn a_highlight_made_in_the_reader_carries_its_color_to_the_page() {
             .any(|m| m.style == MarkStyle::Box && m.color == Some(yellow)),
         "the page draws the new highlight in yellow, got {marks:?}"
     );
+}
+
+#[test]
+fn the_shade_stepper_in_more_saves_the_shade_and_the_page_draws_it() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("highlight-shade");
+    let mut app = open_reader("juliet.epub", &dir);
+    turn_to_text(&mut app);
+    hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
+
+    // The right edge of the stepper is its plus button. The default shade is 20 percent.
+    let stepper = app.find_rect("sel-shade").expect("the stepper is in More");
+    let plus = Point::new(stepper.x + stepper.w as i32 - 4, stepper.y + stepper.h as i32 / 2);
+    app.tap(plus).unwrap();
+    wait_reader(&mut app);
+    assert_eq!(
+        app.services().settings.read("reading.highlight_shade").as_f64(),
+        Some(0.3),
+        "one step up from the default 0.2"
+    );
+
+    // The sheet closes, and the page under it is drawn with the new shade.
+    tap_key(&mut app, "panel-close");
+    wait_reader(&mut app);
+    let mut shade = 0.0;
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| shade = view.highlight_shade);
+    assert_eq!(shade, 0.3, "the page holds the new shade");
 }

@@ -1,7 +1,7 @@
 //! Reads and small writes: book lists, recent books, search, collections,
 //! reading progress, status and covers.
 
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,6 +39,18 @@ const COLS: [&str; 19] = [
 /// Id of the newest history row of a book. Opens in the same second are ordered
 /// by it, so the last open always comes first.
 const LAST_OPEN_SEQ: &str = "(SELECT MAX(h.id) FROM history h WHERE h.book_id = books.id)";
+
+/// Books that one suggestion query reads at most.
+const SUGGEST_CANDIDATES: usize = 200;
+
+/// A suggestion for the search field: a title, an author name or a series name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Suggestion {
+    /// The text as the book shows it, with each run of spaces as one space.
+    pub text: String,
+    /// `"title"`, `"author"` or `"series"`.
+    pub kind: &'static str,
+}
 
 /// The book columns, each with `prefix` in front.
 fn cols(prefix: &str) -> String {
@@ -180,6 +192,60 @@ impl Library {
             cols("books.")
         );
         self.query_books(&sql, params![expr, limit as i64])
+    }
+
+    /// Suggestions for the search field. Each one is a title, an author name or a
+    /// series name, as the books show it. A text matches when it starts with the
+    /// query, or when each word of the query starts a word of the text. Matching
+    /// ignores ASCII case. Only the title, authors and series count, so a word
+    /// that appears only in the description suggests nothing.
+    ///
+    /// Prefix matches come first, then the other matches. Within each group the
+    /// text of the book opened most recently comes first, then the text in
+    /// alphabetical order. Each text appears once for each kind. At most `limit`
+    /// come back. A query with no letters or digits returns nothing.
+    ///
+    /// The index matches accents, but this check does not: "ecl" finds
+    /// "Éclair" in [`Library::search`], and no suggestion shows it.
+    ///
+    /// One query reads at most 200 books, the best of them by prefix match and
+    /// then by recency. Each book is a row of the full-text index, so the cost
+    /// grows with the books that match the words, not with the library.
+    pub fn suggestions(&self, query: &str, limit: usize) -> Result<Vec<Suggestion>> {
+        let words = suggestion_words(query);
+        if words.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+        let phrase = normalize(query);
+        let expr = words
+            .iter()
+            .map(|w| format!("{{title authors series}} : \"{w}\"*"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let sql = format!(
+            "SELECT {} FROM book_fts JOIN books ON books.id = book_fts.rowid
+             WHERE book_fts MATCH ?1 AND books.missing_since IS NULL
+             ORDER BY (substr(lower(COALESCE(books.title, '')), 1, length(?2)) = ?2
+                       OR substr(lower(COALESCE(books.authors, '')), 1, length(?2)) = ?2
+                       OR substr(lower(COALESCE(books.series, '')), 1, length(?2)) = ?2) DESC,
+                      books.last_opened_at DESC, books.id
+             LIMIT ?3",
+            cols("books.")
+        );
+        let books = self.query_books(&sql, params![expr, phrase, SUGGEST_CANDIDATES as i64])?;
+        Ok(rank_suggestions(&books, &phrase, &words, limit))
+    }
+
+    /// The books whose title is `title`, ignoring ASCII case, and without the
+    /// missing ones. The title must equal the stored one apart from case. At most
+    /// two come back, so a caller can tell one book from several.
+    pub fn books_titled(&self, title: &str) -> Result<Vec<Book>> {
+        let sql = format!(
+            "SELECT {} FROM books WHERE title = ?1 COLLATE NOCASE AND missing_since IS NULL
+             ORDER BY id LIMIT 2",
+            cols("")
+        );
+        self.query_books(&sql, [title])
     }
 
     /// The book that follows `book_id` in its series: the book with the smallest
@@ -697,6 +763,111 @@ pub(crate) fn fts_query(input: &str) -> Option<String> {
 
 fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || ('\u{0300}'..='\u{036F}').contains(&c)
+}
+
+/// How well a text matches a suggestion query. A prefix match sorts first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Match {
+    /// The text starts with the query.
+    Prefix,
+    /// Each word of the query starts a word of the text.
+    Words,
+}
+
+/// A candidate suggestion. The fields are in sort order: match, recency,
+/// alphabetical key, kind, then the text as shown.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Ranked {
+    tier: Match,
+    /// The last time the book was opened, newest first. A book never opened
+    /// sorts after every opened book.
+    opened: Reverse<Option<i64>>,
+    /// The text ignoring ASCII case. Equal keys are one suggestion per kind.
+    key: String,
+    kind: &'static str,
+    text: String,
+}
+
+/// The suggestions for `phrase` and `words` among `books`, best first, at most
+/// `limit`. `phrase` and `words` come from [`normalize`] and [`suggestion_words`].
+fn rank_suggestions(books: &[Book], phrase: &str, words: &[String], limit: usize) -> Vec<Suggestion> {
+    let mut ranked = Vec::new();
+    for book in books {
+        let mut fields: Vec<(&'static str, &str)> = Vec::new();
+        if let Some(title) = book.title.as_deref() {
+            fields.push(("title", title));
+        }
+        if let Some(authors) = book.authors.as_deref() {
+            fields.extend(
+                Library::split_authors(authors)
+                    .into_iter()
+                    .map(|name| ("author", name)),
+            );
+        }
+        if let Some(series) = book.series.as_deref() {
+            fields.push(("series", series));
+        }
+        for (kind, field) in fields {
+            let Some(tier) = match_tier(field, phrase, words) else {
+                continue;
+            };
+            ranked.push(Ranked {
+                tier,
+                opened: Reverse(book.last_opened_at),
+                key: normalize(field),
+                kind,
+                text: collapse(field),
+            });
+        }
+    }
+    ranked.sort();
+    let mut seen = BTreeSet::new();
+    ranked
+        .into_iter()
+        .filter(|r| seen.insert((r.kind, r.key.clone())))
+        .take(limit)
+        .map(|r| Suggestion {
+            text: r.text,
+            kind: r.kind,
+        })
+        .collect()
+}
+
+/// How `field` matches the query: a prefix of it, or every word of the query at
+/// the start of a word in it. None when neither holds.
+fn match_tier(field: &str, phrase: &str, words: &[String]) -> Option<Match> {
+    let text = normalize(field);
+    if text.starts_with(phrase) {
+        return Some(Match::Prefix);
+    }
+    let text_words: Vec<&str> = text
+        .split(|c: char| !is_word_char(c))
+        .filter(|w| !w.is_empty())
+        .collect();
+    words
+        .iter()
+        .all(|w| text_words.iter().any(|t| t.starts_with(w.as_str())))
+        .then_some(Match::Words)
+}
+
+/// The words of a suggestion query in lower case. Each run of letters or digits
+/// is one word.
+fn suggestion_words(input: &str) -> Vec<String> {
+    normalize(input)
+        .split(|c: char| !is_word_char(c))
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The text with each run of white space as one space, and the ends trimmed.
+fn collapse(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// [`collapse`] with ASCII letters in lower case. Other letters keep their case.
+fn normalize(text: &str) -> String {
+    collapse(text).to_ascii_lowercase()
 }
 
 /// Sets the status of one book on `conn`, which is normally a transaction.

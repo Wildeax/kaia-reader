@@ -117,6 +117,8 @@ pub enum Command {
     SelColor(String),
     /// Opens the More sheet of the selection.
     SelMore,
+    /// Saves the highlight shade from the stepper of the More sheet, in percent.
+    SelShade(f64),
     /// Opens the note editor for the selection.
     SelNote,
     /// Copies the selected text.
@@ -268,6 +270,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["sel", "highlight"] => Command::SelHighlight,
         ["sel", "color", name] => Command::SelColor((*name).to_string()),
         ["sel", "more"] => Command::SelMore,
+        ["sel", "shade"] => Command::SelShade(number(args, 0)?),
         ["sel", "note"] => Command::SelNote,
         ["sel", "copy"] => Command::SelCopy,
         ["sel", "dict"] => Command::SelDict,
@@ -304,6 +307,10 @@ mod tests {
             Some(Command::SelColor("red".to_string()))
         );
         assert_eq!(parse("reader:sel:more", &[]), Some(Command::SelMore));
+        assert_eq!(
+            parse("reader:sel:shade", &[Value::Number(70.0)]),
+            Some(Command::SelShade(70.0))
+        );
         assert_eq!(parse("reader:sel:highlight", &[]), Some(Command::SelHighlight));
         assert_eq!(parse("reader:sel:color", &[]), None);
     }

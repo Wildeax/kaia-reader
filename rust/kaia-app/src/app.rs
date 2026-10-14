@@ -25,7 +25,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use kaia_display::{DisplayError, InputEvent};
+use kaia_display::{DisplayError, InputEvent, Waveform};
 use kaia_events::{Clock, Ctx, Event, Rect as EventRect, RefreshMode, Value, WindowStack};
 use kaia_gfx::{Pixmap, Point, Rect, Size};
 use kaia_input::{Direction, Gesture, GestureConfig, GestureDetector, Key, KeyEvent, Phase, TouchEvent};
@@ -1355,6 +1355,15 @@ impl<B: Backend> App<B> {
         }
     }
 
+    /// The waveform for the reader's partial refreshes, from the page turn setting.
+    /// None on other screens, which keep the table's waveform.
+    fn reader_partial_waveform(&self) -> Option<Waveform> {
+        if !matches!(self.router.top_route(), Some(Route::Reader { .. })) {
+            return None;
+        }
+        Some(surfaces::settings::keys::page_turn(&self.services.settings).waveform())
+    }
+
     /// Paints the dirty windows bottom up into the frame and presents each refresh.
     /// Returns the number of refreshes presented.
     fn repaint(&mut self) -> Result<usize, DisplayError> {
@@ -1406,6 +1415,7 @@ impl<B: Backend> App<B> {
                 .in_app(&mut self.stack, &mut self.ctx, |lua| lua.after_app_paint());
         }
         let refreshes = self.ctx.dirty.take_frame(painted);
+        let page_turn = self.reader_partial_waveform();
         let mut sent = 0;
         for refresh in refreshes {
             // Surfaces say which refreshes dither their pictures (covers, pages). Plain UI is not dithered.
@@ -1413,9 +1423,15 @@ impl<B: Backend> App<B> {
                 .router
                 .top_surface()
                 .is_some_and(|surface| surface.content_dither(refresh.mode));
-            let Some(panel) = refresh::to_panel(&refresh, self.screen, color, content_dither) else {
+            let Some(mut panel) = refresh::to_panel(&refresh, self.screen, color, content_dither) else {
                 continue;
             };
+            // The reader's partial refreshes take the page turn choice. That covers page turns
+            // and the small repaints for a selection or a bookmark. Full refreshes and the
+            // other modes keep the waveform of the table.
+            if let (RefreshMode::Partial, Some(waveform)) = (refresh.mode, page_turn) {
+                panel.waveform = waveform;
+            }
             if color || self.frame.format() != kaia_gfx::PixelFormat::Rgb24 {
                 self.backend.present(&self.frame, &panel)?;
             } else {

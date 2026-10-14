@@ -12,6 +12,8 @@ use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, UiEvent};
 use kaia_ui::{Tone, Widget};
 
+use crate::surfaces::settings::keys::DEFAULT_HIGHLIGHT_SHADE;
+
 /// The key of the page widget. The reader surface finds it with `Window::update`.
 pub const PAGE_KEY: &str = "reader-page";
 
@@ -24,7 +26,7 @@ pub enum MarkStyle {
     /// a note. The rect is that first line. KOReader draws the same mark.
     Note,
     /// A box behind the text (KOReader's lighten). Tinted by its color on a color
-    /// panel, dimmed otherwise.
+    /// panel, dimmed otherwise. The highlight shade sets the strength of both.
     Box,
     /// A line under the text (underscore).
     Underline,
@@ -69,6 +71,8 @@ pub struct PageView {
     pub(crate) footer_battery: Option<u8>,
     /// The strip reserved by the book layout, including its vertical space.
     pub footer_height: u32,
+    /// The shade of box highlights, from 0 to 1. See [`shade_tint`] and [`dim_amount`].
+    pub highlight_shade: f64,
     pub brightness: Option<u8>,
     pub flipping: bool,
     light_drag: Option<bool>,
@@ -95,6 +99,7 @@ impl PageView {
             footer_content: None,
             footer_battery: None,
             footer_height: 0,
+            highlight_shade: DEFAULT_HIGHLIGHT_SHADE,
             brightness: None,
             flipping: false,
             light_drag: None,
@@ -160,6 +165,24 @@ impl Default for PageView {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The darkening of a box without a color, the `amount` for `PaintCx::dim`.
+/// The amount is 200 times the shade, so the default 0.2 gives 40, the amount the page
+/// used before the shade setting. Each step of 0.1 adds 20. A shade of 1 gives 200.
+pub fn dim_amount(shade: f64) -> u8 {
+    (shade * 200.0).round().clamp(0.0, 255.0) as u8
+}
+
+/// The factor a box with a color multiplies the page by. Each channel of the factor is
+/// 255 minus the channel's distance from white, times `shade / 0.2`. At the default shade
+/// the factor is the color itself, so the default draws the page as it did before the
+/// setting. A shade of 0.1 moves the factor halfway to white and pales the color. A shade
+/// above 0.2 moves it past the color toward black, and a channel stops at 0.
+pub fn shade_tint(tint: Color, shade: f64) -> Color {
+    let scale = shade / DEFAULT_HIGHLIGHT_SHADE;
+    let channel = |c: u8| (255.0 - (255.0 - f64::from(c)) * scale).round().clamp(0.0, 255.0) as u8;
+    Color::rgb(channel(tint.r), channel(tint.g), channel(tint.b))
 }
 
 fn action(id: &str, args: Vec<Value>) -> AppAction {
@@ -244,8 +267,8 @@ impl Widget for PageView {
                     );
                 }
                 MarkStyle::Box => match color {
-                    Some(tint) => cx.multiply_rect(r, tint),
-                    None => cx.dim(r, 40),
+                    Some(tint) => cx.multiply_rect(r, shade_tint(tint, self.highlight_shade)),
+                    None => cx.dim(r, dim_amount(self.highlight_shade)),
                 },
                 MarkStyle::Invert => cx.invert_rect(r),
                 MarkStyle::Underline => cx.fill_rect(

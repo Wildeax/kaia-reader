@@ -484,6 +484,8 @@ impl Surface for ReaderSurface {
             c.color_panel = color_panel;
             c.refresh_every = crate::surfaces::settings::keys::full_refresh_pages(&env.services.settings);
             c.page_window = Some(window.clone());
+            let shade = crate::surfaces::settings::keys::highlight_shade(&env.services.settings);
+            set_page_shade(&window, env.ctx, shade);
             if c.session.is_none() {
                 c.open(&row.path, opts);
             }
@@ -1219,8 +1221,21 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
                 let (drawer, _) = highlight_style(env.services, c.color_panel);
                 let edge = panels::edge_for(env.screen, c.selection.as_ref());
-                let window = panels::selection_more(env.services, env.screen, edge, drawer.as_str());
+                let shade = crate::surfaces::settings::keys::highlight_shade(&env.services.settings);
+                let window = panels::selection_more(env.services, env.screen, edge, drawer.as_str(), shade);
                 show_panel(rc, &mut c, env.ctx, window, true)
+            }
+            Command::SelShade(percent) => {
+                let shade = crate::surfaces::settings::keys::shade_from_percent(percent);
+                env.services.settings.save(
+                    crate::surfaces::settings::keys::READING_HIGHLIGHT_SHADE,
+                    Value::from(shade),
+                );
+                save_settings(env);
+                if let Some(page) = c.page_window.clone() {
+                    set_page_shade(&page, env.ctx, shade);
+                }
+                Outcome::Handled
             }
             Command::SelNote => {
                 let Some(selection) = c.selection.clone() else {
@@ -1492,6 +1507,14 @@ fn highlight_at(c: &mut Core, x: f64, y: f64) -> Option<kaia_book::Annotation> {
         .into_iter()
         .find(|item| !item.annotation.is_bookmark() && item.rects.iter().any(|r| r.contains(point)))
         .map(|item| item.annotation)
+}
+
+/// Sets the shade of the box highlights on the page and paints the page again.
+fn set_page_shade(page: &Window, ctx: &mut Ctx, shade: f64) {
+    page.update::<PageView, _>(ctx, PAGE_KEY, |view, cx| {
+        view.highlight_shade = shade;
+        cx.request_paint_with(PaintHint::Full);
+    });
 }
 
 fn save_settings(env: &mut SurfaceEnv<'_>) {

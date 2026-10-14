@@ -86,3 +86,46 @@ impl Refresh {
         Self { dither, ..self }
     }
 }
+
+/// The waveform for a partial refresh of a reader page turn, as the reader setting
+/// chooses. Full refreshes and the chapter cadence do not use it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum PageTurn {
+    /// Gray with ghost reduction. KOReader's `partial` on the MTK Kobo (REAGL, GLR16),
+    /// and the default.
+    #[default]
+    Cleaner,
+    /// Fast black and white, KOReader's `fast` mode (DU). Less ghost reduction, and
+    /// the page keeps no gray.
+    Faster,
+}
+
+impl PageTurn {
+    /// The waveform a partial page turn uses for this choice.
+    pub const fn waveform(self) -> Waveform {
+        match self {
+            PageTurn::Cleaner => Waveform::Glr16,
+            PageTurn::Faster => Waveform::Du,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_turn_choices_map_to_the_table_waveforms() {
+        assert_eq!(PageTurn::default(), PageTurn::Cleaner);
+        assert_eq!(
+            PageTurn::Cleaner.waveform(),
+            Waveform::Glr16,
+            "the partial row of the table"
+        );
+        assert_eq!(
+            PageTurn::Faster.waveform(),
+            Waveform::Du,
+            "the fast row of the table"
+        );
+    }
+}

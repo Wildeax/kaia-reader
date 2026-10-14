@@ -11,6 +11,8 @@
 //! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
+//! | `reading.page_turn_waveform` | string | `cleaner` | E Ink waveform of a page turn: `cleaner` (gray with ghost reduction) or `faster` (fast black and white). Full refreshes keep their waveform. See [`page_turn`]. |
+//! | `reading.highlight_shade` | number | 0.2 | Shade of a box highlight, from 0 to 1 in steps of 0.1, as KOReader's "Gray highlight opacity". A higher value is darker. The reader's More sheet shows it as a percent. See [`highlight_shade`]. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
 //! | `reading.footer_percent` | bool | false | Reader footer shows the reading percent. |
 //! | `reading.footer_time_chapter` | bool | false | Reader footer shows the time left in the chapter, or in the book before the first chapter. |
@@ -50,6 +52,7 @@
 //! when the section closes. The password field is the exception: typing into it
 //! stores `sync.userkey`, never the text (see `sync::store_password`).
 
+use kaia_display::waveform::PageTurn;
 use kaia_events::Settings;
 
 pub const READING_FONT_FAMILY: &str = "reading.font_family";
@@ -60,6 +63,10 @@ pub const READING_FONT_WEIGHT_PREFIX: &str = "reading.font_weight.";
 pub const FONT_WEIGHT_BOOK_FONT: &str = "(book)";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
+/// Waveform of a reader page turn. See [`page_turn`].
+pub const READING_PAGE_TURN_WAVEFORM: &str = "reading.page_turn_waveform";
+/// Shade of a box highlight. See [`highlight_shade`].
+pub const READING_HIGHLIGHT_SHADE: &str = "reading.highlight_shade";
 /// Reader footer items, each on or off. See the Footer sheet of the reader.
 pub const READING_FOOTER_PAGE: &str = "reading.footer_page";
 pub const READING_FOOTER_PERCENT: &str = "reading.footer_percent";
@@ -115,6 +122,9 @@ pub const DEFAULT_FULL_REFRESH_PAGES: f64 = 0.0;
 pub const FULL_REFRESH_PAGES_MAX: u32 = 10;
 /// Default sleep timeout in minutes.
 pub const DEFAULT_SLEEP_MINUTES: f64 = 15.0;
+/// KOReader's default highlight opacity, `highlight_lighten_factor`. Kaia draws the
+/// default shade as it drew boxes before the setting existed. See `page::shade_tint`.
+pub const DEFAULT_HIGHLIGHT_SHADE: f64 = 0.2;
 
 /// The tap zone presets, in the order the Reading section lists them.
 pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
@@ -122,6 +132,11 @@ pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
     ("left_handed", "Left-handed"),
     ("page_only", "Page turn only"),
 ];
+
+/// The page turn waveform choices, in the order the Reading section lists them.
+/// The first is the default.
+pub const PAGE_TURN_WAVEFORMS: [(&str, &str); 2] =
+    [("cleaner", "Cleaner page turns"), ("faster", "Faster page turns")];
 
 /// The sleep screen choices, in the order the Device section lists them.
 pub const SLEEP_SCREENS: [(&str, &str); 2] = [("cover", "Book cover"), ("blank", "Blank")];
@@ -153,6 +168,28 @@ pub fn full_refresh_pages(settings: &Settings) -> u32 {
     } else {
         0
     }
+}
+
+/// The waveform of a reader page turn from `reading.page_turn_waveform`. Unset, or a
+/// value that is not on offer, is `cleaner`. The app reads it for each partial
+/// refresh while the reader is on top.
+pub fn page_turn(settings: &Settings) -> PageTurn {
+    match text_or(settings, READING_PAGE_TURN_WAVEFORM, PAGE_TURN_WAVEFORMS[0].0).as_str() {
+        "faster" => PageTurn::Faster,
+        _ => PageTurn::Cleaner,
+    }
+}
+
+/// The box highlight shade from `reading.highlight_shade`, from 0 to 1. Unset is
+/// [`DEFAULT_HIGHLIGHT_SHADE`]. A value outside the range reads as the nearest end.
+pub fn highlight_shade(settings: &Settings) -> f64 {
+    number_or(settings, READING_HIGHLIGHT_SHADE, DEFAULT_HIGHLIGHT_SHADE).clamp(0.0, 1.0)
+}
+
+/// The shade for a percent the More sheet offers. The sheet steps by 10 percent,
+/// which is KOReader's step of 0.1. The result is rounded to that step.
+pub fn shade_from_percent(percent: f64) -> f64 {
+    (percent / 10.0).round().clamp(0.0, 10.0) / 10.0
 }
 
 /// The settings key of a face's text weight. `None` is the book's own font.
@@ -218,6 +255,45 @@ mod tests {
         assert_eq!(cadence(Some(25.0)), 10, "a saved value above 10 reads as 10");
         assert_eq!(cadence(Some(2.7)), 2);
         assert_eq!(cadence(Some(-3.0)), 0, "a negative value reads as each chapter");
+    }
+
+    #[test]
+    fn page_turn_is_cleaner_unless_faster_is_saved() {
+        let mut settings = Settings::open(std::path::Path::new("/nonexistent/kaia-keys-test/settings.json"));
+        assert_eq!(page_turn(&settings), PageTurn::Cleaner, "unset is the default");
+        settings.save(READING_PAGE_TURN_WAVEFORM, Value::from("faster"));
+        assert_eq!(page_turn(&settings), PageTurn::Faster);
+        settings.save(READING_PAGE_TURN_WAVEFORM, Value::from("unknown"));
+        assert_eq!(
+            page_turn(&settings),
+            PageTurn::Cleaner,
+            "a value not on offer is the default"
+        );
+        assert_eq!(
+            PAGE_TURN_WAVEFORMS[0].0, "cleaner",
+            "the first choice is the default"
+        );
+    }
+
+    #[test]
+    fn highlight_shade_is_the_default_when_unset_and_stays_in_range() {
+        let mut settings = Settings::open(std::path::Path::new("/nonexistent/kaia-keys-test/settings.json"));
+        assert_eq!(highlight_shade(&settings), 0.2, "unset is KOReader's default");
+        settings.save(READING_HIGHLIGHT_SHADE, Value::from(0.6));
+        assert_eq!(highlight_shade(&settings), 0.6);
+        settings.save(READING_HIGHLIGHT_SHADE, Value::from(3.0));
+        assert_eq!(highlight_shade(&settings), 1.0, "above one reads as one");
+        settings.save(READING_HIGHLIGHT_SHADE, Value::from(-1.0));
+        assert_eq!(highlight_shade(&settings), 0.0, "below zero reads as zero");
+    }
+
+    #[test]
+    fn shade_from_percent_rounds_to_tenths() {
+        assert_eq!(shade_from_percent(20.0), 0.2);
+        assert_eq!(shade_from_percent(20.000000000000004), 0.2, "stepper float drift");
+        assert_eq!(shade_from_percent(70.0), 0.7);
+        assert_eq!(shade_from_percent(-10.0), 0.0);
+        assert_eq!(shade_from_percent(140.0), 1.0);
     }
 
     #[test]

@@ -873,12 +873,26 @@ fn color_dots(services: &Services, color: &str) -> WidgetPod {
     WidgetPod::new(Row::new(dots).gap(services.theme.space.xs))
 }
 
-/// The More sheet of a selection: the drawer styles with the saved one marked,
-/// then Sticker and Share to Notes. Choosing a style returns to the selection panel.
-pub(super) fn selection_more(services: &Services, screen: Size, edge: Edge, drawer: &str) -> Window {
+/// The More sheet of a selection: the drawer styles with the saved one marked, the
+/// shade of box highlights as a percent, then Sticker and Share to Notes. Choosing a
+/// style returns to the selection panel. The shade stepper redraws the page.
+pub(super) fn selection_more(
+    services: &Services,
+    screen: Size,
+    edge: Edge,
+    drawer: &str,
+    shade: f64,
+) -> Window {
     let t = &services.theme;
     let mut children = vec![group_heading(services, &tr("Style"))];
     children.extend(drawer_rows(services, "reader:highlight", drawer));
+    let shade = WidgetPod::new(
+        Stepper::new(shade * 100.0, 0.0, 100.0, 10.0)
+            .format(|v| format!("{}%", v.round() as i64))
+            .on_action("reader:sel:shade"),
+    )
+    .with_key("sel-shade");
+    children.push(labelled(services, &tr("Shade"), shade));
     children.push(WidgetPod::new(
         Row::new(vec![
             WidgetPod::new(Expanded::new(

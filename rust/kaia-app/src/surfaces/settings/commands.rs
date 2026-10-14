@@ -146,6 +146,7 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
             ("never", "Never"),
         ]),
         keys::READING_TAP_ZONES => Some(&keys::TAP_ZONE_PRESETS),
+        keys::READING_PAGE_TURN_WAVEFORM => Some(&keys::PAGE_TURN_WAVEFORMS),
         keys::DEVICE_SLEEP_SCREEN => Some(&keys::SLEEP_SCREENS),
         _ => None,
     }
@@ -252,6 +253,7 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::DEVICE_SLEEP_MINUTES
                 | keys::READING_FONT_FAMILY
                 | keys::READING_TAP_ZONES
+                | keys::READING_PAGE_TURN_WAVEFORM
                 | keys::READING_FOOTER_PAGE
                 | keys::READING_FOOTER_PERCENT
                 | keys::READING_FOOTER_TIME_CHAPTER
@@ -334,6 +336,10 @@ mod tests {
             Some(Value::from("page_only"))
         );
         assert_eq!(value_for_pick(keys::READING_TAP_ZONES, 9), None);
+        assert_eq!(
+            value_for_pick(keys::READING_PAGE_TURN_WAVEFORM, 1),
+            Some(Value::from("faster"))
+        );
     }
 
     #[test]

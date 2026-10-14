@@ -312,6 +312,10 @@ fn the_more_sheet_marks_the_saved_style_and_returns_to_the_selection_panel() {
     assert!(app.find_rect("sel-share").is_some(), "Share is in More");
     assert!(app.find_rect("sel-sticker").is_some(), "Sticker is in More");
     assert!(
+        app.find_rect("sel-shade").is_some(),
+        "the shade stepper is in More"
+    );
+    assert!(
         app.find_rect("color-yellow").is_none(),
         "the colors stay on the selection panel"
     );
