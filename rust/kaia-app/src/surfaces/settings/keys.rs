@@ -8,6 +8,7 @@
 //! |---|---|---|---|
 //! | `reading.font_family` | string | unset (engine default) | Reading font family name. |
 //! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
+//! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
@@ -25,6 +26,7 @@
 //! | `display.natural_light_bedtime_warmth` | number | 92 | Bedtime warmth, from 0 to 100. |
 //! | `library.folders` | array of strings | the books folder | Folders the library scan reads. |
 //! | `library.show_finished` | bool | true | Shows books marked as finished in the library. |
+//! | `library.layout` | string | `covers` | Layout of the Books tab: `covers` or `list`. Kept between runs, also while another tab is open. |
 //! | `sync.server` | string | empty | Progress sync server address, `http://` or `https://`. |
 //! | `sync.username` | string | empty | Progress sync account name. |
 //! | `sync.userkey` | string | empty | MD5 hex of the progress sync password, the key KOReader stores. The password itself is never stored. |
@@ -52,6 +54,10 @@ use kaia_events::Settings;
 
 pub const READING_FONT_FAMILY: &str = "reading.font_family";
 pub const READING_FONT_SIZE: &str = "reading.font_size";
+/// Prefix of the per-family text weight keys. See [`font_weight_key`].
+pub const READING_FONT_WEIGHT_PREFIX: &str = "reading.font_weight.";
+/// The family segment of the text weight key for the book's own font.
+pub const FONT_WEIGHT_BOOK_FONT: &str = "(book)";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
 /// Reader footer items, each on or off. See the Footer sheet of the reader.
@@ -149,6 +155,19 @@ pub fn full_refresh_pages(settings: &Settings) -> u32 {
     }
 }
 
+/// The settings key of a face's text weight. `None` is the book's own font.
+pub fn font_weight_key(family: Option<&str>) -> String {
+    format!(
+        "{READING_FONT_WEIGHT_PREFIX}{}",
+        family.unwrap_or(FONT_WEIGHT_BOOK_FONT)
+    )
+}
+
+/// The saved text weight of a face, as a KOReader font weight value. Unset is 0, which is regular.
+pub fn font_weight(settings: &Settings, family: Option<&str>) -> f64 {
+    number_or(settings, &font_weight_key(family), 0.0)
+}
+
 /// The string at `key`, or `default` when the key is unset or not a string.
 pub fn text_or(settings: &Settings, key: &str, default: &str) -> String {
     settings.read(key).as_str().unwrap_or(default).to_string()
@@ -199,5 +218,19 @@ mod tests {
         assert_eq!(cadence(Some(25.0)), 10, "a saved value above 10 reads as 10");
         assert_eq!(cadence(Some(2.7)), 2);
         assert_eq!(cadence(Some(-3.0)), 0, "a negative value reads as each chapter");
+    }
+
+    #[test]
+    fn font_weight_is_kept_per_family_and_regular_when_unset() {
+        let mut settings = Settings::open(std::path::Path::new("/nonexistent/kaia-keys-test/settings.json"));
+        assert_eq!(font_weight(&settings, Some("Noto Serif")), 0.0);
+        settings.save(font_weight_key(Some("Noto Serif")), Value::from(1.5));
+        assert_eq!(font_weight(&settings, Some("Noto Serif")), 1.5);
+        assert_eq!(
+            font_weight(&settings, Some("Noto Sans")),
+            0.0,
+            "another family keeps its own"
+        );
+        assert_eq!(font_weight_key(None), "reading.font_weight.(book)");
     }
 }

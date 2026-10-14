@@ -145,10 +145,19 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 bottom: 0,
             },
         )),
-        Entry::Text(text) => WidgetPod::new(Paragraph::new(
-            text.clone(),
-            t.font.caption.clone(),
-            Tone::InkSecondary,
+        // A note follows the rows above it, so it has the same space above as a heading.
+        Entry::Text(text) => WidgetPod::new(Padding::new(
+            WidgetPod::new(Paragraph::new(
+                text.clone(),
+                t.font.caption.clone(),
+                Tone::InkSecondary,
+            )),
+            Insets {
+                left: 0,
+                top: t.space.md,
+                right: 0,
+                bottom: 0,
+            },
         )),
         Entry::Toggle { key, label, on } => WidgetPod::new(
             ListRow::new(label.clone())

@@ -93,6 +93,40 @@ pub fn user_face_at(index: usize) -> Option<String> {
     font_choices().into_iter().nth(index).and_then(|(_, face)| face)
 }
 
+/// The labels of the weight choices, in the order of `kaia_book::layout::FONT_WEIGHT_VALUES`.
+/// The regular choice has its own translated label.
+const WEIGHT_LABELS: [&str; 7] = ["-1", "-½", "Regular", "+½", "+1", "+1½", "+3"];
+/// The index of regular text in the weight choices.
+pub const REGULAR_WEIGHT_INDEX: usize = 2;
+
+/// The weight choice at a stepper position. Positions outside the choices clamp.
+pub fn font_weight_at(index: f64) -> f32 {
+    let i = index.round().clamp(0.0, (WEIGHT_LABELS.len() - 1) as f64) as usize;
+    kaia_book::layout::FONT_WEIGHT_VALUES[i]
+}
+
+/// The stepper position of the choice nearest to a weight value. A value
+/// between choices, or one that is not a number, takes the nearest choice.
+pub fn font_weight_index(value: f32) -> usize {
+    if !value.is_finite() {
+        return REGULAR_WEIGHT_INDEX;
+    }
+    let values = kaia_book::layout::FONT_WEIGHT_VALUES;
+    (0..values.len())
+        .min_by(|a, b| (values[*a] - value).abs().total_cmp(&(values[*b] - value).abs()))
+        .unwrap_or(REGULAR_WEIGHT_INDEX)
+}
+
+/// The label of the weight choice at a stepper position.
+pub fn font_weight_label(index: f64) -> String {
+    let i = index.round().clamp(0.0, (WEIGHT_LABELS.len() - 1) as f64) as usize;
+    if i == REGULAR_WEIGHT_INDEX {
+        tr("Regular")
+    } else {
+        WEIGHT_LABELS[i].to_string()
+    }
+}
+
 /// Share of the screen height that a tall sheet takes.
 const TALL_PERCENT: u32 = 70;
 /// Share of the screen height that the search and note sheets take.
@@ -386,6 +420,14 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
             )
             .with_key("layout-size");
             children.push(labelled(services, &tr("Size"), size));
+            let weight_index = font_weight_index(layout.font_weight);
+            let weight = WidgetPod::new(
+                Stepper::new(weight_index as f64, 0.0, (WEIGHT_LABELS.len() - 1) as f64, 1.0)
+                    .format(font_weight_label)
+                    .on_action("reader:layout:weight"),
+            )
+            .with_key("layout-weight");
+            children.push(labelled(services, &tr("Weight"), weight));
             let spacing = WidgetPod::new(
                 Stepper::new(f64::from(layout.line_spacing), 0.8, 2.0, 0.1)
                     .format(|v| format!("{v:.1}"))

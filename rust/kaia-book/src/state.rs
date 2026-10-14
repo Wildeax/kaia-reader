@@ -297,6 +297,7 @@ fn layout_value(l: &TextLayout) -> Value {
     t.insert("hyphenation".into(), Value::Bool(l.hyphenation));
     t.insert("justify".into(), Value::Bool(l.justify));
     t.insert("embedded_styles".into(), Value::Bool(l.embedded_styles));
+    t.insert("font_weight".into(), Value::from(f64::from(l.font_weight)));
     Value::Table(t)
 }
 
@@ -329,6 +330,12 @@ fn layout_from_value(v: &Value) -> TextLayout {
         hyphenation: v.get("hyphenation").as_bool().unwrap_or(d.hyphenation),
         justify: v.get("justify").as_bool().unwrap_or(d.justify),
         embedded_styles: v.get("embedded_styles").as_bool().unwrap_or(d.embedded_styles),
+        // A missing key reads as 0, which is regular.
+        font_weight: v
+            .get("font_weight")
+            .as_f64()
+            .filter(|n| n.is_finite())
+            .map_or(0.0, |n| n as f32),
     }
 }
 
@@ -437,6 +444,16 @@ pub(crate) fn fail_next_write_with_disk_full() {
 mod tests {
     use super::*;
     use crate::pos::Pos;
+
+    #[test]
+    fn a_layout_without_font_weight_reads_as_regular() {
+        let mut t = Table::new();
+        t.insert("font_size".into(), Value::from(30.0));
+        assert_eq!(layout_from_value(&Value::Table(t)).font_weight, 0.0);
+        let mut weighted = Table::new();
+        weighted.insert("font_weight".into(), Value::from(-0.5));
+        assert_eq!(layout_from_value(&Value::Table(weighted)).font_weight, -0.5);
+    }
 
     fn state() -> BookState {
         let mut s = BookState::new(

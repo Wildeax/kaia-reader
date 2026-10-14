@@ -55,6 +55,8 @@ const DEFAULT_HEIGHT: u32 = 1680;
 const DEFAULT_EM: f32 = 24.0;
 /// The face KOReader uses when a book does not name one.
 const DEFAULT_FONT: &str = "Noto Serif";
+/// The base font weight of regular text, in CSS units.
+const REGULAR_FONT_WEIGHT: u32 = 400;
 /// Hits returned by one search call.
 const SEARCH_MAX_HITS: u32 = 500;
 
@@ -219,6 +221,9 @@ pub struct CreDocument {
     /// The font face this document uses. CREngine keeps the preferred font
     /// process-wide, so `doc_mut` applies it before work.
     font_face: String,
+    /// The base font weight, in CSS units. CREngine keeps it process-wide too,
+    /// so `doc_mut` applies it before work.
+    font_weight: u32,
 }
 
 impl CreDocument {
@@ -279,6 +284,7 @@ impl CreDocument {
             applied: None,
             hyphenation: None,
             font_face: DEFAULT_FONT.to_string(),
+            font_weight: REGULAR_FONT_WEIGHT,
         };
         let default = Layout::new(DEFAULT_WIDTH as f32, DEFAULT_HEIGHT as f32, DEFAULT_EM);
         this.set_layout(&default)?;
@@ -297,6 +303,7 @@ impl CreDocument {
         doc.set_hyphenation(self.hyphenation.as_deref())
             .map_err(engine_err)?;
         doc.set_font_face(&self.font_face).map_err(engine_err)?;
+        doc.set_font_weight(self.font_weight).map_err(engine_err)?;
         Ok(Session { doc, _engine: engine })
     }
 
@@ -311,6 +318,19 @@ impl CreDocument {
     /// Selects a hyphenation dictionary, such as `English_US.pattern`. None turns hyphenation off.
     pub fn set_hyphenation(&mut self, dict: Option<&str>) -> Result<()> {
         self.hyphenation = dict.map(str::to_string);
+        self.doc_mut().map(drop)
+    }
+
+    /// Sets the base font weight in CSS units. 400 is regular and 700 is bold.
+    /// Weights between faces are synthesized, so any value from 1 to 999 works.
+    /// The engine lays the book out again when the weight changes.
+    pub fn set_font_weight(&mut self, weight: u32) -> Result<()> {
+        if !(1..=999).contains(&weight) {
+            return Err(DocError::InvalidArgument(format!(
+                "font weight {weight} is outside 1 to 999"
+            )));
+        }
+        self.font_weight = weight;
         self.doc_mut().map(drop)
     }
 
@@ -635,6 +655,10 @@ impl Document for CreDocument {
             // `doc_mut` applies the face with the other process-wide settings.
             self.font_face.clone_from(face);
         }
+        if let Some(weight) = layout.font_weight {
+            // `set_font_weight` checks the range and `doc_mut` applies the weight.
+            self.set_font_weight(weight)?;
+        }
         let mut doc = self.doc_mut()?;
 
         // Stylesheet first. It re-lays out the book, so the other settings follow.
@@ -807,6 +831,38 @@ mod tests {
             assert!(dark > 1000, "page {page} has too little ink: {dark} dark pixels");
             write_pixmap(&pm, &out_dir().join(format!("juliet-p{page}-gray.png"))).expect("write png");
         }
+    }
+
+    /// Dark pixels on page 1 of Juliet at a base font weight.
+    fn dark_pixels_at_weight(weight: u32) -> usize {
+        let mut doc = open_at(&juliet(), 1264.0, 1680.0, 24.0);
+        doc.set_font_weight(weight).expect("set weight");
+        let pm = doc.render(1, 1.0, PixelFormat::Gray8).expect("render gray");
+        pm.data().iter().filter(|&&v| v < 128).count()
+    }
+
+    #[test]
+    fn heavier_font_weight_renders_more_ink() {
+        let regular = dark_pixels_at_weight(REGULAR_FONT_WEIGHT);
+        let heavy = dark_pixels_at_weight(480);
+        assert!(
+            heavy > regular,
+            "400 gives {regular} dark pixels, 480 gives {heavy}"
+        );
+    }
+
+    #[test]
+    fn set_font_weight_rejects_values_outside_the_engine_range() {
+        let mut doc = open_at(&juliet(), 1264.0, 1680.0, 24.0);
+        assert!(matches!(
+            doc.set_font_weight(0),
+            Err(DocError::InvalidArgument(_))
+        ));
+        assert!(matches!(
+            doc.set_font_weight(1000),
+            Err(DocError::InvalidArgument(_))
+        ));
+        doc.set_font_weight(999).expect("999 is the top of the range");
     }
 
     #[test]

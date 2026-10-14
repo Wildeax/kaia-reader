@@ -132,6 +132,7 @@ pub mod ffi {
         ) -> c_int;
         pub fn kaia_cre_set_embedded_styles(doc: *mut kaia_cre_doc, enabled: c_int) -> c_int;
         pub fn kaia_cre_set_embedded_fonts(doc: *mut kaia_cre_doc, enabled: c_int) -> c_int;
+        pub fn kaia_cre_set_font_weight(doc: *mut kaia_cre_doc, weight: c_int) -> c_int;
         pub fn kaia_cre_set_hyphenation(doc: *mut kaia_cre_doc, dict: *const c_char) -> c_int;
         pub fn kaia_cre_set_stylesheet(
             doc: *mut kaia_cre_doc,
@@ -509,6 +510,19 @@ impl Doc {
     pub fn set_embedded_fonts(&mut self, enabled: bool) -> Result<()> {
         // SAFETY: live handle, plain integer argument.
         check(unsafe { ffi::kaia_cre_set_embedded_fonts(self.raw(), enabled as c_int) })
+    }
+
+    /// Sets the base font weight in CSS units, 400 for regular and 700 for bold.
+    /// The engine accepts 1 to 999 and rejects other values here, so a bad value
+    /// does not reach the engine.
+    pub fn set_font_weight(&mut self, weight: u32) -> Result<()> {
+        if !(1..=999).contains(&weight) {
+            return Err(Error::BadInput(format!(
+                "font weight {weight} is outside 1 to 999"
+            )));
+        }
+        // SAFETY: live handle, plain integer argument.
+        check(unsafe { ffi::kaia_cre_set_font_weight(self.raw(), weight as c_int) })
     }
 
     /// Selects a hyphenation dictionary by id, such as `English_US.pattern`.

@@ -27,6 +27,8 @@ state. In the Rust app, Kaia owns all reading state:
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
 
+The `layout` table of a book state holds `font_weight`, a KOReader font weight value (0 is regular, -1 to 3 in the Text and layout sheet). A missing key reads as 0.
+
 ## Kobo import
 
 The Rust app offers an import when `<books dir>/.kobo/KoboReader.sqlite`

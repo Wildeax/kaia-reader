@@ -7,41 +7,41 @@ msgstr ""
 msgid "\"%1\" is removed from the device. The book leaves the library. This cannot be undone."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:84
+#: rust/kaia-app/src/surfaces/settings/storage.rs:85
 msgid "%1 GB"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/catalogs/views.rs:298 rust/kaia-app/src/surfaces/library/data.rs:336 rust/kaia-app/src/surfaces/settings/storage.rs:88
+#: rust/kaia-app/src/surfaces/catalogs/views.rs:298 rust/kaia-app/src/surfaces/library/data.rs:352 rust/kaia-app/src/surfaces/settings/storage.rs:89
 msgid "%1 KB"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/entries.rs:331
+#: rust/kaia-app/src/surfaces/settings/entries.rs:340
 msgid "%1 KOReader units"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/data.rs:334 rust/kaia-app/src/surfaces/settings/storage.rs:86
+#: rust/kaia-app/src/surfaces/library/data.rs:350 rust/kaia-app/src/surfaces/settings/storage.rs:87
 msgid "%1 MB"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/catalogs/views.rs:428 rust/kaia-app/src/surfaces/library/mod.rs:685 rust/kaia-app/src/surfaces/library/views.rs:299 rust/kaia-app/src/surfaces/library/views.rs:337 rust/kaia-app/src/surfaces/library/views.rs:379 rust/kaia-app/src/surfaces/library/views.rs:650 rust/kaia-app/src/surfaces/settings/storage.rs:118
+#: rust/kaia-app/src/surfaces/catalogs/views.rs:428 rust/kaia-app/src/surfaces/library/mod.rs:682 rust/kaia-app/src/surfaces/library/views.rs:299 rust/kaia-app/src/surfaces/library/views.rs:337 rust/kaia-app/src/surfaces/library/views.rs:379 rust/kaia-app/src/surfaces/library/views.rs:650 rust/kaia-app/src/surfaces/settings/storage.rs:119
 msgid "%1 book"
 msgid_plural "%1 books"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1026
+#: rust/kaia-app/src/surfaces/library/mod.rs:1020
 msgid "%1 book could not be changed."
 msgid_plural "%1 books could not be changed."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1010
+#: rust/kaia-app/src/surfaces/library/mod.rs:1004
 msgid "%1 book marked as finished."
 msgid_plural "%1 books marked as finished."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1018
+#: rust/kaia-app/src/surfaces/library/mod.rs:1012
 msgid "%1 book marked as unread."
 msgid_plural "%1 books marked as unread."
 msgstr[0] ""
@@ -53,7 +53,7 @@ msgid_plural "%1 bookmarks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:77
+#: rust/kaia-app/src/surfaces/settings/storage.rs:78
 msgid "%1 byte"
 msgid_plural "%1 bytes"
 msgstr[0] ""
@@ -65,7 +65,7 @@ msgid_plural "%1 collection entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:254
+#: rust/kaia-app/src/surfaces/settings/storage.rs:255
 msgid "%1 deleted, %2 failed, %3 skipped because open."
 msgstr ""
 
@@ -101,13 +101,13 @@ msgid_plural "%1 history entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1831 rust/kaia-app/src/surfaces/reader/state.rs:626
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1855 rust/kaia-app/src/surfaces/reader/state.rs:626
 msgid "%1 match."
 msgid_plural "%1 matches."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/settings/entries.rs:335 rust/kaia-app/src/surfaces/settings/facts.rs:85 rust/kaia-app/src/surfaces/settings/sections.rs:508
+#: rust/kaia-app/src/surfaces/settings/entries.rs:344 rust/kaia-app/src/surfaces/settings/facts.rs:85 rust/kaia-app/src/surfaces/settings/sections.rs:508
 msgid "%1 min"
 msgstr ""
 
@@ -125,15 +125,11 @@ msgid_plural "%1 notes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/settings/entries.rs:332 rust/kaia-app/src/surfaces/settings/entries.rs:334 rust/kaia-app/src/surfaces/settings/facts.rs:91
+#: rust/kaia-app/src/surfaces/settings/entries.rs:341 rust/kaia-app/src/surfaces/settings/entries.rs:343 rust/kaia-app/src/surfaces/settings/facts.rs:91
 msgid "%1 page"
 msgid_plural "%1 pages"
 msgstr[0] ""
 msgstr[1] ""
-
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:48
-msgid "%1 rows: %2"
-msgstr ""
 
 #: rust/kaia-app/src/surfaces/notes/mod.rs:374
 msgid "%1 sticker"
@@ -149,7 +145,7 @@ msgstr ""
 msgid "%1 · Repair"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/footer.rs:212 rust/kaia-app/src/surfaces/settings/entries.rs:219 rust/kaia-app/src/surfaces/settings/entries.rs:343 rust/kaia-app/src/surfaces/settings/quick.rs:145
+#: rust/kaia-app/src/surfaces/reader/footer.rs:212 rust/kaia-app/src/surfaces/settings/entries.rs:228 rust/kaia-app/src/surfaces/settings/entries.rs:352 rust/kaia-app/src/surfaces/settings/quick.rs:145
 msgid "%1%"
 msgstr ""
 
@@ -157,11 +153,11 @@ msgstr ""
 msgid "%1, book %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:68
+#: rust/kaia-app/src/surfaces/settings/kobo.rs:59
 msgid "%1: %2 imported, %3 skipped"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/entries.rs:339
+#: rust/kaia-app/src/surfaces/settings/entries.rs:348
 msgid "%1:%2"
 msgstr ""
 
@@ -179,7 +175,7 @@ msgstr[1] ""
 msgid "A reader for the Kobo Libra Colour"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/data.rs:321
+#: rust/kaia-app/src/surfaces/library/data.rs:337
 msgid "Abandoned"
 msgstr ""
 
@@ -199,15 +195,15 @@ msgstr ""
 msgid "Add to collection"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:961
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1003
 msgid "Add to word list"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:452 rust/kaia-app/src/surfaces/library/mod.rs:535
+#: rust/kaia-app/src/surfaces/library/mod.rs:449 rust/kaia-app/src/surfaces/library/mod.rs:532
 msgid "Added to %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1721
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1745
 msgid "Added to word list"
 msgstr ""
 
@@ -231,11 +227,11 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:365
+#: rust/kaia-app/src/surfaces/reader/mod.rs:369
 msgid "Another device is at %1 percent."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:396
+#: rust/kaia-app/src/surfaces/reader/mod.rs:400
 msgid "Another process has this book open. Changes cannot be saved."
 msgstr ""
 
@@ -291,7 +287,7 @@ msgstr ""
 msgid "Book details"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:410
+#: rust/kaia-app/src/surfaces/reader/mod.rs:414
 msgid "Book file changed"
 msgstr ""
 
@@ -315,15 +311,15 @@ msgstr ""
 msgid "Book's font"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:423
+#: rust/kaia-app/src/surfaces/reader/panels.rs:465
 msgid "Book's styles"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:150 rust/kaia-app/src/surfaces/notes/data.rs:163 rust/kaia-app/src/surfaces/reader/overlay.rs:224 rust/kaia-app/src/surfaces/reader/panels.rs:1314
+#: rust/kaia-app/src/surfaces/notes/data.rs:150 rust/kaia-app/src/surfaces/notes/data.rs:163 rust/kaia-app/src/surfaces/reader/overlay.rs:224 rust/kaia-app/src/surfaces/reader/panels.rs:1356
 msgid "Bookmark"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1341
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1365
 msgid "Bookmark added"
 msgstr ""
 
@@ -331,7 +327,7 @@ msgstr ""
 msgid "Bookmark in %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1343
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1367
 msgid "Bookmark removed"
 msgstr ""
 
@@ -371,7 +367,7 @@ msgstr ""
 msgid "Browse catalogs and download books"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:160
+#: rust/kaia-app/src/surfaces/settings/storage.rs:161
 msgid "Cache, included in Kaia data"
 msgstr ""
 
@@ -387,7 +383,7 @@ msgstr ""
 msgid "Calibre sent a message. Check the server."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:162
+#: rust/kaia-app/src/surfaces/settings/storage.rs:163
 msgid "Calibre uses its saved book list. OPDS includes other books in the download folder. Other includes books outside that folder. Sizes come from the library index."
 msgstr ""
 
@@ -395,7 +391,7 @@ msgstr ""
 msgid "Calibre wireless"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:747 rust/kaia-app/src/surfaces/reader/panels.rs:804
+#: rust/kaia-app/src/surfaces/reader/panels.rs:789 rust/kaia-app/src/surfaces/reader/panels.rs:846
 msgid "Cancel move"
 msgstr ""
 
@@ -407,15 +403,15 @@ msgstr ""
 msgid "Cancelling..."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1573
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1597
 msgid "Cannot change this highlight: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:288
+#: rust/kaia-app/src/surfaces/library/mod.rs:290
 msgid "Cannot clear history: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:207 rust/kaia-app/src/surfaces/reader/mod.rs:220
+#: rust/kaia-app/src/surfaces/reader/mod.rs:211 rust/kaia-app/src/surfaces/reader/mod.rs:224
 msgid "Cannot connect reader plugins: %1"
 msgstr ""
 
@@ -427,15 +423,15 @@ msgstr ""
 msgid "Cannot create the downloads folder."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:266
+#: rust/kaia-app/src/surfaces/settings/storage.rs:267
 msgid "Cannot delete books. Wait for the library scan to finish and try again."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:246
+#: rust/kaia-app/src/surfaces/library/mod.rs:248
 msgid "Cannot delete collection: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1091
+#: rust/kaia-app/src/surfaces/library/mod.rs:1085
 msgid "Cannot delete the book: %1"
 msgstr ""
 
@@ -463,7 +459,7 @@ msgstr ""
 msgid "Cannot go there. %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1426
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1450
 msgid "Cannot highlight. %1"
 msgstr ""
 
@@ -483,19 +479,19 @@ msgstr ""
 msgid "Cannot load this item. Check the address and connection."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1282
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1306
 msgid "Cannot mark the book as finished: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1071
+#: rust/kaia-app/src/surfaces/library/mod.rs:1065
 msgid "Cannot mark the books."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1050
+#: rust/kaia-app/src/surfaces/library/mod.rs:1044
 msgid "Cannot mark the books: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:259
+#: rust/kaia-app/src/surfaces/library/mod.rs:261
 msgid "Cannot move collection: %1"
 msgstr ""
 
@@ -503,7 +499,7 @@ msgstr ""
 msgid "Cannot open the library."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1763
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1787
 msgid "Cannot open the word list: %1"
 msgstr ""
 
@@ -527,11 +523,11 @@ msgstr ""
 msgid "Cannot read book state. Kept a copy at %1. %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:169
+#: rust/kaia-app/src/surfaces/settings/storage.rs:170
 msgid "Cannot read size"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:137 rust/kaia-app/src/surfaces/settings/storage.rs:283
+#: rust/kaia-app/src/surfaces/settings/storage.rs:138 rust/kaia-app/src/surfaces/settings/storage.rs:284
 msgid "Cannot read storage groups. No books can be deleted."
 msgstr ""
 
@@ -551,7 +547,7 @@ msgstr ""
 msgid "Cannot read this cover."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:154
+#: rust/kaia-app/src/surfaces/settings/storage.rs:155
 msgid "Cannot read volume space."
 msgstr ""
 
@@ -559,11 +555,11 @@ msgstr ""
 msgid "Cannot record reading time: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:268
+#: rust/kaia-app/src/surfaces/library/mod.rs:270
 msgid "Cannot remove history: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:958
+#: rust/kaia-app/src/surfaces/reader/mod.rs:962
 msgid "Cannot resize the page. %1"
 msgstr ""
 
@@ -571,11 +567,11 @@ msgstr ""
 msgid "Cannot save book status: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:512
+#: rust/kaia-app/src/surfaces/library/mod.rs:509
 msgid "Cannot save collection: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:670
+#: rust/kaia-app/src/surfaces/reader/mod.rs:674
 msgid "Cannot save confirmation: %1"
 msgstr ""
 
@@ -591,7 +587,7 @@ msgstr ""
 msgid "Cannot save settings. Check device storage."
 msgstr ""
 
-#: rust/kaia-app/src/app/power.rs:416 rust/kaia-app/src/surfaces/reader/mod.rs:1475 rust/kaia-app/src/surfaces/reader/persistence.rs:49
+#: rust/kaia-app/src/app/power.rs:416 rust/kaia-app/src/surfaces/reader/mod.rs:1499 rust/kaia-app/src/surfaces/reader/persistence.rs:49
 msgid "Cannot save settings: %1"
 msgstr ""
 
@@ -607,7 +603,7 @@ msgstr ""
 msgid "Cannot save the downloaded book."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1723 rust/kaia-app/src/surfaces/reader/mod.rs:1776
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1747 rust/kaia-app/src/surfaces/reader/mod.rs:1800
 msgid "Cannot save the word list: %1"
 msgstr ""
 
@@ -615,7 +611,7 @@ msgstr ""
 msgid "Cannot save this book. Free storage, then try again. %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1659 rust/kaia-app/src/surfaces/reader/mod.rs:402
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1683 rust/kaia-app/src/surfaces/reader/mod.rs:406
 msgid "Cannot save this book: %1"
 msgstr ""
 
@@ -659,11 +655,11 @@ msgstr ""
 msgid "Catalog saved."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:309
+#: rust/kaia-app/src/surfaces/reader/panels.rs:343
 msgid "Chapters"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1429
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1471
 msgid "Check"
 msgstr ""
 
@@ -675,7 +671,7 @@ msgstr ""
 msgid "Choose a server to connect."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1410
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1452
 msgid "Choose a sticker"
 msgstr ""
 
@@ -683,7 +679,7 @@ msgstr ""
 msgid "Clear reading history"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:277
+#: rust/kaia-app/src/surfaces/library/mod.rs:279
 msgid "Clear reading history?"
 msgstr ""
 
@@ -691,11 +687,11 @@ msgstr ""
 msgid "Clock"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1294
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1336
 msgid "Close book"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1087
+#: rust/kaia-app/src/surfaces/library/mod.rs:1081
 msgid "Close the book before deleting it."
 msgstr ""
 
@@ -723,7 +719,7 @@ msgstr ""
 msgid "Connecting to Calibre..."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/overlay.rs:164 rust/kaia-app/src/surfaces/reader/panels.rs:344
+#: rust/kaia-app/src/surfaces/reader/overlay.rs:164 rust/kaia-app/src/surfaces/reader/panels.rs:378
 msgid "Contents"
 msgstr ""
 
@@ -731,7 +727,7 @@ msgstr ""
 msgid "Continue reading"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1211
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1235
 msgid "Copied"
 msgstr ""
 
@@ -759,7 +755,7 @@ msgstr ""
 msgid "Credits"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/views.rs:551 rust/kaia-app/src/surfaces/reader/panels.rs:458
+#: rust/kaia-app/src/surfaces/library/views.rs:551 rust/kaia-app/src/surfaces/reader/panels.rs:500
 msgid "Current"
 msgstr ""
 
@@ -775,29 +771,29 @@ msgstr ""
 msgid "Daytime warmth"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:305
+#: rust/kaia-app/src/surfaces/settings/storage.rs:306
 msgid "Delete %1 book from %2, %3? This removes the file from the device. Highlights and notes stay in Kaia's data. Open books are skipped."
 msgid_plural "Delete %1 books from %2, %3? This removes the files from the device. Highlights and notes stay in Kaia's data. Open books are skipped."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:131
+#: rust/kaia-app/src/surfaces/settings/storage.rs:132
 msgid "Delete all from %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:314
+#: rust/kaia-app/src/surfaces/settings/storage.rs:315
 msgid "Delete books"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:310
+#: rust/kaia-app/src/surfaces/settings/storage.rs:311
 msgid "Delete books?"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:231
+#: rust/kaia-app/src/surfaces/library/mod.rs:233
 msgid "Delete collection?"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1066 rust/kaia-app/src/surfaces/settings/sections.rs:157
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1108 rust/kaia-app/src/surfaces/settings/sections.rs:157
 msgid "Dictionaries are searched in this order. A dictionary that is off is skipped."
 msgstr ""
 
@@ -869,7 +865,7 @@ msgstr ""
 msgid "Enable KOReader plugins in Settings, Extensions."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1305
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1347
 msgid "End of book"
 msgstr ""
 
@@ -955,11 +951,11 @@ msgstr ""
 msgid "Finding the download format..."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:432
+#: rust/kaia-app/src/surfaces/reader/panels.rs:474
 msgid "Fit page"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:432
+#: rust/kaia-app/src/surfaces/reader/panels.rs:474
 msgid "Fit width"
 msgstr ""
 
@@ -971,7 +967,7 @@ msgstr ""
 msgid "Font family"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1174
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1198
 msgid "Font size set to %1 px."
 msgstr ""
 
@@ -979,15 +975,15 @@ msgstr ""
 msgid "Font size, %1 px"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:506 rust/kaia-app/src/surfaces/reader/panels.rs:539
+#: rust/kaia-app/src/surfaces/reader/panels.rs:548 rust/kaia-app/src/surfaces/reader/panels.rs:581
 msgid "Footer"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:844
+#: rust/kaia-app/src/surfaces/reader/mod.rs:848
 msgid "Footnote"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:151
+#: rust/kaia-app/src/surfaces/settings/storage.rs:152
 msgid "Free space"
 msgstr ""
 
@@ -1003,15 +999,15 @@ msgstr ""
 msgid "Gesture zones"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:370
+#: rust/kaia-app/src/surfaces/reader/mod.rs:374
 msgid "Go there"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:494
+#: rust/kaia-app/src/surfaces/reader/panels.rs:536
 msgid "Go to the end"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:488
+#: rust/kaia-app/src/surfaces/reader/panels.rs:530
 msgid "Go to the start"
 msgstr ""
 
@@ -1019,15 +1015,15 @@ msgstr ""
 msgid "Hardware keys"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1427
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1469
 msgid "Heart"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1423
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1447
 msgid "Highlighted"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:414
+#: rust/kaia-app/src/surfaces/reader/panels.rs:456
 msgid "Hyphenation"
 msgstr ""
 
@@ -1035,7 +1031,7 @@ msgstr ""
 msgid "If you change the warmth by hand, the schedule waits until its next step. A bedtime between 05:00 and 18:00 counts as 23:00."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/section.rs:93
+#: rust/kaia-app/src/surfaces/settings/kobo.rs:48 rust/kaia-app/src/surfaces/settings/section.rs:93
 msgid "Import"
 msgstr ""
 
@@ -1043,7 +1039,7 @@ msgstr ""
 msgid "Import from KOReader"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:79 rust/kaia-app/src/surfaces/settings/sections.rs:582
+#: rust/kaia-app/src/surfaces/settings/kobo.rs:77 rust/kaia-app/src/surfaces/settings/sections.rs:582
 msgid "Import from Kobo"
 msgstr ""
 
@@ -1063,7 +1059,7 @@ msgstr ""
 msgid "In the book"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:111
+#: rust/kaia-app/src/surfaces/settings/storage.rs:112
 msgid "Indexed books"
 msgstr ""
 
@@ -1071,7 +1067,7 @@ msgstr ""
 msgid "Indexing books: %1 of %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:911
+#: rust/kaia-app/src/surfaces/reader/mod.rs:915
 msgid "Invalid page number or percentage"
 msgstr ""
 
@@ -1079,7 +1075,7 @@ msgstr ""
 msgid "Invert page buttons"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:409
+#: rust/kaia-app/src/surfaces/reader/panels.rs:451
 msgid "Justified text"
 msgstr ""
 
@@ -1099,7 +1095,7 @@ msgstr ""
 msgid "Kaia Reader is a fork of KOReader, base version v2026.07.1 (commit 9192014d8). KOReader is free software under AGPL-3.0, written by the KOReader developers. Kaia keeps its document engines, its Kobo support and its file formats."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:157
+#: rust/kaia-app/src/surfaces/settings/storage.rs:158
 msgid "Kaia data"
 msgstr ""
 
@@ -1119,24 +1115,20 @@ msgstr ""
 msgid "Kaia, sleeping"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:380 rust/kaia-app/src/surfaces/reader/panels.rs:1300
+#: rust/kaia-app/src/app.rs:380 rust/kaia-app/src/surfaces/reader/panels.rs:1342
 msgid "Keep reading"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:369
+#: rust/kaia-app/src/surfaces/reader/mod.rs:373
 msgid "Keep this position"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:62
+#: rust/kaia-app/src/surfaces/settings/kobo.rs:53
 msgid "Kobo import finished. Skipped counts include duplicates, missing books, deleted or invalid records, and highlights whose text was not found."
 msgstr ""
 
 #: rust/kaia-app/src/surfaces/settings/section.rs:110
 msgid "Kobo import stopped. Close any open book, wait for the library scan to finish, and try again. Records already imported will be skipped."
-msgstr ""
-
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:43
-msgid "Kobo schema version: %1"
 msgstr ""
 
 #: rust/kaia-app/src/surfaces/settings/quick.rs:221
@@ -1163,7 +1155,7 @@ msgstr ""
 msgid "Left-handed"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:892 rust/kaia-app/src/surfaces/settings/sections.rs:24
+#: rust/kaia-app/src/surfaces/library/mod.rs:886 rust/kaia-app/src/surfaces/settings/sections.rs:24
 msgid "Library"
 msgstr ""
 
@@ -1181,11 +1173,11 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:395
+#: rust/kaia-app/src/surfaces/reader/panels.rs:437
 msgid "Line spacing"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:854
+#: rust/kaia-app/src/surfaces/reader/mod.rs:858
 msgid "Link"
 msgstr ""
 
@@ -1205,7 +1197,7 @@ msgstr ""
 msgid "Lock orientation"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:699 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:114
+#: rust/kaia-app/src/surfaces/reader/mod.rs:703 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:114
 msgid "Long-press the new place, then choose Sticker."
 msgstr ""
 
@@ -1217,7 +1209,7 @@ msgstr ""
 msgid "Makes the text on every screen %1% larger."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:402
+#: rust/kaia-app/src/surfaces/reader/panels.rs:444
 msgid "Margins"
 msgstr ""
 
@@ -1225,15 +1217,15 @@ msgstr ""
 msgid "Mark as unread"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:597 rust/kaia-app/src/surfaces/reader/mod.rs:1291
+#: rust/kaia-app/src/surfaces/library/mod.rs:594 rust/kaia-app/src/surfaces/reader/mod.rs:1315
 msgid "Marked as finished"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:609 rust/kaia-app/src/surfaces/library/mod.rs:636
+#: rust/kaia-app/src/surfaces/library/mod.rs:606 rust/kaia-app/src/surfaces/library/mod.rs:633
 msgid "Marking books…"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/overlay.rs:127 rust/kaia-app/src/surfaces/reader/panels.rs:526 rust/kaia-app/src/surfaces/reader/panels.rs:797 rust/kaia-app/src/surfaces/reader/panels.rs:868
+#: rust/kaia-app/src/surfaces/reader/overlay.rs:127 rust/kaia-app/src/surfaces/reader/panels.rs:568 rust/kaia-app/src/surfaces/reader/panels.rs:839 rust/kaia-app/src/surfaces/reader/panels.rs:910
 msgid "More"
 msgstr ""
 
@@ -1245,15 +1237,15 @@ msgstr ""
 msgid "Move cancelled"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/views.rs:404 rust/kaia-app/src/surfaces/reader/panels.rs:1042 rust/kaia-app/src/surfaces/settings/entries.rs:308
+#: rust/kaia-app/src/surfaces/library/views.rs:404 rust/kaia-app/src/surfaces/reader/panels.rs:1084 rust/kaia-app/src/surfaces/settings/entries.rs:317
 msgid "Move down"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1464
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1506
 msgid "Move to another place"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/views.rs:399 rust/kaia-app/src/surfaces/reader/panels.rs:1033 rust/kaia-app/src/surfaces/settings/entries.rs:299
+#: rust/kaia-app/src/surfaces/library/views.rs:399 rust/kaia-app/src/surfaces/reader/panels.rs:1075 rust/kaia-app/src/surfaces/settings/entries.rs:308
 msgid "Move up"
 msgstr ""
 
@@ -1281,7 +1273,7 @@ msgstr ""
 msgid "Network worker stopped."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:357
+#: rust/kaia-app/src/surfaces/reader/panels.rs:391
 msgid "Next"
 msgstr ""
 
@@ -1305,15 +1297,15 @@ msgstr ""
 msgid "No active connection. Use a manual address or discover servers."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:767
+#: rust/kaia-app/src/surfaces/library/mod.rs:764
 msgid "No authors yet."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1842 rust/kaia-app/src/surfaces/reader/mod.rs:688 rust/kaia-app/src/surfaces/reader/state.rs:531 rust/kaia-app/src/surfaces/reader/state.rs:548 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:15 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:179 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:228 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:56
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1866 rust/kaia-app/src/surfaces/reader/mod.rs:692 rust/kaia-app/src/surfaces/reader/state.rs:531 rust/kaia-app/src/surfaces/reader/state.rs:548 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:15 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:179 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:228 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:56
 msgid "No book is open."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1848
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1872
 msgid "No bookmarks yet. Use the bookmark button in the top bar."
 msgstr ""
 
@@ -1325,7 +1317,7 @@ msgstr ""
 msgid "No books yet"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:655
+#: rust/kaia-app/src/surfaces/library/mod.rs:652
 msgid "No books yet."
 msgstr ""
 
@@ -1349,7 +1341,7 @@ msgstr ""
 msgid "No experimental features in this build."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1856
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1880
 msgid "No highlights yet. Hold a word to select it."
 msgstr ""
 
@@ -1365,7 +1357,7 @@ msgstr ""
 msgid "No reading recorded yet. Statistics appear after the first book is read."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:737
+#: rust/kaia-app/src/surfaces/library/mod.rs:734
 msgid "No series yet."
 msgstr ""
 
@@ -1389,11 +1381,11 @@ msgstr ""
 msgid "No values in the Calibre metadata file."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1104
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1146
 msgid "No words yet. Hold a word in a book, then choose Dictionary and Add to word list."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/data.rs:319 rust/kaia-app/src/surfaces/library/views.rs:220
+#: rust/kaia-app/src/surfaces/library/data.rs:335 rust/kaia-app/src/surfaces/library/views.rs:220
 msgid "Not started"
 msgstr ""
 
@@ -1417,7 +1409,7 @@ msgstr ""
 msgid "Noto Serif"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:331
+#: rust/kaia-app/src/surfaces/reader/panels.rs:365
 msgid "Now"
 msgstr ""
 
@@ -1445,7 +1437,7 @@ msgstr ""
 msgid "Orientation"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:71
+#: rust/kaia-app/src/surfaces/settings/storage.rs:72
 msgid "Other"
 msgstr ""
 
@@ -1453,7 +1445,7 @@ msgstr ""
 msgid "Page number"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:757
+#: rust/kaia-app/src/surfaces/reader/panels.rs:799
 msgid "Page sticker"
 msgstr ""
 
@@ -1461,7 +1453,7 @@ msgstr ""
 msgid "Page turn only"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:443
+#: rust/kaia-app/src/surfaces/reader/panels.rs:485
 msgid "Page view"
 msgstr ""
 
@@ -1481,7 +1473,7 @@ msgstr ""
 msgid "Plugin"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1373
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1415
 msgid "Plugin actions"
 msgstr ""
 
@@ -1489,7 +1481,7 @@ msgstr ""
 msgid "Plugin runtime failed: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:518 rust/kaia-app/src/surfaces/settings/sections.rs:30
+#: rust/kaia-app/src/surfaces/reader/panels.rs:560 rust/kaia-app/src/surfaces/settings/sections.rs:30
 msgid "Plugins"
 msgstr ""
 
@@ -1501,7 +1493,7 @@ msgstr ""
 msgid "Power off after"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:357
+#: rust/kaia-app/src/surfaces/reader/panels.rs:391
 msgid "Previous"
 msgstr ""
 
@@ -1513,7 +1505,7 @@ msgstr ""
 msgid "Progress sync failed: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1428
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1470
 msgid "Question"
 msgstr ""
 
@@ -1529,11 +1521,11 @@ msgstr ""
 msgid "Reading history"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:278
+#: rust/kaia-app/src/surfaces/library/mod.rs:280
 msgid "Reading positions and annotations will stay saved."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/kobo.rs:52
+#: rust/kaia-app/src/surfaces/settings/kobo.rs:43
 msgid "Reading positions and typography are not imported."
 msgstr ""
 
@@ -1553,7 +1545,7 @@ msgstr ""
 msgid "Recent"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:982
+#: rust/kaia-app/src/surfaces/library/mod.rs:976
 msgid "Recent searches"
 msgstr ""
 
@@ -1565,19 +1557,19 @@ msgstr ""
 msgid "Recently read"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:476
+#: rust/kaia-app/src/surfaces/library/mod.rs:473
 msgid "Removed from %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1779
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1803
 msgid "Removed from word list"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:420
+#: rust/kaia-app/src/surfaces/reader/mod.rs:424
 msgid "Review later"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:421
+#: rust/kaia-app/src/surfaces/reader/mod.rs:425
 msgid "Reviewed"
 msgstr ""
 
@@ -1593,7 +1585,7 @@ msgstr ""
 msgid "Save folder"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:412
+#: rust/kaia-app/src/surfaces/reader/mod.rs:416
 msgid "Saved progress was kept. Check the reading position and %1 annotation."
 msgid_plural "Saved progress was kept. Check the reading position and %1 annotations."
 msgstr[0] ""
@@ -1615,7 +1607,7 @@ msgstr ""
 msgid "Search catalog"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1203 rust/kaia-app/src/surfaces/reader/panels.rs:1242
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1245 rust/kaia-app/src/surfaces/reader/panels.rs:1284
 msgid "Search this book"
 msgstr ""
 
@@ -1627,7 +1619,7 @@ msgstr ""
 msgid "Searching. %1 found so far."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1707
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1731
 msgid "Select a single word to add it to the word list."
 msgstr ""
 
@@ -1655,7 +1647,7 @@ msgstr ""
 msgid "Settings were unreadable. Kept %1 in the data folder."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:854
+#: rust/kaia-app/src/surfaces/reader/panels.rs:896
 msgid "Share to Notes"
 msgstr ""
 
@@ -1679,7 +1671,7 @@ msgstr ""
 msgid "Show finished books"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:532
+#: rust/kaia-app/src/surfaces/reader/panels.rs:574
 msgid "Show in the footer"
 msgstr ""
 
@@ -1687,7 +1679,7 @@ msgstr ""
 msgid "Showing"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:388
+#: rust/kaia-app/src/surfaces/reader/panels.rs:422
 msgid "Size"
 msgstr ""
 
@@ -1707,7 +1699,7 @@ msgstr ""
 msgid "Source"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1426
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1468
 msgid "Star"
 msgstr ""
 
@@ -1723,7 +1715,7 @@ msgstr ""
 msgid "Starting..."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:146 rust/kaia-app/src/surfaces/notes/data.rs:157 rust/kaia-app/src/surfaces/reader/panels.rs:1474 rust/kaia-app/src/surfaces/reader/panels.rs:1501 rust/kaia-app/src/surfaces/reader/panels.rs:740 rust/kaia-app/src/surfaces/reader/panels.rs:845 rust/kaia-app/src/surfaces/reader/stickers.rs:107
+#: rust/kaia-app/src/surfaces/notes/data.rs:146 rust/kaia-app/src/surfaces/notes/data.rs:157 rust/kaia-app/src/surfaces/reader/panels.rs:1516 rust/kaia-app/src/surfaces/reader/panels.rs:1543 rust/kaia-app/src/surfaces/reader/panels.rs:782 rust/kaia-app/src/surfaces/reader/panels.rs:887 rust/kaia-app/src/surfaces/reader/stickers.rs:107
 msgid "Sticker"
 msgstr ""
 
@@ -1739,7 +1731,7 @@ msgstr ""
 msgid "Stickers need CREngine for this book."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:981
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1023
 msgid "Stop using this dictionary first for this book"
 msgstr ""
 
@@ -1791,19 +1783,19 @@ msgstr ""
 msgid "Test connection"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/overlay.rs:177 rust/kaia-app/src/surfaces/reader/panels.rs:441
+#: rust/kaia-app/src/surfaces/reader/overlay.rs:177 rust/kaia-app/src/surfaces/reader/panels.rs:483
 msgid "Text and layout"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1415 rust/kaia-app/src/surfaces/reader/panels.rs:1505 rust/kaia-app/src/surfaces/reader/panels.rs:1522
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1457 rust/kaia-app/src/surfaces/reader/panels.rs:1547 rust/kaia-app/src/surfaces/reader/panels.rs:1564
 msgid "Text note"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1141
+#: rust/kaia-app/src/surfaces/library/mod.rs:1135
 msgid "That book is no longer in the library."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:478
+#: rust/kaia-app/src/surfaces/library/mod.rs:475
 msgid "That book is not in this collection."
 msgstr ""
 
@@ -1827,7 +1819,7 @@ msgstr ""
 msgid "The book worker stopped."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:232
+#: rust/kaia-app/src/surfaces/library/mod.rs:234
 msgid "The books and their reading progress will stay in the library."
 msgstr ""
 
@@ -1839,7 +1831,7 @@ msgstr ""
 msgid "The cover of the book you are reading, or a blank screen."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:1094
+#: rust/kaia-app/src/surfaces/library/mod.rs:1088
 msgid "The file could not be deleted"
 msgstr ""
 
@@ -1855,7 +1847,7 @@ msgstr ""
 msgid "The new time zone applies after a restart."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:737
+#: rust/kaia-app/src/surfaces/reader/mod.rs:741
 msgid "The page is still loading. Try again when it finishes."
 msgstr ""
 
@@ -1871,7 +1863,7 @@ msgstr ""
 msgid "The requested positions are outside the active selection"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:393
+#: rust/kaia-app/src/surfaces/reader/mod.rs:397
 msgid "The saved state was damaged. Kaia will save edits in a recovered file."
 msgstr ""
 
@@ -1915,7 +1907,7 @@ msgstr ""
 msgid "This address did not return an OPDS feed."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1876
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1900
 msgid "This book has no table of contents."
 msgstr ""
 
@@ -1931,7 +1923,7 @@ msgstr ""
 msgid "This book uses page numbers"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:390
+#: rust/kaia-app/src/surfaces/reader/mod.rs:394
 msgid "This book's saved state needs a newer Kaia. Changes cannot be saved."
 msgstr ""
 
@@ -1939,7 +1931,7 @@ msgstr ""
 msgid "This build has no Lua plugin support."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1078
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1082
 msgid "This entry has no page."
 msgstr ""
 
@@ -1947,7 +1939,7 @@ msgstr ""
 msgid "This format needs an external download service."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:716 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:18
+#: rust/kaia-app/src/surfaces/reader/mod.rs:720 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:18
 msgid "This sticker belongs to another book."
 msgstr ""
 
@@ -1987,7 +1979,7 @@ msgstr ""
 msgid "Too many books share this filename."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/storage.rs:152
+#: rust/kaia-app/src/surfaces/settings/storage.rs:153
 msgid "Total space"
 msgstr ""
 
@@ -2003,7 +1995,7 @@ msgstr ""
 msgid "Turning on Wi-Fi..."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:525
+#: rust/kaia-app/src/surfaces/library/mod.rs:522
 msgid "Type a name first"
 msgstr ""
 
@@ -2011,11 +2003,11 @@ msgstr ""
 msgid "Type a title, an author or a word from the description."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1835
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1859
 msgid "Type a word and press Search."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1001
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1005
 msgid "Type a word to search."
 msgstr ""
 
@@ -2035,11 +2027,11 @@ msgstr ""
 msgid "Use synced position"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:363
+#: rust/kaia-app/src/surfaces/reader/mod.rs:367
 msgid "Use synced position?"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:983
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1025
 msgid "Use this dictionary first for this book"
 msgstr ""
 
@@ -2059,11 +2051,15 @@ msgstr ""
 msgid "Wake with page buttons"
 msgstr ""
 
+#: rust/kaia-app/src/surfaces/reader/panels.rs:430
+msgid "Weight"
+msgstr ""
+
 #: rust/kaia-app/src/surfaces/settings/sections.rs:682
 msgid "Which keys turn pages. Not configurable in Kaia yet."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/data.rs:288 rust/kaia-app/src/surfaces/settings/quick.rs:69
+#: rust/kaia-app/src/surfaces/library/data.rs:304 rust/kaia-app/src/surfaces/settings/quick.rs:69
 msgid "Wi-Fi"
 msgstr ""
 
@@ -2071,11 +2067,11 @@ msgstr ""
 msgid "Wi-Fi is off. Turn it on to continue?"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/data.rs:290
+#: rust/kaia-app/src/surfaces/library/data.rs:306
 msgid "Wi-Fi off"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/panels.rs:1102 rust/kaia-app/src/surfaces/reader/panels.rs:1140 rust/kaia-app/src/surfaces/reader/panels.rs:512
+#: rust/kaia-app/src/surfaces/reader/panels.rs:1144 rust/kaia-app/src/surfaces/reader/panels.rs:1182 rust/kaia-app/src/surfaces/reader/panels.rs:554
 msgid "Word list"
 msgstr ""
 
@@ -2103,43 +2099,43 @@ msgstr ""
 msgid "book"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:455
+#: rust/kaia-app/src/surfaces/library/mod.rs:452
 msgid "cannot add book %1: %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1350
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1374
 msgid "cannot change the bookmark: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:538
+#: rust/kaia-app/src/surfaces/library/mod.rs:535
 msgid "cannot create the collection: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:599
+#: rust/kaia-app/src/surfaces/library/mod.rs:596
 msgid "cannot mark book %1: %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:620
+#: rust/kaia-app/src/surfaces/library/mod.rs:617
 msgid "cannot mark the books: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:497
+#: rust/kaia-app/src/surfaces/reader/mod.rs:501
 msgid "cannot record the open: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:480
+#: rust/kaia-app/src/surfaces/library/mod.rs:477
 msgid "cannot remove book %1: %2"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:581
+#: rust/kaia-app/src/surfaces/reader/mod.rs:585
 msgid "cannot resize the page: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/settings/mod.rs:111
+#: rust/kaia-app/src/surfaces/library/mod.rs:155 rust/kaia-app/src/surfaces/settings/mod.rs:111
 msgid "cannot save settings: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/reader/mod.rs:1007 rust/kaia-app/src/surfaces/reader/mod.rs:1241
+#: rust/kaia-app/src/surfaces/reader/mod.rs:1011 rust/kaia-app/src/surfaces/reader/mod.rs:1265
 msgid "cannot search: %1"
 msgstr ""
 
@@ -2163,11 +2159,11 @@ msgstr ""
 msgid "needs repair"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/details.rs:46 rust/kaia-app/src/surfaces/reader/mod.rs:455
+#: rust/kaia-app/src/surfaces/library/details.rs:46 rust/kaia-app/src/surfaces/reader/mod.rs:459
 msgid "no book %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/library/mod.rs:459 rust/kaia-app/src/surfaces/library/mod.rs:484
+#: rust/kaia-app/src/surfaces/library/mod.rs:456 rust/kaia-app/src/surfaces/library/mod.rs:481
 msgid "no collection %1"
 msgstr ""
 

@@ -96,6 +96,10 @@ int kaia_cre_set_interline_percent(kaia_cre_doc *doc, int percent);
 int kaia_cre_set_margins(kaia_cre_doc *doc, int left, int top, int right, int bottom);
 int kaia_cre_set_embedded_styles(kaia_cre_doc *doc, int enabled);
 int kaia_cre_set_embedded_fonts(kaia_cre_doc *doc, int enabled);
+/* Base font weight in CSS units: 400 is regular and 700 is bold. CREngine
+ * picks the nearest face and fakes the difference when the gap is 25 or more.
+ * The engine clamps values to 1 to 999. */
+int kaia_cre_set_font_weight(kaia_cre_doc *doc, int weight);
 /* `dict` is a dictionary id such as "English_US.pattern", or NULL to turn hyphenation off. */
 int kaia_cre_set_hyphenation(kaia_cre_doc *doc, const char *dict);
 /* `css_file` is read when not NULL. `css_extra` is appended when not NULL. */

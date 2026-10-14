@@ -98,9 +98,6 @@ pub struct LibrarySurface {
     root: PathBuf,
     /// The rows of the folder on screen, from the last build. Folder actions index into them.
     entries: Vec<Entry>,
-    /// The layout the Books tab shows when the user taps it: covers or list. The
-    /// view changes to a tab without a layout, so this keeps the last one.
-    books: View,
     /// The series the Series view shows, when the user opened one.
     series: Option<String>,
     /// The series rows of the last build. The series actions index into them.
@@ -138,7 +135,6 @@ impl LibrarySurface {
             current: PathBuf::new(),
             root: PathBuf::new(),
             entries: Vec::new(),
-            books: View::Covers,
             series: None,
             series_names: Vec::new(),
             author: None,
@@ -150,15 +146,21 @@ impl LibrarySurface {
         }
     }
 
+    /// Writes the prefs to settings and flushes the file, so a choice survives a
+    /// restart that skips the normal exit. A failed write stays a notice.
     fn save_prefs(&self, env: &mut SurfaceEnv<'_>) {
         self.prefs.save(&mut env.services.settings);
+        let path = env.services.settings_path();
+        if let Err(e) = env.services.settings.flush(&path) {
+            env.notice(tr_format(&tr("cannot save settings: %1"), &[&e.to_string()]));
+        }
     }
 
     /// Shows the tab `view` and closes whatever was open on the others. Covers and
     /// list also become the layout of the Books tab.
     fn set_view(&mut self, view: View, env: &mut SurfaceEnv<'_>) {
         if matches!(view, View::Covers | View::List) {
-            self.books = view;
+            self.prefs.layout = view;
         }
         self.prefs.view = view;
         self.panel = None;
@@ -294,12 +296,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::BooksTab => {
-                let books = if matches!(self.prefs.view, View::Covers | View::List) {
-                    self.prefs.view
-                } else {
-                    self.books
-                };
-                self.set_view(books, env);
+                self.set_view(self.prefs.layout, env);
                 Outcome::Rebuild
             }
             Command::OpenSort => {
@@ -746,7 +743,7 @@ impl LibrarySurface {
             let books = data::author_books(&env.services.library, &self.prefs, &name);
             if !books.is_empty() {
                 let loader = self.covers.as_ref().unwrap().clone();
-                let body = if self.books == View::List {
+                let body = if self.prefs.layout == View::List {
                     let lines: Vec<Line> = books
                         .iter()
                         .map(|b| Line::book(&data::info_without_cover(b)))
@@ -882,9 +879,6 @@ impl LibrarySurface {
         }
         if !self.loaded {
             self.prefs = Prefs::load(&env.services.settings);
-            if matches!(self.prefs.view, View::Covers | View::List) {
-                self.books = self.prefs.view;
-            }
             self.loaded = true;
         }
         let t = env.services.theme.clone();

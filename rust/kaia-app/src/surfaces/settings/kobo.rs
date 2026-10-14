@@ -33,46 +33,44 @@ pub(super) fn build(
     let mut rows = Vec::new();
     if let Some(plan) = plan {
         rows.push(Entry::Text(tr("These are source counts. Missing books, deleted records and records already imported will be skipped. Highlights need a matching passage in the book.")));
-        for (label, count) in kinds(&plan.counts, true) {
-            rows.push(Entry::Text(tr_format(
-                &tr("%1: %2"),
-                &[&label, &count.to_string()],
-            )));
-        }
-        rows.push(Entry::Text(tr_format(
-            &tr("Kobo schema version: %1"),
-            &[&plan.version.to_string()],
-        )));
-        for (table, count) in &plan.tables {
-            rows.push(Entry::Text(tr_format(
-                &tr("%1 rows: %2"),
-                &[table, &count.to_string()],
-            )));
-        }
+        // Counts per kind only, one line each in one block, so Continue stays on the
+        // first page. The schema version and per-table counts go to the log.
+        let counts: Vec<String> = kinds(&plan.counts, true)
+            .into_iter()
+            .map(|(label, count)| tr_format(&tr("%1: %2"), &[&label, &count.to_string()]))
+            .collect();
+        rows.push(Entry::Text(counts.join("\n")));
         rows.push(Entry::Text(tr(
             "Reading positions and typography are not imported.",
         )));
         rows.push(Entry::Button {
             key: "kobo-confirm",
-            label: tr("Continue"),
+            label: tr("Import"),
             action: "settings:data:kobo:confirm".into(),
         });
     }
     if let Some(report) = report {
         rows.push(Entry::Text(tr("Kobo import finished. Skipped counts include duplicates, missing books, deleted or invalid records, and highlights whose text was not found.")));
-        for ((label, imported), (_, skipped)) in kinds(&report.imported, false)
+        let lines: Vec<String> = kinds(&report.imported, false)
             .into_iter()
             .zip(kinds(&report.skipped, false))
-        {
-            rows.push(Entry::Text(tr_format(
-                &tr("%1: %2 imported, %3 skipped"),
-                &[&label, &imported.to_string(), &skipped.to_string()],
-            )));
-        }
+            .map(|((label, imported), (_, skipped))| {
+                tr_format(
+                    &tr("%1: %2 imported, %3 skipped"),
+                    &[&label, &imported.to_string(), &skipped.to_string()],
+                )
+            })
+            .collect();
+        rows.push(Entry::Text(lines.join("\n")));
     }
     rows.push(Entry::Button {
         key: "kobo-close",
-        label: tr("Done"),
+        // Before the import this button leaves without importing.
+        label: if report.is_some() {
+            tr("Done")
+        } else {
+            tr("Cancel")
+        },
         action: "settings:data:kobo:close".into(),
     });
     let header = WidgetPod::new(
