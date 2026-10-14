@@ -13,6 +13,10 @@
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
 //! | `reading.page_turn_waveform` | string | `cleaner` | E Ink waveform of a page turn: `cleaner` (gray with ghost reduction) or `faster` (fast black and white). Full refreshes keep their waveform. See [`page_turn`]. |
 //! | `reading.highlight_shade` | number | 0.2 | Shade of a box highlight, from 0 to 1 in steps of 0.1, as KOReader's "Gray highlight opacity". A higher value is darker. The reader's More sheet shows it as a percent. See [`highlight_shade`]. |
+//! | `reading.header_title` | bool | false | Reader header shows the book title at the left. |
+//! | `reading.header_chapter` | bool | false | Reader header shows the current TOC chapter at the right. |
+//! | `reading.header_clock` | bool | false | Reader header shows the clock at the right, read on redraw. |
+//! | `reading.header_battery` | bool | false | Reader header shows the battery level at the right, read on redraw. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
 //! | `reading.footer_percent` | bool | false | Reader footer shows the reading percent. |
 //! | `reading.footer_time_chapter` | bool | false | Reader footer shows the time left in the chapter, or in the book before the first chapter. |
@@ -67,6 +71,10 @@ pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
 pub const READING_PAGE_TURN_WAVEFORM: &str = "reading.page_turn_waveform";
 /// Shade of a box highlight. See [`highlight_shade`].
 pub const READING_HIGHLIGHT_SHADE: &str = "reading.highlight_shade";
+pub const READING_HEADER_TITLE: &str = "reading.header_title";
+pub const READING_HEADER_CHAPTER: &str = "reading.header_chapter";
+pub const READING_HEADER_CLOCK: &str = "reading.header_clock";
+pub const READING_HEADER_BATTERY: &str = "reading.header_battery";
 /// Reader footer items, each on or off. See the Footer sheet of the reader.
 pub const READING_FOOTER_PAGE: &str = "reading.footer_page";
 pub const READING_FOOTER_PERCENT: &str = "reading.footer_percent";

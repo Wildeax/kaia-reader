@@ -195,3 +195,27 @@ fn ink_text_anchor_export_and_golden() {
         "the chosen color still settles after turning a page"
     );
 }
+
+#[test]
+fn ink_maps_to_the_page_image_below_the_header() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    let mut settings = kaia_events::Settings::open(&data.join("settings.json"));
+    settings.save("reading.header_title", kaia_events::Value::Bool(true));
+    settings.flush(&data.join("settings.json")).unwrap();
+    let mut app = open(tmp.path(), "juliet.epub");
+    let screen = app.screen();
+    let mut areas = None;
+    app.update_top::<PageView, _>(PAGE_KEY, |view, _| {
+        assert!(view.header_height > 0, "the header is on");
+        let page = view.page_area(kaia_gfx::Rect::from_size(screen));
+        areas = view
+            .ink
+            .as_ref()
+            .map(|ink| (ink.bounds(), page, view.header_height));
+    });
+    let (ink, page, header) = areas.expect("the page has an ink layer");
+    assert_eq!(ink, page, "ink maps to where the page image is drawn");
+    assert!(ink.y >= header as i32, "ink starts below the header strip");
+}

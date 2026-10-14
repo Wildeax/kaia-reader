@@ -82,6 +82,8 @@ pub enum Command {
     Bookmark,
     /// Turns a footer item on or off. The flag is the new state.
     Footer(Item, bool),
+    /// Turns a header item on or off.
+    Header(super::header::Item, bool),
     /// The page slider moved to a page number (1-based).
     Slider(f64),
     /// Opens the search panel.
@@ -251,6 +253,7 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["panel", "more"] => Command::Panel(PanelName::More),
         ["panel", "footer"] => Command::Panel(PanelName::Footer),
         ["footer", id] => Command::Footer(Item::from_id(id)?, flag(args)),
+        ["header", id] => Command::Header(super::header::Item::from_id(id)?, flag(args)),
         ["panel", "close"] => Command::PanelClose,
         ["contents", "tab", n] => Command::ContentsTab(n.parse().ok()?),
         ["contents", "goto", n] => Command::ContentsGoto(n.parse().ok()?),

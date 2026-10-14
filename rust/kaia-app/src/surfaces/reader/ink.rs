@@ -113,6 +113,18 @@ impl PageInk {
             .intersect(&self.bounds)
     }
 
+    /// The page image area on screen that strokes map to.
+    pub fn bounds(&self) -> Rect {
+        self.bounds
+    }
+
+    /// Moves the page down by `dy` pixels on screen. The reader calls it with the
+    /// header height, since the page image sits below the header strip.
+    pub(super) fn shift_down(&mut self, dy: i32) {
+        self.offset.y += dy;
+        self.bounds.y += dy;
+    }
+
     pub fn paint(&self, cx: &mut PaintCx) {
         cx.clipped(self.bounds, |cx| {
             for drawing in self
@@ -342,13 +354,14 @@ pub(super) fn toolbar(theme: &kaia_ui::Theme) -> kaia_ui::WidgetPod {
             "ink-color",
         ));
     }
+    // Literal tr() calls, so the string extractor finds each label.
     for (label, action, key) in [
-        ("Eraser", "reader:ink:eraser", "ink-eraser"),
-        ("Undo", "reader:ink:undo", "ink-undo"),
-        ("Delete", "reader:ink:delete", "ink-delete"),
-        ("Done", "reader:ink:toggle", "ink-done"),
+        (kaia_i18n::tr("Eraser"), "reader:ink:eraser", "ink-eraser"),
+        (kaia_i18n::tr("Undo"), "reader:ink:undo", "ink-undo"),
+        (kaia_i18n::tr("Delete"), "reader:ink:delete", "ink-delete"),
+        (kaia_i18n::tr("Done"), "reader:ink:toggle", "ink-done"),
     ] {
-        children.push(button(ButtonStyle::Text, &kaia_i18n::tr(label), action, key));
+        children.push(button(ButtonStyle::Text, &label, action, key));
     }
     kaia_ui::WidgetPod::new(
         Frame::new(kaia_ui::WidgetPod::new(

@@ -204,13 +204,13 @@ pub(super) enum Edge {
 /// The edge for a panel over `selection`. The panel goes to the top when the
 /// selection is in the lower half of the screen, so it does not cover the word.
 /// Otherwise it stays at the bottom.
-pub(super) fn edge_for(screen: Size, selection: Option<&Selection>) -> Edge {
+pub(super) fn edge_for(screen: Size, selection: Option<&Selection>, top_offset: u32) -> Edge {
     let rects = selection.map_or(&[][..], |s| s.screen_rects.as_slice());
     let top = rects.iter().map(|r| r.y).min();
     let bottom = rects.iter().map(|r| r.y + r.h as i32).max();
     match (top, bottom) {
         // The middle of the selection is at or below the middle of the screen.
-        (Some(top), Some(bottom)) if top + bottom >= screen.h as i32 => Edge::Top,
+        (Some(top), Some(bottom)) if top + bottom + 2 * top_offset as i32 >= screen.h as i32 => Edge::Top,
         _ => Edge::Bottom,
     }
 }
@@ -551,7 +551,7 @@ pub fn more(services: &Services, screen: Size) -> Window {
             ),
             button(
                 ButtonStyle::Secondary,
-                &tr("Footer"),
+                &tr("Header and footer"),
                 "reader:panel:footer",
                 "more-footer",
             ),
@@ -574,17 +574,70 @@ pub fn more(services: &Services, screen: Size) -> Window {
     sheet(services, screen, Some(&tr("More")), children, None)
 }
 
-/// The Footer sheet: one toggle per footer item. A toggle sends the new state, and
-/// the reader saves it and updates the footer line.
-pub fn footer_sheet(services: &Services, screen: Size, footer: &Footer) -> Window {
-    let mut children = vec![group_heading(services, &tr("Show in the footer"))];
+/// Both groups sit side by side so all ten switches fit on the reader screen.
+pub fn footer_sheet(
+    services: &Services,
+    screen: Size,
+    header: &super::header::Header,
+    footer: &Footer,
+) -> Window {
+    let mut header_rows = vec![group_heading(services, &tr("Header"))];
+    for item in super::header::Item::ALL {
+        let action = format!("reader:header:{}", item.id());
+        let key = format!("header-{}", item.id());
+        let toggle = WidgetPod::new(Toggle::pill(header.is_on(item)).on_action(&action)).with_key(&key);
+        header_rows.push(status_switch(services, &item.label(), toggle));
+    }
+    let mut footer_rows = vec![group_heading(services, &tr("Footer"))];
     for item in Item::ALL {
         let action = format!("reader:footer:{}", item.id());
         let key = format!("footer-{}", item.id());
         let toggle = WidgetPod::new(Toggle::pill(footer.is_on(item)).on_action(&action)).with_key(&key);
-        children.push(labelled(services, &item.label(), toggle));
+        let label = match item {
+            Item::TimeChapter => tr("Chapter time left"),
+            Item::TimeBook => tr("Book time left"),
+            _ => item.label(),
+        };
+        footer_rows.push(status_switch(services, &label, toggle));
     }
-    sheet(services, screen, Some(&tr("Footer")), children, None)
+    let groups = [header_rows, footer_rows]
+        .into_iter()
+        .map(|rows| {
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(
+                    Column::new(rows)
+                        .gap(services.theme.space.md)
+                        .cross_align(CrossAlign::Stretch)
+                        .shrink(),
+                ),
+                1,
+            ))
+        })
+        .collect();
+    let groups = WidgetPod::new(Row::new(groups).gap(services.theme.space.lg));
+    sheet(
+        services,
+        screen,
+        Some(&tr("Header and footer")),
+        vec![groups],
+        None,
+    )
+}
+
+/// Wrap long switch labels within their half of the sheet.
+fn status_switch(services: &Services, label: &str, toggle: WidgetPod) -> WidgetPod {
+    let t = &services.theme;
+    WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(Paragraph::new(label, t.font.body.clone(), Tone::Ink).max_lines(2)),
+                1,
+            )),
+            toggle,
+        ])
+        .gap(t.space.md)
+        .cross_align(CrossAlign::Center),
+    )
 }
 
 /// A highlight color: a square, or a round dot when `round` is set. It is framed.
