@@ -22,6 +22,8 @@ md-5 = "0.11"
 roxmltree = "0.21"
 rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 thiserror = "2"
+# Folds Latin accents for suggestions, as the FTS5 unicode61 tokenizer does.
+unicode-normalization = "0.1"
 # Reads EPUB entries with plain deflate only. The `deflate` feature also builds
 # zopfli, which only compresses.
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

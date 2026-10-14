@@ -20,6 +20,7 @@ pub mod covers;
 pub mod i18n;
 pub mod refresh;
 pub mod router;
+pub mod safe_mode;
 pub mod scan;
 pub mod services;
 pub mod slider;

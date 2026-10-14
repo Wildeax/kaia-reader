@@ -219,7 +219,7 @@ msgstr ""
 msgid "Airplane mode"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:954 rust/kaia-app/src/surfaces/catalogs/mod.rs:132 rust/kaia-app/src/surfaces/catalogs/mod.rs:337 rust/kaia-app/src/surfaces/settings/quick.rs:172
+#: rust/kaia-app/src/app.rs:963 rust/kaia-app/src/surfaces/catalogs/mod.rs:132 rust/kaia-app/src/surfaces/catalogs/mod.rs:337 rust/kaia-app/src/surfaces/settings/quick.rs:172
 msgid "Airplane mode is on. Turn it off to use Wi-Fi."
 msgstr ""
 
@@ -767,7 +767,7 @@ msgstr ""
 msgid "Could not power off: %1"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:363
+#: rust/kaia-app/src/app.rs:372
 msgid "Could not save the reading position for sync. Try again."
 msgstr ""
 
@@ -925,7 +925,7 @@ msgstr ""
 msgid "Eraser on"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:381
+#: rust/kaia-app/src/app.rs:390
 msgid "Exit anyway"
 msgstr ""
 
@@ -1151,8 +1151,20 @@ msgstr ""
 msgid "Kaia data"
 msgstr ""
 
+#: rust/kaia-app/src/safe_mode.rs:101
+msgid "Kaia did not start correctly several times in a row, so it started in safe mode. Third-party plugins are off. Once this start has run for a few seconds, the next start is normal."
+msgstr ""
+
 #: rust/kaia-app/src/surfaces/notes/export.rs:48
 msgid "Kaia notes"
+msgstr ""
+
+#: rust/kaia-app/src/safe_mode.rs:98
+msgid "Kaia started in safe mode because the safemode file is in the .kaia folder. Third-party plugins are off. To leave safe mode, connect the Kobo over USB, delete the safemode file from the .kaia folder, then restart Kaia."
+msgstr ""
+
+#: rust/kaia-app/src/safe_mode.rs:104
+msgid "Kaia started in safe mode. Third-party plugins are off."
 msgstr ""
 
 #: rust/kaia-app/src/surfaces/settings/sections.rs:304
@@ -1167,7 +1179,7 @@ msgstr ""
 msgid "Kaia, sleeping"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:380 rust/kaia-app/src/surfaces/reader/panels.rs:1415
+#: rust/kaia-app/src/app.rs:389 rust/kaia-app/src/surfaces/reader/panels.rs:1415
 msgid "Keep reading"
 msgstr ""
 
@@ -1557,7 +1569,7 @@ msgstr ""
 msgid "Previous feed page"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:514
+#: rust/kaia-app/src/app.rs:523
 msgid "Progress sync failed: %1"
 msgstr ""
 
@@ -1811,7 +1823,7 @@ msgstr ""
 msgid "Suspend after no input. The timeout is in Device."
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:375
+#: rust/kaia-app/src/app.rs:384
 msgid "Sync position not saved"
 msgstr ""
 
@@ -1911,7 +1923,7 @@ msgstr ""
 msgid "The reader is busy"
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:376
+#: rust/kaia-app/src/app.rs:385
 msgid "The reading position could not be saved for sync. Exiting now drops that update. The book keeps its own saved position."
 msgstr ""
 
@@ -1931,7 +1943,7 @@ msgstr ""
 msgid "The selection has no text box."
 msgstr ""
 
-#: rust/kaia-app/src/app.rs:511
+#: rust/kaia-app/src/app.rs:520
 msgid "The server answered."
 msgstr ""
 

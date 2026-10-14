@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # Run a packaged Rust app under armv7 emulation and save Home and EPUB frames.
-# Usage: rust-app-smoke.sh package.zip output-directory
+# Usage: rust-app-smoke.sh [--skip-binfmt] package.zip output-directory
+#   --skip-binfmt  Do not install the armv7 binfmt handler. CI installs it with
+#                  docker/setup-qemu-action, and the pinned tonistiigi/binfmt
+#                  image is then not needed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ZIP="${1:?usage: rust-app-smoke.sh package.zip output-directory}"
+SKIP_BINFMT=0
+if [ "${1:-}" = --skip-binfmt ]; then
+    SKIP_BINFMT=1
+    shift
+fi
+ZIP="${1:?usage: rust-app-smoke.sh [--skip-binfmt] package.zip output-directory}"
 OUT="${2:?missing output directory under HOME}"
 mkdir -p "${OUT}"
 OUT="$(cd "${OUT}" && pwd)"
@@ -20,7 +28,9 @@ cp "${ROOT}/test/juliet.epub" "${OUT}/books/juliet.epub"
 for ((i = 0; i < 10; i++)); do
     echo 'key RPgFwd'
 done >"${OUT}/turn-pages.txt"
-docker run --privileged --rm tonistiigi/binfmt --install arm
+if [ "${SKIP_BINFMT}" -eq 0 ]; then
+    docker run --privileged --rm tonistiigi/binfmt --install arm
+fi
 docker run --rm --platform linux/arm/v7 --network none \
     -v "${OUT}:/work" \
     -v "${OUT}/package:/work/package:ro" \

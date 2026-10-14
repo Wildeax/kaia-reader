@@ -63,6 +63,51 @@ Runs on pushes to `main` and on pull requests that touch the Kaia docs, Kaia Lua
 
 The check covers `docs/kaia/`, `frontend/kaia/`, `plugins/kaia*`, `tools/kaia/`, `rust/**/*.rs` and `CLAUDE.md`. It skips `docs/kaia/ENGINEERING_PLAN.md` and `docs/kaia/INITIAL_BACKLOG.md`, which the project owner wrote. Run it from the repository root. It prints each dash with its file, line and column.
 
+### `kaia-kobo.yml`
+
+Runs on pushes to `main`, on pull requests that touch `rust/**`, `platform/kobo/**`, `tools/kaia/**` or the workflow file, and on manual runs (`workflow_dispatch`).
+
+| Job | Gates | Details |
+|---|---|---|
+| `package`, matrix `kobo` and `kobov5` | Both Kobo packages build. The Rust additions pass `check-rust-package.sh` on the unzipped package. The armv7 Rust app runs under qemu and writes its screenshots. | Timeout 180 minutes per target. The two targets run in parallel. `fail-fast: false`, so one failing target does not cancel the other. |
+
+The job runs these steps in order, for each target:
+
+1. Removes four preinstalled directories (`/usr/share/dotnet`, `/usr/local/lib/android`, `/opt/ghc`, `/opt/hostedtoolcache/CodeQL`) to free disk space. `df` prints the space before and after.
+2. Checks out the repository with full history and tags. KOReader's `version_spec` reads `git describe`.
+3. Runs `make fetchthirdparty`. The `CI` variable makes it fetch the submodules at depth 1, including `test/`, which holds the smoke EPUB.
+4. Checks that `docker`, `unzip`, `zip`, `file` and `tee` exist.
+5. Restores the cargo caches (see below).
+6. Runs `tools/kaia/build-kobo.sh <target>`. This builds the KOReader package in `koreader/kokobo`, pinned by digest in the script. The build runs from source on every run.
+7. Runs `tools/kaia/build-libkaia.sh <target>`. This builds `libkaia.so` in `kaia/kobo-rust:1`, the image from `tools/kaia/docker/kobo-rust.Dockerfile`.
+8. Runs `tools/kaia/build-rust-kobo.sh <target> build -p kaia-app --bin kaia --no-default-features --features kobo`.
+9. Runs `tools/kaia/package-kobo.sh` into `dist/packages/<target>/`.
+10. Unzips the package into a new directory and runs `tools/kaia/check-rust-package.sh` on that tree. Packaging runs the same check on the staging tree before it zips, so this step checks the bytes that ship.
+11. Sets up qemu for `arm` with `docker/setup-qemu-action`.
+12. Runs `tools/kaia/rust-app-smoke.sh --skip-binfmt` with its output under `$RUNNER_TEMP/kaia-smoke/<target>`. The `--skip-binfmt` flag stops the script from pulling the unpinned `tonistiigi/binfmt` image, because step 11 registers the handler.
+13. Uploads the logs and, on failure, the packages.
+
+Every build step writes its output to `ci-logs/<step>-<target>.log` with `tee`.
+
+Cache keys. `<hash>` is the hash of `rust/Cargo.lock` and `tools/kaia/docker/kobo-rust.Dockerfile`.
+
+- The cargo registry is cached at `$RUNNER_TEMP/kaia-rust-cache/registry` with the key `kaia-kobo-registry-<hash>`. Both targets share it. The restore key `kaia-kobo-registry-` falls back to the newest entry.
+- The Rust target directory is cached at `$RUNNER_TEMP/kaia-rust-cache/target-<target>` with the key `kaia-kobo-<target>-target-<hash>`. The restore key `kaia-kobo-<target>-target-` falls back to the newest entry for that target.
+
+`build-rust-kobo.sh` reads these directories from `KAIA_RUST_CACHE_DIR`. Without that variable, it uses Docker volumes, as on a developer machine. `actions/cache` saves an entry only when the job succeeds.
+
+Artifacts:
+
+- `kaia-kobo-<target>-logs`, kept 14 days, on every run. It holds `ci-logs/` and the smoke output: `qemu.log`, `no-device.log` and the three screenshots.
+- `kaia-kobo-<target>-packages`, kept 7 days, on failure only. It holds `dist/packages/<target>/`: the Kaia zip and `SHA256SUMS`. Packages are not uploaded on success because their size is not measured yet. Change the `if:` line to keep them on success.
+
+Not in this job:
+
+- The KOReader build volume is not cached. It is several gigabytes, and each target builds KOReader from scratch on every run. The `libkaia.so` build (`build-libkaia.sh`) also rebuilds its cargo target from scratch, because that script is not cached yet.
+- `tools/kaia/arm-smoke.sh`, the Lua side smoke, does not run in this job.
+- Changes to `frontend/`, `plugins/` or `resources/` do not start this job, unless the same pull request also touches a listed path. The package includes those directories, so a frontend break shows only in the next run that matches a listed path.
+- `debian:bookworm-slim`, the smoke test image, has no digest pin. The image tag comes from `tools/kaia/rust-app-smoke.sh`.
+
 ## Upstream workflows
 
 The repository also has upstream KOReader CI. Kaia does not edit those files.
@@ -99,4 +144,5 @@ The `emulator` job compiles the third-party libraries on the first build, so it 
 
 - The workflows do not test the E Ink display, power use or device behavior. Those need the device, as `CONTRIBUTING.md` says.
 - The desktop emulator job runs on `x86_64` runners. The image index also has an `arm64` variant, which the local checks used.
+- The `kaia-kobo` job has not yet run on GitHub. Its 180-minute timeout, its disk use and its cache sizes are estimates until a run records them. The armv7 smoke test runs under qemu, which checks the ABI and startup, not the Libra Colour display.
 - The `kaia-lua` `emulator` job does not run on device hardware or with signing keys. Device and signing jobs belong in a protected, human-approved environment, not in these workflows.

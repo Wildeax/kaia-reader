@@ -57,8 +57,9 @@ still needs a device test.
 
 The Rust launcher writes `/mnt/onboard/.kaia/rust.log` and keeps the last
 500 KB at each launch. It restores the framebuffer depth and rotation on
-exit, then restarts Nickel if Nickel was running when it started. It does
-not use the Lua app's crash restart loop or safe-mode counter.
+exit, then restarts Nickel if Nickel was running when it started. It counts
+failed starts for safe mode (see "Safe mode" below). It does not use the Lua
+app's crash restart loop.
 
 Rust settings, library data and reading state live in `/mnt/onboard/.kaia`.
 The Rust app reads packaged `fonts/`, `data/` and `resources/` beside its
@@ -90,6 +91,8 @@ Deleting `.adds/kaia` removes Kaia's settings, per-book reading data, sticker da
 | `.adds/kaia/kaia`, `kaia-rust.sh`, `resources/` | Rust binary, launcher and UI assets |
 | `.kaia/settings.json`, `library.sqlite3`, `kaia/books/` | Rust settings, library index and reading state |
 | `.kaia/rust.log` | Rust app and launcher log |
+| `.kaia/safemode` | Empty file the user creates over USB to start the Rust app in safe mode |
+| `.kaia/kaia-startup-attempts` | Failed-start count for Rust safe mode. The launcher and the app update it. |
 
 Kaia keeps per-book data (reading position, highlights, notes) in its own folder, `.adds/kaia/docsettings/`. The first time Kaia opens a book that stock KOReader already read, it copies KOReader's `<book>.sdr` data, so highlights carry over. After that the two apps keep separate copies, and Kaia never changes or deletes KOReader's `.sdr` folder. You can switch this in Settings, Document, Book metadata location; choosing the book folder shares the `.sdr` folder with KOReader. Both apps also read fonts from `/mnt/onboard/fonts`.
 
@@ -99,7 +102,30 @@ Safe mode turns off third-party plugins and user patches. Kaia shows a notice on
 
 - To start in safe mode, create an empty file named `safemode` in `.adds/kaia/` over USB, then start Kaia.
 - To leave safe mode, delete that file, then start Kaia again.
-- Kaia also starts in safe mode after three failed starts in a row. Leaving safe mode clears the counter.
+- Kaia also starts in safe mode after three failed starts in a row. A healthy start clears the counter.
+
+### Rust app safe mode
+
+The Rust app has its own marker and counter in the Rust data folder. The Lua
+app's `safemode` file does not affect the Rust app, and the reverse holds too.
+
+- To start the Rust app in safe mode, connect the Kobo over USB and create an
+  empty file named `safemode` in the `.kaia` folder at the root of the storage,
+  so the path is `/mnt/onboard/.kaia/safemode`. Eject the Kobo, then start
+  "Kaia Reader Rust".
+- To leave safe mode, delete that file over USB, then start the Rust app again.
+  The Rust app does not delete the file itself.
+- The launcher adds one to the count in `/mnt/onboard/.kaia/kaia-startup-attempts`
+  before each start. A start whose count, after that increment, is above 3 runs
+  in safe mode. So the fourth start after three failed starts is the first safe
+  mode start.
+- A start is healthy once its first screen has painted and stayed up for 10
+  seconds. A healthy start clears the count. A clean exit clears it too.
+- A start in safe mode because of the count keeps the count until that start is
+  healthy, as the Lua app does. A start that keeps failing stays in safe mode. A
+  start in safe mode because of the marker keeps the marker.
+- The Rust app shows a notice on the screen when it starts in safe mode. In
+  safe mode the Rust app does not load user plugins. Bundled plugins still load.
 
 ## Crash handling
 

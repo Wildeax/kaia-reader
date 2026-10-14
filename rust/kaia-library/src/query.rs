@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row, TransactionBehavior};
+use unicode_normalization::char::is_combining_mark;
+use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{LibraryError, Result};
 use crate::scan::{book_file, mtime_secs};
@@ -197,16 +199,17 @@ impl Library {
     /// Suggestions for the search field. Each one is a title, an author name or a
     /// series name, as the books show it. A text matches when it starts with the
     /// query, or when each word of the query starts a word of the text. Matching
-    /// ignores ASCII case. Only the title, authors and series count, so a word
-    /// that appears only in the description suggests nothing.
+    /// ignores case and Latin accents, as the search index does: "ecl" suggests
+    /// "Éclair" and "senor" suggests "Señor". Other scripts keep their accents.
+    /// Only the title, authors and series count, so a word that appears only in
+    /// the description suggests nothing.
     ///
     /// Prefix matches come first, then the other matches. Within each group the
     /// text of the book opened most recently comes first, then the text in
-    /// alphabetical order. Each text appears once for each kind. At most `limit`
-    /// come back. A query with no letters or digits returns nothing.
-    ///
-    /// The index matches accents, but this check does not: "ecl" finds
-    /// "Éclair" in [`Library::search`], and no suggestion shows it.
+    /// alphabetical order, with accents folded. Each text appears once for each
+    /// kind, ignoring case. "Cafe" and "Café" are different texts, so both show.
+    /// At most `limit` come back. A query with no letters or digits returns
+    /// nothing.
     ///
     /// One query reads at most 200 books, the best of them by prefix match and
     /// then by recency. Each book is a row of the full-text index, so the cost
@@ -217,11 +220,16 @@ impl Library {
             return Ok(Vec::new());
         }
         let phrase = normalize(query);
+        // Same text as `phrase` without the accent folding, which SQLite cannot do.
+        let sql_phrase = collapse(query).to_ascii_lowercase();
         let expr = words
             .iter()
             .map(|w| format!("{{title authors series}} : \"{w}\"*"))
             .collect::<Vec<_>>()
             .join(" ");
+        // The SQL order only picks the candidates. Its prefix test uses SQLite
+        // lower(), which ignores accents, so an accented prefix can miss the cut
+        // when more than SUGGEST_CANDIDATES books match.
         let sql = format!(
             "SELECT {} FROM book_fts JOIN books ON books.id = book_fts.rowid
              WHERE book_fts MATCH ?1 AND books.missing_since IS NULL
@@ -232,7 +240,7 @@ impl Library {
              LIMIT ?3",
             cols("books.")
         );
-        let books = self.query_books(&sql, params![expr, phrase, SUGGEST_CANDIDATES as i64])?;
+        let books = self.query_books(&sql, params![expr, sql_phrase, SUGGEST_CANDIDATES as i64])?;
         Ok(rank_suggestions(&books, &phrase, &words, limit))
     }
 
@@ -782,7 +790,7 @@ struct Ranked {
     /// The last time the book was opened, newest first. A book never opened
     /// sorts after every opened book.
     opened: Reverse<Option<i64>>,
-    /// The text ignoring ASCII case. Equal keys are one suggestion per kind.
+    /// The text folded by [`normalize`], for alphabetical order.
     key: String,
     kind: &'static str,
     text: String,
@@ -821,10 +829,11 @@ fn rank_suggestions(books: &[Book], phrase: &str, words: &[String], limit: usize
         }
     }
     ranked.sort();
+    // One suggestion per kind and text, ignoring case. Accents keep texts apart.
     let mut seen = BTreeSet::new();
     ranked
         .into_iter()
-        .filter(|r| seen.insert((r.kind, r.key.clone())))
+        .filter(|r| seen.insert((r.kind, r.text.to_lowercase())))
         .take(limit)
         .map(|r| Suggestion {
             text: r.text,
@@ -865,9 +874,49 @@ fn collapse(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// [`collapse`] with ASCII letters in lower case. Other letters keep their case.
+/// [`collapse`] folded by [`fold`].
 fn normalize(text: &str) -> String {
-    collapse(text).to_ascii_lowercase()
+    fold(&collapse(text))
+}
+
+/// Lower case, with the marks of Latin letters removed: "Canción" is "cancion"
+/// and "ñ" is "n". This is the fold of the unicode61 tokenizer behind the index,
+/// which covers Latin letters only. The letters of other scripts keep their
+/// marks, so "Οδύσσεια" stays "οδύσσεια" and "がっこう" keeps its dakuten. "ø"
+/// and "ł" have no mark to drop, so they stay too.
+fn fold(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    // Whether the last character written was a Latin letter. A combining mark
+    // after one belongs to that letter, so it is dropped with it.
+    let mut after_latin = false;
+    for c in text.chars() {
+        if c.is_ascii() {
+            out.push(c.to_ascii_lowercase());
+            after_latin = c.is_ascii_alphabetic();
+        } else if is_combining_mark(c) {
+            if !after_latin {
+                out.push(c);
+            }
+        } else {
+            // The first character of the canonical decomposition is the base.
+            let base = std::iter::once(c).nfd().next().unwrap_or(c);
+            if is_latin_letter(base) {
+                out.extend(base.to_lowercase());
+                after_latin = true;
+            } else {
+                out.extend(c.to_lowercase());
+                after_latin = false;
+            }
+        }
+    }
+    out
+}
+
+/// A letter of the Latin blocks that the tokenizer folds: Latin-1 Supplement
+/// through Latin Extended-B, and Latin Extended Additional.
+fn is_latin_letter(c: char) -> bool {
+    c.is_ascii_alphabetic()
+        || (matches!(c, '\u{00C0}'..='\u{024F}' | '\u{1E00}'..='\u{1EFF}') && c.is_alphabetic())
 }
 
 /// Sets the status of one book on `conn`, which is normally a transaction.
@@ -968,6 +1017,19 @@ mod tests {
         assert_eq!(fts_query("\" OR * ").as_deref(), Some("\"OR\"*"));
         assert_eq!(fts_query(" -- ** "), None);
         assert_eq!(fts_query(""), None);
+    }
+
+    #[test]
+    fn fold_removes_latin_marks_and_keeps_other_letters() {
+        assert_eq!(fold("Canción"), "cancion");
+        assert_eq!(fold("ÉCLAIR Naïve"), "eclair naive");
+        assert_eq!(fold("Señor"), "senor");
+        assert_eq!(fold("Ệ Ǎ ǰ"), "e a j");
+        assert_eq!(fold("A\u{0301}"), "a", "a decomposed letter folds the same way");
+        assert_eq!(fold("Åström"), "astrom", "a letter whose base is ASCII folds too");
+        assert_eq!(fold("Ø Łódź"), "ø łodz", "ø and ł have no mark to drop");
+        assert_eq!(fold("Οδύσσεια"), "οδύσσεια");
+        assert_eq!(fold("がっこう"), "がっこう");
     }
 
     #[test]

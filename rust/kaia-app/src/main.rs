@@ -93,13 +93,9 @@ fn prepare<B: Backend>(backend: B, platform: Platform, options: &Options) -> Res
         dpi: backend.dpi(),
         format: backend.format(),
     };
-    let services = Services::open(platform, panel, options.data.clone())?;
-    #[cfg(feature = "lua")]
-    let services = {
-        let mut services = services;
-        services.plugins.startup_safe_mode = options.safe_mode;
-        services
-    };
+    let mut services = Services::open(platform, panel, options.data.clone())?;
+    // The launcher passes --safe-mode after failed starts. A marker file also turns it on.
+    kaia_app::safe_mode::begin(&mut services, options.safe_mode);
     let mut roots = options.books.clone();
     if roots.is_empty() && !options.headless {
         roots.push(services.paths.books_dir.clone());

@@ -7,7 +7,9 @@ frontlight or USB handover.
 ## Prepare
 
 1. Follow `BACKUP_AND_RECOVERY.md`. Back up the books, `.kobo`, `.adds/kaia`
-   and `.kaia` if it exists. Keep a copy off the device.
+   and `.kaia`. `backup.sh` copies `.kaia` when the folder exists, so check
+   that `BACKUP_INFO.txt` lists it before continuing. Keep a copy off the
+   device.
 2. Record the firmware version and package SHA-256. Pick `kobo` for firmware
    4.x or `kobov5` for firmware 5.x. Do not put a 5.x binary on 4.x firmware.
 3. Charge the battery. Copy a small EPUB with known text and a colour cover

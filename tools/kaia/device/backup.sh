@@ -12,7 +12,10 @@
 # The backup mirrors device paths. Each copied item keeps its path relative to
 # the mount, so restore.sh can copy it back to the same place:
 #
-#   .adds/kaia/                      Kaia application and data directory
+#   .adds/kaia/                      Kaia application directory
+#   .kaia/                           Kaia data directory: settings, reading state,
+#                                    library index, statistics, fonts, dictionaries
+#                                    and cache, copied whole (the cache is not skipped)
 #   .adds/koreader/<settings>        KOReader settings and user patches, if present
 #   .adds/nm/                        NickelMenu configuration
 #   <any path>/*.sdr/                book sidecars (outside .kobo and .adds)
@@ -133,13 +136,14 @@ copy_item() {
 }
 
 copy_item ".adds/kaia"
+copy_item ".kaia"
 copy_item ".adds/nm"
 
 for _name in ${KOREADER_SETTINGS}; do
     copy_item ".adds/koreader/${_name}"
 done
 
-find "${MOUNT}" \( -name .kobo -o -name .adds \) -prune -o -type d -name '*.sdr' -print >"${SDR_LIST}"
+find "${MOUNT}" \( -name .kobo -o -name .adds -o -name .kaia \) -prune -o -type d -name '*.sdr' -print >"${SDR_LIST}"
 while IFS= read -r _path; do
     copy_item "${_path#"${MOUNT}"/}"
 done <"${SDR_LIST}"
@@ -169,6 +173,9 @@ fi
 
 if [ ! -d "${BK}/.adds/kaia" ]; then
     info "warning: .adds/kaia was not found on this volume"
+fi
+if [ ! -d "${BK}/.kaia" ]; then
+    info "warning: .kaia was not found on this volume"
 fi
 
 # Manifest: sha256 of every file in the backup except the manifest and info files.

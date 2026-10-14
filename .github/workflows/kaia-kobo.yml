@@ -1,0 +1,192 @@
+name: kaia-kobo
+
+# Builds the Kobo package for both firmware targets from the pinned KOReader
+# toolchain image, checks the Rust additions in each package, and runs the Rust
+# app under armv7 emulation (qemu). Logs are kept on every run. Packages are kept
+# when a run fails. Pull requests from forks get a read-only token and no secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'platform/kobo/**'
+      - 'tools/kaia/**'
+      - 'frontend/**'
+      - 'plugins/**'
+      - 'resources/**'
+      - 'l10n-kaia/**'
+      - '.github/workflows/kaia-kobo.yml'
+  pull_request:
+    paths:
+      - 'rust/**'
+      - 'platform/kobo/**'
+      - 'tools/kaia/**'
+      - 'frontend/**'
+      - 'plugins/**'
+      - 'resources/**'
+      - 'l10n-kaia/**'
+      - '.github/workflows/kaia-kobo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  package:
+    name: kobo ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    # The KOReader build runs from scratch on every run, because its build
+    # volume is too large to cache. Both targets run in parallel.
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [kobo, kobov5]
+    env:
+      LOG_DIR: ci-logs
+      RUST_CACHE: ${{ runner.temp }}/kaia-rust-cache
+      SMOKE_ROOT: ${{ runner.temp }}/kaia-smoke
+    steps:
+
+      # The KOReader build and the Docker images may need more space than the
+      # runner image leaves free. This step removes preinstalled toolchains that
+      # this job does not use. df prints the space before and after.
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history and tags: KOReader's version_spec reads git describe.
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Same call as kaia-lua.yml. The CI variable makes the Makefile fetch
+      # the submodules at depth 1, which includes test/ for the smoke test.
+      - name: Fetch submodules
+        run: make fetchthirdparty
+
+      - name: Check host tools
+        run: |
+          set -euo pipefail
+          for tool in docker unzip zip file tee; do
+            command -v "${tool}" >/dev/null || { echo "missing ${tool}" >&2; exit 1; }
+          done
+          docker version --format '{{.Server.Version}}'
+
+      - name: Create log directory
+        run: mkdir -p "${LOG_DIR}"
+
+      # Keyed on rust/Cargo.lock and the image Dockerfile. The registry is shared
+      # by both targets. The target directory is per target. actions/cache saves
+      # an entry only when the job succeeds.
+      - name: Restore cargo registry cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.RUST_CACHE }}/registry
+          key: kaia-kobo-registry-${{ hashFiles('rust/Cargo.lock', 'tools/kaia/docker/kobo-rust.Dockerfile') }}
+          restore-keys: kaia-kobo-registry-
+
+      - name: Restore Rust target cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.RUST_CACHE }}/target-${{ matrix.target }}
+          key: kaia-kobo-${{ matrix.target }}-target-${{ hashFiles('rust/Cargo.lock', 'tools/kaia/docker/kobo-rust.Dockerfile') }}
+          restore-keys: kaia-kobo-${{ matrix.target }}-target-
+
+      - name: Build KOReader package
+        run: |
+          set -euo pipefail
+          tools/kaia/build-kobo.sh "${{ matrix.target }}" 2>&1 | tee -a "${LOG_DIR}/build-kobo-${{ matrix.target }}.log"
+
+      # Also builds kaia/kobo-rust:1 from tools/kaia/docker/kobo-rust.Dockerfile,
+      # which the Rust build below reuses.
+      - name: Build libkaia.so
+        run: |
+          set -euo pipefail
+          tools/kaia/build-libkaia.sh "${{ matrix.target }}" 2>&1 | tee -a "${LOG_DIR}/build-libkaia-${{ matrix.target }}.log"
+
+      - name: Build the Rust app
+        env:
+          KAIA_RUST_CACHE_DIR: ${{ env.RUST_CACHE }}
+        run: |
+          set -euo pipefail
+          tools/kaia/build-rust-kobo.sh "${{ matrix.target }}" build -p kaia-app --bin kaia --no-default-features --features kobo 2>&1 |
+            tee -a "${LOG_DIR}/build-rust-${{ matrix.target }}.log"
+
+      - name: Build the Kaia package
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(dist/koreader-${{ matrix.target }}-*.zip)
+          test "${#zips[@]}" -eq 1
+          mkdir -p "dist/packages/${{ matrix.target }}"
+          tools/kaia/package-kobo.sh "${zips[0]}" "dist/${{ matrix.target }}/libkaia.so" "dist/packages/${{ matrix.target }}" 2>&1 |
+            tee -a "${LOG_DIR}/package-${{ matrix.target }}.log"
+
+      # Unzips the package the way a device would, then checks the Rust
+      # additions in the unpacked tree. The packaging script checks the staging
+      # tree before it zips, so this step checks the bytes that ship.
+      - name: Check the Rust package
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(dist/packages/${{ matrix.target }}/kaia-kobo*.zip)
+          test "${#zips[@]}" -eq 1
+          stage="${RUNNER_TEMP}/package-stage-${{ matrix.target }}"
+          rm -rf "${stage}"
+          mkdir -p "${stage}"
+          unzip -q "${zips[0]}" -d "${stage}"
+          tools/kaia/check-rust-package.sh "${stage}" "dist/rust/${{ matrix.target }}/kaia" 2>&1 |
+            tee -a "${LOG_DIR}/check-rust-package-${{ matrix.target }}.log"
+
+      # The smoke script can register the armv7 handler with the unpinned
+      # tonistiigi/binfmt image. CI registers it with the pinned action instead,
+      # and the script runs with --skip-binfmt so that the image is not pulled.
+      - name: Set up qemu for armv7
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm
+
+      - name: Run the armv7 smoke test
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(dist/packages/${{ matrix.target }}/kaia-kobo*.zip)
+          test "${#zips[@]}" -eq 1
+          out="${SMOKE_ROOT}/${{ matrix.target }}"
+          rm -rf "${out}"
+          tools/kaia/rust-app-smoke.sh --skip-binfmt "${zips[0]}" "${out}" 2>&1 |
+            tee -a "${LOG_DIR}/smoke-${{ matrix.target }}.log"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kaia-kobo-${{ matrix.target }}-logs
+          path: |
+            ${{ env.LOG_DIR }}/
+            ${{ env.SMOKE_ROOT }}/${{ matrix.target }}/*.log
+            ${{ env.SMOKE_ROOT }}/${{ matrix.target }}/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload packages on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kaia-kobo-${{ matrix.target }}-packages
+          path: dist/packages/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 7

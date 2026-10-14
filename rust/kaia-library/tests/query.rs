@@ -767,23 +767,109 @@ fn suggestions_are_empty_for_blank_or_symbol_only_text() {
 }
 
 #[test]
-fn suggestions_do_not_fold_accents_so_the_plain_letters_find_nothing() {
+fn suggestions_fold_latin_accents_as_the_search_index_does() {
     let (tmp, _root) = setup();
     let lib = open_library(tmp.path());
-    add_book(&raw_connection(tmp.path()), "Éclair", None, None, None);
+    let raw = raw_connection(tmp.path());
+    add_book(&raw, "Éclair", None, None, None);
+    add_book(&raw, "Canción", Some("Ana Peña"), None, None);
+    add_book(&raw, "Naïve", None, None, None);
+    add_book(&raw, "Mi Señor", Some("Señor Pérez"), None, None);
+
+    let eclair = [("Éclair".to_string(), "title")];
+    assert_eq!(
+        suggestion_texts(&lib, "ecl", 5),
+        eclair,
+        "plain letters find the accented title"
+    );
     assert_eq!(
         suggestion_texts(&lib, "Écl", 5),
-        [("Éclair".to_string(), "title")],
+        eclair,
         "the same accent matches"
     );
-    assert!(
-        suggestion_texts(&lib, "ecl", 5).is_empty(),
-        "the suggestion check compares ASCII letters only"
+    assert_eq!(
+        suggestion_texts(&lib, "éclair", 5),
+        eclair,
+        "a whole word matches"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "cancion", 5),
+        [("Canción".to_string(), "title")]
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "CANCIÓN", 5),
+        suggestion_texts(&lib, "cancion", 5),
+        "accents and case together"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "naive", 5),
+        [("Naïve".to_string(), "title")]
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "pena", 5),
+        [("Ana Peña".to_string(), "author")],
+        "a word inside an author name matches without the accent"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "senor", 5),
+        [
+            ("Señor Pérez".to_string(), "author"),
+            ("Mi Señor".to_string(), "title"),
+        ],
+        "a prefix of an author name first, then a word of a title"
     );
     assert_eq!(
         lib.search("ecl", 5).unwrap().len(),
         1,
-        "the search index folds accents"
+        "the search index folds accents too"
+    );
+}
+
+#[test]
+fn suggestions_keep_texts_that_differ_only_in_accents() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    add_book(&raw, "Cafe", None, None, None);
+    add_book(&raw, "Café", None, None, None);
+    assert_eq!(
+        suggestion_texts(&lib, "caf", 5),
+        [("Cafe".to_string(), "title"), ("Café".to_string(), "title")],
+        "two titles, two suggestions"
+    );
+}
+
+#[test]
+fn suggestions_keep_the_accents_of_other_scripts() {
+    let (tmp, _root) = setup();
+    let lib = open_library(tmp.path());
+    let raw = raw_connection(tmp.path());
+    add_book(&raw, "Οδύσσεια", None, None, None);
+    add_book(&raw, "がっこう", None, None, None);
+
+    let odyssey = [("Οδύσσεια".to_string(), "title")];
+    assert_eq!(
+        suggestion_texts(&lib, "Οδύσσεια", 5),
+        odyssey,
+        "a Greek title suggests itself"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "οδύσσεια", 5),
+        odyssey,
+        "case does not matter"
+    );
+    assert!(
+        suggestion_texts(&lib, "Οδυσσεια", 5).is_empty(),
+        "Greek tonos is kept, as the index keeps it"
+    );
+    assert_eq!(
+        suggestion_texts(&lib, "がっこう", 5),
+        [("がっこう".to_string(), "title")],
+        "a Japanese title suggests itself"
+    );
+    assert!(
+        suggestion_texts(&lib, "かっこう", 5).is_empty(),
+        "the dakuten is kept, as the index keeps it"
     );
 }
 

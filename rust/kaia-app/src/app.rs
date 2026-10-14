@@ -228,7 +228,16 @@ impl<B: Backend> App<B> {
             let db = self.services.library_path();
             self.scan = Some(LibraryScan::spawn(db, self.options.library_roots.clone()));
         }
-        self.step(Vec::new()).map(|_| ())
+        self.step(Vec::new())?;
+        // The first screen is up. The start is healthy once it has stayed up for a while.
+        if self.stats.frames > 0 {
+            let data = self.services.paths.data_dir.clone();
+            self.ctx.scheduler.schedule_in(
+                crate::safe_mode::HEALTHY_AFTER.as_secs_f64(),
+                Box::new(move |_| crate::safe_mode::mark_healthy(&data)),
+            );
+        }
+        Ok(())
     }
 
     /// Runs one iteration, waiting for input at most `timeout` (or until something

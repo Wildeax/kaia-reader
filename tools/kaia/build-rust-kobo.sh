@@ -8,7 +8,9 @@
 # build-kobo.sh (kaia-build-<target>) is mounted read-only at /home/ko/build, so
 # MuPDF and CREngine link against the staging tree that the Kobo package uses.
 # Cargo writes to kaia-rust-kobo-target-<target> and the cargo registry to
-# kaia-rust-cargo-registry.
+# kaia-rust-cargo-registry. If KAIA_RUST_CACHE_DIR is set, both live in that
+# directory instead, as registry/ and target-<target>/. CI uses this to save
+# them with actions/cache.
 #
 # The build is a release build, as KOReader's Kobo build is. The script adds
 # --release unless the arguments name a profile, and it refuses other profiles.
@@ -104,20 +106,30 @@ if ! docker volume inspect "${BUILD_VOLUME}" >/dev/null 2>&1; then
 fi
 
 mkdir -p "${OUT}"
-docker volume create "${TARGET_VOLUME}" >/dev/null
-docker volume create kaia-rust-cargo-registry >/dev/null
+if [ -n "${KAIA_RUST_CACHE_DIR:-}" ]; then
+    mkdir -p "${KAIA_RUST_CACHE_DIR}/registry" "${KAIA_RUST_CACHE_DIR}/target-${TARGET}"
+    TARGET_MOUNT="${KAIA_RUST_CACHE_DIR}/target-${TARGET}"
+    REGISTRY_MOUNT="${KAIA_RUST_CACHE_DIR}/registry"
+else
+    docker volume create "${TARGET_VOLUME}" >/dev/null
+    docker volume create kaia-rust-cargo-registry >/dev/null
+    TARGET_MOUNT="${TARGET_VOLUME}"
+    REGISTRY_MOUNT=kaia-rust-cargo-registry
+fi
 
 docker run --rm --platform linux/amd64 \
     -v "${ROOT}":/src:ro \
     -v "${BUILD_VOLUME}":/home/ko/build:ro \
-    -v "${TARGET_VOLUME}":/target \
-    -v kaia-rust-cargo-registry:/home/ko/.cargo/registry \
+    -v "${TARGET_MOUNT}":/target \
+    -v "${REGISTRY_MOUNT}":/home/ko/.cargo/registry \
     -v "${OUT}":/out \
     -e TC="${TC}" -e MAX_GLIBC="${MAX_GLIBC}" -e TARGET="${TARGET}" \
     -e ARCH_FLAGS="${ARCH_FLAGS}" \
     "${IMAGE}" bash -lc '
 set -euo pipefail
-sudo chown ko:ko /target /home/ko/.cargo/registry 2>/dev/null || true
+# Recursive, because a cache directory restored by actions/cache starts out
+# owned by the runner user, and the files below it must be writable by ko.
+sudo chown -R ko:ko /target /home/ko/.cargo/registry 2>/dev/null || true
 
 # Build tree of the KOReader build for this target, read-only.
 B=/home/ko/build/base/build/${TC}

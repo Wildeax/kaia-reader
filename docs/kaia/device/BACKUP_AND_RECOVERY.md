@@ -1,6 +1,6 @@
 # Backup and recovery (KR-003)
 
-Status: the backup and restore scripts exist and were tested against a fake volume on a desktop. The Kaia safe mode described below is a design requirement. It is not implemented in this tree yet, so the KR-003 acceptance test cannot pass until it is.
+Status: the backup and restore scripts exist. `tools/kaia/device/test-backup-restore.sh` checks both against a fake volume on a desktop, including `.kaia`. The Kaia safe mode described below is a design requirement. It is not implemented in this tree yet, so the KR-003 acceptance test cannot pass until it is.
 
 Owner: platform engineer and QA. Depends on the hardware profile (HARDWARE_PROFILE.md).
 
@@ -10,13 +10,22 @@ Owner: platform engineer and QA. Depends on the hardware profile (HARDWARE_PROFI
 
 | Item | Location on the device | Notes |
 |---|---|---|
-| Kaia application and data | `.adds/kaia/` | Whole directory, including the plugin tree and state files. |
+| Kaia application | `.adds/kaia/` | Whole directory, including the plugin tree and the Lua app's state files. |
+| Kaia data (Rust app) | `.kaia/` | Whole directory: `settings.json`, reading state in `kaia/books/*.json`, `kaia/kaia.sqlite3`, `library.sqlite3`, `statistics.sqlite3`, `fonts/`, `dict/` and `cache/`. The cache is not skipped, so it is backed up too and counts toward the backup size. Copied only if the folder exists. |
 | KOReader settings and user patches | `.adds/koreader/settings.reader.lua`, `settings`, `patches`, `defaults.persistent.lua`, `defaults.custom.lua` | Each item is copied only if it exists. Check the list on the device once. |
 | NickelMenu configuration | `.adds/nm/` | |
 | Book sidecars | every `*.sdr` directory outside `.kobo` and `.adds` | KOReader keeps highlights, notes and reading position here. |
 | Nickel database (optional) | `.kobo/KoboReader.sqlite` | Only with `--include-nickel-db`. Copied as a read-only file. |
 
 The backup does not copy book files. Copy the library folders separately if they belong in the backup set.
+
+The Rust app keeps its data in `.kaia`, a folder beside `.adds`. The backup copies `.kaia` with the same hashes and manifest as the other items. The script skips nothing inside it.
+
+To run the fake-volume check on a desktop, with no device:
+
+```sh
+sh tools/kaia/device/test-backup-restore.sh
+```
 
 The backup mirrors device paths. A file at `.adds/kaia/core.lua` on the device is at `.adds/kaia/core.lua` in the backup. Every file has a SHA-256 hash in `MANIFEST.sha256`. `BACKUP_INFO.txt` records the time, the mount name, whether the database was included and the list of copied items. It does not record the computer's own paths.
 
@@ -45,7 +54,7 @@ The backup script never writes to the Kobo volume. It refuses a backup directory
 
 ## Restoring the Kaia directory
 
-`tools/kaia/device/restore.sh` restores only `.adds/kaia`. It runs as a dry run unless `--apply` is given.
+`tools/kaia/device/restore.sh` restores `.adds/kaia` and `.kaia`. It restores `.kaia` only when the backup contains it, so a backup made before `.kaia` was added leaves the current data folder alone. The two folders restore together. If either copy fails, both return to their state before the run. It runs as a dry run unless `--apply` is given.
 
 1. Connect the Kobo over USB and wait for the volume to mount. Kaia must not be running. A running app writes to storage.
 2. Dry run:
@@ -61,8 +70,8 @@ The backup script never writes to the Kobo volume. It refuses a backup directory
    sh tools/kaia/device/restore.sh ~/kaia-backups/kaia-backup-<time> /Volumes/KOBOeReader --apply
    ```
 
-   The script renames the current `.adds/kaia` to `.adds/kaia.replaced-<UTC time>`. It copies the backup in and checks every restored file. If the copy fails, it removes the partial copy and moves the replaced directory back.
-4. Eject the volume. Start Kaia from its launch entry. Delete `.adds/kaia.replaced-*` by hand after Kaia starts from the restored copy.
+   The script renames the current `.adds/kaia` to `.adds/kaia.replaced-<UTC time>` and the current `.kaia` to `.kaia.replaced-<UTC time>`. It copies both from the backup and checks every restored file. If a copy fails or a file does not match the manifest, it removes the new copies and moves both replaced directories back.
+4. Eject the volume. Start Kaia from its launch entry. Delete `.adds/kaia.replaced-*` and `.kaia.replaced-*` by hand after Kaia starts from the restored copy. Keep them until then: they hold the state from before the restore.
 
 Settings in `.adds/koreader` and `.adds/nm` are not restored by this script. Copy them by hand from the backup if needed, using the same USB procedure.
 
@@ -71,7 +80,8 @@ Settings in `.adds/koreader` and `.adds/nm` are not restored by this script. Cop
 - It never deletes or changes a book file, a sidecar, `.kobo` or `.adds/koreader`.
 - It never restores `.kobo/KoboReader.sqlite`. Nickel's database is not part of Kaia's recovery. Do not copy the database over the live file.
 - It never runs on a backup whose manifest does not match. The check runs before any write.
-- The only deletion it performs is the rollback of its own partial copy inside `.adds/kaia`.
+- It never changes `.kaia` when the backup has no `.kaia`.
+- The only deletion it performs is the rollback of its own new copies of `.adds/kaia` and `.kaia`.
 
 ### Factory reset is not a recovery path
 
@@ -81,7 +91,7 @@ A factory reset removes books and reading data. It fails the KR-003 acceptance c
 
 | Path | When to use | What it needs | Limits |
 |---|---|---|---|
-| **1. Kaia safe mode (automatic)** | A third-party plugin or a user patch breaks startup. | Safe mode in the Kaia launcher. Not implemented yet. | Does not help when the launcher itself is broken. |
+| **1. Kaia safe mode (automatic)** | A third-party plugin or a user patch breaks startup. | Safe mode in the Lua launcher (`kaia.sh`) and the Rust launcher (`kaia-rust.sh`). The launcher logic has host tests; no device test yet. | Does not help when the launcher itself is broken. |
 | **2. Return to Nickel** | Kaia fails before its UI starts, or the launch entry is the problem. | Nothing extra. Nickel and its launchers stay installed. | If the launch entry runs a broken launcher, the screen may stay blank. Power the device off and on again. |
 | **3. USB manual restore** | The launcher, the binary or the app directory is broken and safe mode cannot start. | The backup, the scripts and a USB connection that mounts the volume. | Needs the volume to mount while Kaia is in its failure state. Test this (see test B). |
 | **4. Remove the launch entry** | The entry itself keeps starting Kaia. | Access to the NickelMenu or KFMon configuration over USB. | Only for entries you created. Leave Nickel's own entries alone. |
@@ -96,6 +106,14 @@ Required behavior, for the Kaia launcher owner to implement:
 - A startup failure is counted in a file that survives the launcher's own restarts. The upstream launcher keeps its crash count in shell variables and resets it after 20 seconds without a crash, so it cannot be reused for this. Kaia writes the counter at the start of each launch and clears it after a healthy start, for example when the first screen is drawn and stays up for a fixed time. The exact values belong to the launcher owner and need a test.
 - In safe mode, Kaia does not load third-party plugins or user patches. Core Kaia starts, so the user can open a book, read it and leave.
 - Safe mode shows a visible notice on screen. Leaving safe mode removes the `safemode` file and the failure count.
+
+Rust app, as built:
+
+- The marker is `/mnt/onboard/.kaia/safemode`, in the Rust data folder. The counter is `/mnt/onboard/.kaia/kaia-startup-attempts`. The Lua app's files in `.adds/kaia` are separate.
+- `platform/kobo/kaia/kaia-rust.sh` adds one to the counter before each launch. A count above 3 after that increment, or the marker, starts the app with `--safe-mode`. A clean exit (status 0) removes the counter.
+- After a healthy start, the app removes the counter. A healthy start is a first screen that has painted and stayed up for 10 seconds (`rust/kaia-app/src/safe_mode.rs`, `HEALTHY_AFTER`). A start in safe mode because of the count keeps the counter until that start is healthy, so a start that keeps failing stays in safe mode. The marker stays until the user deletes it.
+- In safe mode the app skips user plugins and shows a notice that says how to leave safe mode.
+- Tests: `sh platform/kobo/kaia/test-kaia-rust.sh` runs the real launcher with a fake binary (marker, count below and at the limit, clean exit, repeated crashes). `cargo test -p kaia-app --test safe_mode` covers the app side.
 
 The upstream launcher is in `platform/kobo/koreader.sh`. Its restart loop stops after five consecutive crashes and keeps the crash log in `crash.log`. Safe mode must work with that loop, not replace it silently.
 
