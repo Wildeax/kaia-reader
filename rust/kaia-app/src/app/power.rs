@@ -643,9 +643,10 @@ mod latency_tests {
         std::fs::write(path, text).unwrap();
     }
 
-    /// Runs the loop until `done` holds. Fails after ten seconds.
+    /// Runs the loop until `done` holds. Fails after a minute. The suspend plan runs
+    /// a real `sync`, which can take many seconds on a CI runner after a large build.
     fn wait_until(app: &mut App<HeadlessBackend>, what: &str, done: impl Fn(&App<HeadlessBackend>) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(60);
         while !done(app) {
             assert!(Instant::now() < deadline, "timed out waiting for {what}");
             app.process(Vec::new()).unwrap();
@@ -707,13 +708,13 @@ mod latency_tests {
         wait_until(&mut app, "the prepare plan", |a| a.power.flow.finish_pending());
 
         // The reader opens the FIFO once the test releases it. The helper also
-        // gives up after ten seconds, so a blocked app thread fails the test instead
+        // gives up after a minute, so a blocked app thread fails the test instead
         // of hanging it.
         let (release, released) = mpsc::channel::<()>();
         let reader = std::thread::spawn({
             let state = state.clone();
             move || {
-                let _ = released.recv_timeout(Duration::from_secs(10));
+                let _ = released.recv_timeout(Duration::from_secs(60));
                 std::fs::File::open(&state).unwrap()
             }
         });
