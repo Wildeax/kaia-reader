@@ -5,6 +5,7 @@
 //!   field to `settings.json`. The key is one of `keys.rs`.
 //! - `settings:pick:<key>` writes the option a radio group chose (argument: the
 //!   option index, see [`options_for`]).
+//! - `settings:pick:option:<key>:<index>` selects a compact settings choice.
 //! - `settings:light:<frontlight|warmth>` sets the platform value (argument: 0 to 100).
 //! - `settings:fields:open` and `settings:fields:close` show and hide the
 //!   keyboard of the Network and sync section's text fields.
@@ -34,11 +35,29 @@ use kaia_events::Value;
 use super::{experiments, keys};
 use crate::surfaces::reader::dict::Change;
 
-/// The sections, in the order the root lists them.
-pub const SECTIONS: [&str; 11] = [
+/// The index groups. Kaia-specific pages remain reachable through Advanced.
+pub const INDEX_SECTIONS: [&str; 9] = [
+    "wifi",
+    "datetime",
+    "language-dictionaries",
+    "network",
+    "device",
+    "reading",
+    "library",
+    "device-info",
+    "advanced",
+];
+
+/// All sections with a direct settings command, including secondary pages.
+pub const SECTIONS: [&str; 16] = [
+    "wifi",
+    "datetime",
+    "language-dictionaries",
+    "device-info",
     "home",
     "reading",
     "display",
+    "fonts",
     "library",
     "network",
     "statistics",
@@ -158,6 +177,7 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
             ("silent", "Use synced position"),
             ("never", "Never"),
         ]),
+        keys::READING_TURN_GESTURE => Some(&keys::TURN_GESTURES),
         keys::READING_TAP_ZONES => Some(&keys::TAP_ZONE_PRESETS),
         keys::READING_PAGE_TURN_WAVEFORM => Some(&keys::PAGE_TURN_WAVEFORMS),
         keys::DEVICE_SLEEP_SCREEN => Some(&keys::SLEEP_SCREENS),
@@ -226,6 +246,12 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
             .get(index)
             .map(|n| Value::Number(f64::from(*n)));
     }
+    if key == keys::READING_FULL_REFRESH_PAGES {
+        return (index <= keys::FULL_REFRESH_PAGES_MAX as usize).then_some(Value::Number(index as f64));
+    }
+    if key == keys::DISPLAY_ROTATION_LOCK {
+        return (index < 2).then_some(Value::Bool(index == 1));
+    }
     if key == keys::DEVICE_STANDBY_MINUTES {
         return keys::STANDBY_MINUTES
             .get(index)
@@ -258,6 +284,17 @@ pub fn is_known_key(key: &str) -> bool {
         || matches!(
             key,
             keys::DISPLAY_LARGE_PRINT
+                | keys::READING_PROGRESS_BAR
+                | keys::READING_ADOBE_NUMBERS
+                | keys::READING_REDUCE_RAINBOW
+                | keys::READING_TURN_GESTURE
+                | keys::DEVICE_COVER_FULLSCREEN
+                | keys::DEVICE_CHARGING_INDICATOR
+                | keys::DEVICE_CLOCK_24H
+                | keys::READING_PINCH_SIZE
+                | keys::READING_EDGE_LIGHT
+                | keys::DEVICE_SLEEP_DETAILS
+                | keys::DEVICE_SHOW_BOOK
                 | keys::READING_INVERT_PAGE_BUTTONS
                 | keys::DEVICE_SLEEP_COVER
                 | keys::DEVICE_PAGE_BUTTON_WAKE

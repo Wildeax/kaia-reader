@@ -2,12 +2,12 @@
 //! from the settings and the device; [`widget`] turns each one into a widget.
 //! The list is paged, so the entries are plain data and cheap to build again.
 
+use super::widgets::{px, CompactRow as ListRow, SectionBar};
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Padding, Paragraph, Row, SizedBox, Spacer,
 };
-use kaia_ui::composite::ListRow;
-use kaia_ui::controls::{Button, ButtonStyle, RadioGroup, Slider, Stepper, TextField};
+use kaia_ui::controls::{ButtonStyle, Slider, TextField};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, WidgetPod};
 
@@ -17,6 +17,20 @@ use crate::surfaces::common::button;
 /// One line of a section.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Entry {
+    PageBreak,
+    TapZones {
+        preset: String,
+    },
+    DisabledRow(String),
+    DeviceDrawing {
+        inverted: bool,
+    },
+    Select {
+        key: &'static str,
+        label: String,
+        options: Vec<String>,
+        selected: usize,
+    },
     DeviceToggle {
         key: &'static str,
         label: String,
@@ -41,7 +55,11 @@ pub enum Entry {
         action: String,
     },
     /// A plugin switch with a discovered name.
-    PluginToggle { key: String, label: String, on: bool },
+    PluginToggle {
+        key: String,
+        label: String,
+        on: bool,
+    },
     /// A stepper. Its action writes `settings:set:<key>` with the new value.
     Stepper {
         key: &'static str,
@@ -123,6 +141,9 @@ const BAR_LABEL_ROW_HEIGHTS: u32 = 2;
 /// The widget for one entry of a section.
 pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
     match entry {
+        Entry::TapZones { preset } => {
+            WidgetPod::new(super::widgets::TapZones::new(preset)).with_key("settings-tap-zones")
+        }
         Entry::DeviceToggle {
             key,
             label,
@@ -135,30 +156,38 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 .on_action(format!("settings:set:{key}")),
         )
         .with_key(format!("set-{key}")),
-        // A heading starts a new group, so it has a space above it.
-        Entry::Heading(text) => WidgetPod::new(Padding::new(
-            WidgetPod::new(Label::new(text.clone(), t.font.label.clone(), Tone::InkSecondary)),
-            Insets {
-                left: 0,
-                top: t.space.md,
-                right: 0,
-                bottom: 0,
-            },
-        )),
-        // A note follows the rows above it, so it has the same space above as a heading.
+        Entry::DisabledRow(label) => {
+            WidgetPod::new(ListRow::new(label.clone()).enabled(false)).with_key(label.clone())
+        }
+        Entry::PageBreak => WidgetPod::new(SizedBox::new(None).height(0)),
+        Entry::DeviceDrawing { inverted } => {
+            WidgetPod::new(super::widgets::DeviceDrawing::new(*inverted)).with_key("settings-page-buttons")
+        }
+        Entry::Heading(text) => WidgetPod::new(SectionBar(text.clone())),
         Entry::Text(text) => WidgetPod::new(Padding::new(
             WidgetPod::new(Paragraph::new(
                 text.clone(),
-                t.font.caption.clone(),
-                Tone::InkSecondary,
+                kaia_ui::theme::FontSpec {
+                    family: "Noto Sans",
+                    size: px(t, 34) as f32 * t.text_scale,
+                    weight: 400,
+                },
+                Tone::Ink,
             )),
-            Insets {
-                left: 0,
-                top: t.space.md,
-                right: 0,
-                bottom: 0,
-            },
+            Insets::symmetric(px(t, 25), px(t, 24)),
         )),
+        Entry::Select {
+            key,
+            label,
+            options,
+            selected,
+        } => WidgetPod::new(
+            ListRow::new(label.clone())
+                .value(options.get(*selected).cloned().unwrap_or_default())
+                .dropdown()
+                .on_action(format!("settings:choose:{key}")),
+        )
+        .with_key(format!("pick-{key}")),
         Entry::Toggle { key, label, on } => WidgetPod::new(
             ListRow::new(label.clone())
                 .toggle(*on)
@@ -189,29 +218,24 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             max,
             step,
             unit,
-        } => {
-            let unit = *unit;
-            let stepper = Stepper::new(*value, *min, *max, *step)
-                .format(move |v| unit_text(unit, v))
-                .on_action(format!("settings:set:{key}"));
-            WidgetPod::new(
-                Row::new(vec![
-                    WidgetPod::new(Expanded::new(
-                        WidgetPod::new(Label::new(label.clone(), t.font.body.clone(), Tone::Ink)),
-                        1,
-                    )),
-                    WidgetPod::new(stepper).with_key(format!("set-{key}")),
-                ])
-                .gap(t.space.md)
-                .cross_align(CrossAlign::Center),
-            )
-        }
+        } => WidgetPod::new(super::widgets::CompactStepper {
+            key,
+            label: label.clone(),
+            value: *value,
+            min: *min,
+            max: *max,
+            step: *step,
+            unit: *unit,
+        })
+        .with_key(format!("set-{key}")),
         Entry::Radio {
             key,
             options,
             selected,
         } => WidgetPod::new(
-            RadioGroup::new(options.clone(), Some(*selected)).on_action(format!("settings:pick:{key}")),
+            ListRow::new(options.get(*selected).cloned().unwrap_or_default())
+                .dropdown()
+                .on_action(format!("settings:choose:{key}")),
         )
         .with_key(format!("pick-{key}")),
         Entry::Slider {
@@ -266,12 +290,9 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
             )
             .with_key(format!("field-{key}"))
         }
-        Entry::Button { key, label, action } => WidgetPod::new(
-            Button::new(ButtonStyle::Secondary)
-                .text(label.clone())
-                .on_action(action.clone()),
-        )
-        .with_key(*key),
+        Entry::Button { key, label, action } => {
+            WidgetPod::new(ListRow::new(label.clone()).on_action(action.clone())).with_key(*key)
+        }
         Entry::Row {
             primary,
             secondary,
@@ -286,7 +307,10 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 row = row.value(text.clone());
             }
             if let Some(action) = action {
-                row = row.chevron().on_action(action.clone());
+                if value.is_none() {
+                    row = row.chevron();
+                }
+                row = row.on_action(action.clone());
             }
             WidgetPod::new(row).with_key(action.clone().unwrap_or_else(|| primary.clone()))
         }
@@ -334,10 +358,10 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
 }
 
 /// A stepper value with its unit, such as `22 KOReader units` or `1 page`.
-fn unit_text(unit: StepUnit, v: f64) -> String {
+pub(super) fn unit_text(unit: StepUnit, v: f64) -> String {
     let n = v.to_string();
     match unit {
-        StepUnit::KoreaderUnits => tr_format(&tr("%1 KOReader units"), &[&n]),
+        StepUnit::KoreaderUnits => n,
         StepUnit::Pages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),
         StepUnit::ChapterOrPages if v < 1.0 => tr("Chapter"),
         StepUnit::ChapterOrPages => tr_format(&tr_n("%1 page", "%1 pages", v as i64), &[&n]),

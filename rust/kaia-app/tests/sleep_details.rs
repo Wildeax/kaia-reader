@@ -65,10 +65,11 @@ fn details_is_a_sleep_screen_choice_after_the_cover() {
     assert!(commands::is_known_key(keys::DEVICE_SLEEP_SCREEN));
     let rows = sections::entries("device", app.services(), 0);
     let radio = rows.iter().find_map(|row| match row {
-        Entry::Radio {
+        Entry::Select {
             key,
             options,
             selected,
+            ..
         } if *key == keys::DEVICE_SLEEP_SCREEN => Some((options.clone(), *selected)),
         _ => None,
     });

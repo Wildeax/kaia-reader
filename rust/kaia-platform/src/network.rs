@@ -22,7 +22,7 @@ use crate::sysfs::{Root, Runner, SysfsWriter};
 use crate::wpa::{encode_ssid, psk_value, ScanResult, WpaCtrl};
 
 /// Wi-Fi operations. Methods that talk to the device return `Result`.
-pub trait Network {
+pub trait Network: Send {
     /// Powers the Wi-Fi chip and loads its driver.
     fn enable_wifi(&mut self) -> Result<(), PlatformError>;
     /// Releases the DHCP lease and powers Wi-Fi down.
@@ -37,6 +37,14 @@ pub trait Network {
     fn release_ip(&mut self) -> Result<(), PlatformError>;
     /// Scans and returns the visible networks.
     fn scan(&mut self) -> Result<Vec<ScanResult>, PlatformError>;
+    /// Saved associations in the supplicant. Names stay in memory.
+    fn saved_networks(&mut self) -> Result<Vec<crate::wpa::SavedNetwork>, PlatformError> {
+        Err(PlatformError::NotSupported("Saved networks"))
+    }
+    /// Removes the selected supplicant entry and persists the removal.
+    fn forget_network(&mut self, _id: u32) -> Result<(), PlatformError> {
+        Err(PlatformError::NotSupported("Forget network"))
+    }
     /// Joins a network. `psk` of `None` or `Some("")` joins an open network.
     fn connect(&mut self, ssid: &str, psk: Option<&str>) -> Result<(), PlatformError>;
 }
@@ -184,7 +192,7 @@ fn has_default_route(root: &Root, iface: &str) -> bool {
         .unwrap_or(false)
 }
 
-impl<IO: SysfsWriter + Runner> Network for KoboNetwork<IO> {
+impl<IO: SysfsWriter + Runner + Send> Network for KoboNetwork<IO> {
     fn enable_wifi(&mut self) -> Result<(), PlatformError> {
         let plan = self.enable_plan();
         self.run_plan(&plan)
@@ -254,6 +262,19 @@ impl<IO: SysfsWriter + Runner> Network for KoboNetwork<IO> {
         Ok(rows)
     }
 
+    fn saved_networks(&mut self) -> Result<Vec<crate::wpa::SavedNetwork>, PlatformError> {
+        self.open_wpa()?.list_networks()
+    }
+
+    fn forget_network(&mut self, id: u32) -> Result<(), PlatformError> {
+        let mut wpa = self.open_wpa()?;
+        let current = wpa.status()?.id == Some(id);
+        wpa.remove_network(id)?;
+        let saved = wpa.save_config();
+        let released = if current { self.release_ip() } else { Ok(()) };
+        saved.and(released)
+    }
+
     /// Adds a network, sets SSID and key, enables it and waits for `COMPLETED`.
     /// Mirrors `WpaSupplicant:authenticateNetwork` (`wpa_supplicant.lua:80-185`).
     /// After three authentication rejects, or after `connect_attempts` seconds, the network is removed.
@@ -263,8 +284,9 @@ impl<IO: SysfsWriter + Runner> Network for KoboNetwork<IO> {
         let id = wpa.add_network()?;
         match self.configure_and_wait(&mut wpa, id, ssid, psk) {
             Ok(()) => {
+                let result = wpa.save_config();
                 let _ = wpa.detach();
-                Ok(())
+                result
             }
             Err(e) => {
                 let _ = wpa.remove_network(id);

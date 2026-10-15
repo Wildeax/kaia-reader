@@ -521,6 +521,7 @@ impl<B: Backend> App<B> {
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
         }
+        self.broadcast_app(Event::new("SettingsTick"));
         self.broadcast_app(Event::new("CatalogTick"));
         self.broadcast_app(Event::new("ReaderTick"));
         if !self.reader_busy() {
@@ -958,6 +959,15 @@ impl<B: Backend> App<B> {
 
     /// Routes an action id through surfaces from top to bottom, then global commands. An id nobody knows is recorded.
     pub fn command(&mut self, id: &str, args: &[Value]) {
+        if matches!(id, "reader:size:smaller" | "reader:size:larger")
+            && !surfaces::settings::keys::bool_or(
+                &self.services.settings,
+                surfaces::settings::keys::READING_PINCH_SIZE,
+                true,
+            )
+        {
+            return;
+        }
         #[cfg(not(feature = "lua"))]
         if id == "reader:plugins" {
             self.push(Box::new(
@@ -995,6 +1005,10 @@ impl<B: Backend> App<B> {
             return;
         }
         match id {
+            "settings:close" => {
+                self.close_settings();
+                return;
+            }
             "resume" => {
                 self.resume();
                 return;
@@ -1009,6 +1023,47 @@ impl<B: Backend> App<B> {
                         self.wifi(on);
                     }
                 }
+                return;
+            }
+            "settings:reading:open" => {
+                self.push(Box::new(
+                    surfaces::settings::section::SettingsSectionSurface::from_reader(),
+                ));
+                return;
+            }
+            "settings:light:open" => {
+                let reader = self
+                    .router
+                    .routes()
+                    .iter()
+                    .any(|r| matches!(r, Route::Reader { .. }));
+                if self.find_rect("quick-light-panel").is_some() {
+                    self.back();
+                }
+                let anchor = self.find_rect("overlay-light").map(|r| r.x + r.w as i32 / 2);
+                let panel = surfaces::settings::light::LightPanel::new(&self.services, reader).anchor(anchor);
+                let window = kaia_ui::Window::new(
+                    panel,
+                    self.services.theme.clone(),
+                    self.services.assets.clone(),
+                    self.screen,
+                );
+                env!(self).show(
+                    window,
+                    kaia_events::ShowOpts {
+                        covers_fullscreen: false,
+                        ..Default::default()
+                    },
+                );
+                return;
+            }
+            "settings:wifi:open" => {
+                if self.find_rect("quick-wifi-settings").is_some() {
+                    self.back();
+                }
+                self.push(Box::new(
+                    surfaces::settings::section::SettingsSectionSurface::new("wifi".into()),
+                ));
                 return;
             }
             "settings:quick:open" => {
@@ -1087,6 +1142,13 @@ impl<B: Backend> App<B> {
             self.broadcast_app(Event::new("ReaderTick"));
         }
         let taken = self.apply(index, outcome);
+        if taken && (id.starts_with("settings:set:") || id.starts_with("settings:pick:")) {
+            if let Some(start) = self.router.settings_start() {
+                for index in 0..start {
+                    self.router.mark_stale(index);
+                }
+            }
+        }
         if self.services.language_epoch != language {
             self.rebuild_all();
         }
@@ -1132,6 +1194,7 @@ impl<B: Backend> App<B> {
 
     fn global(&mut self, command: Command) {
         match command {
+            Command::Navigate(Route::Settings) => self.open_settings(false, RefreshMode::Ui),
             Command::Navigate(route) => self.switch_root_to(route, RefreshMode::Ui),
             Command::OpenBook(book) => self.open_book(book, None),
             Command::Back => self.back(),
@@ -1158,14 +1221,59 @@ impl<B: Backend> App<B> {
         }
     }
 
-    /// Makes the surface for `route` the root. Choosing the root that is already
-    /// shown does nothing.
+    /// Opens Settings above the caller. Other routes replace the root.
     fn switch_root_to(&mut self, route: Route, mode: RefreshMode) {
+        if route == Route::Settings {
+            self.open_settings(true, mode);
+            return;
+        }
         if self.router.depth() == 1 && self.router.root_route() == Some(&route) {
             return;
         }
         if let Some(surface) = surfaces::create(&route) {
             self.switch_root(surface, mode);
+        }
+    }
+
+    fn open_settings(&mut self, rebuild: bool, mode: RefreshMode) {
+        if rebuild {
+            // Large print and reset return here. Covered screens must pick up
+            // the new settings when they next become visible.
+            for index in 0..self.router.depth() {
+                self.router.mark_stale(index);
+            }
+        }
+        let index = self.router.routes().iter().position(|r| **r == Route::Settings);
+        if let Some(index) = index {
+            while self.router.depth() > index + 1 {
+                let depth = self.router.depth();
+                self.pop(mode);
+                if self.router.depth() == depth {
+                    return;
+                }
+            }
+            if rebuild {
+                self.rebuild(index);
+            }
+        } else {
+            self.push(Box::new(surfaces::settings::SettingsSurface));
+        }
+    }
+
+    /// Leaves the whole settings flow and reveals the original caller.
+    fn close_settings(&mut self) {
+        if self.top_route().is_some_and(surfaces::pin::is_lock_route) {
+            return;
+        }
+        let Some(index) = self.router.settings_start() else {
+            return;
+        };
+        while self.router.depth() > index.max(1) {
+            let depth = self.router.depth();
+            self.pop(RefreshMode::Ui);
+            if self.router.depth() == depth {
+                break;
+            }
         }
     }
 

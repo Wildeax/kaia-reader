@@ -277,7 +277,7 @@ fn both_idle_pickers_offer_the_same_numeric_values() {
     let rows = sections::entries("device", app.services(), 0);
     assert!(rows.iter().any(|row| matches!(
         row,
-        Entry::Radio {
+        Entry::Select {
             key: keys::DEVICE_SLEEP_MINUTES,
             selected: 1,
             ..
@@ -285,7 +285,7 @@ fn both_idle_pickers_offer_the_same_numeric_values() {
     )));
     assert!(rows.iter().any(|row| matches!(
         row,
-        Entry::Radio {
+        Entry::Select {
             key: keys::DEVICE_POWER_OFF_MINUTES,
             selected: 0,
             ..
@@ -351,8 +351,8 @@ fn quick_settings_controls_fit_portrait_and_landscape() {
         app.command("settings:quick:open", &[]);
         app.process(vec![]).unwrap();
         for name in [
-            "quick-frontlight",
-            "quick-warmth",
+            "quick-light-panel",
+            "quick-wifi-settings",
             "quick-wifi",
             "quick-rotation",
             "quick-orientation",

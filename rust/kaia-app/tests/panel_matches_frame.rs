@@ -248,32 +248,25 @@ fn back_to_home(app: &mut App<HeadlessBackend>) {
     panic!("Back did not reach Home, on {:?}", app.top_route());
 }
 
-/// Taps the Previous or Next button of the Settings root list. The pager draws the
-/// buttons in a strip above the nav bar, on the two edges, and gives them no widget key.
-fn settings_pager_tap(app: &mut App<HeadlessBackend>, next: bool) {
-    let nav = app.find_rect("nav-bar").expect("the navigation bar");
-    let (touch, side) = {
-        let t = &app.services().theme;
-        (t.touch_target as i32, t.space.sm as i32)
-    };
-    let x = if next {
-        nav.x + nav.w as i32 - touch / 2
+/// Opens an index category or a secondary settings page through its parent.
+fn settings_open_section(app: &mut App<HeadlessBackend>, name: &str) {
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    if commands::INDEX_SECTIONS.contains(&name) {
+        tap_key(app, &format!("settings-{name}"));
     } else {
-        nav.x + touch / 2
-    };
-    app.tap(Point::new(x, nav.y - side - touch / 2)).unwrap();
-}
-
-/// Opens the row `key` on the Settings root list. The list has two pages on the
-/// screen, so the row is on page 1 or page 2. Previous goes to page 1 first.
-fn settings_open_row(app: &mut App<HeadlessBackend>, key: &str) {
-    for _ in 0..3 {
-        settings_pager_tap(app, false);
+        let parent = match name {
+            "about" => "device-info",
+            "fonts" => "reading",
+            _ => "advanced",
+        };
+        tap_key(app, &format!("settings-{parent}"));
+        if name == "fonts" {
+            app.command("settings:page:1", &[]);
+            app.process(Vec::new()).unwrap();
+        }
+        tap_key(app, &format!("settings:{name}"));
     }
-    if app.find_rect(key).is_none() {
-        settings_pager_tap(app, true);
-    }
-    tap_key(app, key);
 }
 
 /// Runs `action` and checks that the boolean setting `key` flips.
@@ -424,14 +417,14 @@ fn panel_matches_frame_after_each_step() {
     run.step(&mut app, "settings: root", |app| tap_key(app, "nav-settings"));
     for name in commands::SECTIONS {
         run.step(&mut app, &format!("settings: {name} section"), |app| {
-            settings_open_row(app, &format!("settings-{name}"))
+            settings_open_section(app, name)
         });
         run.step(&mut app, &format!("settings: back from {name}"), |app| {
             app.key(Key::Back).unwrap();
         });
     }
     run.step(&mut app, "settings: display section", |app| {
-        settings_open_row(app, "settings-display")
+        settings_open_section(app, "display")
     });
     run.step(&mut app, "settings: night mode on", |app| {
         toggle_changes(app, "display.night_mode", |app| {
@@ -446,8 +439,8 @@ fn panel_matches_frame_after_each_step() {
     run.step(&mut app, "settings: display back", |app| {
         app.key(Key::Back).unwrap();
     });
-    run.step(&mut app, "settings: reading section", |app| {
-        settings_open_row(app, "settings-reading")
+    run.step(&mut app, "settings: fonts section", |app| {
+        settings_open_section(app, "fonts")
     });
     run.step(&mut app, "settings: font size up", |app| {
         let before = app.services().settings.read("reading.font_size").as_f64();
@@ -455,7 +448,7 @@ fn panel_matches_frame_after_each_step() {
         let after = app.services().settings.read("reading.font_size").as_f64();
         assert_ne!(after, before, "the plus button changes the font size");
     });
-    run.step(&mut app, "settings: reading back", |app| {
+    run.step(&mut app, "settings: fonts back", |app| {
         app.key(Key::Back).unwrap();
     });
 
@@ -463,11 +456,11 @@ fn panel_matches_frame_after_each_step() {
     // The light sliders work on a Kobo only, so the test platform reports one.
     run.step(&mut app, "quick settings: open", |app| {
         app.services_mut().platform.kind = Kind::Kobo(Model::LibraColour);
-        app.command("settings:quick:open", &[]);
+        app.command("settings:light:open", &[]);
     });
     run.step(&mut app, "quick settings: warmth", |app| {
         let before = app.services().platform.frontlight.warmth();
-        let rect = app.find_rect("quick-warmth").expect("the warmth slider");
+        let rect = app.find_rect("light-warmth").expect("the warmth slider");
         let p = Point::new(rect.x + rect.w as i32 * 3 / 4, rect.y + rect.h as i32 / 2);
         app.tap(p).unwrap();
         let after = app.services().platform.frontlight.warmth();

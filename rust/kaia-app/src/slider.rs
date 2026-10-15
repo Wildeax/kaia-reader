@@ -1,6 +1,6 @@
 //! App sliders use Fast during a drag and finish with Ui on release.
 use kaia_events::Value;
-use kaia_gfx::Size;
+use kaia_gfx::{Point, Rect, Size};
 use kaia_input::{Gesture, Key};
 use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, PaintHint, UiEvent, Widget};
@@ -13,6 +13,7 @@ pub struct Slider {
     enabled: bool,
     action: String,
     dragging: bool,
+    light: Option<bool>,
     format: Box<dyn Fn(f64) -> String>,
 }
 impl Slider {
@@ -25,6 +26,7 @@ impl Slider {
             enabled: true,
             action: String::new(),
             dragging: false,
+            light: None,
             format: Box::new(|v| format!("{v}")),
         }
     }
@@ -40,6 +42,11 @@ impl Slider {
     }
     pub fn on_action(mut self, id: impl Into<String>) -> Self {
         self.action = id.into();
+        self
+    }
+    /// Light-panel geometry. Warmth has a moon endpoint and no numeric readout.
+    pub fn light_style(mut self, warmth: bool) -> Self {
+        self.light = Some(warmth);
         self
     }
     pub fn value(&self) -> f64 {
@@ -60,6 +67,18 @@ impl Slider {
         }
     }
     fn at(&mut self, cx: &mut EventCx, x: i32, hint: PaintHint) {
+        if self.light.is_some() {
+            let inset = crate::surfaces::settings::widgets::px(cx.theme(), 75);
+            let b = cx.bounds();
+            let fraction =
+                f64::from(x - b.x - inset as i32) / f64::from(b.w.saturating_sub(2 * inset).max(1));
+            self.change(
+                cx,
+                self.min + fraction.clamp(0.0, 1.0) * (self.max - self.min),
+                hint,
+            );
+            return;
+        }
         let t = cx.theme();
         let style = t.style(&t.font.body, kaia_ui::Tone::Ink);
         let lo = cx
@@ -84,10 +103,66 @@ impl Slider {
 impl Widget for Slider {
     kaia_ui::impl_as_any!();
     fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
-        self.inner.layout(cx, c)
+        if self.light.is_some() {
+            c.constrain(Size::new(
+                c.max.w,
+                crate::surfaces::settings::widgets::px(cx.theme, 180),
+            ))
+        } else {
+            self.inner.layout(cx, c)
+        }
     }
     fn paint(&mut self, cx: &mut PaintCx) {
-        self.inner.paint(cx);
+        let Some(warmth) = self.light else {
+            self.inner.paint(cx);
+            return;
+        };
+        use crate::surfaces::settings::widgets::{px, style};
+        use kaia_ui::Tone;
+        let b = cx.bounds();
+        let t = cx.theme;
+        let ink = cx.color(if self.enabled { Tone::Ink } else { Tone::InkMuted });
+        let inset = px(t, 75);
+        let left = b.x + inset as i32;
+        let width = b.w.saturating_sub(2 * inset);
+        let y = b.bottom() - px(t, 50) as i32;
+        let fraction = ((self.value() - self.min) / (self.max - self.min)).clamp(0.0, 1.0);
+        let x = left + (f64::from(width) * fraction).round() as i32;
+        cx.fill_rect(Rect::new(left, y, width, px(t, 1).max(1)), ink);
+        if !warmth {
+            cx.fill_rect(
+                Rect::new(left, y - px(t, 2) as i32, (x - left) as u32, px(t, 5).max(1)),
+                cx.color(Tone::Accent),
+            );
+        }
+        let radius = px(t, 24) as f32;
+        cx.fill_circle(Point::new(x, y), radius, cx.color(Tone::Surface));
+        cx.stroke_circle(Point::new(x, y), radius, px(t, 2).max(1) as f32, ink);
+        cx.stroke_circle(Point::new(x, y), px(t, 16) as f32, px(t, 1).max(1) as f32, ink);
+        if !warmth {
+            let text = cx.fonts.layout(
+                &(self.format)(self.value()),
+                &style(t, 36),
+                px(t, 140),
+                Some(1),
+                false,
+            );
+            let text_x = (x - text.width as i32 / 2).clamp(b.x, b.right() - text.width as i32);
+            cx.text(&text, Point::new(text_x, y - px(t, 82) as i32));
+        }
+        for (name, center, side) in [
+            ("light.sun", b.x + px(t, 29) as i32, if warmth { 40 } else { 30 }),
+            (
+                if warmth { "light.moon" } else { "light.sun" },
+                b.right() - px(t, 29) as i32,
+                40,
+            ),
+        ] {
+            let side = px(t, side);
+            if let Ok(mask) = cx.icons.get(name, Size::new(side, side), ink) {
+                cx.blit_alpha(&mask, Point::new(center - side as i32 / 2, y - side as i32 / 2));
+            }
+        }
     }
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         if !self.enabled {

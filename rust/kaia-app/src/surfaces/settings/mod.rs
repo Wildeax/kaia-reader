@@ -9,31 +9,36 @@
 //! surface), `quick` (the quick settings sheet), `sleep` (the sleep screen)
 //! and `experiments` (the experimental feature flags).
 
+pub mod clock;
 pub mod commands;
 pub mod entries;
 pub mod experiments;
 pub mod facts;
+pub mod keyboard;
 pub mod keys;
+pub mod light;
 pub mod quick;
 pub mod reset;
 pub mod section;
 pub mod sections;
 pub mod sleep;
 pub mod storage;
+pub mod widgets;
+pub mod wifi;
 
 use kaia_events::Value;
 use kaia_gfx::Size;
 use kaia_i18n::{format as tr_format, tr};
-use kaia_ui::components::Expanded;
-use kaia_ui::composite::{ListRow, PagedList};
-use kaia_ui::controls::{ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
+use kaia_ui::components::{Column, CrossAlign, Expanded};
+use kaia_ui::composite::{ScrollList, SettingsDialog, SettingsIndexRow};
+use kaia_ui::controls::{OnScreenKeyboard, TextField, ENGLISH};
 use kaia_ui::{Theme, WidgetPod, Window};
 
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{body, button, fill, page, root_window as window, title};
+use crate::surfaces::common::{body, fill, root_window as window};
 use crate::surfaces::Route;
-use commands::{Command, SECTIONS};
+use commands::{Command, INDEX_SECTIONS};
 use section::SettingsSectionSurface;
 
 /// The Settings root. See the module docs.
@@ -121,18 +126,18 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("home", "More by author"),
     ("home", "Recent"),
     ("home", "Other books in progress"),
-    ("reading", "Font size"),
-    ("reading", "Font family"),
+    ("fonts", "Font size"),
+    ("fonts", "Font family"),
     ("reading", "Tap zones"),
     ("reading", "Full refresh every"),
-    ("reading", "Dictionary folder"),
+    ("language-dictionaries", "Dictionary folder"),
     ("display", "Frontlight"),
     ("display", "Warmth"),
     ("display", "Night mode"),
     ("display", "Color rendering"),
     ("display", "Large print"),
     ("display", "Screen rotation"),
-    ("display", "Language"),
+    ("language-dictionaries", "Language"),
     ("library", "Book folders"),
     ("library", "Scan now"),
     ("library", "Show finished books"),
@@ -145,7 +150,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("statistics", "Today"),
     ("statistics", "This week"),
     ("statistics", "Books"),
-    ("device", "Storage"),
+    ("device-info", "Storage"),
     ("device", "Sleep after"),
     ("device", "Sleep screen"),
     ("device", "Screen lock"),
@@ -159,7 +164,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Hardware keys"),
     ("advanced", "Auto suspend"),
     ("advanced", "Backup and safe mode"),
-    ("advanced", "Date and time"),
+    ("datetime", "Date and time"),
     ("advanced", "Experimental features"),
     ("advanced", "Reset settings"),
     ("advanced", "Erase all Kaia data"),
@@ -243,7 +248,7 @@ enum RootItem {
 }
 
 fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window {
-    let mut children = vec![title(services, tr("Settings"))];
+    let mut children = Vec::new();
     if root.typing {
         children.push(
             WidgetPod::new(
@@ -255,21 +260,12 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
             .focusable(true)
             .with_key("settings-search-field"),
         );
-    } else {
-        let label = if root.query.is_empty() {
-            tr("Search settings")
-        } else {
-            tr_format(&tr("Search: %1"), &[&root.query])
-        };
-        children.push(button(
-            ButtonStyle::Secondary,
-            &label,
-            "settings:search:open",
-            "settings-search",
-        ));
     }
     if root.query.is_empty() {
-        let items: Vec<RootItem> = SECTIONS.iter().map(|name| RootItem::Section(name)).collect();
+        let items: Vec<RootItem> = INDEX_SECTIONS
+            .iter()
+            .map(|name| RootItem::Section(name))
+            .collect();
         children.push(list(items));
     } else {
         let hits = search(&root.query);
@@ -298,20 +294,15 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
             OnScreenKeyboard::new(&ENGLISH).on_hide("settings:search:close"),
         ));
     }
-    window(
-        services,
-        screen,
-        crate::surfaces::common::tabbed_page(
-            services,
-            page(services, children),
-            kaia_ui::composite::NavItem::More,
-        ),
-    )
+    let content = WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch));
+    let dialog = SettingsDialog::new(tr("Settings"), tr("Settings"), content, "settings:close")
+        .search("settings:search:open");
+    window(services, screen, dialog)
 }
 
 fn list(items: Vec<RootItem>) -> WidgetPod {
     WidgetPod::new(Expanded::new(
-        WidgetPod::new(PagedList::new(items, build_item)),
+        WidgetPod::new(ScrollList::new(items, build_item)).with_key("settings-index"),
         1,
     ))
 }
@@ -319,22 +310,24 @@ fn list(items: Vec<RootItem>) -> WidgetPod {
 fn build_item(item: &RootItem, _theme: &Theme) -> WidgetPod {
     match item {
         RootItem::Section(name) => WidgetPod::new(
-            ListRow::new(sections::title(name))
-                .chevron()
-                .on_action(format!("settings:{name}")),
+            SettingsIndexRow::new(sections::title(name), format!("settings:{name}"))
+                .first(*name == INDEX_SECTIONS[0]),
         )
-        .with_key(format!("settings-{name}")),
+        .with_key(format!("settings-{name}"))
+        .focusable(true),
         RootItem::Hit {
             section,
             title,
             index,
         } => WidgetPod::new(
-            ListRow::new(item_title(title))
-                .secondary(sections::title(section))
-                .chevron()
-                .on_action(format!("settings:{section}")),
+            SettingsIndexRow::new(
+                tr_format(&tr("%1: %2"), &[&sections::title(section), &item_title(title)]),
+                format!("settings:{section}"),
+            )
+            .first(*index == 0),
         )
-        .with_key(format!("settings-hit-{index}")),
+        .with_key(format!("settings-hit-{index}"))
+        .focusable(true),
     }
 }
 
@@ -353,7 +346,7 @@ mod tests {
     #[test]
     fn every_search_item_names_a_known_section() {
         for (section, _) in ITEMS {
-            assert!(SECTIONS.contains(section), "{section}");
+            assert!(commands::SECTIONS.contains(section), "{section}");
         }
     }
 }

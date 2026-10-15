@@ -78,14 +78,12 @@ fn saved_zone(dir: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Opens the Time zone page: the Device section from the root, then the page.
+/// Opens the Time zone page through the Date and time category.
 fn open_time_zone_page(app: &mut App<HeadlessBackend>) {
     app.start().unwrap();
     tap_key(app, "nav-settings");
-    // The root list is paged, so open Device by its command, not by its row.
-    app.command("settings:device", &[]);
-    app.process(Vec::new()).unwrap();
-    app.command("settings:timezone", &[]);
+    tap_key(app, "settings-datetime");
+    tap_key(app, "settings:timezone");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
@@ -179,13 +177,13 @@ fn the_page_lists_system_default_first_then_zones_by_offset() {
 }
 
 #[test]
-fn the_device_section_shows_the_zone_in_use() {
+fn the_date_time_section_shows_the_zone_in_use() {
     let _guard = zone_guard();
     let dir = scratch("time-zone-row");
     save_zone(&dir, "America/Bogota");
     let app = make_app(&dir, vec![]);
 
-    let rows = sections::entries("device", app.services(), 0);
+    let rows = sections::entries("datetime", app.services(), 0);
     assert!(rows.iter().any(|row| matches!(
         row,
         Entry::Row { primary, action: Some(action), .. }

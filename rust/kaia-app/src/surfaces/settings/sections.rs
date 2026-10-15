@@ -20,13 +20,18 @@ pub fn title(name: &str) -> String {
     match name {
         "home" => tr("Home"),
         "reading" => tr("Reading"),
+        "fonts" => tr("Fonts"),
         "dictionaries" => tr("Dictionary settings"),
         "dictionary-downloads" => tr("Download dictionaries"),
         "display" => tr("Display and light"),
         "library" => tr("Library"),
+        "wifi" => tr("Wi-Fi"),
         "network" => tr("Network and sync"),
         "statistics" => tr("Statistics"),
-        "device" => tr("Device"),
+        "device" => tr("Power and privacy"),
+        "datetime" => tr("Date and time"),
+        "language-dictionaries" => tr("Language and dictionaries"),
+        "device-info" => tr("Device information"),
         "storage" => tr("Storage"),
         "extensions" => tr("Extensions"),
         "plugin-menus" => tr("Plugins"),
@@ -50,13 +55,18 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
     match name {
         "home" => home(services),
         "reading" => reading(services),
+        "fonts" => font_management(services),
         "dictionaries" => dictionary_page(services),
         "dictionary-downloads" => download_page(services),
         "display" => display(services),
         "library" => library(services),
+        "wifi" => wifi(services),
         "network" => network(services),
         "statistics" => statistics(services, now),
         "device" => device(services),
+        "datetime" => date_time(services, now),
+        "language-dictionaries" => language_dictionaries(services),
+        "device-info" => device_info(services),
         "storage" => super::storage::entries(services),
         "extensions" => extensions(services),
         "plugin-menus" => reader_menus(services),
@@ -73,17 +83,166 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
 
 fn reading(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
+    vec![
+        Entry::Heading(tr("Reading progress")),
+        progress_choice(s, true),
+        progress_choice(s, false),
+        Entry::Toggle {
+            key: keys::READING_PROGRESS_BAR,
+            label: tr("Book progress bar"),
+            on: keys::bool_or(s, keys::READING_PROGRESS_BAR, false),
+        },
+        Entry::Text(tr(
+            "Choose a header and footer.\nUse the bar to see your place in the book.",
+        )),
+        Entry::Heading(tr("Button controls")),
+        Entry::DeviceDrawing {
+            inverted: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
+        },
+        Entry::PageBreak,
+        Entry::Heading(tr("Page appearance")),
+        Entry::Select {
+            key: keys::READING_FULL_REFRESH_PAGES,
+            label: tr("Full refresh"),
+            options: (0..=keys::FULL_REFRESH_PAGES_MAX)
+                .map(|n| {
+                    if n == 0 {
+                        tr("Every chapter")
+                    } else {
+                        tr_format(&tr("Every %1 pages"), &[&n.to_string()])
+                    }
+                })
+                .collect(),
+            selected: keys::full_refresh_pages(s) as usize,
+        },
+        Entry::Select {
+            key: keys::DISPLAY_ROTATION_LOCK,
+            label: tr("Orientation"),
+            options: vec![tr("Automatic"), tr("Locked")],
+            selected: usize::from(keys::bool_or(s, keys::DISPLAY_ROTATION_LOCK, false)),
+        },
+        Entry::Toggle {
+            key: keys::READING_ADOBE_NUMBERS,
+            label: tr("Adobe page numbers"),
+            on: keys::bool_or(s, keys::READING_ADOBE_NUMBERS, false),
+        },
+        Entry::Toggle {
+            key: keys::DISPLAY_NIGHT_MODE,
+            label: tr("Dark mode"),
+            on: keys::bool_or(s, keys::DISPLAY_NIGHT_MODE, false),
+        },
+        Entry::Toggle {
+            key: keys::READING_REDUCE_RAINBOW,
+            label: tr("Reduce color artifacts"),
+            on: keys::bool_or(s, keys::READING_REDUCE_RAINBOW, false),
+        },
+        Entry::Select {
+            key: keys::READING_PAGE_TURN_WAVEFORM,
+            label: tr("Page turns"),
+            options: labels(keys::READING_PAGE_TURN_WAVEFORM),
+            selected: keys::preset_index(
+                &keys::PAGE_TURN_WAVEFORMS,
+                &keys::text_or(
+                    s,
+                    keys::READING_PAGE_TURN_WAVEFORM,
+                    keys::PAGE_TURN_WAVEFORMS[0].0,
+                ),
+            ),
+        },
+        Entry::Row {
+            primary: tr("Fonts"),
+            secondary: None,
+            value: None,
+            action: Some("settings:fonts".into()),
+        },
+        Entry::PageBreak,
+        Entry::Heading(tr("Touch controls")),
+        Entry::TapZones {
+            preset: keys::text_or(s, keys::READING_TAP_ZONES, "default"),
+        },
+        Entry::Toggle {
+            key: keys::READING_PINCH_SIZE,
+            label: tr("Pinch to change text size"),
+            on: keys::bool_or(s, keys::READING_PINCH_SIZE, true),
+        },
+        Entry::Toggle {
+            key: keys::READING_EDGE_LIGHT,
+            label: tr("Swipe the left edge for brightness"),
+            on: keys::bool_or(s, keys::READING_EDGE_LIGHT, true),
+        },
+        Entry::Select {
+            key: keys::READING_TURN_GESTURE,
+            label: tr("Turn pages"),
+            options: labels(keys::READING_TURN_GESTURE),
+            selected: keys::preset_index(
+                &keys::TURN_GESTURES,
+                &keys::text_or(s, keys::READING_TURN_GESTURE, "tap_swipe"),
+            ),
+        },
+        Entry::Select {
+            key: keys::READING_TAP_ZONES,
+            label: tr("Other tap layouts"),
+            options: labels(keys::READING_TAP_ZONES),
+            selected: keys::preset_index(
+                &keys::TAP_ZONE_PRESETS,
+                &keys::text_or(s, keys::READING_TAP_ZONES, "default"),
+            ),
+        },
+        Entry::Toggle {
+            key: keys::READING_DOUBLE_TAP_LOOKUP,
+            label: tr("Double tap to look up a word"),
+            on: keys::double_tap_lookup(s),
+        },
+        Entry::Text(tr("Double tap lookup adds a short delay to single taps.")),
+        Entry::Row {
+            primary: tr("Dictionary settings"),
+            secondary: None,
+            value: None,
+            action: Some("settings:dictionaries".into()),
+        },
+    ]
+}
+
+fn progress_choice(s: &kaia_events::Settings, header: bool) -> Entry {
+    let choices = if header {
+        &keys::HEADER_CHOICES[..]
+    } else {
+        &keys::FOOTER_CHOICES[..]
+    };
+    let on: Vec<_> = choices
+        .iter()
+        .enumerate()
+        .filter(|(i, (key, _))| !key.is_empty() && keys::bool_or(s, key, !header && *i == 1))
+        .map(|(i, _)| i)
+        .collect();
+    let selected = match on.as_slice() {
+        [] => 0,
+        [index] => *index,
+        _ => choices.len(),
+    };
+    let mut options: Vec<_> = choices.iter().map(|(_, label)| tr(label)).collect();
+    if selected == choices.len() {
+        options.push(tr("Custom"));
+    }
+    Entry::Select {
+        key: if header {
+            keys::HEADER_CHOICE
+        } else {
+            keys::FOOTER_CHOICE
+        },
+        label: if header { tr("Header") } else { tr("Footer") },
+        options,
+        selected,
+    }
+}
+
+fn font_management(services: &Services) -> Vec<Entry> {
+    let s = &services.settings;
     let family = keys::text_or(s, keys::READING_FONT_FAMILY, "");
     // Fonts copied into the user folder since the last visit show up in the list.
     rescan_user_fonts();
     let faces = font_options();
     let family_index = faces.iter().position(|(v, _)| *v == family).unwrap_or(0);
-    let zones = keys::text_or(s, keys::READING_TAP_ZONES, "default");
-    let page_turn = keys::text_or(
-        s,
-        keys::READING_PAGE_TURN_WAVEFORM,
-        keys::PAGE_TURN_WAVEFORMS[0].0,
-    );
     // The section loads the dictionaries before it builds. See `section::lists_dictionaries`.
     let dictionaries = dict::folder(services);
     let found = dict::installed(services).len();
@@ -100,52 +259,12 @@ fn reading(services: &Services) -> Vec<Entry> {
         )),
         Entry::Stepper {
             key: keys::READING_FONT_SIZE,
-            label: tr_format(
-                &tr("Font size, %1 px"),
-                &[&crate::surfaces::reader::koreader_px(
-                    kaia_gfx::Size::new(services.theme.scale.width, services.theme.scale.height),
-                    keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
-                )
-                .to_string()],
-            ),
+            label: tr("Font size"),
             value: keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
             min: 12.0,
             max: 40.0,
             step: 1.0,
             unit: StepUnit::KoreaderUnits,
-        },
-        Entry::Heading(tr("Page turns")),
-        Entry::Toggle {
-            key: keys::READING_INVERT_PAGE_BUTTONS,
-            label: tr("Invert page buttons"),
-            on: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
-        },
-        Entry::Radio {
-            key: keys::READING_TAP_ZONES,
-            options: labels(keys::READING_TAP_ZONES),
-            selected: keys::preset_index(&keys::TAP_ZONE_PRESETS, &zones),
-        },
-        Entry::Toggle {
-            key: keys::READING_DOUBLE_TAP_LOOKUP,
-            label: tr("Double tap a word to look it up"),
-            on: keys::double_tap_lookup(s),
-        },
-        Entry::Text(tr(
-            "When this is on, a single tap turns the page 0.3 seconds after the tap, so the reader can tell it from a double tap.",
-        )),
-        Entry::Stepper {
-            key: keys::READING_FULL_REFRESH_PAGES,
-            label: tr("Full refresh every"),
-            value: f64::from(keys::full_refresh_pages(s)),
-            min: 0.0,
-            max: f64::from(keys::FULL_REFRESH_PAGES_MAX),
-            step: 1.0,
-            unit: StepUnit::ChapterOrPages,
-        },
-        Entry::Radio {
-            key: keys::READING_PAGE_TURN_WAVEFORM,
-            options: labels(keys::READING_PAGE_TURN_WAVEFORM),
-            selected: keys::preset_index(&keys::PAGE_TURN_WAVEFORMS, &page_turn),
         },
         Entry::Heading(tr("Dictionary")),
         Entry::Row {
@@ -350,18 +469,39 @@ fn display(services: &Services) -> Vec<Entry> {
             f64::from(services.platform.device.startup_rotation_degrees()),
         ) / 90.0) as usize,
     });
-    out.push(Entry::Heading(tr("Language")));
+    out
+}
+
+fn language_dictionaries(services: &Services) -> Vec<Entry> {
     let current = crate::i18n::available(&services.catalog_root)
         .into_iter()
         .find(|(tag, _)| *tag == services.language)
         .map_or(services.language.clone(), |(_, name)| name.to_string());
-    out.push(Entry::Row {
-        primary: current,
-        secondary: None,
-        value: None,
-        action: Some("settings:language".into()),
-    });
-    out
+    vec![
+        Entry::Heading(tr("Language")),
+        Entry::Row {
+            primary: tr("Language"),
+            secondary: None,
+            value: Some(current),
+            action: Some("settings:language".into()),
+        },
+        Entry::Heading(tr("Dictionaries")),
+        Entry::Row {
+            primary: tr_format(
+                &tr("Installed dictionaries: %1"),
+                &[&dict::ordered(services).len().to_string()],
+            ),
+            secondary: None,
+            value: Some(tr("Edit")),
+            action: Some("settings:dictionaries".into()),
+        },
+        Entry::Row {
+            primary: tr("Dictionary files"),
+            secondary: None,
+            value: Some(super::storage::size(facts::dictionary_bytes(services))),
+            action: None,
+        },
+    ]
 }
 
 /// The languages on offer, one row each. The row of the language in use has a checkbox.
@@ -452,6 +592,45 @@ fn home(services: &Services) -> Vec<Entry> {
     out
 }
 
+fn wifi(services: &Services) -> Vec<Entry> {
+    let airplane = keys::airplane_mode(&services.settings);
+    vec![
+        Entry::Heading(tr("Wi-Fi")),
+        Entry::Choice {
+            label: tr("Wi-Fi"),
+            selected: services.platform.network.is_wifi_on(),
+            action: if airplane {
+                "settings:quick:wifi-blocked"
+            } else {
+                "settings:quick:wifi"
+            }
+            .into(),
+        },
+        Entry::Text(if airplane {
+            tr("Turn off airplane mode to use Wi-Fi.")
+        } else {
+            tr("Wi-Fi connects only when you ask it to.")
+        }),
+        Entry::Heading(tr("Connections")),
+        Entry::Button {
+            key: "wifi-connect",
+            label: tr("Connect to a network"),
+            action: "settings:wifi:scan".into(),
+        },
+        Entry::Button {
+            key: "wifi-forget",
+            label: tr("Remove a saved network"),
+            action: "settings:wifi:saved".into(),
+        },
+        Entry::Row {
+            primary: tr("Network and sync"),
+            secondary: None,
+            value: None,
+            action: Some("settings:network".into()),
+        },
+    ]
+}
+
 fn network(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let mut out = vec![
@@ -463,12 +642,12 @@ fn network(services: &Services) -> Vec<Entry> {
         },
         Entry::Toggle {
             key: keys::SYNC_AUTO,
-            label: tr("Automatically keep documents in sync"),
+            label: tr("Automatic document sync"),
             on: s.is_true(keys::SYNC_AUTO),
         },
         Entry::Toggle {
             key: keys::SYNC_INVALID_CERTS,
-            label: tr("Accept self-signed certificates"),
+            label: tr("Trust self-signed certificates"),
             on: s.is_true(keys::SYNC_INVALID_CERTS),
         },
         Entry::Heading(tr("Sync to a newer state")),
@@ -639,8 +818,15 @@ fn minutes_choices(
     zero: String,
 ) -> Entry {
     let value = keys::number_or(s, key, default);
-    Entry::Radio {
+    Entry::Select {
         key,
+        label: if key == keys::DEVICE_SLEEP_MINUTES {
+            tr("Sleep after")
+        } else if key == keys::DEVICE_POWER_OFF_MINUTES {
+            tr("Power off after")
+        } else {
+            tr("Standby after")
+        },
         options: choices
             .iter()
             .map(|n| {
@@ -658,61 +844,42 @@ fn minutes_choices(
 /// The screen lock rows: set a PIN when none is set, or change and turn off the PIN.
 /// The PIN file is `.kaia/pin`, and the text says how to remove a lost PIN.
 fn screen_lock(services: &Services) -> Vec<Entry> {
-    if crate::surfaces::pin::store::is_on(&services.paths.data_dir) {
-        vec![
-            Entry::Heading(tr("Screen lock")),
-            Entry::Text(tr(
-                "On. Kaia asks for the PIN when the device wakes and when Kaia starts.",
-            )),
-            Entry::Button {
-                key: "settings-pin-change",
-                label: tr("Change PIN"),
-                action: "settings:pin:change".into(),
-            },
-            Entry::Button {
-                key: "settings-pin-off",
-                label: tr("Turn off"),
-                action: "settings:pin:off".into(),
-            },
-            Entry::Text(tr(
-                "To reset a forgotten PIN, connect the Kobo to a computer and delete the file .kaia/pin.",
-            )),
-        ]
-    } else {
-        vec![
-            Entry::Heading(tr("Screen lock")),
-            Entry::Text(tr("Off. Set a PIN to ask for it when the device wakes.")),
-            Entry::Button {
-                key: "settings-pin-set",
-                label: tr("Set PIN"),
-                action: "settings:pin:set".into(),
-            },
-        ]
-    }
+    let on = crate::surfaces::pin::store::is_on(&services.paths.data_dir);
+    vec![
+        Entry::Heading(tr("Screen lock")),
+        Entry::Choice {
+            label: tr("Require a PIN"),
+            selected: on,
+            action: if on {
+                "settings:pin:off"
+            } else {
+                "settings:pin:set"
+            }
+            .into(),
+        },
+        if on {
+            Entry::Row {
+                primary: tr("Change PIN"),
+                secondary: None,
+                value: None,
+                action: Some("settings:pin:change".into()),
+            }
+        } else {
+            Entry::DisabledRow(tr("Change PIN"))
+        },
+        Entry::Text(tr(
+            "The PIN protects startup and wake. To reset a forgotten PIN, remove .kaia/pin using a computer.",
+        )),
+    ]
 }
 
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let mut out = vec![
-        Entry::Button {
-            key: "settings-storage",
-            label: tr("Storage"),
-            action: "settings:storage".into(),
-        },
-        Entry::Heading(tr("Standby after")),
-        minutes_choices(s, keys::DEVICE_STANDBY_MINUTES, 0.0, &keys::STANDBY_MINUTES, tr("Off")),
-        Entry::Text(tr(
-            "Standby keeps Kaia awake and idle, so any input wakes it at once. The device still sleeps after the time under Sleep after.",
-        )),
-        Entry::Heading(tr("Sleep after")),
+        Entry::Heading(tr("Power saving")),
         idle_choices(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
-        Entry::Heading(tr("Power off after")),
         idle_choices(s, keys::DEVICE_POWER_OFF_MINUTES, 0.0),
-        Entry::Toggle {
-            key: keys::DEVICE_SLEEP_COVER,
-            label: tr("Sleep cover"),
-            on: keys::bool_or(s, keys::DEVICE_SLEEP_COVER, true),
-        },
+        Entry::Heading(tr("Sleep and wake")),
         Entry::DeviceToggle {
             key: keys::DEVICE_PAGE_BUTTON_WAKE,
             label: tr("Wake with page buttons"),
@@ -721,27 +888,62 @@ fn device(services: &Services) -> Vec<Entry> {
             enabled: services.platform.supports_page_button_wake(),
         },
         Entry::Heading(tr("Sleep screen")),
-        Entry::Radio {
-            key: keys::DEVICE_SLEEP_SCREEN,
-            options: labels(keys::DEVICE_SLEEP_SCREEN),
-            selected: keys::preset_index(
-                &keys::SLEEP_SCREENS,
-                &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, keys::DEFAULT_SLEEP_SCREEN),
-            ),
+        Entry::Toggle {
+            key: keys::DEVICE_SHOW_BOOK,
+            label: tr("Show current book"),
+            on: keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, keys::DEFAULT_SLEEP_SCREEN) != "blank",
         },
-        Entry::Text(tr(
-            "Book cover shows the book you are reading. Book cover with details also shows its title, author and progress, and uses the last book you opened when no book is open.",
-        )),
+        Entry::Toggle {
+            key: keys::DEVICE_COVER_FULLSCREEN,
+            label: tr("Full-screen cover"),
+            on: keys::bool_or(s, keys::DEVICE_COVER_FULLSCREEN, true),
+        },
+        Entry::Toggle {
+            key: keys::DEVICE_SLEEP_DETAILS,
+            label: tr("Show book details"),
+            on: keys::sleep_details(s),
+        },
+        Entry::Toggle {
+            key: keys::DEVICE_CHARGING_INDICATOR,
+            label: tr("Charging indicator"),
+            on: keys::bool_or(s, keys::DEVICE_CHARGING_INDICATOR, false),
+        },
+        Entry::Heading(tr("Sleep cover")),
+        Entry::Toggle {
+            key: keys::DEVICE_SLEEP_COVER,
+            label: tr("Sleep and wake with the cover"),
+            on: keys::bool_or(s, keys::DEVICE_SLEEP_COVER, true),
+        },
+        Entry::Text(tr("Close the magnetic cover to sleep. Open it to wake.")),
+        Entry::PageBreak,
     ];
     out.extend(screen_lock(services));
-    out.extend([
-        Entry::Heading(tr("Time zone")),
+    out.push(Entry::Heading(tr("Standby")));
+    out.push(minutes_choices(
+        s,
+        keys::DEVICE_STANDBY_MINUTES,
+        0.0,
+        &keys::STANDBY_MINUTES,
+        tr("Off"),
+    ));
+    out
+}
+
+fn date_time(services: &Services, now: i64) -> Vec<Entry> {
+    let s = &services.settings;
+    let local = chrono::DateTime::from_timestamp(now, 0).map(|date| date.with_timezone(&chrono::Local));
+    vec![
+        Entry::Row { primary: tr("Date"), secondary: None,
+            value: local.map(|d| d.format("%Y-%m-%d").to_string()), action: Some("settings:clock:date".into()) },
+        Entry::Row { primary: tr("Time"), secondary: None,
+            value: local.map(|d| d.format(if keys::bool_or(s, keys::DEVICE_CLOCK_24H, true) { "%H:%M" } else { "%I:%M %p" }).to_string()), action: Some("settings:clock:time".into()) },
         Entry::Row {
-            primary: keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string()),
+            primary: tr("Time zone"),
             secondary: None,
-            value: None,
+            value: Some(keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string())),
             action: Some("settings:timezone".into()),
         },
+        Entry::Toggle { key: keys::DEVICE_CLOCK_24H, label: tr("24-hour clock"), on: keys::bool_or(s, keys::DEVICE_CLOCK_24H, true) },
         Entry::Heading(tr("Network time")),
         Entry::Toggle {
             key: keys::DEVICE_NETWORK_TIME,
@@ -751,8 +953,87 @@ fn device(services: &Services) -> Vec<Entry> {
         Entry::Text(tr(
             "Needs Wi-Fi on. Syncs at most every six hours. Off by default. Kaia contacts pool.ntp.org only when this is on.",
         )),
-    ]);
-    out
+    ]
+}
+
+fn device_info(services: &Services) -> Vec<Entry> {
+    vec![
+        Entry::Heading(tr("Hardware")),
+        Entry::Row {
+            primary: tr("Model"),
+            secondary: None,
+            value: Some(services.platform.device.model_name.clone()),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("Firmware"),
+            secondary: None,
+            value: Some(
+                services
+                    .platform
+                    .device
+                    .firmware
+                    .clone()
+                    .unwrap_or_else(|| tr("Not available")),
+            ),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("Connection"),
+            secondary: None,
+            value: Some(if services.platform.network.is_connected() {
+                tr("Connected")
+            } else {
+                tr("Not connected")
+            }),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("Storage"),
+            secondary: None,
+            value: kaia_platform::storage::volume_space(&services.paths.books_dir)
+                .ok()
+                .map(|s| {
+                    tr_format(
+                        &tr("%1 free of %2"),
+                        &[&super::storage::size(s.available), &super::storage::size(s.total)],
+                    )
+                }),
+            action: Some("settings:storage".into()),
+        },
+        Entry::Heading(tr("Software")),
+        Entry::Row {
+            primary: tr("Kaia Reader"),
+            secondary: None,
+            value: Some(env!("CARGO_PKG_VERSION").into()),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("About and licenses"),
+            secondary: None,
+            value: None,
+            action: Some("settings:about".into()),
+        },
+        Entry::Heading(tr("Maintenance")),
+        Entry::Row {
+            primary: tr("Reset settings"),
+            secondary: None,
+            value: None,
+            action: Some("settings:reset:settings".into()),
+        },
+        Entry::Row {
+            primary: tr("Erase Kaia data"),
+            secondary: None,
+            value: None,
+            action: Some("settings:reset:erase".into()),
+        },
+        Entry::Row {
+            primary: tr("Advanced"),
+            secondary: None,
+            value: None,
+            action: Some("settings:advanced".into()),
+        },
+    ]
 }
 
 fn data(services: &Services) -> Vec<Entry> {
@@ -851,7 +1132,7 @@ fn about() -> Vec<Entry> {
         Entry::Text(tr(
             "Kaia Reader is a fork of KOReader, base version v2026.07.1 (commit 9192014d8). \
              KOReader is free software under AGPL-3.0, written by the KOReader developers. \
-             Kaia keeps its document engines, its Kobo support and its file formats.",
+             The Rust app uses KOReader document engines and device support, with Noto, Atkinson Hyperlegible and OpenDyslexic fonts.",
         )),
     ]
 }
@@ -885,15 +1166,20 @@ fn advanced() -> Vec<Entry> {
         ),
         (
             tr("Auto suspend"),
-            tr("Suspend after no input. The timeout is in Device."),
+            tr("Suspend after no input. The timeout is in Power and privacy."),
         ),
         (tr("Backup"), tr("Copy the data folder to keep a backup.")),
-        (
-            tr("Date and time"),
-            tr("Uses the device clock. Set it on the device."),
-        ),
     ];
-    let mut out = vec![
+    let mut out: Vec<Entry> = ["home", "display", "statistics", "extensions", "data"]
+        .into_iter()
+        .map(|name| Entry::Row {
+            primary: title(name),
+            secondary: None,
+            value: None,
+            action: Some(format!("settings:{name}")),
+        })
+        .collect();
+    out.extend([
         Entry::Row {
             primary: tr("Experimental features"),
             secondary: Some(tr("Off by default. Flags for features that are not ready.")),
@@ -903,7 +1189,7 @@ fn advanced() -> Vec<Entry> {
         Entry::Text(tr(
             "These KOReader options have no Kaia control yet. Each line says what the option does.",
         )),
-    ];
+    ]);
     for (primary, secondary) in items {
         out.push(Entry::Row {
             primary,

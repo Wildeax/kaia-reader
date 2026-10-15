@@ -39,6 +39,12 @@ struct Radio {
     on: bool,
     enables: usize,
     disables: usize,
+    scans: usize,
+    joins: usize,
+    forgets: usize,
+    connected: bool,
+    saved: bool,
+    fail: bool,
 }
 
 /// A Wi-Fi radio that only records calls. Shared with the test through `log`.
@@ -76,7 +82,7 @@ impl Network for FakeNetwork {
     }
 
     fn is_connected(&self) -> bool {
-        false
+        self.log.lock().unwrap().connected
     }
 
     fn obtain_ip(&mut self) -> Result<(), PlatformError> {
@@ -88,11 +94,47 @@ impl Network for FakeNetwork {
     }
 
     fn scan(&mut self) -> Result<Vec<ScanResult>, PlatformError> {
-        Err(PlatformError::NotSupported("Wi-Fi scanning"))
+        let mut radio = self.log.lock().unwrap();
+        radio.scans += 1;
+        if radio.fail {
+            return Err(PlatformError::AuthFailed);
+        }
+        Ok(vec![ScanResult {
+            ssid: "Test connection".into(),
+            bssid: String::new(),
+            frequency_mhz: 2400,
+            signal_dbm: -50,
+            flags: "[WPA2-PSK-CCMP][ESS]".into(),
+        }])
     }
 
-    fn connect(&mut self, _ssid: &str, _psk: Option<&str>) -> Result<(), PlatformError> {
-        Err(PlatformError::NotSupported("Wi-Fi connection"))
+    fn connect(&mut self, _ssid: &str, psk: Option<&str>) -> Result<(), PlatformError> {
+        let mut radio = self.log.lock().unwrap();
+        radio.joins += 1;
+        if radio.fail || psk != Some("qqqqqqqq") {
+            return Err(PlatformError::AuthFailed);
+        }
+        radio.connected = true;
+        radio.saved = true;
+        Ok(())
+    }
+    fn saved_networks(&mut self) -> Result<Vec<kaia_platform::wpa::SavedNetwork>, PlatformError> {
+        Ok(if self.log.lock().unwrap().saved {
+            vec![kaia_platform::wpa::SavedNetwork {
+                id: 7,
+                ssid: "Test connection".into(),
+            }]
+        } else {
+            vec![]
+        })
+    }
+    fn forget_network(&mut self, id: u32) -> Result<(), PlatformError> {
+        assert_eq!(id, 7);
+        let mut radio = self.log.lock().unwrap();
+        radio.forgets += 1;
+        radio.saved = false;
+        radio.connected = false;
+        Ok(())
     }
 }
 
@@ -194,7 +236,8 @@ fn large_print_switch_rebuilds_from_the_settings_root() {
     assert_eq!(app.services().theme.text_scale, 1.0);
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
@@ -205,14 +248,15 @@ fn large_print_switch_rebuilds_from_the_settings_root() {
     assert_eq!(app.services().theme.text_scale, LARGE_PRINT_SCALE);
     assert_eq!(
         app.router().routes().len(),
-        1,
-        "the stack starts over at the root"
+        2,
+        "the settings index keeps its caller underneath"
     );
     assert_eq!(app.top_route(), Some(&Route::Settings));
     assert!(app.services().settings.is_true(keys::DISPLAY_LARGE_PRINT));
 
     // The root has no switch of its own: open the display section again to turn it off.
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     command(
         &mut app,
         "settings:set:display.large_print",
@@ -239,7 +283,8 @@ fn large_print_screens_render_with_the_larger_text() {
     tap_key(&mut app, "nav-settings");
     save_png(app.frame(), "settings-root");
 
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     save_png(app.frame(), "settings-display");
 
     for section in ["reading", "network", "statistics", "advanced", "about"] {
@@ -263,7 +308,8 @@ fn large_print_display_page_golden() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_matches_golden(app.frame(), &golden("settings_large_print.png"), 14);
 }
 
@@ -550,4 +596,105 @@ fn quick_settings_show_airplane_mode_and_fit_the_screen() {
         assert!(rect.right() <= app.screen().w as i32, "{name}: {rect:?}");
         assert!(rect.bottom() <= app.screen().h as i32, "{name}: {rect:?}");
     }
+}
+
+#[test]
+fn round5_wifi_scan_keyboard_join_forget_and_privacy() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("round5-wifi");
+    let mut app = make_app(&dir, vec![]);
+    app.start().unwrap();
+    let (network, radio) = FakeNetwork::boxed(true);
+    app.services_mut().platform.network = network;
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-wifi");
+    tap_key(&mut app, "wifi-connect");
+    wait_for(&mut app, "scan", |a| a.find_rect("wifi:select:0").is_some());
+    assert_matches_golden(app.frame(), &golden("settings_wifi_scan.png"), 14);
+    tap_key(&mut app, "wifi:select:0");
+    tap_key(&mut app, "wifi-password");
+    let keyboard = app.find_rect("wifi-keyboard").unwrap();
+    let mut point = kaia_gfx::Point::new(0, 0);
+    let theme = app.services().theme.clone();
+    app.update_top::<kaia_ui::controls::OnScreenKeyboard, _>("wifi-keyboard", |kb, _| {
+        let key = kb
+            .key_boxes(&theme, keyboard.w)
+            .into_iter()
+            .find(|k| k.action == kaia_ui::controls::KeyAction::Char('q'))
+            .unwrap();
+        point = kaia_gfx::Point::new(
+            keyboard.x + key.rect.x + key.rect.w as i32 / 2,
+            keyboard.y + key.rect.y + key.rect.h as i32 / 2,
+        );
+    });
+    for _ in 0..8 {
+        app.tap(point).unwrap();
+    }
+    assert_matches_golden(app.frame(), &golden("settings_wifi_password.png"), 14);
+    radio.lock().unwrap().fail = true;
+    tap_key(&mut app, "wifi-join");
+    wait_for(&mut app, "refused password", |a| {
+        a.find_rect("wifi-password").is_some()
+    });
+    assert!(!app.services().platform.network.is_connected());
+    assert_matches_golden(app.frame(), &golden("settings_wifi_failure.png"), 14);
+    radio.lock().unwrap().fail = false;
+    tap_key(&mut app, "wifi-password");
+    for _ in 0..8 {
+        app.tap(point).unwrap();
+    }
+    tap_key(&mut app, "wifi-join");
+    wait_for(&mut app, "join", |a| {
+        a.services().platform.network.is_connected() && a.find_rect("wifi-retry").is_some()
+    });
+    tap_key(&mut app, "settings-back");
+    tap_key(&mut app, "wifi-forget");
+    wait_for(&mut app, "saved networks", |a| {
+        a.find_rect("wifi:select:0").is_some()
+    });
+    tap_key(&mut app, "wifi:select:0");
+    assert_matches_golden(app.frame(), &golden("settings_wifi_forget.png"), 14);
+    tap_key(&mut app, "wifi-remove");
+    wait_for(&mut app, "forget", |a| {
+        a.find_rect("wifi-retry").is_some() && !a.services().platform.network.is_connected()
+    });
+    assert_eq!(radio.lock().unwrap().forgets, 1);
+    assert_eq!(radio.lock().unwrap().joins, 2);
+    tap_key(&mut app, "settings-close");
+    let saved = fs::read_to_string(app.services().settings_path()).unwrap();
+    assert!(!saved.contains("Test connection"));
+    assert!(!saved.contains("qqqqqqqq"));
+    assert!(app.unknown_commands().is_empty());
+}
+
+#[test]
+fn round5_wifi_off_airplane_and_failed_scan_do_not_join() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("round5-wifi-failure");
+    let mut app = make_app(&dir, vec![]);
+    app.start().unwrap();
+    let (network, radio) = FakeNetwork::boxed(false);
+    app.services_mut().platform.network = network;
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-wifi");
+    tap_key(&mut app, "wifi-connect");
+    assert_eq!(radio.lock().unwrap().scans, 0);
+    tap_key(&mut app, "settings-back");
+    radio.lock().unwrap().on = true;
+    app.services_mut()
+        .settings
+        .save(keys::NETWORK_AIRPLANE_MODE, Value::Bool(true));
+    tap_key(&mut app, "wifi-connect");
+    assert_eq!(radio.lock().unwrap().scans, 0);
+    app.services_mut()
+        .settings
+        .save(keys::NETWORK_AIRPLANE_MODE, Value::Bool(false));
+    radio.lock().unwrap().fail = true;
+    tap_key(&mut app, "wifi-retry");
+    wait_for(&mut app, "failed scan", |a| {
+        a.services().platform.network.is_wifi_on() && a.find_rect("wifi-retry").is_some()
+    });
+    app.process(vec![]).unwrap();
+    assert_eq!(radio.lock().unwrap().joins, 0);
+    assert!(app.unknown_commands().is_empty());
 }

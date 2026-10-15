@@ -378,7 +378,8 @@ fn settings_sections_open_and_toggles_persist() {
     let path = app.services().settings_path();
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
@@ -421,6 +422,8 @@ fn stepper_saves_the_new_value() {
 
     tap_key(&mut app, "nav-settings");
     tap_key(&mut app, "settings-reading");
+    app.command("settings:fonts", &[]);
+    app.process(Vec::new()).unwrap();
     let rect = app.find_rect("set-reading.font_size").expect("font size stepper");
     let touch = app.services().theme.touch_target as i32;
     // The plus button is the right-hand touch target of the stepper.
@@ -460,9 +463,7 @@ fn sync_test_calls_the_server_only_when_tapped() {
     assert_eq!(hits.load(Ordering::SeqCst), 0, "editing the fields sends nothing");
 
     for page in 0..20 {
-        app.update_top::<kaia_ui::composite::PagedList<Entry>, _>("settings-entries", |list, cx| {
-            list.set_page(page, cx)
-        });
+        app.command(&format!("settings:page:{page}"), &[]);
         app.process(Vec::new()).unwrap();
         if app.find_rect("settings-sync-test").is_some() {
             break;
@@ -493,7 +494,8 @@ fn statistics_section_reads_the_database() {
     );
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-statistics");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:statistics");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {

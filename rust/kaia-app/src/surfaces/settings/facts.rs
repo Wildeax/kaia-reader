@@ -207,6 +207,33 @@ pub fn kobo_database(paths: &Paths) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
+/// Disk bytes of loaded StarDict files and installed Kobo dictionary archives.
+/// The settings page shows only the total, never dictionary contents.
+pub fn dictionary_bytes(services: &crate::services::Services) -> u64 {
+    let mut paths = std::collections::HashSet::new();
+    if let Some(library) = &services.dictionary {
+        for dictionary in library.dictionaries() {
+            for extension in ["ifo", "idx", "idx.gz", "dict", "dict.dz", "syn"] {
+                paths.insert(dictionary.path().with_extension(extension));
+            }
+        }
+    }
+    if let Ok(files) = std::fs::read_dir(services.paths.books_dir.join(".kobo/dict")) {
+        for file in files.flatten() {
+            let path = file.path();
+            if path.extension().is_some_and(|ext| ext == "zip") {
+                paths.insert(path);
+            }
+        }
+    }
+    paths
+        .iter()
+        .filter_map(|path| std::fs::metadata(path).ok())
+        .filter(|metadata| metadata.is_file())
+        .map(|metadata| metadata.len())
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

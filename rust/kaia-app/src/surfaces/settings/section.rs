@@ -17,7 +17,7 @@ use super::keys;
 use super::{save, sections};
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{page, root_window as window};
+use crate::surfaces::common::root_window as window;
 use crate::surfaces::reader::dict;
 use crate::surfaces::Route;
 
@@ -25,7 +25,12 @@ use crate::surfaces::Route;
 /// keyboard for the section's text fields (Network and sync only).
 pub struct SettingsSectionSurface {
     name: String,
+    reader_entry: bool,
+    scan_status: Option<String>,
     typing: bool,
+    page: usize,
+    choosing: Option<String>,
+    choice_page: usize,
     lua_plan: Option<crate::lua_import::Plan>,
     lua_report: Option<crate::lua_import::Report>,
     kobo_plan: Option<crate::nickel::Plan>,
@@ -36,10 +41,22 @@ pub struct SettingsSectionSurface {
 }
 
 impl SettingsSectionSurface {
+    pub fn from_reader() -> Self {
+        Self {
+            reader_entry: true,
+            ..Self::new("reading".into())
+        }
+    }
+
     pub fn new(name: String) -> Self {
         Self {
             name,
+            reader_entry: false,
+            scan_status: None,
             typing: false,
+            page: 0,
+            choosing: None,
+            choice_page: 0,
             lua_plan: None,
             lua_report: None,
             kobo_plan: None,
@@ -107,16 +124,80 @@ impl Surface for SettingsSectionSurface {
         if lists_dictionaries(&self.name) {
             dict::load(env.services);
         }
-        Some(build(
+        Some(window(
             env.services,
             env.screen,
-            &self.name,
-            self.typing,
-            now_unix(),
+            section_page_at(
+                env.services,
+                &self.name,
+                self.typing,
+                now_unix(),
+                PageState {
+                    page: if self.choosing.is_some() {
+                        self.choice_page
+                    } else {
+                        self.page
+                    },
+                    choosing: self.choosing.as_deref(),
+                    back: !self.reader_entry || self.choosing.is_some(),
+                    status: self.scan_status.as_deref(),
+                },
+            ),
         ))
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if matches!(cmd, "settings:wifi:scan" | "settings:wifi:saved") {
+            return Outcome::Navigate(Nav::Push(Box::new(super::wifi::WifiSurface::new(
+                cmd.ends_with(":saved"),
+            ))));
+        }
+        if matches!(cmd, "settings:clock:date" | "settings:clock:time") {
+            return Outcome::Navigate(Nav::Push(Box::new(super::clock::ClockSurface::new(
+                cmd.ends_with(":date"),
+            ))));
+        }
+        if let Some(page) = cmd.strip_prefix("settings:page:").and_then(|s| s.parse().ok()) {
+            if self.choosing.is_some() {
+                self.choice_page = page;
+            } else {
+                self.page = page;
+            }
+            return Outcome::Rebuild;
+        }
+        if let Some(key) = cmd.strip_prefix("settings:choose:") {
+            self.choosing = Some(key.into());
+            self.choice_page = 0;
+            return Outcome::Rebuild;
+        }
+        if cmd == "back" && self.choosing.is_some() {
+            self.choosing = None;
+            return Outcome::Rebuild;
+        }
+        if let Some((key, index)) = cmd
+            .strip_prefix("settings:pick:option:")
+            .and_then(|s| s.rsplit_once(':'))
+        {
+            if let Ok(index) = index.parse::<usize>() {
+                self.choosing = None;
+                if key == keys::HEADER_CHOICE || key == keys::FOOTER_CHOICE {
+                    let choices = if key == keys::HEADER_CHOICE {
+                        &keys::HEADER_CHOICES[..]
+                    } else {
+                        &keys::FOOTER_CHOICES[..]
+                    };
+                    if index < choices.len() {
+                        for (i, (flag, _)) in choices.iter().enumerate().skip(1) {
+                            env.services.settings.save(*flag, Value::Bool(i == index));
+                        }
+                        save(env);
+                    }
+                    return Outcome::Rebuild;
+                }
+                pick(key, &[Value::Number(index as f64)], env);
+                return Outcome::Rebuild;
+            }
+        }
         if self.name == "device" {
             if let Some(purpose) = pin_flow_start(cmd) {
                 let now = crate::surfaces::pin::session::unix_now();
@@ -276,11 +357,19 @@ impl Surface for SettingsSectionSurface {
             }
         }
         match commands::parse(cmd) {
+            Some(Command::Section(name)) => {
+                Outcome::Navigate(Nav::Push(Box::new(SettingsSectionSurface::new(name))))
+            }
             Some(Command::FieldsOpen | Command::FieldsClose) => {
                 let typing = commands::parse(cmd) == Some(Command::FieldsOpen);
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
                     name: self.name.clone(),
+                    reader_entry: self.reader_entry,
+                    scan_status: self.scan_status.clone(),
                     typing,
+                    page: self.page,
+                    choosing: None,
+                    choice_page: 0,
                     lua_plan: None,
                     lua_report: None,
                     kobo_plan: None,
@@ -342,10 +431,29 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_event(&mut self, event: &kaia_events::Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if self.name == "library" {
+            let number = |i: usize| event.args.get(i).and_then(Value::as_i64).unwrap_or(0).to_string();
+            let status = match event.name.as_str() {
+                "LibraryScanProgress" => Some(tr_format(
+                    &tr("Scanned %1 of %2 files"),
+                    &[&number(0), &number(1)],
+                )),
+                "LibraryUpdated" => Some(tr_format(
+                    &tr("Scan complete. Added %1, updated %2, removed %3."),
+                    &[&number(0), &number(1), &number(2)],
+                )),
+                "LibraryScanFailed" => Some(tr("Scan failed. Check that the book folder is available.")),
+                _ => None,
+            };
+            if let Some(status) = status {
+                self.scan_status = Some(status);
+                return Outcome::Rebuild;
+            }
+        }
         if event.name == "DictionariesChanged"
             && matches!(
                 self.name.as_str(),
-                "reading" | "dictionaries" | "dictionary-downloads"
+                "reading" | "dictionaries" | "dictionary-downloads" | "language-dictionaries"
             )
         {
             Outcome::Rebuild
@@ -375,37 +483,144 @@ pub fn build(services: &Services, screen: Size, name: &str, typing: bool, now: i
 /// The page of section `name`: the header, the entries and, for the text
 /// fields, the edit button and the keyboard while typing. Tests render it with
 /// a fixed `now`.
-pub fn section_page(services: &Services, name: &str, typing: bool, now: i64) -> kaia_ui::components::Padding {
-    let t = &services.theme;
-    let header =
-        kaia_ui::WidgetPod::new(kaia_ui::composite::Header::new(t, sections::title(name)).back("back"));
-    let mut children = vec![header];
-    if has_text_fields(name) {
-        let (label, action) = if typing {
-            (tr("Done editing"), "settings:fields:close")
-        } else {
-            (tr("Edit fields"), "settings:fields:open")
-        };
-        children.push(crate::surfaces::common::button(
-            kaia_ui::controls::ButtonStyle::Secondary,
-            &label,
-            action,
-            "settings-fields",
-        ));
+pub fn section_page(
+    services: &Services,
+    name: &str,
+    typing: bool,
+    now: i64,
+) -> kaia_ui::composite::SettingsDialog {
+    section_page_at(
+        services,
+        name,
+        typing,
+        now,
+        PageState {
+            page: 0,
+            choosing: None,
+            back: true,
+            status: None,
+        },
+    )
+}
+
+struct PageState<'a> {
+    page: usize,
+    choosing: Option<&'a str>,
+    back: bool,
+    status: Option<&'a str>,
+}
+
+fn section_page_at(
+    services: &Services,
+    name: &str,
+    typing: bool,
+    now: i64,
+    state: PageState<'_>,
+) -> kaia_ui::composite::SettingsDialog {
+    let PageState {
+        page,
+        choosing,
+        back,
+        status,
+    } = state;
+    let mut children = Vec::new();
+    let mut list = sections::entries(name, services, now);
+    if let Some(status) = status {
+        let index = list
+            .iter()
+            .position(|entry| {
+                matches!(
+                    entry,
+                    entries::Entry::Button {
+                        key: "settings-scan",
+                        ..
+                    }
+                )
+            })
+            .map_or(list.len(), |i| i + 1);
+        list.insert(
+            index,
+            entries::Entry::Row {
+                primary: status.into(),
+                secondary: None,
+                value: None,
+                action: None,
+            },
+        );
     }
-    let list = sections::entries(name, services, now);
+    if has_text_fields(name) {
+        list.insert(
+            0,
+            entries::Entry::Button {
+                key: "settings-fields",
+                label: if typing {
+                    tr("Done editing")
+                } else {
+                    tr("Edit fields")
+                },
+                action: if typing {
+                    "settings:fields:close"
+                } else {
+                    "settings:fields:open"
+                }
+                .into(),
+            },
+        );
+    }
+    if let Some(key) = choosing {
+        list = list
+            .iter()
+            .find_map(|entry| match entry {
+                entries::Entry::Select {
+                    key: k,
+                    options,
+                    selected,
+                    ..
+                }
+                | entries::Entry::Radio {
+                    key: k,
+                    options,
+                    selected,
+                } if *k == key => Some(
+                    options
+                        .iter()
+                        .enumerate()
+                        .map(|(i, label)| entries::Entry::Choice {
+                            label: label.clone(),
+                            selected: i == *selected,
+                            action: format!("settings:pick:option:{key}:{i}"),
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .unwrap_or_default();
+    }
     children.push(kaia_ui::WidgetPod::new(Expanded::new(
-        kaia_ui::WidgetPod::new(kaia_ui::composite::PagedList::new(list, entries::widget))
-            .with_key("settings-entries"),
+        kaia_ui::WidgetPod::new(super::widgets::SettingsPages::new(list, page)).with_key("settings-entries"),
         1,
     )));
     if has_text_fields(name) && typing {
         children.push(kaia_ui::WidgetPod::new(
-            kaia_ui::controls::OnScreenKeyboard::new(&kaia_ui::controls::ENGLISH)
+            kaia_ui::controls::OnScreenKeyboard::new(super::keyboard::layout(&services.language))
                 .on_hide("settings:fields:close"),
         ));
     }
-    page(services, children)
+    let content = kaia_ui::WidgetPod::new(
+        kaia_ui::components::Column::new(children).cross_align(kaia_ui::components::CrossAlign::Stretch),
+    );
+    let dialog = kaia_ui::composite::SettingsDialog::new(
+        tr("Settings"),
+        sections::title(name),
+        content,
+        "settings:close",
+    )
+    .content_header();
+    if back {
+        dialog.back("back")
+    } else {
+        dialog
+    }
 }
 
 fn has_text_fields(name: &str) -> bool {
@@ -414,7 +629,10 @@ fn has_text_fields(name: &str) -> bool {
 
 /// Whether section `name` lists the dictionaries. Those sections load them before they build.
 fn lists_dictionaries(name: &str) -> bool {
-    matches!(name, "reading" | "dictionaries")
+    matches!(
+        name,
+        "reading" | "fonts" | "dictionaries" | "language-dictionaries"
+    )
 }
 
 /// Turns a dictionary on or off, or moves it one place in the lookup order. The page
@@ -463,6 +681,36 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         crate::sync::store_password(&mut env.services.settings, value.as_str().unwrap_or(""));
         return Outcome::Handled;
     }
+    if key == keys::DEVICE_SHOW_BOOK || key == keys::DEVICE_SLEEP_DETAILS {
+        let Some(on) = value.as_bool() else {
+            return Outcome::Handled;
+        };
+        let settings = &mut env.services.settings;
+        let legacy = keys::text_or(settings, keys::DEVICE_SLEEP_SCREEN, "cover");
+        let details = if key == keys::DEVICE_SLEEP_DETAILS {
+            on
+        } else {
+            keys::sleep_details(settings)
+        };
+        let show = if key == keys::DEVICE_SHOW_BOOK {
+            on
+        } else {
+            legacy != "blank"
+        };
+        settings.save(keys::DEVICE_SLEEP_DETAILS, Value::Bool(details));
+        settings.save(
+            keys::DEVICE_SLEEP_SCREEN,
+            Value::from(if !show {
+                "blank"
+            } else if details {
+                "details"
+            } else {
+                "cover"
+            }),
+        );
+        save(env);
+        return Outcome::Rebuild;
+    }
     env.services.settings.save(key, value);
     if key == crate::webdav::ENABLED {
         env.services.webdav.update_gate(&env.services.settings, false);
@@ -471,11 +719,15 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         save(env);
     }
     if key == keys::DISPLAY_LARGE_PRINT {
-        // Switching the root replaces the stack, so no screen keeps the old sizes.
+        // Returning to the index rebuilds it and marks covered screens for rebuild.
         env.services.apply_large_print();
         return Outcome::Navigate(Nav::SwitchRoot(Route::Settings));
     }
-    if key == keys::READING_FONT_SIZE || key == crate::dictionary_downloads::ALLOW_KEY {
+    if matches!(
+        key,
+        keys::READING_FONT_SIZE | keys::READING_TAP_ZONES | keys::DEVICE_CLOCK_24H
+    ) || key == crate::dictionary_downloads::ALLOW_KEY
+    {
         Outcome::Rebuild
     } else {
         Outcome::Handled
