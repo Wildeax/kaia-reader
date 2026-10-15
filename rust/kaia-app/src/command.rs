@@ -45,6 +45,7 @@ impl Command {
         match (head, arg) {
             ("nav", Some("home")) => Some(Command::Navigate(Route::Home)),
             ("nav", Some("library")) => Some(Command::Navigate(Route::Library { page: 0 })),
+            ("nav", Some("more")) => Some(Command::Navigate(Route::More)),
             ("nav", Some("notes")) => Some(Command::Navigate(Route::Notes)),
             ("nav", Some("settings")) => Some(Command::Navigate(Route::Settings)),
             ("open_book", Some(arg)) if !arg.is_empty() => {

@@ -231,20 +231,18 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     ));
     let page = Padding::new(
         WidgetPod::new(
-            Column::new(vec![
-                header,
-                content,
-                counts,
-                WidgetPod::new(kaia_ui::composite::NavBar::new(kaia_ui::composite::NavItem::Home))
-                    .with_key("nav-bar"),
-            ])
-            .gap(t.space.md)
-            .cross_align(CrossAlign::Stretch),
+            Column::new(vec![header, content, counts])
+                .gap(t.space.md)
+                .cross_align(CrossAlign::Stretch),
         ),
         // Home is the tallest page, so its vertical margin is the medium space.
         Insets::symmetric(t.space.lg, t.space.md),
     );
-    window(services, env.screen, page)
+    window(
+        services,
+        env.screen,
+        common::tabbed_page(page, kaia_ui::composite::NavItem::Home),
+    )
 }
 
 /// The next book in the series of the book read most recently. It is offered when

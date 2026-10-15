@@ -106,6 +106,8 @@ pub struct LibrarySurface {
     page: usize,
     prefs: Prefs,
     loaded: bool,
+    /// Opened from the local Favorites entry in More.
+    favorites_entry: bool,
     panel: Option<Panel>,
     search: bool,
     query: String,
@@ -156,6 +158,7 @@ impl LibrarySurface {
             page,
             prefs: Prefs::default(),
             loaded: false,
+            favorites_entry: false,
             panel: None,
             search: false,
             query: String::new(),
@@ -178,6 +181,15 @@ impl LibrarySurface {
             marking: Rc::new(Cell::new(false)),
             window: Rc::new(RefCell::new(None)),
         }
+    }
+
+    /// Local favorites, independent of the last library filter.
+    pub fn favorites() -> Self {
+        let mut view = Self::new(0);
+        view.prefs.favorite = true;
+        view.favorites_entry = true;
+        view.loaded = true;
+        view
     }
 
     /// Writes the prefs to settings and flushes the file, so a choice survives a
@@ -1095,7 +1107,18 @@ impl LibrarySurface {
         }
         let t = env.services.theme.clone();
         let status = data::status_line(env.services);
-        let mut head = vec![views::header(&t, &tr("Library"), status, self.selecting)];
+        let title = if self.favorites_entry && self.prefs.favorite {
+            tr("Favorites")
+        } else {
+            tr("Library")
+        };
+        let mut head = vec![views::header(
+            &t,
+            &title,
+            status,
+            self.selecting,
+            self.favorites_entry,
+        )];
         if self.selecting {
             head.push(views::select_bar(&t, self.select_label(), self.selected.len()));
         } else if !self.search {
@@ -1130,16 +1153,23 @@ impl LibrarySurface {
                     .shrink(),
             ),
             WidgetPod::new(Expanded::new(WidgetPod::new(body), 1)),
-            WidgetPod::new(kaia_ui::composite::NavBar::new(
-                kaia_ui::composite::NavItem::Library,
-            ))
-            .with_key("nav-bar"),
         ];
         let page = Padding::new(
             WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch)),
             Insets::all(t.space.lg),
         );
-        let win = window(env.services, env.screen, page);
+        let win = window(
+            env.services,
+            env.screen,
+            super::common::tabbed_page(
+                page,
+                if self.favorites_entry {
+                    kaia_ui::composite::NavItem::More
+                } else {
+                    kaia_ui::composite::NavItem::Library
+                },
+            ),
+        );
         *self.window.borrow_mut() = Some(win.clone());
         win
     }

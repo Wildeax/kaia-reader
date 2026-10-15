@@ -96,8 +96,11 @@ pub fn button(style: ButtonStyle, label: &str, action: &str) -> WidgetPod {
 
 /// The page header: the title, the status line and the icon actions. Select mode
 /// has none: its bar holds the way out.
-pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: bool) -> WidgetPod {
+pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: bool, back: bool) -> WidgetPod {
     let mut h = Header::new(theme, title);
+    if back {
+        h = h.back("back");
+    }
     if !selecting {
         h = h
             .action("check", "library:select:on")

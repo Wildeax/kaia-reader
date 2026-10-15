@@ -350,13 +350,11 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
         }
         children.push(list(items));
     }
-    children.push(
-        WidgetPod::new(kaia_ui::composite::NavBar::new(
-            kaia_ui::composite::NavItem::Notes,
-        ))
-        .with_key("nav-bar"),
-    );
-    window(services, screen, page(services, children))
+    window(
+        services,
+        screen,
+        crate::surfaces::common::tabbed_page(page(services, children), kaia_ui::composite::NavItem::More),
+    )
 }
 
 fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter) -> Window {
@@ -384,13 +382,11 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
     } else {
         children.push(list(items));
     }
-    children.push(
-        WidgetPod::new(kaia_ui::composite::NavBar::new(
-            kaia_ui::composite::NavItem::Notes,
-        ))
-        .with_key("nav-bar"),
-    );
-    window(services, screen, page(services, children))
+    window(
+        services,
+        screen,
+        crate::surfaces::common::tabbed_page(page(services, children), kaia_ui::composite::NavItem::More),
+    )
 }
 
 fn entry_item(book: &BookNotes, note: &Note, index: usize) -> Item {

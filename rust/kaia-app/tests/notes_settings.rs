@@ -171,7 +171,7 @@ fn paint(app: &App<HeadlessBackend>, root: impl Widget + 'static) -> Pixmap {
 }
 
 #[test]
-fn notes_root_is_a_root_and_the_nav_bar_returns_home() {
+fn notes_opens_from_more_and_the_nav_bar_returns_home() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("notes");
     let mut app = make_app(&dir, Vec::new());
@@ -179,7 +179,7 @@ fn notes_root_is_a_root_and_the_nav_bar_returns_home() {
 
     tap_key(&mut app, "nav-notes");
     assert_eq!(app.top_route(), Some(&Route::Notes));
-    assert_eq!(app.router().routes().len(), 1, "Notes replaces the root");
+    assert_eq!(app.router().routes().len(), 2, "Notes opens above More");
 
     tap_key(&mut app, "nav-home");
     assert_eq!(app.top_route(), Some(&Route::Home));

@@ -1,4 +1,4 @@
-//! [`NavBar`]: the bottom bar with Home, Library, Notes and Settings.
+//! [`NavBar`]: the bottom bar with Home, My books and More.
 
 use kaia_gfx::{Point, Rect, Size};
 use kaia_input::Gesture;
@@ -13,20 +13,23 @@ use crate::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, UiEvent, Wid
 pub enum NavItem {
     Home,
     Library,
+    /// Notes belongs to More. Kept for callers that identify their current page.
     Notes,
     Settings,
+    More,
 }
 
 impl NavItem {
-    pub const ALL: [NavItem; 4] = [NavItem::Home, NavItem::Library, NavItem::Notes, NavItem::Settings];
+    pub const ALL: [NavItem; 3] = [NavItem::Home, NavItem::Library, NavItem::More];
 
-    /// The action id a tap queues: `nav.home`, `nav.library`, `nav.notes` or `nav.settings`.
+    /// The action id a tap queues.
     pub fn action(self) -> &'static str {
         match self {
             NavItem::Home => "nav.home",
             NavItem::Library => "nav.library",
             NavItem::Notes => "nav.notes",
             NavItem::Settings => "nav.settings",
+            NavItem::More => "nav.more",
         }
     }
 
@@ -36,6 +39,14 @@ impl NavItem {
             NavItem::Library => "book.opened",
             NavItem::Notes => "bookmark",
             NavItem::Settings => "appbar.settings",
+            NavItem::More => "appbar.menu",
+        }
+    }
+
+    fn tab(self) -> Self {
+        match self {
+            Self::Notes | Self::Settings => Self::More,
+            item => item,
         }
     }
 
@@ -45,21 +56,21 @@ impl NavItem {
 }
 
 /// The bar at the bottom of the Home, Library, Notes and Settings surfaces.
-/// The active item has a bold label and an accent underline. In RTL the items
+/// The active item has a bold label and a red mark above it on color panels. In RTL the items
 /// run from right to left.
 pub struct NavBar {
     active: NavItem,
-    labels: [String; 4],
+    labels: [String; 3],
 }
 
 impl NavBar {
     /// A bar with the English labels.
     pub fn new(active: NavItem) -> Self {
-        Self::with_labels(active, ["Home", "Library", "Notes", "Settings"].map(String::from))
+        Self::with_labels(active, ["Home", "My books", "More"].map(String::from))
     }
 
     /// A bar with labels in the order of [`NavItem::ALL`]. Use it for translated labels.
-    pub fn with_labels(active: NavItem, labels: [String; 4]) -> Self {
+    pub fn with_labels(active: NavItem, labels: [String; 3]) -> Self {
         Self { active, labels }
     }
 
@@ -75,7 +86,7 @@ impl NavBar {
     /// The item at display position `slot` (0 is the leading edge).
     fn slot_item(rtl: bool, slot: usize) -> NavItem {
         if rtl {
-            NavItem::ALL[3 - slot]
+            NavItem::ALL[2 - slot]
         } else {
             NavItem::ALL[slot]
         }
@@ -95,26 +106,35 @@ impl Widget for NavBar {
         cx.fill_rect(b, background);
         let t = cx.theme;
         let divider = cx.color(Tone::Divider);
-        cx.fill_rect(Rect::new(b.x, b.y, b.w, t.line.divider), divider);
+        cx.fill_rect(Rect::new(b.x, b.y, b.w, 1), divider);
 
-        let cell_w = b.w / 4;
-        let icon = t.icon_size;
-        for slot in 0..4 {
+        let cell_w = b.w / 3;
+        let icon = t.scale.dp(24);
+        for slot in 0..3 {
             let item = Self::slot_item(t.rtl, slot);
             let cell = Rect::new(b.x + (slot as u32 * cell_w) as i32, b.y, cell_w, b.h);
-            let active = item == self.active;
-            let tone = if active { Tone::Ink } else { Tone::InkSecondary };
-            let label_font = if active { &t.font.label } else { &t.font.caption };
+            let active = item == self.active.tab();
+            let tone = Tone::Ink;
+            let mut label_font = t.font.caption.clone();
+            if active {
+                label_font.weight = 700;
+            }
+            let color = if active && t.color_panel {
+                kaia_gfx::Color::rgb(0xbf, 0, 0)
+            } else {
+                cx.color(tone)
+            };
+            let mut style = t.style(&label_font, tone);
+            style.color = color;
             let label = cx.fonts.layout(
                 &self.labels[item.index()],
-                &t.style(label_font, tone),
+                &style,
                 cell_w.saturating_sub(2 * t.space.xs).max(1),
                 Some(1),
                 true,
             );
             let stack_h = icon as i32 + t.space.xs as i32 + label.height as i32;
             let top = cell.y + (cell.h as i32 - stack_h - t.line.focus as i32) / 2;
-            let color = cx.color(tone);
             draw_icon_at(
                 cx,
                 item.icon(),
@@ -128,13 +148,8 @@ impl Widget for NavBar {
             );
             cx.text(&label, label_at);
             if active {
-                let accent = cx.color(Tone::Accent);
-                let line = Rect::new(
-                    cell.x + t.space.md as i32,
-                    b.bottom() - t.line.focus as i32,
-                    cell_w.saturating_sub(2 * t.space.md),
-                    t.line.focus,
-                );
+                let accent = color;
+                let line = Rect::new(cell.x, b.y, cell_w, t.line.focus);
                 cx.fill_rect(line, accent);
             }
         }
@@ -148,8 +163,8 @@ impl Widget for NavBar {
         if !b.contains(*pos) {
             return Handled::No;
         }
-        let cell_w = (b.w / 4).max(1);
-        let slot = (((pos.x - b.x) as u32) / cell_w).min(3) as usize;
+        let cell_w = (b.w / 3).max(1);
+        let slot = (((pos.x - b.x) as u32) / cell_w).min(2) as usize;
         let item = Self::slot_item(cx.theme().rtl, slot);
         cx.action(AppAction::new(item.action()));
         Handled::Yes

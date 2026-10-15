@@ -109,12 +109,12 @@ pub fn wait_for(app: &mut App<HeadlessBackend>, what: &str, done: impl Fn(&App<H
 
 /// The centre of the widget with `key` on the top window.
 pub fn centre_of(app: &App<HeadlessBackend>, key: &str) -> Point {
-    if let Some(slot) = ["nav-home", "nav-library", "nav-notes", "nav-settings"]
+    if let Some(slot) = ["nav-home", "nav-library", "nav-more"]
         .iter()
         .position(|k| *k == key)
     {
         let r = app.find_rect("nav-bar").expect("navigation bar");
-        return Point::new(r.x + r.w as i32 * (2 * slot as i32 + 1) / 8, r.y + r.h as i32 / 2);
+        return Point::new(r.x + r.w as i32 * (2 * slot as i32 + 1) / 6, r.y + r.h as i32 / 2);
     }
     let r: Rect = app
         .find_rect(key)
@@ -128,6 +128,19 @@ pub fn wait_reader(app: &mut App<HeadlessBackend>) {
 }
 
 pub fn tap_key(app: &mut App<HeadlessBackend>, key: &str) {
+    // Notes and Settings now open through More. Keep callers exercising taps.
+    if matches!(key, "nav-notes" | "nav-settings") {
+        tap_key(app, "nav-more");
+        tap_key(
+            app,
+            if key == "nav-notes" {
+                "more-notes"
+            } else {
+                "more-settings"
+            },
+        );
+        return;
+    }
     wait_reader(app);
     let p = centre_of(app, key);
     app.tap(p).unwrap();
