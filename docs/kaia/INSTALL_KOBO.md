@@ -29,7 +29,15 @@ There are two ways to read the firmware version.
 3. Eject the Kobo in the file manager, then unplug the cable.
 4. Start Kaia from the NickelMenu entry "Kaia Reader".
 
-NickelMenu is not part of the package. Install it separately and follow its own documentation. The entry file `.adds/nm/kaia` has separate Lua and Rust entries. This repository does not include NickelMenu's documentation, so the entry syntax was written from the documented format and not checked against the NickelMenu version on the device. If the entry does nothing, check its syntax against that version.
+NickelMenu is not part of the package. Install it separately and follow its own documentation. The entry file `.adds/nm/kaia` has separate Lua and Rust entries. Its syntax was checked against NickelMenu v0.6.0 on a Libra Colour with firmware 4.42.23303 on 2026-10-14, and both entries start Kaia.
+
+Nickel scans every folder on the storage for books, hidden ones included, so after the install it lists Kaia's icons and help pages as books. KOReader has the same problem and the same fix: with the Kobo connected over USB, open `.kobo/Kobo/Kobo eReader.conf` in a plain text editor, find the `[FeatureSettings]` section (add it at the end of the file if it is missing) and add this line under it:
+
+```
+ExcludeSyncFolders=(\\.(?!kobo|adobe).+|([^.][^/]*/)+\\..+)
+```
+
+Save, eject and unplug. Nickel then ignores folders whose names start with a dot. Edit the file only while the Kobo is in USB mode, and keep a copy of it first.
 
 NickelMenu states that it does not support firmware 5.x. On firmware 5.x, start Kaia with another launcher, such as KFMon, and follow that launcher's documentation. The Kaia launcher reads `.adds/kfmon/config/kaia.ini` when it exits under KFMon. If that file contains the line `reboot_on_exit=false`, the launcher restarts Nickel. Without that line, the launcher reboots the device.
 
