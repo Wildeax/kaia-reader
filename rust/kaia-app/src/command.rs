@@ -13,7 +13,7 @@ use crate::surfaces::Route;
 /// A global command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    /// `nav:home`, `nav:library`, `nav:notes`, `nav:settings`: replace the root.
+    /// `nav:settings` opens above the caller. Other navigation replaces the root.
     Navigate(Route),
     /// `open_book:<id or path>`: open the book in the reader.
     OpenBook(BookRef),

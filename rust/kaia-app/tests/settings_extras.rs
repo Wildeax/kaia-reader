@@ -194,7 +194,8 @@ fn large_print_switch_rebuilds_from_the_settings_root() {
     assert_eq!(app.services().theme.text_scale, 1.0);
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
@@ -205,14 +206,15 @@ fn large_print_switch_rebuilds_from_the_settings_root() {
     assert_eq!(app.services().theme.text_scale, LARGE_PRINT_SCALE);
     assert_eq!(
         app.router().routes().len(),
-        1,
-        "the stack starts over at the root"
+        2,
+        "the settings index keeps its caller underneath"
     );
     assert_eq!(app.top_route(), Some(&Route::Settings));
     assert!(app.services().settings.is_true(keys::DISPLAY_LARGE_PRINT));
 
     // The root has no switch of its own: open the display section again to turn it off.
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     command(
         &mut app,
         "settings:set:display.large_print",
@@ -239,7 +241,8 @@ fn large_print_screens_render_with_the_larger_text() {
     tap_key(&mut app, "nav-settings");
     save_png(app.frame(), "settings-root");
 
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     save_png(app.frame(), "settings-display");
 
     for section in ["reading", "network", "statistics", "advanced", "about"] {
@@ -263,7 +266,8 @@ fn large_print_display_page_golden() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_matches_golden(app.frame(), &golden("settings_large_print.png"), 14);
 }
 

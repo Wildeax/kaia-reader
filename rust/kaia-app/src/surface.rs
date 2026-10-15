@@ -103,7 +103,8 @@ pub enum Nav {
     /// Close the top screen. Does nothing on the root.
     Pop,
     /// Replace the whole stack with the surface for `route`. Choosing the root
-    /// that is already shown does nothing.
+    /// that is already shown does nothing. Settings returns to its index while
+    /// preserving its caller and marking covered screens for rebuild.
     SwitchRoot(Route),
     /// Close the top screen and show `surface` in its place. On the root, this is
     /// a root switch.

@@ -30,8 +30,8 @@ fn setup(name: &str) -> (App<HeadlessBackend>, PathBuf) {
 
 fn open_storage(app: &mut App<HeadlessBackend>) {
     command(app, "nav:settings");
-    command(app, "settings:device");
-    tap_key(app, "settings-storage");
+    tap_key(app, "settings-device-info");
+    tap_key(app, "settings:storage");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {

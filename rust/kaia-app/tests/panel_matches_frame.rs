@@ -248,9 +248,21 @@ fn back_to_home(app: &mut App<HeadlessBackend>) {
     panic!("Back did not reach Home, on {:?}", app.top_route());
 }
 
-/// All settings categories fit in the portrait index without pager buttons.
-fn settings_open_row(app: &mut App<HeadlessBackend>, key: &str) {
-    tap_key(app, key);
+/// Opens an index category or a secondary settings page through its parent.
+fn settings_open_section(app: &mut App<HeadlessBackend>, name: &str) {
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    if commands::INDEX_SECTIONS.contains(&name) {
+        tap_key(app, &format!("settings-{name}"));
+    } else {
+        let parent = if name == "about" {
+            "device-info"
+        } else {
+            "advanced"
+        };
+        tap_key(app, &format!("settings-{parent}"));
+        tap_key(app, &format!("settings:{name}"));
+    }
 }
 
 /// Runs `action` and checks that the boolean setting `key` flips.
@@ -401,14 +413,14 @@ fn panel_matches_frame_after_each_step() {
     run.step(&mut app, "settings: root", |app| tap_key(app, "nav-settings"));
     for name in commands::SECTIONS {
         run.step(&mut app, &format!("settings: {name} section"), |app| {
-            settings_open_row(app, &format!("settings-{name}"))
+            settings_open_section(app, name)
         });
         run.step(&mut app, &format!("settings: back from {name}"), |app| {
             app.key(Key::Back).unwrap();
         });
     }
     run.step(&mut app, "settings: display section", |app| {
-        settings_open_row(app, "settings-display")
+        settings_open_section(app, "display")
     });
     run.step(&mut app, "settings: night mode on", |app| {
         toggle_changes(app, "display.night_mode", |app| {
@@ -424,7 +436,7 @@ fn panel_matches_frame_after_each_step() {
         app.key(Key::Back).unwrap();
     });
     run.step(&mut app, "settings: reading section", |app| {
-        settings_open_row(app, "settings-reading")
+        settings_open_section(app, "reading")
     });
     run.step(&mut app, "settings: font size up", |app| {
         let before = app.services().settings.read("reading.font_size").as_f64();

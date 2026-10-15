@@ -106,7 +106,8 @@ fn save_switch(dir: &Path, key: &str, on: bool) {
 /// Taps the switch of `key` on the Home page of Settings, then goes back to Home.
 fn flip(app: &mut App<HeadlessBackend>, key: &str) {
     tap_key(app, "nav-settings");
-    tap_key(app, "settings-home");
+    tap_key(app, "settings-advanced");
+    tap_key(app, "settings:home");
     tap_key(app, &format!("set-{key}"));
     app.command("back", &[]);
     app.command("nav:home", &[]);
@@ -325,7 +326,8 @@ fn settings_home_golden() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-home");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:home");
     assert_matches_golden(app.frame(), &golden("settings_home.png"), 14);
 }
 

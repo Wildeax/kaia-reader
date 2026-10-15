@@ -14,8 +14,8 @@ pub mod settings;
 
 use crate::surface::Surface;
 
-/// A screen the app can show. Home, Library, Notes and Settings are roots. The
-/// others are pushed above a root.
+/// A screen the app can show. Home, Library and Notes are roots. Settings and
+/// the other screens are pushed above a root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Route {
     Home,

@@ -3,18 +3,18 @@
 mod common;
 
 use common::*;
-use kaia_app::surfaces::settings::commands::SECTIONS;
+use kaia_app::surfaces::settings::commands::INDEX_SECTIONS;
 use kaia_app::Route;
 
 #[test]
-fn every_category_fits_and_close_uses_the_existing_back_route() {
+fn index_rows_fit_and_close_restores_home() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("settings-index");
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
     assert!(app.find_rect("nav-bar").is_none());
-    for (index, section) in SECTIONS.iter().enumerate() {
+    for (index, section) in INDEX_SECTIONS.iter().enumerate() {
         let row = app.find_rect(&format!("settings-{section}")).unwrap();
         assert_eq!(row.x, 100);
         assert_eq!(row.y, 280 + 107 * index as i32);
@@ -32,4 +32,178 @@ fn every_category_fits_and_close_uses_the_existing_back_route() {
     app.process(Vec::new()).unwrap();
     tap_key(&mut app, "settings-close");
     assert_eq!(app.top_route(), Some(&Route::Home));
+}
+
+#[test]
+fn close_restores_each_caller_and_back_only_leaves_one_settings_page() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    for (name, command, caller) in [
+        ("home", "nav:home", Route::Home),
+        ("library", "nav:library", Route::Library { page: 0 }),
+        ("notes", "nav:notes", Route::Notes),
+    ] {
+        let dir = scratch(&format!("settings-caller-{name}"));
+        let mut app = make_app(&dir, Vec::new());
+        app.start().unwrap();
+        app.command(command, &[]);
+        app.process(Vec::new()).unwrap();
+        let caller_window = app.router().top_window().unwrap().id();
+        tap_key(&mut app, "nav-settings");
+        app.command("nav:settings", &[]);
+        app.process(Vec::new()).unwrap();
+        assert_eq!(app.router().routes(), vec![&caller, &Route::Settings]);
+        tap_key(&mut app, "settings-reading");
+        tap_key(&mut app, "settings-back");
+        assert_eq!(app.top_route(), Some(&Route::Settings));
+        tap_key(&mut app, "settings-reading");
+        app.command("settings:dictionaries", &[]);
+        app.process(Vec::new()).unwrap();
+        tap_key(&mut app, "settings-close");
+        assert_eq!(app.router().routes(), vec![&caller]);
+        assert_eq!(app.router().top_window().unwrap().id(), caller_window);
+    }
+}
+
+#[test]
+fn search_replacement_and_close_preserve_the_library_caller() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-search-caller");
+    let mut app = make_app(&dir, Vec::new());
+    app.start().unwrap();
+    app.command("nav:library", &[]);
+    app.process(Vec::new()).unwrap();
+    let caller_window = app.router().top_window().unwrap().id();
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-search");
+    app.command("settings:search", &[kaia_events::Value::from("refresh")]);
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-hit-0");
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.router().routes(), vec![&Route::Library { page: 0 }]);
+    assert_eq!(app.router().top_window().unwrap().id(), caller_window);
+}
+
+#[test]
+fn close_returns_to_the_open_reader_without_reopening_the_book() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-reader-caller");
+    let books = library_with_books(&dir);
+    let mut app = make_app(&dir, vec![books]);
+    app.start().unwrap();
+    wait_for(&mut app, "library scan", |a| !a.scan_running());
+    let id = book_id(&app, "juliet.epub");
+    app.command(&format!("open_book:{id}"), &[]);
+    wait_reader(&mut app);
+    let caller_window = app.router().top_window().unwrap().id();
+    let routes: Vec<_> = app.router().routes().into_iter().cloned().collect();
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-reading");
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.router().routes(), routes.iter().collect::<Vec<_>>());
+    assert_eq!(app.top_route(), Some(&Route::Reader { book: id }));
+    assert_eq!(app.router().top_window().unwrap().id(), caller_window);
+}
+
+#[test]
+fn grouped_settings_keep_secondary_pages_reachable() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-groups");
+    let mut app = make_app(&dir, Vec::new());
+    app.start().unwrap();
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-language-dictionaries");
+    tap_key(&mut app, "settings:language");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::SettingsSection {
+            name: "language".into()
+        })
+    );
+    tap_key(&mut app, "settings-back");
+    tap_key(&mut app, "settings:dictionaries");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::SettingsSection {
+            name: "dictionaries".into()
+        })
+    );
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-datetime");
+    tap_key(&mut app, "settings:timezone");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::SettingsSection {
+            name: "timezone".into()
+        })
+    );
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-device-info");
+    tap_key(&mut app, "settings:about");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::SettingsSection { name: "about".into() })
+    );
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:home");
+    assert_eq!(
+        app.top_route(),
+        Some(&Route::SettingsSection { name: "home".into() })
+    );
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.router().routes(), vec![&Route::Home]);
+}
+
+#[test]
+fn language_group_golden() {
+    settings_group_golden("language-dictionaries");
+}
+
+#[test]
+fn date_time_group_golden() {
+    settings_group_golden("datetime");
+}
+
+#[test]
+fn device_info_group_golden() {
+    settings_group_golden("device-info");
+}
+
+fn settings_group_golden(name: &str) {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch(&format!("settings-groups-golden-{name}"));
+    let mut app = make_app(&dir, Vec::new());
+    app.start().unwrap();
+    tap_key(&mut app, "nav-settings");
+    app.command(&format!("settings:{name}"), &[]);
+    app.process(Vec::new()).unwrap();
+    let path = golden(&format!("settings_{name}.png"));
+    if !path.exists() {
+        kaia_gfx::png::write_pixmap(app.frame(), &path.with_extension("actual.png")).unwrap();
+    }
+    kaia_gfx::golden::assert_matches_golden(app.frame(), &path, 14);
+}
+
+#[test]
+fn changing_a_setting_rebuilds_the_caller_when_settings_closes() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("settings-rebuild-caller");
+    let mut app = make_app(&dir, Vec::new());
+    app.start().unwrap();
+    let caller_window = app.router().top_window().unwrap().id();
+    tap_key(&mut app, "nav-settings");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:home");
+    app.command(
+        "settings:set:home.show_current",
+        &[kaia_events::Value::Bool(false)],
+    );
+    app.process(Vec::new()).unwrap();
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.router().routes(), vec![&Route::Home]);
+    assert_ne!(app.router().top_window().unwrap().id(), caller_window);
 }

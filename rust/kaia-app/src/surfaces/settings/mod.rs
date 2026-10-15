@@ -33,7 +33,7 @@ use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common::{body, root_window as window};
 use crate::surfaces::Route;
-use commands::{Command, SECTIONS};
+use commands::{Command, INDEX_SECTIONS};
 use section::SettingsSectionSurface;
 
 /// The Settings root. See the module docs.
@@ -125,14 +125,14 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("reading", "Font family"),
     ("reading", "Tap zones"),
     ("reading", "Full refresh every"),
-    ("reading", "Dictionary folder"),
+    ("language-dictionaries", "Dictionary folder"),
     ("display", "Frontlight"),
     ("display", "Warmth"),
     ("display", "Night mode"),
     ("display", "Color rendering"),
     ("display", "Large print"),
     ("display", "Screen rotation"),
-    ("display", "Language"),
+    ("language-dictionaries", "Language"),
     ("library", "Book folders"),
     ("library", "Scan now"),
     ("library", "Show finished books"),
@@ -145,7 +145,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("statistics", "Today"),
     ("statistics", "This week"),
     ("statistics", "Books"),
-    ("device", "Storage"),
+    ("device-info", "Storage"),
     ("device", "Sleep after"),
     ("device", "Sleep screen"),
     ("device", "Screen lock"),
@@ -159,7 +159,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Hardware keys"),
     ("advanced", "Auto suspend"),
     ("advanced", "Backup and safe mode"),
-    ("advanced", "Date and time"),
+    ("datetime", "Date and time"),
     ("advanced", "Experimental features"),
     ("advanced", "Reset settings"),
     ("advanced", "Erase all Kaia data"),
@@ -257,7 +257,10 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
         );
     }
     if root.query.is_empty() {
-        let items: Vec<RootItem> = SECTIONS.iter().map(|name| RootItem::Section(name)).collect();
+        let items: Vec<RootItem> = INDEX_SECTIONS
+            .iter()
+            .map(|name| RootItem::Section(name))
+            .collect();
         children.push(list(items));
     } else {
         let hits = search(&root.query);
@@ -285,8 +288,8 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
         ));
     }
     let content = WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch));
-    let dialog =
-        SettingsDialog::new(tr("Settings"), tr("Settings"), content, "back").search("settings:search:open");
+    let dialog = SettingsDialog::new(tr("Settings"), tr("Settings"), content, "settings:close")
+        .search("settings:search:open");
     window(services, screen, dialog)
 }
 
@@ -301,7 +304,7 @@ fn build_item(item: &RootItem, _theme: &Theme) -> WidgetPod {
     match item {
         RootItem::Section(name) => WidgetPod::new(
             SettingsIndexRow::new(sections::title(name), format!("settings:{name}"))
-                .first(*name == SECTIONS[0]),
+                .first(*name == INDEX_SECTIONS[0]),
         )
         .with_key(format!("settings-{name}"))
         .focusable(true),
@@ -336,7 +339,7 @@ mod tests {
     #[test]
     fn every_search_item_names_a_known_section() {
         for (section, _) in ITEMS {
-            assert!(SECTIONS.contains(section), "{section}");
+            assert!(commands::SECTIONS.contains(section), "{section}");
         }
     }
 }

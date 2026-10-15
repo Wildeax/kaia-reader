@@ -34,8 +34,23 @@ use kaia_events::Value;
 use super::{experiments, keys};
 use crate::surfaces::reader::dict::Change;
 
-/// The sections, in the order the root lists them.
-pub const SECTIONS: [&str; 11] = [
+/// The index groups. Kaia-specific pages remain reachable through Advanced.
+pub const INDEX_SECTIONS: [&str; 8] = [
+    "datetime",
+    "language-dictionaries",
+    "network",
+    "device",
+    "reading",
+    "library",
+    "device-info",
+    "advanced",
+];
+
+/// All sections with a direct settings command, including secondary pages.
+pub const SECTIONS: [&str; 14] = [
+    "datetime",
+    "language-dictionaries",
+    "device-info",
     "home",
     "reading",
     "display",

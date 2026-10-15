@@ -1,5 +1,5 @@
-//! The route stack. The bottom screen is a root (Home, Library, Notes or
-//! Settings). Pushed screens (the reader, its overlay, book details, settings
+//! The route stack. The bottom screen is a root (Home, Library or Notes).
+//! Pushed screens (the reader, its overlay, book details, settings
 //! sections) sit above it.
 //!
 //! The router owns one [`Surface`] and one `kaia_ui::Window` per screen, and
@@ -59,6 +59,14 @@ impl Router {
     /// The routes from the root up.
     pub fn routes(&self) -> Vec<&Route> {
         self.screens.iter().map(|s| &s.route).collect()
+    }
+
+    /// The first settings screen, including a section opened without the index.
+    /// Closing settings removes this screen and its descendants.
+    pub fn settings_start(&self) -> Option<usize> {
+        self.screens
+            .iter()
+            .position(|s| matches!(s.route, Route::Settings | Route::SettingsSection { .. }))
     }
 
     pub fn top_window(&self) -> Option<Window> {

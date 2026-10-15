@@ -17,7 +17,7 @@ use super::keys;
 use super::{save, sections};
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{page, root_window as window};
+use crate::surfaces::common::root_window as window;
 use crate::surfaces::reader::dict;
 use crate::surfaces::Route;
 
@@ -276,6 +276,9 @@ impl Surface for SettingsSectionSurface {
             }
         }
         match commands::parse(cmd) {
+            Some(Command::Section(name)) => {
+                Outcome::Navigate(Nav::Push(Box::new(SettingsSectionSurface::new(name))))
+            }
             Some(Command::FieldsOpen | Command::FieldsClose) => {
                 let typing = commands::parse(cmd) == Some(Command::FieldsOpen);
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
@@ -345,7 +348,7 @@ impl Surface for SettingsSectionSurface {
         if event.name == "DictionariesChanged"
             && matches!(
                 self.name.as_str(),
-                "reading" | "dictionaries" | "dictionary-downloads"
+                "reading" | "dictionaries" | "dictionary-downloads" | "language-dictionaries"
             )
         {
             Outcome::Rebuild
@@ -375,11 +378,13 @@ pub fn build(services: &Services, screen: Size, name: &str, typing: bool, now: i
 /// The page of section `name`: the header, the entries and, for the text
 /// fields, the edit button and the keyboard while typing. Tests render it with
 /// a fixed `now`.
-pub fn section_page(services: &Services, name: &str, typing: bool, now: i64) -> kaia_ui::components::Padding {
-    let t = &services.theme;
-    let header =
-        kaia_ui::WidgetPod::new(kaia_ui::composite::Header::new(t, sections::title(name)).back("back"));
-    let mut children = vec![header];
+pub fn section_page(
+    services: &Services,
+    name: &str,
+    typing: bool,
+    now: i64,
+) -> kaia_ui::composite::SettingsDialog {
+    let mut children = Vec::new();
     if has_text_fields(name) {
         let (label, action) = if typing {
             (tr("Done editing"), "settings:fields:close")
@@ -405,7 +410,11 @@ pub fn section_page(services: &Services, name: &str, typing: bool, now: i64) -> 
                 .on_hide("settings:fields:close"),
         ));
     }
-    page(services, children)
+    let content = kaia_ui::WidgetPod::new(
+        kaia_ui::components::Column::new(children).cross_align(kaia_ui::components::CrossAlign::Stretch),
+    );
+    kaia_ui::composite::SettingsDialog::new(tr("Settings"), sections::title(name), content, "settings:close")
+        .back("back")
 }
 
 fn has_text_fields(name: &str) -> bool {
@@ -414,7 +423,7 @@ fn has_text_fields(name: &str) -> bool {
 
 /// Whether section `name` lists the dictionaries. Those sections load them before they build.
 fn lists_dictionaries(name: &str) -> bool {
-    matches!(name, "reading" | "dictionaries")
+    matches!(name, "reading" | "dictionaries" | "language-dictionaries")
 }
 
 /// Turns a dictionary on or off, or moves it one place in the lookup order. The page
@@ -471,7 +480,7 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         save(env);
     }
     if key == keys::DISPLAY_LARGE_PRINT {
-        // Switching the root replaces the stack, so no screen keeps the old sizes.
+        // Returning to the index rebuilds it and marks covered screens for rebuild.
         env.services.apply_large_print();
         return Outcome::Navigate(Nav::SwitchRoot(Route::Settings));
     }

@@ -56,6 +56,15 @@ fn webdav_settings_store_password_separately_and_book_close_queues_saved_notes()
     assert_eq!(app.top_route(), Some(&kaia_app::Route::Settings));
     let queue: serde_json::Value =
         serde_json::from_slice(&fs::read(data.join("webdav-queue.json")).unwrap()).unwrap();
+    assert_eq!(queue["queue"].as_array().unwrap().len(), 0);
+    // Settings covers the book. Export waits until the reader actually closes.
+    tap_key(&mut app, "settings-close");
+    app.command("back", &[]);
+    wait_reader(&mut app);
+    app.command("nav:settings", &[]);
+    wait_reader(&mut app);
+    let queue: serde_json::Value =
+        serde_json::from_slice(&fs::read(data.join("webdav-queue.json")).unwrap()).unwrap();
     assert_eq!(queue["queue"].as_array().unwrap().len(), 1);
     let exported: serde_json::Value =
         serde_json::from_str(queue["queue"][0]["json"].as_str().unwrap()).unwrap();

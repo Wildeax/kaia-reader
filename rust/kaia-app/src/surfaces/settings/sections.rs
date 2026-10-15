@@ -26,7 +26,10 @@ pub fn title(name: &str) -> String {
         "library" => tr("Library"),
         "network" => tr("Network and sync"),
         "statistics" => tr("Statistics"),
-        "device" => tr("Device"),
+        "device" => tr("Power and privacy"),
+        "datetime" => tr("Date and time"),
+        "language-dictionaries" => tr("Language and dictionaries"),
+        "device-info" => tr("Device information"),
         "storage" => tr("Storage"),
         "extensions" => tr("Extensions"),
         "plugin-menus" => tr("Plugins"),
@@ -57,6 +60,9 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "network" => network(services),
         "statistics" => statistics(services, now),
         "device" => device(services),
+        "datetime" => date_time(services),
+        "language-dictionaries" => language_dictionaries(services),
+        "device-info" => device_info(),
         "storage" => super::storage::entries(services),
         "extensions" => extensions(services),
         "plugin-menus" => reader_menus(services),
@@ -350,18 +356,30 @@ fn display(services: &Services) -> Vec<Entry> {
             f64::from(services.platform.device.startup_rotation_degrees()),
         ) / 90.0) as usize,
     });
-    out.push(Entry::Heading(tr("Language")));
+    out
+}
+
+fn language_dictionaries(services: &Services) -> Vec<Entry> {
     let current = crate::i18n::available(&services.catalog_root)
         .into_iter()
         .find(|(tag, _)| *tag == services.language)
         .map_or(services.language.clone(), |(_, name)| name.to_string());
-    out.push(Entry::Row {
-        primary: current,
-        secondary: None,
-        value: None,
-        action: Some("settings:language".into()),
-    });
-    out
+    vec![
+        Entry::Heading(tr("Language")),
+        Entry::Row {
+            primary: tr("Language"),
+            secondary: None,
+            value: Some(current),
+            action: Some("settings:language".into()),
+        },
+        Entry::Heading(tr("Dictionaries")),
+        Entry::Row {
+            primary: tr("Installed dictionaries"),
+            secondary: None,
+            value: Some(dict::ordered(services).len().to_string()),
+            action: Some("settings:dictionaries".into()),
+        },
+    ]
 }
 
 /// The languages on offer, one row each. The row of the language in use has a checkbox.
@@ -694,11 +712,6 @@ fn screen_lock(services: &Services) -> Vec<Entry> {
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let mut out = vec![
-        Entry::Button {
-            key: "settings-storage",
-            label: tr("Storage"),
-            action: "settings:storage".into(),
-        },
         Entry::Heading(tr("Standby after")),
         minutes_choices(s, keys::DEVICE_STANDBY_MINUTES, 0.0, &keys::STANDBY_MINUTES, tr("Off")),
         Entry::Text(tr(
@@ -734,7 +747,13 @@ fn device(services: &Services) -> Vec<Entry> {
         )),
     ];
     out.extend(screen_lock(services));
-    out.extend([
+    out
+}
+
+fn date_time(services: &Services) -> Vec<Entry> {
+    let s = &services.settings;
+    vec![
+        Entry::Text(tr("Date and time use the device clock. Set them on the device.")),
         Entry::Heading(tr("Time zone")),
         Entry::Row {
             primary: keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string()),
@@ -751,8 +770,39 @@ fn device(services: &Services) -> Vec<Entry> {
         Entry::Text(tr(
             "Needs Wi-Fi on. Syncs at most every six hours. Off by default. Kaia contacts pool.ntp.org only when this is on.",
         )),
-    ]);
-    out
+    ]
+}
+
+fn device_info() -> Vec<Entry> {
+    vec![
+        Entry::Heading(tr("Hardware")),
+        Entry::Row {
+            primary: tr("Storage"),
+            secondary: None,
+            value: None,
+            action: Some("settings:storage".into()),
+        },
+        Entry::Heading(tr("Software")),
+        Entry::Row {
+            primary: tr("Kaia Reader"),
+            secondary: None,
+            value: Some(env!("CARGO_PKG_VERSION").into()),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("About and licenses"),
+            secondary: None,
+            value: None,
+            action: Some("settings:about".into()),
+        },
+        Entry::Heading(tr("Maintenance")),
+        Entry::Row {
+            primary: tr("Advanced"),
+            secondary: None,
+            value: None,
+            action: Some("settings:advanced".into()),
+        },
+    ]
 }
 
 fn data(services: &Services) -> Vec<Entry> {
@@ -885,15 +935,20 @@ fn advanced() -> Vec<Entry> {
         ),
         (
             tr("Auto suspend"),
-            tr("Suspend after no input. The timeout is in Device."),
+            tr("Suspend after no input. The timeout is in Power and privacy."),
         ),
         (tr("Backup"), tr("Copy the data folder to keep a backup.")),
-        (
-            tr("Date and time"),
-            tr("Uses the device clock. Set it on the device."),
-        ),
     ];
-    let mut out = vec![
+    let mut out: Vec<Entry> = ["home", "display", "statistics", "extensions", "data"]
+        .into_iter()
+        .map(|name| Entry::Row {
+            primary: title(name),
+            secondary: None,
+            value: None,
+            action: Some(format!("settings:{name}")),
+        })
+        .collect();
+    out.extend([
         Entry::Row {
             primary: tr("Experimental features"),
             secondary: Some(tr("Off by default. Flags for features that are not ready.")),
@@ -903,7 +958,7 @@ fn advanced() -> Vec<Entry> {
         Entry::Text(tr(
             "These KOReader options have no Kaia control yet. Each line says what the option does.",
         )),
-    ];
+    ]);
     for (primary, secondary) in items {
         out.push(Entry::Row {
             primary,

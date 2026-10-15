@@ -286,7 +286,10 @@ pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
                 row = row.value(text.clone());
             }
             if let Some(action) = action {
-                row = row.chevron().on_action(action.clone());
+                if value.is_none() {
+                    row = row.chevron();
+                }
+                row = row.on_action(action.clone());
             }
             WidgetPod::new(row).with_key(action.clone().unwrap_or_else(|| primary.clone()))
         }

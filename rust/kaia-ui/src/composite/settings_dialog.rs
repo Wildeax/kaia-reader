@@ -29,6 +29,7 @@ pub struct SettingsDialog {
     title: String,
     content: WidgetPod,
     close: WidgetPod,
+    back: Option<WidgetPod>,
     search: Option<WidgetPod>,
     panel: Rect,
 }
@@ -48,6 +49,7 @@ impl SettingsDialog {
                 .with_key("settings-close")
                 .focusable(true),
             search: None,
+            back: None,
             panel: Rect::default(),
         }
     }
@@ -56,6 +58,16 @@ impl SettingsDialog {
         self.search = Some(
             WidgetPod::new(DialogIcon::new("appbar.search", action))
                 .with_key("settings-search")
+                .focusable(true),
+        );
+        self
+    }
+
+    /// Adds a back arrow for a subpage. Close keeps its separate action.
+    pub fn back(mut self, action: &str) -> Self {
+        self.back = Some(
+            WidgetPod::new(DialogIcon::new("settings.back", action))
+                .with_key("settings-back")
                 .focusable(true),
         );
         self
@@ -79,6 +91,10 @@ impl Widget for SettingsDialog {
         let y = px(t, 28) as i32;
         self.close.layout(cx, Constraints::tight(Size::new(side, side)));
         self.close.set_origin(Point::new(right - side as i32, y));
+        if let Some(back) = &mut self.back {
+            back.layout(cx, Constraints::tight(Size::new(side, side)));
+            back.set_origin(Point::new(px(t, 27) as i32, y));
+        }
         if let Some(search) = &mut self.search {
             search.layout(cx, Constraints::tight(Size::new(side, side)));
             search.set_origin(Point::new(right - 2 * side as i32, y));
@@ -126,6 +142,7 @@ impl Widget for SettingsDialog {
 
     fn children_mut(&mut self) -> Vec<&mut WidgetPod> {
         let mut children = vec![&mut self.content, &mut self.close];
+        children.extend(self.back.iter_mut());
         children.extend(self.search.iter_mut());
         children
     }
@@ -155,9 +172,14 @@ impl Widget for DialogIcon {
     fn paint(&mut self, cx: &mut PaintCx) {
         let b = cx.bounds();
         let size = px(cx.theme, 38);
+        let icon = if self.icon == "settings.back" && cx.theme.rtl {
+            "settings.back.rtl"
+        } else {
+            &self.icon
+        };
         draw_icon_at(
             cx,
-            &self.icon,
+            icon,
             size,
             cx.color(Tone::Ink),
             Point::new(b.x + (b.w - size) as i32 / 2, b.y + (b.h - size) as i32 / 2),

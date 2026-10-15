@@ -375,7 +375,8 @@ fn settings_sections_open_and_toggles_persist() {
     let path = app.services().settings_path();
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-display");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:display");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
@@ -489,7 +490,8 @@ fn statistics_section_reads_the_database() {
     );
 
     tap_key(&mut app, "nav-settings");
-    tap_key(&mut app, "settings-statistics");
+    tap_key(&mut app, "settings-advanced");
+    tap_key(&mut app, "settings:statistics");
     assert_eq!(
         app.top_route(),
         Some(&Route::SettingsSection {
