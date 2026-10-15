@@ -77,6 +77,13 @@ impl Assets {
     /// `icons_dir` (the `mdlight` set, one `<name>.svg` per icon). The `freefont`
     /// folder next to `fonts_dir`, when present, adds Hebrew, Georgian and Thai.
     pub fn load(fonts_dir: &Path, icons_dir: &Path) -> Result<Self, AssetError> {
+        Self::load_icons(fonts_dir, &[icons_dir.to_path_buf()])
+    }
+
+    /// Like [`Assets::load`], with several icon folders. A name is read from the
+    /// first folder that has `<name>.svg`, so later folders are fallbacks.
+    pub fn load_icons(fonts_dir: &Path, icon_dirs: &[PathBuf]) -> Result<Self, AssetError> {
+        assert!(!icon_dirs.is_empty(), "at least one icon folder");
         let mut dirs = vec![fonts_dir.to_path_buf()];
         if let Some(freefont) = fonts_dir.parent().map(|fonts| fonts.join("freefont")) {
             if freefont.is_dir() {
@@ -84,13 +91,15 @@ impl Assets {
             }
         }
         let fonts = FontSystem::load(&dirs, NOTO_FONT_PREFIXES).map_err(AssetError::Fonts)?;
-        fs::read_dir(icons_dir).map_err(|source| AssetError::IconDir {
-            path: icons_dir.to_path_buf(),
-            source,
-        })?;
+        for icons_dir in icon_dirs {
+            fs::read_dir(icons_dir).map_err(|source| AssetError::IconDir {
+                path: icons_dir.to_path_buf(),
+                source,
+            })?;
+        }
         Ok(Self {
             fonts,
-            icons: IconCache::new(icons_dir.to_path_buf()),
+            icons: IconCache::new(icon_dirs.to_vec()),
             closed: Vec::new(),
         })
     }
@@ -112,16 +121,28 @@ struct IconKey {
 /// Rendered icons, keyed by name, size and color. Each entry is a tinted
 /// alpha mask, so a repeated draw does no SVG work.
 pub struct IconCache {
-    dir: PathBuf,
+    dirs: Vec<PathBuf>,
     cache: HashMap<IconKey, Rc<AlphaPixmap>>,
 }
 
 impl IconCache {
-    pub fn new(dir: PathBuf) -> Self {
+    /// `dirs` in lookup order. The first folder with `<name>.svg` wins.
+    pub fn new(dirs: Vec<PathBuf>) -> Self {
         Self {
-            dir,
+            dirs,
             cache: HashMap::new(),
         }
+    }
+
+    /// The file for `name`: the first folder that has it, or the first folder's
+    /// path when none has it, so the read error names a real location.
+    fn locate(&self, name: &str) -> PathBuf {
+        let file = format!("{name}.svg");
+        self.dirs
+            .iter()
+            .map(|dir| dir.join(&file))
+            .find(|path| path.is_file())
+            .unwrap_or_else(|| self.dirs[0].join(&file))
     }
 
     /// The icon `name` at `size`, drawn in `color`. The SVG alpha channel
@@ -139,7 +160,7 @@ impl IconCache {
         if let Some(hit) = self.cache.get(&key) {
             return Ok(Rc::clone(hit));
         }
-        let path = self.dir.join(format!("{name}.svg"));
+        let path = self.locate(name);
         let svg = fs::read(&path).map_err(|source| IconError::Read {
             path: path.clone(),
             source,

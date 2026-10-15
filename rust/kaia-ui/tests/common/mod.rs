@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use kaia_gfx::{Point, Rect, Size};
@@ -17,10 +18,16 @@ pub const SCREEN: Size = Size::new(1264, 1680);
 
 pub const FONT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources/fonts/noto");
 pub const ICON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources/icons/mdlight");
+pub const KAIA_ICON_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../resources/kaia-icons/phosphor-light"
+);
 
-/// Loads the bundled fonts and icons. Panics when the resources are missing.
+/// Loads the bundled fonts and icons, in the order the app uses. Panics when the
+/// resources are missing.
 pub fn assets() -> SharedAssets {
-    Assets::load(FONT_DIR.as_ref(), ICON_DIR.as_ref())
+    let icons = [PathBuf::from(KAIA_ICON_DIR), PathBuf::from(ICON_DIR)];
+    Assets::load_icons(FONT_DIR.as_ref(), &icons)
         .unwrap_or_else(|e| panic!("cannot load assets: {e}"))
         .shared()
 }

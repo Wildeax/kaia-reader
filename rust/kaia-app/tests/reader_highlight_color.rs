@@ -33,9 +33,12 @@ const DIMMED: [u8; 3] = [215, 215, 215];
 
 fn assets() -> SharedAssets {
     let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources");
-    Assets::load(&resources.join("fonts/noto"), &resources.join("icons/mdlight"))
-        .unwrap_or_else(|e| panic!("cannot load assets: {e}"))
-        .shared()
+    Assets::load_icons(
+        &resources.join("fonts/noto"),
+        &kaia_app::services::icon_dirs(&resources),
+    )
+    .unwrap_or_else(|e| panic!("cannot load assets: {e}"))
+    .shared()
 }
 
 fn theme(color_panel: bool) -> Theme {
