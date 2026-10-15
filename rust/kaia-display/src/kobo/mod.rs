@@ -42,8 +42,8 @@
 //!   `alignment_constraint`). Whether KOReader rounds the same way is not checked.
 //! - Touch ranges: the raw ranges come from `EVIOCGABS` at runtime. The test values
 //!   are assumptions. The touch node is `/dev/input/event1` and the keys are on
-//!   `/dev/input/event0`, as KOReader's Kobo defaults say. KOReader finds the nodes
-//!   with FBInk's input scan, which this backend does not do.
+//!   `/dev/input/event0`, as KOReader's Kobo defaults say. Separate power-button
+//!   nodes are scanned by KEY_POWER capability, including bd71828-pwrkey.
 //! - Sleep cover: KOReader maps key codes 35 and 59 to the sleep cover. It does not
 //!   read `SW_LID`, so this backend does not either.
 //! - Struct layout: `input_event` is 16 bytes with a 32-bit `time_t` (armv7) and 24
@@ -56,7 +56,7 @@ pub mod plan;
 
 #[cfg(all(target_os = "linux", feature = "fbink"))]
 mod display;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 mod evdev;
 
 #[cfg(all(target_os = "linux", feature = "fbink"))]
@@ -64,7 +64,7 @@ pub use display::KoboDisplay;
 /// Selects the native panel backend when the optional FBInk backend is absent.
 #[cfg(all(target_os = "linux", not(feature = "fbink")))]
 pub struct KoboDisplay;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 pub use evdev::EvdevInput;
 #[cfg(target_os = "linux")]
 pub use native::NativeKoboDisplay;

@@ -22,10 +22,13 @@
 //!   method named in the [`Timer`] docs.
 //! - [`Effect::Cancel`]: drop that timer if it is still pending.
 //! - [`Effect::PrepareSuspend`]: run [`PowerManager::prepare_suspend`](crate::power::PowerManager::prepare_suspend)
-//!   and report the outcome with [`SuspendFlow::prepare_done`].
+//!   and report success with [`SuspendFlow::prepare_done`]. The app calls
+//!   [`SuspendFlow::resume`] on a failure to restore the awake UI.
 //! - [`Effect::RunFinishSuspend`]: run [`PowerManager::finish_suspend`](crate::power::PowerManager::finish_suspend)
-//!   and report with [`SuspendFlow::finish_done`] when it returns. The kernel
-//!   returns from the `mem` write on wakeup, so this call returns after resume.
+//!   and call [`SuspendFlow::resume`] when it returns, then restore subsystems
+//!   and redraw. A return may mean wakeup, a failed write or an aborted suspend.
+//!   [`SuspendFlow::finish_done`] models KOReader's retry guard, but the Rust app
+//!   does not use that guard while device validation is pending.
 //! - [`Effect::GiveUp`]: send the `UnexpectedWakeupLimit` event so the idle
 //!   timer can take over, as `Kobo:checkUnexpectedWakeup` does.
 //!

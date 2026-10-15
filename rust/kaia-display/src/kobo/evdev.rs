@@ -3,8 +3,9 @@
 //!
 //! The device nodes are the defaults from KOReader's `frontend/device/kobo/device.lua`:
 //! `/dev/input/event0` for keys and switches, and `/dev/input/event1` for the touch
-//! panel. KOReader finds them with FBInk's input scan, which this backend does not
-//! use. Nothing here has run on a device. See the list in [`crate::kobo`].
+//! panel. Extra power-button nodes are found by KEY_POWER capability, as KOReader's
+//! FBInk input scan does. On the Libra Colour, bd71828-pwrkey is a separate node.
+//! Keep it open and polled throughout suspend so the wake press reaches the app.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
@@ -51,12 +52,13 @@ const _: () = assert!(EVENT_SIZE == 16);
 
 /// Touch and key input from the Kobo's evdev nodes.
 ///
-/// Raw events from both nodes go through one [`EvdevDecoder`], in time order. The
-/// touch node sends the multitouch frames and the key node sends the buttons.
+/// Touch, page buttons and power events share one [`EvdevDecoder`], in time order.
+/// A separate decoder handles stylus frames.
 pub struct EvdevInput {
     touch: Option<Node>,
     keys: Option<Node>,
     pen: Option<Node>,
+    power: Vec<Option<Node>>,
     pen_decoder: EvdevDecoder,
     decoder: EvdevDecoder,
 }
@@ -88,8 +90,15 @@ impl EvdevInput {
             let y = axis_range(file, code::ABS_Y, code::ABS_Y).unwrap_or(y_range);
             pen_decoder.set_pen_calibration(Calibration::libra_colour(x, y, rotation));
         }
+        let power = find_power_nodes(
+            touch.parent().unwrap_or(Path::new("/dev/input")),
+            touch,
+            keys,
+            |file| has_key(file, crate::kobo::decode::key::POWER),
+        )?;
         let keys = keys.map(open_node).transpose()?;
         Ok(Self {
+            power,
             touch: Some(Node {
                 file: touch_file,
                 rest: Vec::new(),
@@ -107,9 +116,22 @@ impl EvdevInput {
         })
     }
 
-    /// Opens the Libra Colour's default nodes ([`TOUCH_NODE`] and [`KEY_NODE`]).
+    /// Opens touch, page buttons and every separate KEY_POWER node.
+    /// Refuse startup without a power button, since manual suspend needs it to wake.
     pub fn libra_colour(rotation: Rotation) -> io::Result<Self> {
-        Self::open(Path::new(TOUCH_NODE), Some(Path::new(KEY_NODE)), rotation)
+        let input = Self::open(Path::new(TOUCH_NODE), Some(Path::new(KEY_NODE)), rotation)?;
+        let has_power = input.power.iter().any(Option::is_some)
+            || [&input.keys, &input.touch].iter().any(|node| {
+                node.as_ref()
+                    .is_some_and(|node| has_key(&node.file, crate::kobo::decode::key::POWER))
+            });
+        if !has_power {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no KEY_POWER input device; refusing to start without a wake button",
+            ));
+        }
+        Ok(input)
     }
 
     /// Changes the rotation that later touch positions use. Call it together with
@@ -120,15 +142,22 @@ impl EvdevInput {
     }
 
     fn is_open(&self) -> bool {
-        self.touch.is_some() || self.keys.is_some() || self.pen.is_some()
+        self.touch.is_some()
+            || self.keys.is_some()
+            || self.pen.is_some()
+            || self.power.iter().any(Option::is_some)
     }
 
     /// Waits up to `timeout_ms` (-1 for no limit) for readable nodes, reads them, and
     /// returns the decoded raw events.
     fn read_ready(&mut self, timeout_ms: i32) -> (Vec<RawEvent>, Vec<RawEvent>) {
-        let mut fds: Vec<libc::pollfd> = Vec::with_capacity(3);
-        let mut which: Vec<usize> = Vec::with_capacity(3);
-        for (is_touch, node) in [(0, &self.touch), (1, &self.keys), (2, &self.pen)] {
+        let mut fds: Vec<libc::pollfd> = Vec::with_capacity(3 + self.power.len());
+        let mut which: Vec<usize> = Vec::with_capacity(3 + self.power.len());
+        for (is_touch, node) in [&self.touch, &self.keys, &self.pen]
+            .into_iter()
+            .chain(self.power.iter())
+            .enumerate()
+        {
             if let Some(node) = node {
                 fds.push(libc::pollfd {
                     fd: node.file.as_raw_fd(),
@@ -156,7 +185,8 @@ impl EvdevInput {
             let slot = match is_touch {
                 0 => &mut self.touch,
                 1 => &mut self.keys,
-                _ => &mut self.pen,
+                2 => &mut self.pen,
+                index => &mut self.power[index - 3],
             };
             let Some(node) = slot.as_mut() else {
                 continue;
@@ -168,7 +198,7 @@ impl EvdevInput {
                 *slot = None;
             }
         }
-        // Keep the two nodes in time order. Each node is already in order.
+        // Keep touch, page and power events in time order.
         raw.sort_by_key(|event| event.time_us);
         (raw, pen_raw)
     }
@@ -176,7 +206,7 @@ impl EvdevInput {
 
 impl InputSource for EvdevInput {
     /// Returns the input events that arrived. With `timeout` None, waits until an
-    /// event arrives. When both nodes are gone, returns no events at once.
+    /// event arrives. When all nodes are gone, waits out the timeout without polling.
     fn poll(&mut self, timeout: Option<Duration>) -> Vec<InputEvent> {
         let deadline = timeout.map(|t| Instant::now() + t);
         loop {
@@ -216,6 +246,50 @@ impl InputSource for EvdevInput {
             }
         }
     }
+}
+
+/// Scan the input directory instead of assuming the power button's event number.
+fn find_power_nodes(
+    input_dir: &Path,
+    touch: &Path,
+    keys: Option<&Path>,
+    has_power: impl Fn(&File) -> bool,
+) -> io::Result<Vec<Option<Node>>> {
+    let mut paths = std::fs::read_dir(input_dir)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_prefix("event"))
+                .is_some_and(|number| !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
+        })
+        .collect::<Vec<_>>();
+    paths.sort();
+    let mut nodes = Vec::new();
+    for path in paths {
+        if path == touch || keys == Some(path.as_path()) {
+            continue;
+        }
+        let file = open_node(&path)?;
+        if has_power(&file) {
+            eprintln!("kaia: input: power button {}", path.display());
+            nodes.push(Some(Node {
+                file,
+                rest: Vec::new(),
+            }));
+        }
+    }
+    Ok(nodes)
+}
+
+fn has_key(file: &File, key: u16) -> bool {
+    let mut bits = [0u8; 96];
+    let request = (IOC_READ << 30) | ((bits.len() as u32) << 16) | ((b'E' as u32) << 8) | 0x21;
+    // SAFETY: EVIOCGBIT writes at most the size encoded in the request into bits.
+    let result = unsafe { libc::ioctl(file.as_raw_fd(), request as libc::c_ulong, bits.as_mut_ptr()) };
+    let key = usize::from(key);
+    result >= 0 && key / 8 < bits.len() && bits[key / 8] & (1 << (key % 8)) != 0
 }
 
 /// Finds the stylus by its Linux tool capability, without assuming an event number.
@@ -320,6 +394,63 @@ fn read_time(bytes: &[u8]) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discovers_separate_power_button_without_assuming_event_three() {
+        use std::os::unix::fs::FileExt;
+        let root = std::env::temp_dir().join(format!("kaia-power-input-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (name, capability) in [
+            ("event0", "page"),
+            ("event1", "touch"),
+            ("event2", "accel"),
+            ("event3", "power"),
+            ("event17", "power"),
+        ] {
+            std::fs::write(root.join(name), capability).unwrap();
+        }
+        let nodes = find_power_nodes(&root, &root.join("event1"), Some(&root.join("event0")), |file| {
+            let mut bytes = [0; 5];
+            file.read_at(&mut bytes, 0).is_ok() && &bytes == b"power"
+        })
+        .unwrap();
+        assert_eq!(nodes.len(), 2);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn separate_power_node_delivers_press_and_release_across_polls() {
+        use std::io::Write;
+        use std::os::fd::OwnedFd;
+        use std::os::unix::net::UnixStream;
+        let (reader, mut writer) = UnixStream::pair().unwrap();
+        reader.set_nonblocking(true).unwrap();
+        let fd: OwnedFd = reader.into();
+        let calibration = Calibration::libra_colour(FALLBACK_X_RANGE, FALLBACK_Y_RANGE, Rotation::Deg0);
+        let mut input = EvdevInput {
+            touch: None,
+            keys: None,
+            pen: None,
+            power: vec![Some(Node {
+                file: File::from(fd),
+                rest: Vec::new(),
+            })],
+            decoder: EvdevDecoder::new(calibration),
+            pen_decoder: EvdevDecoder::new(calibration),
+        };
+        for pressed in [true, false, true, false] {
+            let mut bytes = [0u8; EVENT_SIZE];
+            let at = 2 * size_of::<libc::time_t>();
+            bytes[at..at + 2].copy_from_slice(&code::EV_KEY.to_ne_bytes());
+            bytes[at + 2..at + 4].copy_from_slice(&crate::kobo::decode::key::POWER.to_ne_bytes());
+            bytes[at + 4..at + 8].copy_from_slice(&i32::from(pressed).to_ne_bytes());
+            writer.write_all(&bytes).unwrap();
+            let events = input.poll(Some(Duration::from_millis(20)));
+            assert!(matches!(events.as_slice(), [InputEvent::Key(key)]
+                if key.key == kaia_input::Key::Power && key.pressed == pressed));
+            assert!(input.power[0].is_some(), "keep the wake button open");
+        }
+    }
 
     #[test]
     fn eviocgabs_matches_the_kernel_request_numbers() {

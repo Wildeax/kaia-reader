@@ -42,7 +42,8 @@
 //!   turns the light off with `Frontlight::begin_toggle` first.
 //! - the `pmic_rtc` alarm chain (`wakeupmgr.lua:79-94`). That RTC is on i.MX5
 //!   boards, not the Libra Colour.
-//! - KOReader's `enableCPUCores` and `wakeup_count` handling.
+//! - KOReader's `enableCPUCores`. Its `wakeup_count` handshake is commented out
+//!   unconditionally in `device.lua:1416-1436`, so suspend does not use it here.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -211,7 +212,8 @@ impl PowerManager {
     ///
     /// If the write fails, `state-extended` goes back to 0 (`device.lua:1442-1464`).
     /// The write returns when the kernel resumes. Whatever the outcome, the
-    /// caller then arms the unexpected wakeup guard (`device.lua:1471`).
+    /// caller must restore subsystems and the UI. Kaia returns to the UI on every
+    /// return, including an immediate return, instead of retrying unattended.
     /// Unverified on hardware.
     pub fn finish_suspend(&self) -> Plan {
         if self.kobo.is_none() {

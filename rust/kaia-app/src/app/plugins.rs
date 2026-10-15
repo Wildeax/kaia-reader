@@ -206,7 +206,8 @@ impl<B: Backend> App<B> {
                 "intensity" => self.services.platform.frontlight.set_intensity(v),
                 "warmth" => self.services.platform.frontlight.set_warmth(v),
                 "suspend" => {
-                    self.sleep();
+                    // Plugin requests may come from timers, so use the Kobo safety default.
+                    self.automatic_sleep();
                     Ok(())
                 }
                 "lookup" => {

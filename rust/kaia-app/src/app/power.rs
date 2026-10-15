@@ -17,7 +17,7 @@ use kaia_platform::frontlight::RampStep;
 use kaia_platform::plan::Outcome;
 use kaia_platform::power::{PowerContext, ResumeContext};
 use kaia_platform::suspend::{Effect, PrepareResult, SuspendFlow, Timer, WakeupCause, SUSPEND_WAIT_TIMEOUT};
-use kaia_platform::sysfs::SystemIo;
+use kaia_platform::sysfs::{power_trace, SystemIo};
 use kaia_ui::components::{
     Align, Column, CrossAlign, Divider, Frame, Image, Label, Padding, ProgressBar, SizedBox, Spacer, Stack,
 };
@@ -34,6 +34,10 @@ const WIFI_JOB: u64 = 0;
 const FINISH_JOB: u64 = u64::MAX;
 const RESUME_JOB: u64 = u64::MAX - 1;
 const POWER_OFF_JOB: u64 = u64::MAX - 2;
+
+/// Keep idle, low-battery and plugin sleep out of the kernel until the Kobo test passes.
+/// Manual Sleep and the power button still exercise the suspend sequence.
+const KOBO_AUTOMATIC_KERNEL_SUSPEND_ENABLED: bool = false;
 
 /// How often the loop polls a worker while one of its jobs runs.
 const POLL: Duration = Duration::from_millis(50);
@@ -58,8 +62,8 @@ pub(super) struct State {
     prepare_generation: u64,
     /// The finish plan is running: `sync`, then the suspend write. Power and Resume wait for it.
     finishing: bool,
-    /// A Power press or Resume came while `finishing`. The resume runs when the finish plan returns.
-    resume_queued: bool,
+    /// Keep the sleep screen and light off until subsystem cleanup returns.
+    resuming: bool,
     last_activity: Duration,
     /// Idle past the standby time, and not suspended. Input clears it.
     standby: bool,
@@ -100,7 +104,7 @@ impl State {
             wifi_requests: (0, 0),
             prepare_generation: 0,
             finishing: false,
-            resume_queued: false,
+            resuming: false,
             last_activity: Duration::ZERO,
             standby: false,
             suspended_time: Duration::ZERO,
@@ -202,9 +206,23 @@ impl<B: Backend> App<B> {
     }
 
     pub(super) fn sleep(&mut self) {
+        self.sleep_with_kernel_suspend(true);
+    }
+
+    pub(super) fn automatic_sleep(&mut self) {
+        let allow_kernel = !matches!(self.services.platform.kind, kaia_platform::Kind::Kobo(_))
+            || KOBO_AUTOMATIC_KERNEL_SUSPEND_ENABLED;
+        if !allow_kernel {
+            power_trace("automatic sleep: kernel suspend disabled; screen and light only");
+        }
+        self.sleep_with_kernel_suspend(allow_kernel);
+    }
+
+    fn sleep_with_kernel_suspend(&mut self, allow_kernel: bool) {
         if self.sleeping() {
             return;
         }
+        self.trace_power("sleep screen requested");
         self.broadcast_app(Event::new("Suspend"));
         if let Err(e) = self.services.settings.flush(&self.services.settings_path()) {
             self.notices.push(format!("Cannot save settings: {e}"));
@@ -231,8 +249,16 @@ impl<B: Backend> App<B> {
         if self.power.restore_light {
             self.toggle_light();
         }
-        let effects = self.power.flow.reschedule_suspend(SUSPEND_WAIT_TIMEOUT);
-        self.power_effects(effects);
+        if allow_kernel {
+            let effects = self.power.flow.reschedule_suspend(SUSPEND_WAIT_TIMEOUT);
+            self.power_effects(effects);
+        }
+    }
+
+    fn trace_power(&self, message: &str) {
+        if matches!(self.services.platform.kind, kaia_platform::Kind::Kobo(_)) {
+            power_trace(message);
+        }
     }
 
     /// Shows the PIN pad when a PIN is set and the pad is not already on top. The pad
@@ -251,36 +277,50 @@ impl<B: Backend> App<B> {
 
     pub(super) fn resume(&mut self) {
         if self.power.finishing {
-            // KOReader handles a Power press after the suspend write returns. This one waits too.
-            self.power.resume_queued = true;
+            // The worker always resumes after the suspend write returns.
+            self.trace_power("resume waits for suspend write to return");
             return;
         }
-        self.power.resume_queued = false;
         self.note_activity();
         self.power.charge_screen = false;
         self.power.prepare_generation += 1;
         let effects = self.power.flow.resume();
         self.power_effects(effects);
+        if self.power.screen.is_none() || self.power.resuming {
+            return;
+        }
+        self.trace_power("resume cleanup queued");
+        // Restore subsystems and wait 100 ms before drawing or restoring light.
+        let plan = self
+            .services
+            .platform
+            .power
+            .resume(ResumeContext {
+                sync_system_clock: true,
+                ..ResumeContext::default()
+            })
+            .then(self.services.platform.power.clear_wakeup());
+        if plan.is_skipped() {
+            self.complete_resume();
+        } else {
+            self.power.resuming = true;
+            self.power.scripts.submit(RESUME_JOB, plan);
+        }
+    }
+
+    fn complete_resume(&mut self) {
+        self.power.resuming = false;
         let Some(id) = self.power.screen.take() else {
             return;
         };
         self.stack
             .close(id, Some(Refresh::new(RefreshMode::Full)), &mut self.ctx);
         self.lock_screen();
-        let plan = self
-            .services
-            .platform
-            .power
-            .clear_wakeup()
-            .then(self.services.platform.power.resume(ResumeContext {
-                sync_system_clock: true,
-                ..ResumeContext::default()
-            }));
-        self.power.scripts.submit(RESUME_JOB, plan);
         if self.power.restore_light && !self.services.platform.frontlight.target_is_on() {
             self.toggle_light();
         }
         self.broadcast_app(Event::new("Resume"));
+        self.trace_power("resume UI: full redraw requested; light restored");
     }
 
     pub(super) fn toggle_light(&mut self) {
@@ -420,7 +460,7 @@ impl<B: Backend> App<B> {
                 self.power.battery_warned = false;
             } else if level.is_some_and(|n| n <= 3) && !self.sleeping() {
                 self.power.charge_screen = true;
-                self.sleep();
+                self.automatic_sleep();
             } else if level.is_some_and(|n| n <= 10) && !self.power.battery_warned && !self.sleeping() {
                 self.power.battery_warned = true;
                 crate::surface::SurfaceEnv::new(
@@ -460,7 +500,7 @@ impl<B: Backend> App<B> {
                 )
                 .is_some_and(|timeout| idle >= timeout)
         {
-            self.sleep();
+            self.automatic_sleep();
         } else if !self.sleeping()
             && !self.power.standby
             && self
@@ -474,6 +514,11 @@ impl<B: Backend> App<B> {
     }
 
     pub(super) fn power_key(&mut self, event: kaia_input::KeyEvent) {
+        self.trace_power(if event.pressed {
+            "power key pressed"
+        } else {
+            "power key released"
+        });
         if self.power.off_requested || self.power.off_started {
             return;
         }
@@ -507,7 +552,6 @@ impl<B: Backend> App<B> {
         }
         self.power.off_requested = true;
         self.power.prepare_generation += 1;
-        self.power.resume_queued = false;
         self.quitting = true;
         let effects = self.power.flow.resume();
         self.power_effects(effects);
@@ -630,24 +674,27 @@ impl<B: Backend> App<B> {
                     let awake = self.ctx.scheduler.now().saturating_sub(clock);
                     self.power.suspended_time += elapsed.saturating_sub(awake);
                 }
-                // The suspend write returned. The device woke up, or the kernel refused to suspend.
+                self.trace_power(&format!("suspend returned: {outcome:?}; restoring awake UI"));
                 self.power.finishing = false;
-                if !self.power.off_requested {
-                    let effects = self.power.flow.finish_done();
-                    self.power_effects(effects);
-                }
-                if std::mem::take(&mut self.power.resume_queued) {
-                    self.resume();
-                }
+                // A failed or immediate return must never strand the sleep screen or
+                // retry suspend unattended. A normal wake follows the same cleanup.
+                // Account for a due power-off alarm before resume resets idle time.
+                self.check_idle_power();
+                self.resume();
             }
-            RESUME_JOB => {}
+            RESUME_JOB => {
+                self.trace_power(&format!("resume cleanup returned: {outcome:?}"));
+                self.complete_resume();
+            }
             super::clock::CLOCK_JOB => self.clock_done(outcome),
             generation if generation == self.power.prepare_generation && self.sleeping() => {
-                let effects = self
-                    .power
-                    .flow
-                    .prepare_done(PrepareResult::from_outcome(&outcome));
-                self.power_effects(effects);
+                self.trace_power(&format!("suspend prepare returned: {outcome:?}"));
+                if matches!(outcome, Outcome::Completed) {
+                    let effects = self.power.flow.prepare_done(PrepareResult::Done);
+                    self.power_effects(effects);
+                } else if matches!(self.services.platform.kind, kaia_platform::Kind::Kobo(_)) {
+                    self.resume();
+                }
             }
             _ => {}
         }
@@ -728,6 +775,7 @@ impl<B: Backend> App<B> {
                     self.power.timers.retain(|(t, _)| *t != timer);
                 }
                 Effect::Schedule { timer, delay } => {
+                    self.trace_power(&format!("schedule {timer:?} after {delay:?}"));
                     let queue = self.power.queue.clone();
                     let task = self.ctx.scheduler.schedule_in(
                         delay.as_secs_f64(),
@@ -743,6 +791,7 @@ impl<B: Backend> App<B> {
                         self.power_effects(effects);
                         continue;
                     }
+                    self.trace_power("suspend prepare: save state, disable Wi-Fi, flag subsystems");
                     self.broadcast_app(Event::new("SaveState"));
                     let platform = &self.services.platform;
                     let plan = platform.power.prepare_suspend(PowerContext {
@@ -755,7 +804,18 @@ impl<B: Backend> App<B> {
                 Effect::RunFinishSuspend => {
                     // The panel finishes its last update first. Only the sync and the
                     // suspend write run on the worker.
+                    self.trace_power("suspend: waiting for panel completion");
                     self.backend.wait_idle();
+                    self.trace_power("suspend: panel complete; queue sync and mem");
+                    // Charging can change during the two-second wait. MTK must not
+                    // enter mem with a cable attached, even after prepare succeeded.
+                    if matches!(self.services.platform.kind, kaia_platform::Kind::Kobo(_))
+                        && self.services.platform.battery.is_charging().unwrap_or(true)
+                    {
+                        self.trace_power("suspend cancelled: charger attached or status unknown");
+                        self.resume();
+                        continue;
+                    }
                     let mut plan = self.services.platform.power.finish_suspend();
                     if let Some(timeout) = self.idle_timeout(settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0) {
                         let remaining = (self.power.last_activity + timeout).saturating_sub(self.idle_now());
@@ -1333,5 +1393,236 @@ mod idle_tests {
         assert!(!app.power.off_requested);
         assert!(!app.power.off_started);
         assert_eq!(app.power.last_activity, clock.now());
+    }
+}
+
+#[cfg(test)]
+mod suspend_recovery_tests {
+    use super::*;
+    use crate::{AppOptions, HeadlessBackend, ScriptInput, Services};
+    use kaia_events::ManualClock;
+    use kaia_platform::battery::MONZA_BATTERY_DIR;
+    use kaia_platform::power::{POWER_STATE, PRE_SUSPEND_DELAY, STATE_EXTENDED};
+    use kaia_platform::{Env, Platform};
+    use std::path::Path;
+    use std::time::Instant;
+
+    fn put(root: &Path, path: &str, value: &str) {
+        let path = root.join(path.trim_start_matches('/'));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, value).unwrap();
+    }
+
+    fn app() -> (tempfile::TempDir, App<HeadlessBackend>, ManualClock) {
+        let dir = tempfile::tempdir().unwrap();
+        put(
+            dir.path(),
+            "/mnt/onboard/.kobo/version",
+            "N3-0-0,4.42.23303,x,y,z,w,v,390\n",
+        );
+        put(dir.path(), &format!("{MONZA_BATTERY_DIR}/status"), "Discharging");
+        put(dir.path(), &format!("{MONZA_BATTERY_DIR}/capacity"), "60");
+        put(dir.path(), POWER_STATE, "freeze mem");
+        put(dir.path(), STATE_EXTENDED, "0");
+        put(dir.path(), "/sys/class/backlight/mxc_msp430.0/brightness", "30");
+        put(dir.path(), "/sys/class/backlight/lm3630a_led/color", "5");
+        let install = dir.path().join("mnt/onboard/.adds/kaia");
+        std::fs::create_dir_all(&install).unwrap();
+        std::os::unix::fs::symlink(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources"),
+            install.join("resources"),
+        )
+        .unwrap();
+        let platform = Platform::detect_in(
+            dir.path(),
+            &Env {
+                product: Some("monza".into()),
+                ..Env::default()
+            },
+        )
+        .unwrap();
+        let panel = kaia_display::PanelSpec::LIBRA_COLOUR;
+        let services = Services::open(platform, panel, Some(dir.path().join("data"))).unwrap();
+        let clock = ManualClock::new();
+        let mut app = App::new(
+            HeadlessBackend::new(panel, ScriptInput::idle()),
+            services,
+            Box::new(clock.clone()),
+            AppOptions::default(),
+        );
+        app.start().unwrap();
+        (dir, app, clock)
+    }
+
+    fn wait_until(app: &mut App<HeadlessBackend>, done: impl Fn(&App<HeadlessBackend>) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !done(app) {
+            assert!(Instant::now() < deadline, "worker timed out");
+            app.process(Vec::new()).unwrap();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    fn prepare(app: &mut App<HeadlessBackend>, clock: &ManualClock) {
+        app.sleep();
+        clock.advance(SUSPEND_WAIT_TIMEOUT);
+        app.process(Vec::new()).unwrap();
+        wait_until(app, |app| app.power.flow.finish_pending());
+    }
+
+    #[test]
+    fn kobo_automatic_sleep_only_draws_and_dims_without_kernel_writes() {
+        let (dir, mut app, clock) = app();
+        clock.advance(Duration::from_secs(300));
+        app.process(Vec::new()).unwrap();
+        assert!(app.sleeping());
+        assert!(!app.services.platform.frontlight.target_is_on());
+        for _ in 0..4 {
+            clock.advance(Duration::from_secs(60));
+            app.process(Vec::new()).unwrap();
+            assert!(app.power.timers.is_empty());
+            assert!(!app.power.scripts.busy());
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+                "freeze mem"
+            );
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("sys/power/state-extended")).unwrap(),
+                "0"
+            );
+        }
+        app.key(kaia_input::Key::Power).unwrap();
+        wait_until(&mut app, |app| !app.sleeping());
+        assert!(app.services.platform.frontlight.target_is_on());
+    }
+
+    #[cfg(feature = "lua")]
+    #[test]
+    fn plugin_suspend_request_cannot_bypass_kobo_safe_default() {
+        let (dir, mut app, clock) = app();
+        app.services
+            .settings
+            .save(crate::plugins::ENABLED, kaia_events::Value::Bool(true));
+        app.services
+            .settings
+            .save(crate::plugins::SAFE_MODE, kaia_events::Value::Bool(true));
+        app.pump_plugins();
+        assert!(
+            app.services.plugins.ui.is_some(),
+            "{:?}",
+            app.services.plugins.error
+        );
+        app.services
+            .plugins
+            .device
+            .borrow_mut()
+            .requests
+            .push(("suspend".into(), kaia_events::Value::Bool(true)));
+        app.pump_plugins();
+        assert!(app.sleeping());
+        clock.advance(Duration::from_secs(60));
+        app.process(Vec::new()).unwrap();
+        assert!(app.power.timers.is_empty());
+        assert!(!app.power.scripts.busy());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+            "freeze mem"
+        );
+        app.shutdown();
+    }
+
+    #[test]
+    fn failed_prepare_restores_awake_ui_without_scheduling_mem() {
+        let (dir, mut app, clock) = app();
+        std::fs::remove_file(dir.path().join("sys/power/state-extended")).unwrap();
+        app.sleep();
+        clock.advance(SUSPEND_WAIT_TIMEOUT);
+        app.process(Vec::new()).unwrap();
+        wait_until(&mut app, |app| !app.sleeping());
+        assert!(app.power.timers.is_empty());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+            "freeze mem"
+        );
+        assert!(app.services.platform.frontlight.target_is_on());
+    }
+
+    #[test]
+    fn failed_or_immediate_suspend_return_cleans_up_and_redraws_without_a_power_event() {
+        for fail in [false, true] {
+            let (dir, mut app, clock) = app();
+            prepare(&mut app, &clock);
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("sys/power/state-extended")).unwrap(),
+                "1"
+            );
+            // The first half must never write mem, including during the two-second wait.
+            clock.advance(PRE_SUSPEND_DELAY - Duration::from_millis(1));
+            app.process(Vec::new()).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+                "freeze mem"
+            );
+            if fail {
+                std::fs::remove_file(dir.path().join("sys/power/state")).unwrap();
+            }
+            let paints = app.backend.display().refreshes().len();
+            clock.advance(Duration::from_millis(1));
+            app.process(Vec::new()).unwrap();
+            wait_until(&mut app, |app| !app.sleeping());
+            assert!(!app.power.finishing);
+            assert!(app.power.timers.is_empty(), "no unattended suspend retry");
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("sys/power/state-extended")).unwrap(),
+                "0"
+            );
+            assert!(app.services.platform.frontlight.target_is_on());
+            assert!(
+                app.backend.display().refreshes().len() > paints,
+                "redraw the awake screen"
+            );
+            clock.advance(Duration::from_secs(20));
+            app.process(Vec::new()).unwrap();
+            assert!(!app.sleeping());
+        }
+    }
+
+    #[test]
+    fn resume_keeps_sleep_screen_until_subsystem_cleanup_returns() {
+        let (dir, mut app, clock) = app();
+        prepare(&mut app, &clock);
+        app.resume();
+        assert!(app.sleeping());
+        assert!(app.power.resuming);
+        assert!(!app.services.platform.frontlight.target_is_on());
+        wait_until(&mut app, |app| !app.sleeping());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state-extended")).unwrap(),
+            "0"
+        );
+        assert!(app.services.platform.frontlight.target_is_on());
+        assert!(app.power.timers.is_empty());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+            "freeze mem"
+        );
+    }
+
+    #[test]
+    fn charger_connected_during_prepare_wait_cancels_mem() {
+        let (dir, mut app, clock) = app();
+        prepare(&mut app, &clock);
+        put(dir.path(), &format!("{MONZA_BATTERY_DIR}/status"), "Charging");
+        clock.advance(PRE_SUSPEND_DELAY);
+        app.process(Vec::new()).unwrap();
+        wait_until(&mut app, |app| !app.sleeping());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state")).unwrap(),
+            "freeze mem"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("sys/power/state-extended")).unwrap(),
+            "0"
+        );
     }
 }

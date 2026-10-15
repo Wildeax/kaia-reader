@@ -5,9 +5,9 @@
 //! sleeps. Kaia builds the same chain as a [`Plan`] of [`Step`]s. Tests check
 //! the plan. [`execute`] runs it against any [`SysfsWriter`] and [`Runner`].
 //!
-//! Each step names the KOReader line it comes from in `source`. No plan has
-//! run on a Libra Colour yet, so every step is unverified on hardware. The
-//! doc comment of each builder says which parts differ from KOReader.
+//! Each step names the KOReader line it comes from in `source`. Suspend recovery
+//! still needs the device test in `docs/kaia/device/RUST_APP_TEST.md`. Each builder
+//! documents its differences from KOReader.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -209,6 +209,7 @@ where
     IO: SysfsWriter + Runner,
 {
     if let Some(reason) = plan.skipped {
+        io.trace(&format!("plan skipped: {reason}"));
         return Outcome::Skipped(reason);
     }
     match run_steps(&plan.steps, io, sleep) {
@@ -225,7 +226,20 @@ where
     IO: SysfsWriter + Runner,
 {
     for (index, step) in steps.iter().enumerate() {
-        if perform(&step.action, io, sleep) {
+        // Omit command environments, which may contain credentials.
+        let label = match &step.action {
+            Action::Run { program, .. } => format!("run {program}"),
+            action => format!("{action:?}"),
+        };
+        io.trace(&format!("begin {label}"));
+        let started = std::time::SystemTime::now();
+        let succeeded = perform(&step.action, io, sleep);
+        io.trace(&format!(
+            "end {label}: {} after {:?}",
+            if succeeded { "ok" } else { "FAILED" },
+            started.elapsed().unwrap_or_default(),
+        ));
+        if succeeded {
             continue;
         }
         match &step.on_error {

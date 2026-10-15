@@ -39,19 +39,45 @@ frontlight or USB handover.
 
 ## Light and power
 
-1. Swipe down to open quick settings. Change brightness at several levels,
-   including zero, then change warmth. Record visible changes and any lag.
-2. Press Power briefly while reading. The sleep screen should finish drawing
-   before the frontlight turns off and the device enters suspend.
-3. Wait 30 seconds, then press Power once. The book should return, touch and
-   page buttons should work, and the previous light level should return.
-4. Repeat five times, including a Power press during the first two seconds
-   after entering sleep. Check for a delayed second suspend after waking.
-5. If a sleep cover is available, close and open it. Confirm sleep and resume.
-6. Leave the device asleep for at least ten minutes. Record battery readings
-   before and after. This short test cannot establish overnight drain.
-7. Check the Wi-Fi state shown in Settings against Nickel before and after
-   suspend. Do not enable sync or other network services for this test.
+Automatic sleep and plugin suspend requests currently show the sleep screen and
+dim the light without kernel suspend on Kobo. `KOBO_AUTOMATIC_KERNEL_SUSPEND_ENABLED` in
+`rust/kaia-app/src/app/power.rs` is `false`. Keep it false until this test passes
+on the device, then change it to `true` and rebuild to test the timer. Manual
+Sleep and the power button still request kernel suspend.
+
+1. Disconnect USB and the charger. MTK cannot suspend safely while plugged in.
+   Start Rust and check brightness, including zero, and warmth in Quick settings.
+   Let the automatic sleep timer show its screen, then confirm a short Power press
+   wakes it before testing manual Sleep.
+2. Tap Sleep in Quick settings once. Wait at least 30 seconds. The sleep picture
+   should finish drawing, the light should go off, and suspend should start after
+   the 15-second screen delay and two-second subsystem delay.
+3. Press Power briefly once. The book, touch, page buttons and previous light
+   level should return. If suspend fails or returns immediately, Kaia should
+   return to the awake screen on its own. Record that as a failed suspend test.
+4. If it hangs, hold Power for about 15 seconds until the device restarts.
+   Copy `.kaia/rust.log` over USB before launching Rust again. Do not keep retrying.
+5. Check the log. Startup should list `kaia: input: power button /dev/input/event3`
+   on this Libra Colour. The `kaia: power:` lines should show, in order:
+   sleep requested, `schedule Suspend after 15s`, prepare, Wi-Fi scripts if needed,
+   `state-extended` written to `1`, `schedule FinishSuspend after 2s`, panel
+   completion, `run sync`, and the start of the `state` write with value `mem`.
+   After Power, expect that write to end, `suspend returned`, resume cleanup,
+   `state-extended` written to `0`, `Sleep(100ms)`, and `resume UI: full redraw
+   requested`. Power-key lines may arrive before the worker reports completion.
+   Each power diagnostic flushes and syncs the log file. Keep the final line if
+   the sequence stops. A `FAILED` write should still lead to cleanup and redraw.
+6. After one successful cycle, repeat five times, including a Power press in the
+   two-second prepare window. Check that Kaia stays awake after cancellation.
+   Check the Wi-Fi state before and after sleep. Do not enable sync or other
+   network services for this test. Test a sleep cover if available.
+7. Leave Kaia idle past the configured sleep timeout. Expect `automatic sleep:
+   kernel suspend disabled; screen and light only`, with no prepare or `mem`
+   write. Press Power to return. This temporary mode consumes more battery than
+   kernel suspend, so return to Nickel when leaving the device unattended.
+8. After manual sleep and wake pass, leave the device manually asleep for ten
+   minutes and record battery readings before and after. This short test cannot
+   establish overnight drain.
 
 ## USB and return to Nickel
 
