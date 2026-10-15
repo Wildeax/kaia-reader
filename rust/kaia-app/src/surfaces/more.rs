@@ -86,11 +86,9 @@ impl Surface for MoreSurface {
             env.services,
             env.screen,
             common::tabbed_page(
-                Column::new(vec![
-                    super::status::row(env.services),
-                    WidgetPod::new(Expanded::new(WidgetPod::new(content), 1)),
-                ])
-                .cross_align(CrossAlign::Stretch),
+                env.services,
+                Column::new(vec![WidgetPod::new(Expanded::new(WidgetPod::new(content), 1))])
+                    .cross_align(CrossAlign::Stretch),
                 NavItem::More,
             ),
         ))

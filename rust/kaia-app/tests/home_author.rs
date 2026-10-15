@@ -136,7 +136,7 @@ fn home_shows_the_next_in_series_before_the_author_tile_and_never_the_same_book(
     );
     let next = app.find_rect("next-in-series").unwrap();
     let author = app.find_rect("more-by-author").unwrap();
-    assert!(next.y < author.y, "the next book in series comes first");
+    assert!(next.x < author.x, "the next book in series comes first");
 
     tap_key(&mut app, "more-by-author");
     assert_eq!(

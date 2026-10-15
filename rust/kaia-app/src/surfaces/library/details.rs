@@ -23,6 +23,7 @@ pub struct BookDetailsSurface {
     book: i64,
     rating_open: bool,
     stats_open: bool,
+    metadata: bool,
 }
 
 impl BookDetailsSurface {
@@ -31,6 +32,7 @@ impl BookDetailsSurface {
             book,
             rating_open: false,
             stats_open: false,
+            metadata: false,
         }
     }
 }
@@ -61,6 +63,7 @@ impl Surface for BookDetailsSurface {
                         statistics: stats.is_some(),
                         favorite,
                         tags: &tags,
+                        metadata: self.metadata,
                     };
                     views::details_panel(&t, &book, cover, "back", None, info)
                 };
@@ -78,6 +81,10 @@ impl Surface for BookDetailsSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if let Some(tab) = cmd.strip_prefix("library:details-tab:") {
+            self.metadata = tab == "metadata";
+            return Outcome::Rebuild;
+        }
         match parse(cmd, args) {
             Some(Command::OpenRating(id)) if id == self.book => {
                 self.rating_open = true;

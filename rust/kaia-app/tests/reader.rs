@@ -1164,6 +1164,7 @@ fn sticker_needs_repair_and_notes_can_place_it_again() {
     wait_reader(&mut app);
     let books = kaia_app::surfaces::notes::load_books(app.services());
     assert!(books[0].notes[0].orphaned);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("notes-sticker-repair.png"), 14);
     assert_eq!(books[0].notes[0].sticker.as_deref(), Some(id.as_str()));
     tap_key(&mut app, "notes-entry-1");

@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 
 use kaia_app::{App, HeadlessBackend, Route};
 use kaia_display::InputEvent;
-use kaia_gfx::Point;
 use kaia_input::{Key, Phase, TouchEvent};
 use kaia_library::{Filter, Sort, SortKey, Status};
 
@@ -52,18 +51,13 @@ fn open_library(app: &mut App<HeadlessBackend>) {
 
 /// Taps the search action at the trailing edge of the header.
 fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    let r = app.find_rect("library-header").expect("the header");
-    let touch = app.services().theme.touch_target as i32;
-    let p = Point::new(r.x + r.w as i32 - touch / 2, r.y + r.h as i32 / 2);
-    app.tap(p).unwrap();
+    tap_key(app, "status-search");
 }
 
 /// Taps the select action, the icon left of the search icon.
 fn tap_select_icon(app: &mut App<HeadlessBackend>) {
-    let r = app.find_rect("library-header").expect("the header");
-    let touch = app.services().theme.touch_target as i32;
-    let p = Point::new(r.x + r.w as i32 - touch * 3 / 2, r.y + r.h as i32 / 2);
-    app.tap(p).unwrap();
+    tap_key(app, "library-options");
+    tap_key(app, "library-select-on");
 }
 
 /// Holds a finger on `key` until `done` holds, then lifts it.
@@ -242,7 +236,7 @@ fn select_mode_marks_the_checked_books_finished_and_unread() {
 
     tap_key(&mut app, "library-select-off");
     assert!(app.find_rect("select-count").is_none(), "Done leaves select mode");
-    assert!(app.find_rect("library-view-list").is_some(), "the tabs are back");
+    assert!(app.find_rect("library-view-books").is_some(), "the tabs are back");
     assert!(app.notices().is_empty(), "no notices: {:?}", app.notices());
 }
 

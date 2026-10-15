@@ -142,10 +142,15 @@ pub(crate) fn status_header(header: kaia_ui::composite::Header) -> WidgetPod {
 }
 
 /// Reserves the bottom bar before laying out content, including empty lists.
-pub(crate) fn tabbed_page(content: impl Widget + 'static, active: kaia_ui::composite::NavItem) -> Column {
+pub(crate) fn tabbed_page(
+    services: &Services,
+    content: impl Widget + 'static,
+    active: kaia_ui::composite::NavItem,
+) -> Column {
     use kaia_ui::components::{CrossAlign, Expanded};
     use kaia_ui::composite::NavBar;
     Column::new(vec![
+        super::status::row(services),
         WidgetPod::new(Expanded::new(WidgetPod::new(content), 1)),
         WidgetPod::new(NavBar::with_labels(
             active,

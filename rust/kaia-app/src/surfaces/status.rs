@@ -88,7 +88,10 @@ pub fn row(services: &Services) -> WidgetPod {
         }
     };
     let icons = vec![
-        WidgetPod::new(Padding::new(WidgetPod::new(DeviceIcon::Light), inset(19))),
+        WidgetPod::new(Padding::new(
+            WidgetPod::new(DeviceIcon::Light(Tone::Ink)),
+            inset(19),
+        )),
         WidgetPod::new(Padding::new(
             WidgetPod::new(Icon::new(
                 "wifi",
@@ -175,7 +178,7 @@ impl Widget for StatusRow {
 }
 
 enum DeviceIcon {
-    Light,
+    Light(Tone),
     Battery(Option<u8>),
 }
 
@@ -194,7 +197,8 @@ impl Widget for DeviceIcon {
         let dp = |v| scale.dp(v);
         let stroke = dp(1);
         match self {
-            Self::Light => {
+            Self::Light(tone) => {
+                let ink = cx.color(*tone);
                 let radius = dp(6);
                 let ray = dp(2);
                 let distance = dp(10);
@@ -230,10 +234,45 @@ impl Widget for DeviceIcon {
     }
 }
 
-pub(crate) fn command(id: &str, _args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+pub(crate) fn command(id: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let section = match id {
-        "status:light" => "display",
-        "status:wifi" => "network",
+        "status:light" | "status:wifi" => {
+            let light = id == "status:light";
+            let panel = if light {
+                light_panel(env.services)
+            } else {
+                wifi_panel(env.services)
+            };
+            let rect = if light {
+                Rect::new(182, 69, 401, 435)
+            } else {
+                Rect::new(162, 69, 465, 200)
+            };
+            let popup = library::widgets::Overlay::new(None, panel, rect, "dialog:dismiss");
+            env.show(
+                common::window(
+                    env.services,
+                    env.screen,
+                    StatusCallout::new(popup, light, env.services),
+                ),
+                ShowOpts {
+                    modal: true,
+                    ..ShowOpts::default()
+                },
+            );
+            return Outcome::Handled;
+        }
+        "status:light-settings" => "display",
+        "status:network-settings" => "network",
+        "status:auto-light" => {
+            if let Some(on) = args.first().and_then(Value::as_bool) {
+                env.services
+                    .settings
+                    .save(settings::keys::DISPLAY_NATURAL_LIGHT_ENABLED, Value::Bool(on));
+                settings::save(env);
+            }
+            return Outcome::Handled;
+        }
         "status:power" => "device",
         "status:search" => return Outcome::Navigate(Nav::Push(Box::new(library::LibrarySurface::search()))),
         "status:battery" => {
@@ -387,5 +426,160 @@ impl Widget for BatteryPopup {
 
     fn children_mut(&mut self) -> Vec<&mut WidgetPod> {
         vec![&mut self.panel]
+    }
+}
+
+fn framed_panel(services: &Services, rows: Vec<WidgetPod>, key: &str) -> WidgetPod {
+    use kaia_ui::components::Frame;
+    let t = &services.theme;
+    WidgetPod::new(
+        Frame::new(WidgetPod::new(Padding::new(
+            WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch)),
+            Insets::all(t.scale.dp(25)),
+        )))
+        .fill(Tone::Surface)
+        .border(Tone::Ink, 3),
+    )
+    .with_key(key)
+}
+
+fn light_panel(services: &Services) -> WidgetPod {
+    use kaia_ui::composite::ListRow;
+    let t = &services.theme;
+    let enabled = settings::sections::has_frontlight(services);
+    let slider = |value, action: &str, key: &str| {
+        WidgetPod::new(
+            crate::slider::Slider::new(value, 0.0, 100.0, 1.0)
+                .format(|v| tr_format(&tr("%1%"), &[&v.to_string()]))
+                .enabled(enabled)
+                .on_action(action),
+        )
+        .with_key(key)
+    };
+    let rows = vec![
+        WidgetPod::new(Label::new(tr("Brightness"), t.font.book_title.clone(), Tone::Ink)),
+        slider(
+            f64::from(services.platform.frontlight.intensity()),
+            "settings:quick:frontlight",
+            "quick-frontlight",
+        ),
+        WidgetPod::new(Divider::new(Tone::Divider)),
+        WidgetPod::new(
+            ListRow::new(tr("Natural light"))
+                .toggle(settings::keys::bool_or(
+                    &services.settings,
+                    settings::keys::DISPLAY_NATURAL_LIGHT_ENABLED,
+                    false,
+                ))
+                .on_action("status:auto-light"),
+        )
+        .with_key("light-auto"),
+        slider(
+            f64::from(services.platform.frontlight.warmth()),
+            "settings:quick:warmth",
+            "quick-warmth",
+        ),
+        WidgetPod::new(
+            ListRow::new(tr("Bedtime"))
+                .value(settings::keys::text_or(
+                    &services.settings,
+                    settings::keys::DISPLAY_NATURAL_LIGHT_BEDTIME,
+                    "23:00",
+                ))
+                .on_action("status:light-settings"),
+        )
+        .with_key("light-bedtime"),
+        common::button(
+            kaia_ui::controls::ButtonStyle::Text,
+            &tr("Light settings"),
+            "status:light-settings",
+            "light-settings",
+        ),
+    ];
+    framed_panel(services, rows, "light-popup")
+}
+
+fn wifi_panel(services: &Services) -> WidgetPod {
+    use kaia_ui::composite::ListRow;
+    let blocked = settings::keys::airplane_mode(&services.settings);
+    framed_panel(
+        services,
+        vec![
+            WidgetPod::new(
+                ListRow::new(tr("Wi-Fi"))
+                    .toggle(services.platform.network.is_wifi_on())
+                    .on_action(if blocked {
+                        "settings:quick:wifi-blocked"
+                    } else {
+                        "settings:quick:wifi"
+                    }),
+            )
+            .with_key("quick-wifi"),
+            common::button(
+                kaia_ui::controls::ButtonStyle::Text,
+                &tr("Network settings"),
+                "status:network-settings",
+                "wifi-settings",
+            ),
+        ],
+        "wifi-popup",
+    )
+}
+
+struct StatusCallout {
+    popup: WidgetPod,
+    icon: WidgetPod,
+    light: bool,
+    center: Point,
+}
+impl StatusCallout {
+    fn new(popup: library::widgets::Overlay, light: bool, services: &Services) -> Self {
+        Self {
+            popup: WidgetPod::new(popup),
+            light,
+            center: Point::default(),
+            icon: if light {
+                WidgetPod::new(DeviceIcon::Light(Tone::Surface))
+            } else {
+                WidgetPod::new(
+                    kaia_ui::components::Frame::new(WidgetPod::new(Icon::new(
+                        "wifi",
+                        services.theme.scale.dp(25),
+                        Tone::Surface,
+                    )))
+                    .fill(Tone::Ink),
+                )
+            },
+        }
+    }
+}
+impl Widget for StatusCallout {
+    kaia_ui::impl_as_any!();
+    fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
+        self.popup.layout(cx, Constraints::tight(c.max));
+        let dp = |v| cx.theme.scale.dp(v);
+        let x = c.max.w.saturating_sub(dp(if self.light { 249 } else { 200 })) as i32;
+        self.center = Point::new(if cx.theme.rtl { c.max.w as i32 - x } else { x }, dp(42) as i32);
+        let side = dp(28);
+        self.icon.layout(cx, Constraints::tight(Size::new(side, side)));
+        self.icon.set_origin(Point::new(
+            self.center.x - side as i32 / 2,
+            self.center.y - side as i32 / 2,
+        ));
+        c.max
+    }
+    fn paint(&mut self, cx: &mut PaintCx) {
+        let ink = cx.color(Tone::Ink);
+        cx.fill_circle(self.center, cx.theme.scale.dp(20) as f32, ink);
+        let y = cx.theme.scale.dp(69) as i32;
+        for dy in 0..10 {
+            cx.fill_rect(
+                Rect::new(self.center.x - dy, y - 10 + dy, (2 * dy + 1) as u32, 1),
+                ink,
+            );
+        }
+    }
+    fn children_mut(&mut self) -> Vec<&mut WidgetPod> {
+        vec![&mut self.popup, &mut self.icon]
     }
 }

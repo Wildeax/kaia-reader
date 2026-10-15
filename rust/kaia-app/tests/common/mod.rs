@@ -144,11 +144,68 @@ pub fn tap_key(app: &mut App<HeadlessBackend>, key: &str) {
         );
         return;
     }
+    if key.starts_with("settings-")
+        && app.top_route() == Some(&Route::Settings)
+        && app.find_rect(key).is_none()
+    {
+        let nav = app.find_rect("nav-bar").unwrap();
+        let t = &app.services().theme;
+        let y = nav.y - t.space.lg as i32 - t.space.sm as i32 - t.touch_target as i32 / 2;
+        let left = t.space.lg as i32 + t.touch_target as i32;
+        let right = app.screen().w as i32 - left;
+        for _ in 0..4 {
+            app.tap(Point::new(left, y)).unwrap();
+        }
+        for _ in 0..5 {
+            if app.find_rect(key).is_some() {
+                break;
+            }
+            app.tap(Point::new(right, y)).unwrap();
+        }
+    }
+    if key == "library-view-books" && app.find_rect(key).is_none() && app.find_rect("author-up").is_some() {
+        tap_key(app, "author-up");
+    }
+    if app.find_rect(key).is_none() {
+        if matches!(
+            key,
+            "library-view-list" | "library-view-covers" | "library-view-folders" | "library-select-on"
+        ) {
+            if app.find_rect("library-options").is_none() {
+                tap_key(app, "library-view-books");
+            }
+            tap_key(app, "library-options");
+            if matches!(key, "library-view-covers" | "library-view-list") && app.find_rect(key).is_none() {
+                app.key(kaia_input::Key::Back).unwrap();
+                return;
+            }
+        } else if (key.starts_with("library-filter-") && app.find_rect("primary-filter").is_some())
+            || key == "sort-progress"
+        {
+            app.key(kaia_input::Key::Back).unwrap();
+            tap_key(app, "library-options");
+            if key != "sort-progress" {
+                tap_key(app, "library-filters-more");
+            }
+        } else if key.starts_with("library-filter-") && app.find_rect("library-filters-more").is_some() {
+            tap_key(app, "library-filters-more");
+        } else if key.starts_with("library-book-") {
+            if let Some(book) = key.rsplit('-').next() {
+                let menu = format!("details-menu-{book}");
+                if app.find_rect(&menu).is_some() {
+                    tap_key(app, &menu);
+                }
+            }
+        }
+    }
     wait_reader(app);
     let p = centre_of(app, key);
     app.tap(p).unwrap();
     wait_reader(app);
     wait_for(app, "visible covers", |_| !kaia_app::covers::busy());
+    if app.find_rect("status-clock").is_some() {
+        freeze_status_clock(app);
+    }
 }
 
 /// The refresh modes sent since the loop started, after the first `skip`.

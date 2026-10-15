@@ -31,10 +31,7 @@ fn position(app: &App<HeadlessBackend>, key: &str) -> (i32, i32) {
 
 /// Taps the search action at the trailing edge of the header.
 fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    let r = app.find_rect("library-header").expect("the header");
-    let touch = app.services().theme.touch_target as i32;
-    let p = kaia_gfx::Point::new(r.x + r.w as i32 - touch / 2, r.y + r.h as i32 / 2);
-    app.tap(p).unwrap();
+    tap_key(app, "status-search");
 }
 
 fn open_library(app: &mut App<HeadlessBackend>) {
@@ -203,5 +200,6 @@ fn library_search_with_suggestions_golden() {
     });
     app.iterate(Some(Duration::from_millis(10))).unwrap();
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_suggestions.png"), 14);
 }

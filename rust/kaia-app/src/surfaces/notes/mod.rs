@@ -302,10 +302,7 @@ fn filter_row(services: &Services, filter: Filter) -> WidgetPod {
 
 fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Filter) -> Window {
     let mut children = vec![
-        crate::surfaces::common::status_header(
-            Header::new(&services.theme, tr("Notes"))
-                .status(crate::surfaces::library::data::status_line(services).unwrap_or_default()),
-        ),
+        crate::surfaces::common::status_header(Header::new(&services.theme, tr("Notes"))),
         filter_row(services, filter),
         button(
             ButtonStyle::Text,
@@ -353,7 +350,11 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
     window(
         services,
         screen,
-        crate::surfaces::common::tabbed_page(page(services, children), kaia_ui::composite::NavItem::More),
+        crate::surfaces::common::tabbed_page(
+            services,
+            page(services, children),
+            kaia_ui::composite::NavItem::More,
+        ),
     )
 }
 
@@ -385,7 +386,11 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
     window(
         services,
         screen,
-        crate::surfaces::common::tabbed_page(page(services, children), kaia_ui::composite::NavItem::More),
+        crate::surfaces::common::tabbed_page(
+            services,
+            page(services, children),
+            kaia_ui::composite::NavItem::More,
+        ),
     )
 }
 

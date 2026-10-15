@@ -299,7 +299,11 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
     window(
         services,
         screen,
-        crate::surfaces::common::tabbed_page(page(services, children), kaia_ui::composite::NavItem::More),
+        crate::surfaces::common::tabbed_page(
+            services,
+            page(services, children),
+            kaia_ui::composite::NavItem::More,
+        ),
     )
 }
 

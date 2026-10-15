@@ -250,7 +250,7 @@ impl WidgetPod {
             return;
         }
         let abs = self.abs(origin);
-        let visible = abs.intersect(&cx.region);
+        let visible = abs.intersect(&cx.region).intersect(&cx.clip);
         if visible.is_empty() {
             return;
         }

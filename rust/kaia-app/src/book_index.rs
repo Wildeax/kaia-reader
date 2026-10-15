@@ -135,6 +135,10 @@ fn mark_one(services: &mut Services, id: i64, mark: Mark) -> Result<(), String> 
         .map_err(|e| e.to_string())
 }
 
+pub(crate) fn mark_unread(services: &mut Services, id: i64) -> Result<(), String> {
+    mark_one(services, id, Mark::Unread)
+}
+
 pub(crate) fn mark_finished(services: &mut Services, id: i64) -> Result<(), String> {
     mark_one(services, id, Mark::Finished)
 }

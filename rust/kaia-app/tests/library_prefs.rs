@@ -100,5 +100,5 @@ fn the_books_layout_defaults_to_covers_and_the_tab_and_sort_survive() {
     );
     tap_key(&mut app, "library-view-books");
     assert!(app.find_rect("list").is_none(), "the Books layout is covers");
-    assert!(app.find_rect("library-view-list").is_some());
+    assert!(app.find_rect("library-view-books").is_some());
 }

@@ -1021,8 +1021,15 @@ impl<B: Backend> App<B> {
             }
             _ => {}
         }
+        if id == "status:search" && matches!(self.top_route(), Some(Route::Library { .. })) {
+            self.route_command(self.router.depth() - 1, "library:search:open", &[]);
+            return;
+        }
         if id.starts_with("status:") {
-            if id == "status:power" {
+            if matches!(
+                id,
+                "status:power" | "status:light-settings" | "status:network-settings"
+            ) {
                 self.back();
             }
             let outcome = surfaces::status::command(id, args, &mut env!(self));
@@ -1230,6 +1237,9 @@ impl<B: Backend> App<B> {
                 self.reconcile_windows();
                 return;
             }
+        }
+        if self.router.depth() > 0 && self.route_command(self.router.depth() - 1, "surface:back", &[]) {
+            return;
         }
         match self.router.depth() {
             0 => {}

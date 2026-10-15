@@ -234,5 +234,6 @@ fn details_golden_with_the_series_and_an_unopened_rating() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details_series.png"), 14);
 }

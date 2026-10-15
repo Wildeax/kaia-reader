@@ -181,6 +181,7 @@ fn the_page_shows_the_totals_of_the_statistics_database() {
 
     hold_for_details(&mut app, &format!("book-{juliet}"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details_statistics.png"), 14);
 
     tap_key(&mut app, &key(&format!("library:stats:open:{juliet}")));
@@ -213,6 +214,7 @@ fn the_page_shows_the_totals_of_the_statistics_database() {
     assert_eq!(value("book-stats-left"), "6 min");
 
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_book_stats.png"), 14);
 
     tap_key(&mut app, &key("book-stats-back"));

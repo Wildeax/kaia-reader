@@ -42,11 +42,20 @@ fn golden_frame(app: &App<HeadlessBackend>, name: &str) {
 fn status_actions_keep_their_caller() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut app = app("status-actions", None);
-    for root in ["nav-home", "nav-more"] {
+    for root in ["nav-home", "nav-library", "nav-more"] {
         tap_key(&mut app, root);
         let caller = app.top_route().cloned();
-        for (key, section) in [("status-light", "display"), ("status-wifi", "network")] {
+        for (key, popup, settings, section) in [
+            ("status-light", "light-popup", "light-settings", "display"),
+            ("status-wifi", "wifi-popup", "wifi-settings", "network"),
+        ] {
             tap_key(&mut app, key);
+            assert!(app.find_rect(popup).is_some());
+            assert_eq!(app.top_route(), caller.as_ref());
+            app.key(Key::Back).unwrap();
+            assert!(app.find_rect(popup).is_none());
+            tap_key(&mut app, key);
+            tap_key(&mut app, settings);
             assert_eq!(
                 app.top_route(),
                 Some(&Route::SettingsSection { name: section.into() })

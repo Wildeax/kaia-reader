@@ -307,6 +307,7 @@ fn details_golden_with_a_favorite_and_tags() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details_tags.png"), 14);
 }
 
@@ -322,6 +323,7 @@ fn tag_filter_golden() {
     open_library(&mut app);
     tap_key(&mut app, "library-filter");
     tap_key(&mut app, "library-filter-tags");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tag_filter.png"), 14);
 }
 
@@ -335,9 +337,11 @@ fn tag_sheet_golden() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
     tap_key(&mut app, &key(&format!("library:tags:open:{juliet}")));
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tags_list.png"), 14);
     tap_key(&mut app, &key(&format!("library:tags:new:{juliet}")));
     tap_key(&mut app, "tag-field");
     type_text(&mut app, "Sci");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tags_sheet.png"), 14);
 }

@@ -106,11 +106,11 @@ fn authors_tab_lists_each_author_and_opens_its_books() {
     tap_key(&mut app, &key("library:view:authors"));
     assert!(
         app.find_rect("author-0").is_some(),
-        "Walt Whitman is the first author"
+        "William Shakespeare is the first surname"
     );
     assert!(
         app.find_rect("author-1").is_some(),
-        "William Shakespeare is the second"
+        "Walt Whitman is the second surname"
     );
     assert!(app.find_rect("author-2").is_none(), "two authors, no more rows");
     assert!(
@@ -122,8 +122,8 @@ fn authors_tab_lists_each_author_and_opens_its_books() {
         "the Authors tab has no sort"
     );
 
-    // The second author has two books, and the book with two authors is one of them.
-    tap_key(&mut app, "author-1");
+    // Shakespeare has two books, including the shared book.
+    tap_key(&mut app, "author-0");
     assert!(app.find_rect(&format!("book-{juliet}")).is_some());
     assert!(app.find_rect(&format!("book-{pdf}")).is_some());
     assert!(
@@ -182,6 +182,8 @@ fn an_author_lists_its_books_in_series_order() {
     let mut app = reopen(&dir);
     open_library(&mut app);
     open_author(&mut app, 0);
+    tap_key(&mut app, "library-sort");
+    tap_key(&mut app, "sort-series");
 
     let leaves_key = format!("book-{leaves}");
     let juliet_key = format!("book-{juliet}");
@@ -254,6 +256,7 @@ fn authors_list_golden() {
     open_library(&mut app);
     tap_key(&mut app, &key("library:view:authors"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_authors.png"), 14);
     let _ = fs::remove_dir_all(dir);
 }
@@ -273,6 +276,7 @@ fn author_books_golden() {
     open_library(&mut app);
     open_author(&mut app, 1);
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_author_books.png"), 14);
     let _ = (juliet, leaves, pdf);
     let _ = fs::remove_dir_all(dir);
