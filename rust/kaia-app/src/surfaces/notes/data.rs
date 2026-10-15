@@ -195,6 +195,14 @@ pub fn books_dir(data_dir: &Path) -> PathBuf {
 /// annotations. `library` maps a partial MD5 to the library row of that book.
 /// Books come newest first. Each book's notes are in reading order.
 pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> {
+    load_with_empty(data_dir, library)
+        .into_iter()
+        .filter(|b| !b.notes.is_empty() || !b.ink_counts.is_empty())
+        .collect()
+}
+
+/// Includes empty books so an export can replace notes that the user removed.
+pub fn load_with_empty(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> {
     let mut books: Vec<BookNotes> = fs::read_dir(books_dir(data_dir))
         .into_iter()
         .flatten()
@@ -202,7 +210,6 @@ pub fn load(data_dir: &Path, library: &HashMap<String, Book>) -> Vec<BookNotes> 
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
         .filter_map(|path| read_book(&path, library))
-        .filter(|book| !book.notes.is_empty())
         .collect();
     if data_dir.join("kaia/kaia.sqlite3").exists() {
         if let Ok(store) = kaia_storage::Store::open(&data_dir.join("kaia")) {

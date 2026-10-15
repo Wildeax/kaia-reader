@@ -928,6 +928,7 @@ dependencies = [
 name = "kaia-app"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "fs2",
  "getrandom 0.4.3",
@@ -953,9 +954,11 @@ dependencies = [
  "kaia-ui",
  "pbkdf2",
  "rusqlite",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",
+ "ureq",
  "url",
  "zip",
 ]

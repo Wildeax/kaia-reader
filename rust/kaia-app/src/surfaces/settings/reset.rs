@@ -144,6 +144,7 @@ fn reset_settings(env: &mut SurfaceEnv<'_>) -> Outcome {
             // The settings in memory are the old ones. Replace them with the file as it
             // is now, so a later save does not write the old values back.
             env.services.settings = Settings::open(&env.services.settings_path());
+            env.services.webdav.update_gate(&env.services.settings, false);
             env.services.apply_large_print();
             let message = match copy {
                 Some(_) => tr("Settings reset. Restart Kaia to use the default settings. The old settings are in settings.json.before-reset."),
@@ -160,6 +161,7 @@ fn reset_settings(env: &mut SurfaceEnv<'_>) -> Outcome {
 }
 
 fn erase_everything(env: &mut SurfaceEnv<'_>) -> Outcome {
+    env.services.webdav = crate::webdav::WebDav::new(env.services.paths.data_dir.clone());
     let data = env.services.paths.data_dir.clone();
     match reset::erase(&data) {
         Ok(()) => {

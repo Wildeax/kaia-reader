@@ -247,6 +247,25 @@ impl Surface for SettingsSectionSurface {
             _ => {}
         }
         if self.name == "network" {
+            if cmd == "settings:webdav:test" {
+                let connected = env.services.platform.network.is_connected();
+                if let Err(message) = env
+                    .services
+                    .webdav
+                    .test_connection(&env.services.settings, connected)
+                {
+                    env.toast(message, 5.0);
+                }
+                return Outcome::Handled;
+            }
+            if cmd == "settings:webdav:export" {
+                if !env.services.settings.is_true(crate::webdav::ENABLED) {
+                    env.toast(tr("Turn on Export notes to WebDAV first."), 4.0);
+                } else {
+                    crate::webdav::enqueue_saved(env, None, true);
+                }
+                return Outcome::Handled;
+            }
             let surface = match cmd {
                 "settings:catalogs" => Some(crate::surfaces::catalogs::CatalogSurface::default()),
                 "settings:calibre" => Some(crate::surfaces::catalogs::CatalogSurface::calibre()),
@@ -416,6 +435,27 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let Some(value) = args.first().cloned() else {
         return Outcome::Handled;
     };
+    if key == crate::webdav::PASSWORD {
+        match crate::webdav::store_password(&env.services.paths.data_dir, value.as_str().unwrap_or("")) {
+            Ok(()) => {
+                if let Err(message) = env.services.webdav.account_changed() {
+                    env.toast(message, 5.0);
+                }
+            }
+            Err(_) => {
+                env.toast(tr("Could not save the WebDAV password."), 5.0);
+            }
+        }
+        return Outcome::Handled;
+    }
+    if matches!(
+        key,
+        crate::webdav::SERVER | crate::webdav::USERNAME | crate::webdav::FOLDER
+    ) {
+        if let Err(message) = env.services.webdav.account_changed() {
+            env.toast(message, 5.0);
+        }
+    }
     if key == keys::SYNC_PASSWORD {
         // Typing a password may fix a refused login, so the next request runs again.
         env.services.sync.forget_refusal();
@@ -424,6 +464,9 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         return Outcome::Handled;
     }
     env.services.settings.save(key, value);
+    if key == crate::webdav::ENABLED {
+        env.services.webdav.update_gate(&env.services.settings, false);
+    }
     if !key.starts_with("sync.") {
         save(env);
     }

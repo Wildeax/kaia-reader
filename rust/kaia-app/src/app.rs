@@ -341,6 +341,7 @@ impl<B: Backend> App<B> {
             eprintln!("kaia: dropping sync updates that could not be written: {error}");
         }
         self.services.sync.close();
+        self.services.webdav.stop();
         if let Some(scan) = self.scan.take() {
             scan.cancel();
         }
@@ -505,6 +506,16 @@ impl<B: Backend> App<B> {
                 Err(error) => env!(self).notice(tr_format(&tr("Dictionary download failed: %1"), &[&error])),
             }
             self.broadcast_app(Event::new("DictionariesChanged"));
+        }
+        let connected = self.services.settings.is_true(crate::webdav::ENABLED)
+            && !crate::surfaces::settings::keys::airplane_mode(&self.services.settings)
+            && self.services.platform.network.is_connected();
+        for message in self
+            .services
+            .webdav
+            .tick(&self.services.settings, connected, crate::sync::now_unix())
+        {
+            env!(self).toast(message, 5.0);
         }
         self.poll_screenshots();
         if crate::covers::poll() || crate::covers::busy() {
@@ -969,6 +980,11 @@ impl<B: Backend> App<B> {
         }
         // Airplane mode turns Wi-Fi off on the script worker. The quick settings
         // surface still gets the id and saves the switch.
+        if (id == "settings:quick:airplane" && args.first().and_then(Value::as_bool) == Some(true))
+            || (id == "settings:quick:wifi" && args.first().and_then(Value::as_bool) == Some(false))
+        {
+            self.services.webdav.update_gate(&self.services.settings, false);
+        }
         if id == "settings:quick:airplane"
             && args.first().and_then(Value::as_bool) == Some(true)
             && self.services.platform.network.is_wifi_on()
@@ -1526,6 +1542,9 @@ impl<B: Backend> App<B> {
         let now = self.ctx.scheduler.now();
         let mut budget = min_opt(timeout, self.power_wait());
         budget = min_opt(budget, self.natural_light.wait(now));
+        if let Some(wait) = self.services.webdav.wait(&self.services.settings) {
+            budget = min_opt(budget, wait);
+        }
         if let Some(due) = self.ctx.scheduler.next_due() {
             budget = min_opt(budget, due.saturating_sub(now));
         }
@@ -1538,6 +1557,7 @@ impl<B: Backend> App<B> {
         }
         if self.scan.is_some()
             || self.services.sync.busy()
+            || self.services.webdav.busy()
             || self.services.dictionary_downloads.busy()
             || crate::covers::busy()
             || self.power.scripts.busy()
