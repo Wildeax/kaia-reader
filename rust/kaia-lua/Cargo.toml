@@ -12,7 +12,7 @@ kaia-gfx = { path = "../kaia-gfx" }
 kaia-input = { path = "../kaia-input" }
 kaia-ui = { path = "../kaia-ui" }
 # No "vendored" feature: the LuaJIT that KOReader builds is linked (see build.rs and env.sh).
-mlua = { version = "0.10", default-features = false, features = ["luajit"] }
+mlua = { version = "0.12", default-features = false, features = ["luajit"] }
 
 [dev-dependencies]
 kaia-book = { path = "../kaia-book" }
