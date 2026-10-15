@@ -63,7 +63,7 @@ fn choices_with(user: &[String]) -> Vec<(String, Option<String>)> {
 }
 
 /// The font choices, with the user faces the engine has registered.
-fn font_choices() -> Vec<(String, Option<String>)> {
+pub(super) fn font_choices() -> Vec<(String, Option<String>)> {
     choices_with(&kaia_doc::cre::user_font_faces())
 }
 
@@ -186,10 +186,44 @@ impl Surface for Panel {
         true
     }
 
-    fn on_hide(&mut self, _env: &mut SurfaceEnv<'_>) {
+    fn on_show(&mut self, env: &mut SurfaceEnv<'_>) {
+        super::overlay::clear_external_tools(&self.window, env.ctx);
+        self.window.dispatch(
+            UiEvent::Named(kaia_events::Event::new("ReaderPanelFocus")),
+            env.ctx,
+        );
+    }
+
+    fn on_event(&mut self, event: &kaia_events::Event, env: &mut SurfaceEnv<'_>) -> crate::surface::Outcome {
+        if matches!(event.name.as_str(), "PageForward" | "PageBack" | "PageBackward")
+            && self.window.update::<super::book_dialogs::ContentsList, _>(
+                env.ctx,
+                "contents-list",
+                |list, cx| list.step(event.name == "PageForward", cx),
+            )
+        {
+            return crate::surface::Outcome::Handled;
+        }
+        if event.name == "ReaderSearchSubmit" {
+            return super::command(&self.core, "reader:search:go", &[], env);
+        }
+        crate::surface::Outcome::NotMine
+    }
+    fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
         let mut core = self.core.borrow_mut();
+        if core
+            .advanced
+            .as_ref()
+            .is_some_and(|a| a.layer.serial == self.serial)
+        {
+            core.advanced = None;
+        }
         if core.panel.as_ref().is_some_and(|l| l.serial == self.serial) {
+            core.panel_name = None;
             core.panel = None;
+            if core.selection.is_some() {
+                core.clear_selection(env.ctx);
+            }
         }
     }
 }
@@ -309,75 +343,6 @@ fn labelled(services: &Services, label: &str, control: WidgetPod) -> WidgetPod {
         ])
         .gap(t.space.md)
         .cross_align(CrossAlign::Center),
-    )
-}
-
-fn tab_button(index: usize, label: &str, active: bool) -> WidgetPod {
-    let style = if active {
-        ButtonStyle::Primary
-    } else {
-        ButtonStyle::Secondary
-    };
-    WidgetPod::new(Expanded::new(
-        button(
-            style,
-            label,
-            &format!("reader:contents:tab:{index}"),
-            &format!("contents-tab-{index}"),
-        ),
-        1,
-    ))
-}
-
-/// The Contents panel. `tab` is 0 for chapters, 1 for bookmarks and 2 for highlights.
-pub fn contents(
-    services: &Services,
-    screen: Size,
-    tab: usize,
-    items: Vec<ContentItem>,
-    empty: &str,
-) -> Window {
-    let t = &services.theme;
-    let tabs = WidgetPod::new(
-        Row::new(vec![
-            tab_button(0, &tr("Chapters"), tab == 0),
-            tab_button(1, &tr("Bookmarks"), tab == 1),
-            tab_button(2, &tr("Highlights"), tab == 2),
-        ])
-        .gap(t.space.sm),
-    );
-    let mut children = vec![tabs];
-    if items.is_empty() {
-        children.push(WidgetPod::new(Paragraph::new(
-            empty.to_string(),
-            t.font.body.clone(),
-            Tone::InkSecondary,
-        )));
-    } else {
-        let list = PagedList::new(items, |item: &ContentItem, _t: &Theme| {
-            let mut row = ListRow::new(item.label.clone())
-                .indent(item.level)
-                .on_action(item.action.clone());
-            if !item.detail.is_empty() {
-                row = row.secondary(item.detail.clone());
-            }
-            if item.current {
-                row = row.value(tr("Now"));
-            }
-            WidgetPod::new(row).with_key(key_of(&item.action))
-        })
-        .labels(page_labels());
-        children.push(WidgetPod::new(Expanded::new(
-            WidgetPod::new(list).with_key("contents-list"),
-            1,
-        )));
-    }
-    sheet(
-        services,
-        screen,
-        Some(&tr("Contents")),
-        children,
-        Some(TALL_PERCENT),
     )
 }
 
@@ -511,28 +476,7 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
 /// per font choice, in the order of `font_choices`. The row of choice `current`
 /// shows "Current". Tapping a row picks that face.
 pub fn font_list(services: &Services, screen: Size, current: usize) -> Window {
-    let labels: Vec<String> = font_choices().into_iter().map(|(label, _)| label).collect();
-    let indices: Vec<usize> = (0..labels.len()).collect();
-    let list = PagedList::new(indices, move |index: &usize, _t: &Theme| {
-        let action = format!("reader:layout:font:{index}");
-        let mut row = ListRow::new(labels[*index].clone()).on_action(action.clone());
-        if *index == current {
-            row = row.value(tr("Current"));
-        }
-        WidgetPod::new(row).with_key(key_of(&action))
-    })
-    .labels(page_labels());
-    let children = vec![WidgetPod::new(Expanded::new(
-        WidgetPod::new(list).with_key("font-list"),
-        1,
-    ))];
-    sheet(
-        services,
-        screen,
-        Some(&tr("Font")),
-        children,
-        Some(WRITING_PERCENT),
-    )
+    super::typography::font_list(services, screen, current, 0)
 }
 
 /// The hyphenation language choices. Index 0 is the book language, which is the
@@ -605,15 +549,16 @@ pub fn hyphenation_list(services: &Services, screen: Size, current: usize) -> Wi
 }
 
 /// The More panel: go to either end and mark the book as finished.
-pub fn more(services: &Services, screen: Size) -> Window {
+pub fn more_tools(services: &Services, screen: Size, fixed: bool, history: bool) -> Window {
     let children = vec![WidgetPod::new(
         Column::new(vec![
             button(
                 ButtonStyle::Secondary,
-                &tr("Ink mode"),
-                "reader:ink:toggle",
-                "more-ink",
-            ),
+                &tr("Back to previous location"),
+                "reader:back",
+                "more-back",
+            )
+            .visible(history),
             button(
                 ButtonStyle::Secondary,
                 &tr("Go to page"),
@@ -649,6 +594,26 @@ pub fn more(services: &Services, screen: Size) -> Window {
                 &tr("Word list"),
                 "reader:words:open",
                 "more-words",
+            ),
+            button(
+                ButtonStyle::Secondary,
+                &tr("Text options"),
+                "reader:more:text-options",
+                "more-text-options",
+            )
+            .visible(!fixed),
+            button(
+                ButtonStyle::Secondary,
+                &tr("Fit modes"),
+                "reader:zoom:fit-modes",
+                "more-fit-modes",
+            )
+            .visible(fixed),
+            button(
+                ButtonStyle::Secondary,
+                &tr("All notes"),
+                "nav:notes",
+                "more-notes",
             ),
             button(
                 ButtonStyle::Secondary,
@@ -1029,10 +994,11 @@ pub(super) fn selection_more(
     screen: Size,
     edge: Edge,
     drawer: &str,
+    color: &str,
     shade: f64,
 ) -> Window {
     let t = &services.theme;
-    let mut children = vec![group_heading(services, &tr("Style"))];
+    let mut children = vec![color_dots(services, color), group_heading(services, &tr("Style"))];
     children.extend(drawer_rows(services, "reader:highlight", drawer));
     let shade = WidgetPod::new(
         Stepper::new(shade * 100.0, 0.0, 100.0, 10.0)
@@ -1818,6 +1784,245 @@ pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> 
             1,
         ))],
         Some(TALL_PERCENT),
+    )
+}
+
+/// Selection actions stay beside the word while its definition opens below.
+pub(super) fn selection_lookup(
+    services: &Services,
+    screen: Size,
+    word: &str,
+    style: (&str, &str),
+    selection: Option<&Selection>,
+    header: u32,
+    definition: &str,
+) -> Window {
+    use super::chrome::{rect, Chrome, Tool};
+    let t = &services.theme;
+    let (drawer, color) = style;
+    let mut font = t.font.body.clone();
+    font.size = 34.0 * screen.w.min(screen.h) as f32 / 1264.0;
+    let compact = |label: &str, action: &str, key: &str| {
+        let mut tool = Tool::new("", action, 48 * screen.w.min(screen.h) / 1264);
+        tool.label = label.into();
+        WidgetPod::new(tool).focusable(true).with_key(key)
+    };
+    let bounds = selection
+        .and_then(|s| s.screen_rects.first())
+        .copied()
+        .unwrap_or(kaia_gfx::Rect::new(
+            (screen.w / 2) as i32,
+            (screen.h / 3) as i32,
+            1,
+            1,
+        ));
+    let width = screen.w * 342 / 1264;
+    let height = screen.h * 379 / 1680;
+    let gap = screen.h * 24 / 1680;
+    let x =
+        (bounds.x + bounds.w as i32 / 2 - width as i32 / 2).clamp(0, screen.w.saturating_sub(width) as i32);
+    let above = bounds.y + header as i32 - height as i32 - gap as i32;
+    let y = if above >= 0 {
+        above
+    } else {
+        bounds.bottom() + header as i32 + gap as i32
+    };
+    let y = y
+        .min((screen.h * 980 / 1680).saturating_sub(height) as i32)
+        .max(0);
+    let popup = kaia_gfx::Rect::new(x, y, width, height);
+    let mut children = Vec::new();
+    let mut add = |dx, dy, w, h, pod| {
+        let r = rect(screen, dx, dy, w, h);
+        children.push((kaia_gfx::Rect::new(x + r.x, y + r.y, r.w, r.h), pod));
+    };
+    for (i, name) in ["yellow", "purple", "blue", "green"]
+        .iter()
+        .enumerate()
+        .filter(|_| t.color_panel && drawer != "invert")
+    {
+        let rgb = kaia_book::highlight_rgb(name).unwrap();
+        add(
+            20 + i as u32 * 80,
+            24,
+            62,
+            62,
+            WidgetPod::new(Swatch {
+                color: Color::rgb(rgb[0], rgb[1], rgb[2]),
+                selected: *name == color,
+                action: Some(format!("reader:sel:color:{name}")),
+                round: true,
+            })
+            .with_key(format!("color-{name}")),
+        );
+    }
+    for (y, label, action, key) in [
+        (104, tr("Highlight"), "reader:sel:highlight", "sel-highlight"),
+        (193, tr("Add note"), "reader:sel:note", "sel-note"),
+        (282, tr("Search ›"), "reader:sel:search-menu", "sel-search"),
+    ] {
+        add(10, y, 322, 87, compact(&label, action, key));
+    }
+    let card = rect(screen, 31, 1002, 1202, 647);
+    children.push((
+        rect(screen, 60, 1015, 1000, 80),
+        compact(&tr("Dictionaries ▾"), "reader:dicts:open", "dict-selector"),
+    ));
+    children.push((
+        rect(screen, 72, 1110, 1120, 70),
+        WidgetPod::new(Label::new(word, font.clone(), Tone::Ink)).with_key("sel-word"),
+    ));
+    children.push((
+        rect(screen, 72, 1185, 1120, 350),
+        WidgetPod::new(Paragraph::new(definition, font.clone(), Tone::Ink).max_lines(7))
+            .with_key("dict-body"),
+    ));
+    children.push((
+        rect(screen, 60, 1560, 520, 75),
+        compact(&tr("More"), "reader:sel:more", "sel-more"),
+    ));
+    children.push((
+        rect(screen, 560, 1560, 470, 75),
+        compact(
+            &tr("Free dictionaries"),
+            "settings:dictionary-downloads",
+            "dict-downloads",
+        ),
+    ));
+    children.push((
+        rect(screen, 1050, 1560, 140, 75),
+        WidgetPod::new(IconButton::new("appbar.pagefit").on_action("reader:sel:dict")).with_key("sel-dict"),
+    ));
+    for dy in [104, 193, 282] {
+        let r = rect(screen, 10, dy, 322, 1);
+        children.push((
+            kaia_gfx::Rect::new(x + r.x, y + r.y, r.w, 1),
+            WidgetPod::new(Frame::new(WidgetPod::new(SizedBox::new(None))).fill(Tone::Ink)),
+        ));
+    }
+    for dy in [1103, 1558] {
+        children.push((
+            rect(screen, 32, dy, 1200, 1),
+            WidgetPod::new(Frame::new(WidgetPod::new(SizedBox::new(None))).fill(Tone::Ink)),
+        ));
+    }
+    window(
+        services,
+        screen,
+        Chrome {
+            panel_border: 1,
+            size: screen,
+            children,
+            panels: vec![popup, card],
+        },
+    )
+}
+
+pub(super) fn selection_search(services: &Services, screen: Size) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Search")),
+        vec![
+            button(
+                ButtonStyle::Text,
+                &tr("In this book"),
+                "reader:sel:search",
+                "sel-search-book",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("Dictionary"),
+                "reader:sel:dict",
+                "sel-dict",
+            ),
+            button(ButtonStyle::Text, &tr("Copy"), "reader:sel:copy", "sel-copy"),
+            button(ButtonStyle::Text, &tr("More"), "reader:sel:more", "sel-more"),
+        ],
+        None,
+    )
+}
+
+pub(super) fn more(services: &Services, screen: Size, model: &super::overlay::OverlayModel) -> Window {
+    use super::{chrome::rect, compact::*};
+    let mut chrome = super::overlay::chrome(services, screen, model, Some("overlay-more"));
+    chrome.panels.push(rect(screen, 713, 182, 541, 383));
+    for (i, label, id, key) in [
+        (0, tr("Book details"), "reader:more:details", "more-details"),
+        (1, tr("Dictionary"), "reader:more:dictionary", "more-dictionary"),
+        (2, tr("Reading help"), "reader:more:help", "more-help"),
+        (3, tr("More tools"), "reader:more:tools", "more-tools"),
+    ] {
+        put(
+            &mut chrome,
+            screen,
+            [728, 192 + i * 91, 510, 89],
+            action(screen, &label, id, key),
+        );
+        if i < 3 {
+            rule(&mut chrome, screen, [728, 282 + i * 91, 510, 1], Tone::Divider);
+        }
+    }
+    window(services, screen, chrome)
+}
+pub(super) fn annotation_tools(services: &Services, screen: Size) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Annotations")),
+        vec![
+            button(
+                ButtonStyle::Text,
+                &tr("Bookmark this page"),
+                "reader:bookmark",
+                "annotations-bookmark",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("All notes"),
+                "nav:notes",
+                "annotations-all",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("Back to annotations"),
+                "reader:contents:tab:1",
+                "annotations-back",
+            ),
+        ],
+        None,
+    )
+}
+pub(super) fn text_options(services: &Services, screen: Size, layout: &TextLayout) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Text options")),
+        vec![
+            labelled(
+                services,
+                &tr("Hyphenation"),
+                WidgetPod::new(Toggle::pill(layout.hyphenation).on_action("reader:layout:hyphenation"))
+                    .with_key("layout-hyphenation"),
+            ),
+            labelled(
+                services,
+                &tr("Hyphenation language"),
+                button(
+                    ButtonStyle::Secondary,
+                    &hyphenation_choice_label(layout.hyphenation_lang.as_deref()),
+                    "reader:layout:hyphlang",
+                    "layout-hyphlang",
+                ),
+            ),
+            labelled(
+                services,
+                &tr("Book's styles"),
+                WidgetPod::new(Toggle::pill(layout.embedded_styles).on_action("reader:layout:styles"))
+                    .with_key("layout-styles"),
+            ),
+        ],
+        None,
     )
 }
 

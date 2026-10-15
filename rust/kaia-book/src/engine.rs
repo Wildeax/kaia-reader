@@ -47,6 +47,7 @@ pub(crate) struct LayoutOutcome {
     pub page_count: usize,
     pub position: Location,
     pub toc: Vec<TocEntry>,
+    pub logical_starts: Vec<u32>,
 }
 
 /// Messages from the engine thread to the session.
@@ -333,6 +334,7 @@ impl Worker {
             page,
             page_count: self.page_count(),
             toc: self.doc.doc().toc(),
+            logical_starts: Vec::new(),
             position,
         })
     }

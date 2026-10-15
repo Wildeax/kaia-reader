@@ -448,6 +448,7 @@ fn layout_from_sidecar(root: &Value) -> Option<TextLayout> {
         .map(|v| v as f32)
         .unwrap_or(d.margins.right);
     Some(TextLayout {
+        align_left: false,
         font_family: root.get("font_face").as_str().map(str::to_string),
         font_size: root
             .get("copt_font_size")

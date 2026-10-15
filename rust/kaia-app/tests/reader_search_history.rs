@@ -38,6 +38,12 @@ fn open_search(app: &mut App<HeadlessBackend>) {
     app.tap(p).unwrap();
     wait_reader(app);
     assert_eq!(app.top_route(), Some(&Route::Overlay), "the overlay opens");
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(app, "overlay-search");
 }
 
@@ -203,10 +209,7 @@ fn clear_history_empties_the_list_and_the_file() {
 
     tap_key(&mut app, "search-history-clear");
     assert!(listed(&mut app).is_empty(), "Clear history empties the list");
-    assert_eq!(
-        text_of(&mut app, "search-status"),
-        "Type a word and press Search."
-    );
+    assert!(text_of(&mut app, "search-status").is_empty());
     drop(app);
 
     let mut app = open_book(&dir, "juliet.epub");

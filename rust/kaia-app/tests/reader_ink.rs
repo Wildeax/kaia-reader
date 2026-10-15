@@ -21,8 +21,7 @@ fn open(dir: &Path, name: &str) -> App<HeadlessBackend> {
 }
 fn enable(app: &mut App<HeadlessBackend>) {
     app.tap(Point::new(600, 800)).unwrap();
-    tap_key(app, "overlay-more");
-    tap_key(app, "more-ink");
+    tap_key(app, "overlay-pen");
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
     assert!(app.find_rect("ink-width").is_some());
 }

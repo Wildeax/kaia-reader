@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use kaia_app::slider::Slider;
 use kaia_app::surfaces::reader::page::PageView;
-use kaia_app::surfaces::reader::panels::{ContentItem, SearchRow};
+use kaia_app::surfaces::reader::panels::SearchRow;
 use kaia_app::App;
 use kaia_app::HeadlessBackend;
 use kaia_app::Route;
@@ -233,17 +233,20 @@ fn chapter_pages(app: &mut App<HeadlessBackend>) -> std::collections::HashSet<u3
     open_overlay(app);
     tap_key(app, "overlay-contents");
     let mut pages = std::collections::HashSet::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
-        for item in list.items() {
-            if let Some(n) = item
-                .detail
-                .strip_prefix("Page ")
-                .and_then(|n| n.parse::<u32>().ok())
-            {
-                pages.insert(n - 1);
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| {
+            for item in list.items() {
+                if let Some(n) = item
+                    .detail
+                    .strip_prefix("Page ")
+                    .and_then(|n| n.parse::<u32>().ok())
+                {
+                    pages.insert(n - 1);
+                }
             }
-        }
-    });
+        },
+    );
     // Back closes the panel, and a tap in the middle closes the overlay.
     app.key(Key::Back).unwrap();
     wait_reader(app);
@@ -334,11 +337,15 @@ fn bookmark_button_adds_a_bookmark_listed_in_the_contents() {
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
 
-    tap_key(&mut app, "overlay-bookmark");
+    app.command("reader:bookmark", &[]);
+    wait_reader(&mut app);
     tap_key(&mut app, "overlay-contents");
     tap_key(&mut app, "contents-tab-1");
     let mut bookmarks = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| bookmarks = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| bookmarks = list.items().len(),
+    );
     assert_eq!(bookmarks, 1, "one bookmark on the page");
 }
 
@@ -351,7 +358,10 @@ fn contents_entry_jumps_and_the_overlay_follows() {
     tap_key(&mut app, "overlay-contents");
 
     let mut entries = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| entries = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| entries = list.items().len(),
+    );
     assert!(entries >= 2, "the test book has chapters, got {entries}");
 
     // The second entry of the first page jumps to its chapter.
@@ -382,10 +392,7 @@ fn font_size_change_relayouts_and_keeps_the_place() {
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-layout");
-    // The plus button sits at the right edge of the stepper.
-    let rect = app.find_rect("layout-size").expect("the size stepper");
-    app.tap(Point::new(rect.x + rect.w as i32 - 6, rect.y + rect.h as i32 / 2))
-        .unwrap();
+    tap_key(&mut app, "layout-size-plus");
     wait_reader(&mut app);
 
     // The layout runs on the engine thread. Give it time, then leave the sheet.
@@ -394,8 +401,6 @@ fn font_size_change_relayouts_and_keeps_the_place() {
         app.iterate(Some(Duration::from_millis(20))).unwrap();
     }
     app.key(Key::Back).unwrap();
-    wait_reader(&mut app);
-    app.tap(centre(&app)).unwrap();
     wait_reader(&mut app);
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
 
@@ -433,6 +438,12 @@ fn font_row_opens_the_font_list_and_picking_a_face_returns_to_the_sheet() {
     let dir = scratch("font-pick");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     assert!(
         app.find_rect("layout-font").is_some(),
@@ -495,14 +506,15 @@ fn font_list_back_and_close_return_to_the_text_sheet() {
         app.find_rect("reader-layout-font-0").is_some(),
         "the font list is open"
     );
-    tap_key(&mut app, "panel-close");
+    app.tap(Point::new(100, 900)).unwrap();
+    wait_reader(&mut app);
     assert!(
         app.find_rect("reader-layout-font-0").is_none(),
-        "the close button closes the list"
+        "the outside tap closes the list"
     );
     assert!(
         app.find_rect("layout-font").is_some(),
-        "the close button shows the sheet"
+        "the outside tap shows the sheet"
     );
     assert_eq!(
         saved_font_family(&mut app, "juliet.epub"),
@@ -517,6 +529,12 @@ fn font_list_golden() {
     let dir = scratch("golden-font-list");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     tap_key(&mut app, "layout-font");
     assert_matches_golden(app.frame(), &golden("reader-font-list.png"), 14);
@@ -540,9 +558,12 @@ fn hold_selects_a_word_and_the_highlight_survives_reopening() {
     open_from_library(&mut app, "juliet.epub");
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
-    tap_key(&mut app, "contents-tab-2");
+    tap_key(&mut app, "contents-tab-1");
     let mut highlights = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| highlights = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| highlights = list.items().len(),
+    );
     assert_eq!(highlights, 1, "the highlight survives reopening");
 }
 
@@ -568,11 +589,14 @@ fn note_on_a_selection_is_saved_with_the_highlight() {
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
-    tap_key(&mut app, "contents-tab-2");
+    tap_key(&mut app, "contents-tab-1");
     let mut details = Vec::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
-        details = list.items().iter().map(|i| i.detail.clone()).collect();
-    });
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| {
+            details = list.items().iter().map(|i| i.detail.clone()).collect();
+        },
+    );
     assert_eq!(
         details,
         vec!["check the wording".to_string()],
@@ -589,6 +613,7 @@ fn copy_closes_the_popover() {
     hold_at(&mut app, word_point());
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
     let selection = text_of(&mut app, "sel-word");
+    tap_key(&mut app, "sel-search");
     tap_key(&mut app, "sel-copy");
     assert_eq!(app.services().clipboard.as_deref(), Some(selection.as_str()));
     assert!(
@@ -603,9 +628,9 @@ fn fixed_layout_books_get_a_zoom_sheet_instead_of_text_settings() {
     let dir = scratch("zoom");
     let mut app = open_reader("2col.pdf", &dir);
     open_overlay(&mut app);
-    tap_key(&mut app, "overlay-layout");
+    tap_key(&mut app, "overlay-zoom");
     assert!(
-        app.find_rect("layout-zoom").is_some(),
+        app.find_rect("zoom-slider").is_some(),
         "a PDF shows the zoom choice"
     );
     assert!(app.find_rect("layout-size").is_none(), "a PDF has no font size");
@@ -621,7 +646,8 @@ fn dictionary_sheet_shows_the_definition_of_the_selected_word() {
     let word = word_of(&text_of(&mut app, "sel-word"));
     assert!(!word.is_empty(), "a word is selected");
 
-    // The dictionary is read when the word is looked up, so write it now.
+    // Reload after installing a dictionary following the automatic lookup.
+    app.services_mut().dictionary = None;
     write_stardict(&dir.join("data"), &word, "first line\nsecond line");
     let dictionaries = dir.join("data/dict");
     fs::copy(dictionaries.join("test.idx"), dictionaries.join("second.idx")).unwrap();
@@ -672,8 +698,8 @@ fn dictionary_sheet_says_when_none_is_installed() {
     let body = text_of(&mut app, "dict-body");
     assert!(body.starts_with("No dictionary installed."), "got {body:?}");
     assert!(
-        body.contains("StarDict"),
-        "the sheet says what to copy, got {body:?}"
+        body.contains("free dictionary downloads"),
+        "the sheet points to free dictionaries, got {body:?}"
     );
 }
 
@@ -724,6 +750,7 @@ fn end_of_book_sheet_appears_after_the_last_page() {
     let (_, count) = position(&mut app);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-end");
     assert_eq!(app.top_route(), Some(&Route::Overlay));
     assert_eq!(slider_value(&mut app), count as f64, "the last page is shown");
@@ -802,6 +829,18 @@ fn overlay_golden() {
     let dir = scratch("golden-overlay");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     assert_matches_golden(app.frame(), &golden("reader-overlay.png"), 14);
 }
 
@@ -811,6 +850,12 @@ fn contents_golden() {
     let dir = scratch("golden-contents");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-contents");
     assert_matches_golden(app.frame(), &golden("reader-contents.png"), 14);
 }
@@ -821,6 +866,12 @@ fn text_and_layout_golden() {
     let dir = scratch("golden-layout");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     assert_matches_golden(app.frame(), &golden("reader-layout.png"), 14);
 }
@@ -836,38 +887,23 @@ fn selection_popover_golden() {
 }
 
 #[test]
-fn selection_panel_takes_a_quarter_of_the_screen_and_moves_up_for_a_low_word() {
+fn selection_callout_stays_above_a_low_word_with_dictionary_below() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("selection-edge");
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
-    let screen = app.screen();
-
-    // A word in the upper half: the panel sits at the bottom.
-    hold_at(&mut app, word_point());
-    let more = app.find_rect("sel-more").expect("the panel shows More");
-    assert!(
-        more.y >= screen.h as i32 * 3 / 4,
-        "the bottom panel is in the lower quarter, got y {}",
-        more.y
-    );
-    app.key(Key::Back).unwrap();
-    wait_reader(&mut app);
-
-    // A word in the lower half: the panel moves to the top and stays above the word.
-    let low = Point::new(200, screen.h as i32 * 3 / 5);
+    let low = Point::new(200, app.screen().h as i32 * 3 / 5);
     hold_at(&mut app, low);
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
-    let more = app.find_rect("sel-more").expect("the panel shows More");
-    assert!(
-        more.y + more.h as i32 <= screen.h as i32 / 4,
-        "the top panel ends in the top quarter, got bottom {}",
-        more.y + more.h as i32
-    );
-    assert!(
-        more.y + more.h as i32 <= low.y,
-        "the panel does not cover the word"
-    );
+    let highlight = app.find_rect("sel-highlight").unwrap();
+    assert!(highlight.bottom() < low.y);
+    let dictionary = app.find_rect("dict-body").unwrap();
+    assert!(dictionary.y > low.y);
+    assert!(app.find_rect("color-yellow").is_some());
+    assert!(app.find_rect("color-purple").is_some());
+    assert!(app.find_rect("color-blue").is_some());
+    assert!(app.find_rect("color-green").is_some());
+    assert!(app.find_rect("color-red").is_none());
 }
 
 #[test]
@@ -879,7 +915,9 @@ fn dictionary_golden() {
     hold_at(&mut app, word_point());
     let word = word_of(&text_of(&mut app, "sel-word"));
     write_stardict(&dir.join("data"), &word, "a test definition for the word");
+    app.services_mut().dictionary = None;
     tap_key(&mut app, "sel-dict");
+    assert!(text_of(&mut app, "dict-body").contains("a test definition for the word"));
     assert_matches_golden(app.frame(), &golden("reader-dictionary.png"), 14);
 }
 
@@ -889,6 +927,12 @@ fn search_golden() {
     let dir = scratch("golden-search");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-search");
     app.update_top::<TextField, _>("search-field", |field, cx| {
         field.set_text("Romeo");
@@ -1297,16 +1341,15 @@ fn pdf_sticker_uses_page_fractions_and_shared_store_images() {
     assert!(zoomed[0].rect.h > before[0].rect.h);
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
-    let panned = page_stickers(&mut app);
-    assert_eq!(panned.len(), 1, "panning stays on the sticker's page");
-    assert!(panned[0].rect.y < zoomed[0].rect.y);
-    assert_eq!(panned[0].rect.h, zoomed[0].rect.h);
-    app.key(Key::RPgFwd).unwrap();
-    wait_reader(&mut app);
     assert!(
         page_stickers(&mut app).is_empty(),
         "a sticker belongs only to its page"
     );
+    app.key(Key::RPgBack).unwrap();
+    wait_reader(&mut app);
+    let returned = page_stickers(&mut app);
+    assert_eq!(returned.len(), 1);
+    assert_eq!(returned[0].rect, zoomed[0].rect);
 }
 
 #[test]

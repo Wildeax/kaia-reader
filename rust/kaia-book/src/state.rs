@@ -315,6 +315,7 @@ fn layout_value(l: &TextLayout) -> Value {
         t.insert("hyphenation_lang".into(), Value::from(lang.as_str()));
     }
     t.insert("justify".into(), Value::Bool(l.justify));
+    t.insert("align_left".into(), Value::Bool(l.align_left));
     t.insert("embedded_styles".into(), Value::Bool(l.embedded_styles));
     t.insert("font_weight".into(), Value::from(f64::from(l.font_weight)));
     Value::Table(t)
@@ -350,6 +351,7 @@ fn layout_from_value(v: &Value) -> TextLayout {
         // A missing key means the book language. An unknown tag falls back when it is applied.
         hyphenation_lang: v.get("hyphenation_lang").as_str().map(str::to_string),
         justify: v.get("justify").as_bool().unwrap_or(d.justify),
+        align_left: v.get("align_left").as_bool().unwrap_or(false),
         embedded_styles: v.get("embedded_styles").as_bool().unwrap_or(d.embedded_styles),
         // A missing key reads as 0, which is regular.
         font_weight: v

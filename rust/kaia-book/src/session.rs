@@ -302,6 +302,8 @@ struct OrderCache {
 
 /// An open book: its document, its Kaia state, and a reader's view of it.
 pub struct BookSession {
+    logical: Option<crate::logical::SpinePages>,
+    logical_starts: Vec<u32>,
     path: PathBuf,
     engine: Handle,
     cache: Arc<Mutex<PageCache>>,
@@ -503,7 +505,11 @@ impl BookSession {
             Err(e) => return Err(e),
         };
         let (page, position, page_count, layout_gen) = restored;
-        facts.toc = engine.call(|w| Ok(w.doc.doc().toc()))?;
+        let logical = crate::logical::SpinePages::open(&path);
+        let spine_len = logical.as_ref().map_or(0, |s| s.len());
+        let (toc, logical_starts) =
+            engine.call(move |w| Ok((w.doc.doc().toc(), spine_starts(w, spine_len))))?;
+        facts.toc = toc;
         if !opts.import_only {
             state.position = Some(position);
             state.percent = fraction(page, page_count);
@@ -551,6 +557,8 @@ impl BookSession {
         let saved_position = state.position.clone();
         let stale = state.file_change_pending;
         let mut session = BookSession {
+            logical,
+            logical_starts,
             path,
             engine,
             cache,
@@ -701,6 +709,28 @@ impl BookSession {
             pages_left_in_chapter: self.pages_left(self.page),
             location: self.state.position.clone().unwrap_or(Location::Page(self.page)),
         }
+    }
+
+    /// Logical EPUB labels, separate from screen-based navigation and statistics.
+    /// Cached CREngine fragment boundaries supply the fraction through the item.
+    /// This never waits for the document engine.
+    pub fn logical_progress(&self) -> Option<crate::LogicalProgress> {
+        if !self.facts.reflowable || self.layout_pending {
+            return None;
+        }
+        let spine = self.logical.as_ref()?;
+        let starts = &self.logical_starts;
+        if starts.len() != spine.len() {
+            return None;
+        }
+        let item = starts
+            .partition_point(|&start| start <= self.page)
+            .saturating_sub(1);
+        let start = starts[item];
+        let end = starts.get(item + 1).copied().unwrap_or(self.page_count as u32);
+        let fraction =
+            f64::from(self.page.saturating_sub(start)) / f64::from(end.saturating_sub(start).max(1));
+        spine.progress(item, fraction)
     }
 
     /// Moves to a location. Fails with [`BookError::LayoutPending`] during a layout change.
@@ -997,70 +1027,42 @@ impl BookSession {
         Ok(())
     }
 
-    /// Moves right, then down, before turning the physical page. Back reverses that order.
+    /// Turns a physical page while retaining the current zoom and pan offset.
+    /// Only the new page's dimensions may clamp the offset.
     pub fn turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
-        if self.is_reflowable() {
-            return if forward {
-                self.next_page()
-            } else {
-                self.prev_page()
-            };
-        }
-        let t = self.page_transform(viewport)?;
-        let max_x = t.full_image.w.saturating_sub(viewport.w) as i32;
-        let max_y = t.full_image.h.saturating_sub(viewport.h) as i32;
-        let step_x = viewport.w.max(1) as i32;
-        let step_y = viewport.h.max(1) as i32;
-        let p = t.offset;
-        let target = if forward && p.x < max_x {
-            Some(Point::new((p.x + step_x).min(max_x), p.y))
-        } else if forward && p.y < max_y {
-            Some(Point::new(0, (p.y + step_y).min(max_y)))
-        } else if !forward && p.x > 0 {
-            Some(Point::new(((p.x - 1) / step_x) * step_x, p.y))
-        } else if !forward && p.y > 0 {
-            Some(Point::new(max_x, ((p.y - 1) / step_y) * step_y))
-        } else {
-            None
-        };
-        if let Some(target) = target {
-            self.state.zoom_pan = target;
-            self.dirty = true;
-            return Ok(true);
-        }
+        let pan = self.state.zoom_pan;
         let moved = if forward {
             self.next_page()?
         } else {
             self.prev_page()?
         };
-        if moved && !forward {
-            let t = self.page_transform(viewport)?;
-            self.state.zoom_pan = Point::new(
-                t.full_image.w.saturating_sub(viewport.w) as i32,
-                t.full_image.h.saturating_sub(viewport.h) as i32,
-            );
+        if moved && !self.is_reflowable() {
+            self.state.zoom_pan = pan;
+            self.clamp_pan(viewport)?;
         }
         Ok(moved)
     }
 
-    /// Whether a page-turn action can move within this page or to another page.
-    pub fn can_turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
-        let another_page = if forward {
+    /// Whether a physical page exists in the requested direction.
+    pub fn can_turn_view(&mut self, forward: bool, _viewport: Size) -> Result<bool> {
+        Ok(if forward {
             self.page as usize + 1 < self.page_count
         } else {
             self.page > 0
-        };
-        if another_page || self.is_reflowable() {
-            return Ok(another_page);
-        }
-        let t = self.page_transform(viewport)?;
-        Ok(if forward {
-            self.page as usize + 1 < self.page_count
-                || t.offset.x < t.full_image.w.saturating_sub(viewport.w) as i32
-                || t.offset.y < t.full_image.h.saturating_sub(viewport.h) as i32
-        } else {
-            self.page > 0 || t.offset.x > 0 || t.offset.y > 0
         })
+    }
+
+    /// A fit-page image for the zoom overview. It does not change the saved view.
+    pub fn render_overview(&mut self, viewport: Size) -> Result<Arc<Pixmap>> {
+        self.ensure_idle()?;
+        let (page, format) = (self.page, self.format);
+        let zoom = FixedView {
+            mode: ZoomMode::FitPage,
+            scale: None,
+            pan: Point::new(0, 0),
+        };
+        self.engine
+            .call(move |w| w.render_and_prefetch(page, viewport, zoom, format))
     }
 
     /// The transform between the current page and a viewport.
@@ -1771,6 +1773,7 @@ impl BookSession {
                 self.page = outcome.page;
                 self.page_count = outcome.page_count;
                 self.facts.toc = outcome.toc;
+                self.logical_starts = outcome.logical_starts;
                 self.state.position = Some(outcome.position);
                 self.state.percent = fraction(self.page, self.page_count);
                 self.selection = None;
@@ -1832,10 +1835,15 @@ impl BookSession {
         let viewport = self.viewport;
         let position = self.state.position.clone();
         let percent = self.state.percent;
+        let spine_len = self.logical.as_ref().map_or(0, |s| s.len());
         self.layout_pending = true;
         self.engine.post(move |w| {
             let result = w
                 .apply_layout(&layout, dict, viewport, position, percent)
+                .map(|mut outcome| {
+                    outcome.logical_starts = spine_starts(w, spine_len);
+                    outcome
+                })
                 .map_err(|e| e.to_string());
             w.send(Event::Layout(result));
         })
@@ -2170,6 +2178,21 @@ fn hyphenation_for(layout: &TextLayout, book: Option<&str>, ui: Option<&str>) ->
     layout
         .hyphenation
         .then(|| crate::layout::hyphenation_pattern(choice, book, ui))
+}
+
+/// Called on the engine thread after layout, never from a UI status read.
+fn spine_starts(worker: &Worker, len: usize) -> Vec<u32> {
+    (1..=len)
+        .map(|item| {
+            worker
+                .doc
+                .xpointer_page(&format!("/body/DocFragment[{item}]/body"))
+                .ok()
+                .flatten()
+        })
+        .collect::<Option<Vec<_>>>()
+        .filter(|starts| starts.windows(2).all(|pair| pair[0] <= pair[1]))
+        .unwrap_or_default()
 }
 
 /// The job that restores the reading position on the engine thread. For a

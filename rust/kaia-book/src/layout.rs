@@ -119,7 +119,7 @@ pub fn primary_book_language(dc_language: &str) -> Option<&str> {
 }
 
 /// CSS added when text is justified. Appended after the book's own styles.
-const JUSTIFY_CSS: &str = "body { text-align: justify !important; }\n";
+const JUSTIFY_CSS: &str = "body, p, div, li, blockquote { text-align: justify !important; }\n";
 
 /// CREngine base weight of regular text, in CSS units.
 pub const REGULAR_FONT_WEIGHT: u32 = 400;
@@ -173,6 +173,8 @@ pub struct TextLayout {
     pub hyphenation_lang: Option<String>,
     /// Justify lines.
     pub justify: bool,
+    /// Force left alignment. False with justify false preserves book alignment.
+    pub align_left: bool,
     /// Keep the book's own CSS. When false, the engine ignores the book's styles.
     pub embedded_styles: bool,
     /// KOReader font weight value, one of [`FONT_WEIGHT_VALUES`]. 0 is regular.
@@ -197,6 +199,7 @@ impl Default for TextLayout {
             hyphenation: true,
             hyphenation_lang: None,
             justify: false,
+            align_left: false,
             embedded_styles: true,
             font_weight: 0.0,
         }
@@ -214,7 +217,9 @@ impl TextLayout {
             line_height: Some(self.line_spacing),
             font_family: self.font_family.clone(),
             font_weight: Some(self.css_weight()),
-            css_extra: if self.justify {
+            css_extra: if self.align_left {
+                "body, p, div, li, blockquote { text-align: left !important; }\n".to_string()
+            } else if self.justify {
                 JUSTIFY_CSS.to_string()
             } else {
                 String::new()

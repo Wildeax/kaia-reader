@@ -213,7 +213,15 @@ pub fn lookup(word: &str, services: &mut Services, preferred: &[String]) -> Answ
     };
     if library.names().is_empty() {
         return Answer {
-            text: install_hint(&services.paths.data_dir),
+            text: if library
+                .errors()
+                .iter()
+                .any(|(_, e)| e.to_string().to_lowercase().contains("encrypt"))
+            {
+                tr("This Kobo dictionary is encrypted. Open Dictionaries in Settings for free dictionary downloads.")
+            } else {
+                tr("No dictionary installed. Open Dictionaries in Settings for free dictionary downloads.")
+            },
             first: None,
         };
     }

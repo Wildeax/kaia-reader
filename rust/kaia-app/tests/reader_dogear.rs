@@ -5,13 +5,11 @@
 
 use std::time::Duration;
 
-use kaia_app::surfaces::reader::panels::ContentItem;
 use kaia_app::{App, HeadlessBackend, Route};
 use kaia_display::InputEvent;
 use kaia_gfx::Point;
 use kaia_input::{Phase, TouchEvent};
 use kaia_ui::components::Label;
-use kaia_ui::composite::PagedList;
 use kaia_ui::controls::TextField;
 
 mod common;
@@ -88,7 +86,10 @@ fn bookmark_count(app: &mut App<HeadlessBackend>) -> usize {
     tap_key(app, "overlay-contents");
     tap_key(app, "contents-tab-1");
     let mut count = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| count = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| count = list.items().len(),
+    );
     // Back to the page: close the contents panel, then the overlay.
     tap_key(app, "panel-close");
     app.tap(Point::new(app.screen().w as i32 / 2, app.screen().h as i32 / 2))
@@ -152,7 +153,7 @@ fn the_rest_of_the_top_edge_still_opens_the_overlay() {
 }
 
 #[test]
-fn the_bookmark_button_also_draws_the_dog_ear() {
+fn the_bookmark_command_updates_the_dog_ear_under_the_overlay() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("dogear-button");
     let mut app = open_reader("juliet.epub", &dir);
@@ -161,13 +162,13 @@ fn the_bookmark_button_also_draws_the_dog_ear() {
     let before = dark_in_corner(&mut app, 20);
 
     open_overlay(&mut app);
-    tap_key(&mut app, "overlay-bookmark");
+    app.command("reader:bookmark", &[]);
     // The centre tap closes the overlay, and the page shows the new state.
     app.tap(Point::new(w / 2, app.screen().h as i32 / 2)).unwrap();
     wait_reader(&mut app);
     assert!(
         dark_in_corner(&mut app, 20) > before + 100,
-        "the page shows the dog-ear after the bookmark button"
+        "the page shows the dog-ear after the bookmark command"
     );
 }
 
@@ -209,8 +210,5 @@ fn the_overlay_footer_line_is_a_label_on_the_bars() {
     let mut text = None;
     app.update_top::<Label, _>("overlay-footer", |label, _| text = Some(label.text().to_string()));
     let text = text.expect("the overlay has the footer line");
-    assert!(
-        text.starts_with("Page 9 of "),
-        "the default footer is the page count: {text:?}"
-    );
+    assert_eq!(text, "Page 3 of 96", "the menu labels logical EPUB pages");
 }

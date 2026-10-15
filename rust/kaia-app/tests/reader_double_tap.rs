@@ -243,6 +243,7 @@ fn a_double_tap_on_a_word_opens_the_dictionary_with_that_word() {
     app.key(Key::Back).unwrap();
     idle(&mut app);
     write_stardict(&dir.join("data"), &word, "the definition of the word");
+    app.services_mut().dictionary = None;
 
     double_tap(&mut app, &clock, word_point(), Duration::from_millis(100));
     clock.advance(WINDOW);

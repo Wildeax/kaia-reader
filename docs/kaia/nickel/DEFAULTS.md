@@ -124,16 +124,12 @@ CREngine's space condensation. Both next screens begin
 `him three children:`. The defaults do not claim exact typography parity.
 
 Kaia renders **1090 physical pages** for the whole book in both extension tests.
-Nickel displays **96 pages**. Both supplied Nickel screens retain 3 of 96,
-so its displayed EPUB page numbers are not physical screen counts at this
-font size. Reproducing that numbering requires a separate logical pagination
-implementation, not a smaller font or a fabricated total.
+Nickel displays **96 pages**. The B-147 logical page model below now supplies
+96 as Kaia's displayed total while preserving all 1090 screen turns.
 
-The header now sits at the measured position, but shows `About` without
-Nickel's chapter page count. The footer still shows `Page 6 of 1090`, without
-the book title. Kaia has no footer-title or chapter-page-count item to enable
-as a default. Those content and numbering gaps remain outside this defaults
-change. The 120 px strips and 64 px vertical margins reproduce the body area.
+The default header shows the chapter and its logical page count. The footer
+shows the book title and logical book page count. The 120 px strips and 64 px
+vertical margins remain unchanged.
 
 ## Defaults and Kaia mapping
 
@@ -164,8 +160,8 @@ are pixels. Old values below refer to the app before the Nickel defaults work.
 | Ambient light adjustment | Device has no ambient-light sensor | Confirmed device capability | No matching setting | Unsupported | Unchanged |
 | Frontlight intensity | Missing-key fallback 80 on color devices | Confirmed | Platform state, no Rust preference default | Current hardware intensity | Unchanged; startup hardware state is not a missing preference |
 | Orientation lock | Unlocked | Confirmed | `display.rotation_lock` | false | Unchanged |
-| Header | Chapter title and chapter page progress; page progress enum 3 | Confirmed | `reading.header_chapter`; no chapter-page item | Header items off | Chapter title on and centred; chapter page counts still unsupported |
-| Footer | Book title and book page progress; page progress enum 6 | Confirmed | `reading.footer_page`; no footer title item | Pages on | Unchanged; title placement remains a gap |
+| Header | Chapter title and chapter page progress; page progress enum 3 | Confirmed | `reading.header_chapter` | Header items off | Chapter title and logical chapter page count, centred |
+| Footer | Book title and book page progress; page progress enum 6 | Confirmed | `reading.footer_page` | Pages on | Book title and logical book page count |
 | Time left | Off in both chapter and book progress choices | Confirmed | `reading.footer_time_chapter`, `reading.footer_time_book` | false | Unchanged |
 | Clock/battery in reading bars | No equivalent enabled default established | Likely | Header/footer clock and battery keys | false | Unchanged |
 | Library view | Grid on color devices | Confirmed | `library.layout` | `covers` | Unchanged |
@@ -209,3 +205,32 @@ Run the comparison from `rust/` after loading `tools/kaia/env.sh`:
 ```sh
 cargo test -p kaia-app --test nickel_defaults -- --nocapture
 ```
+
+## B-147 logical EPUB pages
+
+EPUB and KEPUB display labels now use the Adobe compressed-content rule.
+Each OPF spine item contributes `max(1, ceil(compressed ZIP bytes / 1024))`
+pages, and the book total is their sum. Kaia opens the container's declared
+OPF and reads compressed sizes from the ZIP directory. It does not estimate
+sizes from extracted text or compress the content again.
+
+Kaia caches CREngine's `DocFragment` boundaries on the engine thread at open
+and after each reflow. Reading page labels never waits for the engine.
+Within an item, the fraction is `(current screen - first screen) / item screen count`.
+The one-based item label is `1 + floor(fraction * item logical pages)`, clamped
+to the item's last page. The book label adds the preceding items' page counts.
+This is a screen-resolution approximation of the reading position within the
+item. Font changes can move a position near a logical boundary to the other
+side; compressed page totals remain unchanged. The current implementation
+uses spine items as chapter boundaries for these labels.
+
+For `test/juliet.epub`, the total is 96 and About spans book pages 3 and 4.
+At the calibrated layout, About occupies zero-based screens 3 through 17.
+Screens 3 through 10 show logical page 3; screens 11 through 17 show page 4.
+The two captured passages on screens 5 and 6 both show About 1 of 2 and book
+page 3 of 96. The EPUB and KEPUB integration test checks every About screen.
+
+Screen navigation, saved percent, reading statistics and time estimates retain
+their existing basis. Fixed-layout documents retain document-page counts.
+Malformed EPUB metadata or an unavailable fragment position falls back to
+screen labels. Adobe margin markers remain unimplemented.

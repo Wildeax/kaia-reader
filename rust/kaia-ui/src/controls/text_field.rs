@@ -20,6 +20,8 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 /// Password mode draws each character as a dot. The text itself is unchanged.
 pub struct TextField {
     background: Option<Tone>,
+    borderless: bool,
+    focus_event: Option<String>,
     text: String,
     placeholder: String,
     /// Caret position in characters, from 0 to the character count.
@@ -28,7 +30,6 @@ pub struct TextField {
     scroll: f32,
     max_len: Option<usize>,
     password: bool,
-    borderless: bool,
     on_change: Reaction,
     on_submit: Reaction,
     /// The shaped text and the caret stops, kept until the text changes.
@@ -55,13 +56,14 @@ impl TextField {
     pub fn new() -> Self {
         Self {
             background: None,
+            borderless: false,
+            focus_event: None,
             text: String::new(),
             placeholder: String::new(),
             caret: 0,
             scroll: 0.0,
             max_len: None,
             password: false,
-            borderless: false,
             on_change: Reaction::None,
             on_submit: Reaction::None,
             shaped: None,
@@ -73,6 +75,18 @@ impl TextField {
     /// or `Surface`.
     pub fn background(mut self, tone: Tone) -> Self {
         self.background = Some(tone);
+        self
+    }
+
+    /// Use the enclosing control's outline and keep the caret visible on focus.
+    pub fn borderless(mut self) -> Self {
+        self.borderless = true;
+        self
+    }
+
+    /// Focus this field when its window dispatches the named event.
+    pub fn focus_on(mut self, event: impl Into<String>) -> Self {
+        self.focus_event = Some(event.into());
         self
     }
 
@@ -108,12 +122,6 @@ impl TextField {
     /// Queues a named event when `Press` is pressed. Its argument is the text.
     pub fn on_submit(mut self, name: impl Into<String>) -> Self {
         self.on_submit = Reaction::Event(name.into());
-        self
-    }
-
-    /// For a field inside a shared search outline.
-    pub fn borderless(mut self) -> Self {
-        self.borderless = true;
         self
     }
 
@@ -369,11 +377,18 @@ impl Widget for TextField {
                 cx.fill_rect(Rect::new(caret_x, text_y, ring, line_h), caret);
             }
         }
-        cx.focus_ring(radius + ring);
+        if !self.borderless {
+            cx.focus_ring(radius + ring);
+        }
     }
 
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         match ev {
+            UiEvent::Named(e) if self.focus_event.as_deref() == Some(e.name.as_str()) => {
+                cx.request_focus();
+                cx.request_paint();
+                Handled::Yes
+            }
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
                 cx.request_focus();
                 let t = cx.theme();
