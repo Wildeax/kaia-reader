@@ -141,3 +141,98 @@ fn four_times_panel_size_renders_only_the_clip() {
     assert_eq!(clip.size(), Size::new(1264, 1680));
     assert!(clip.data().iter().all(|p| *p == clip.data()[0]));
 }
+
+/// A valid PNG with an unknown ancillary chunk of `pad` pseudo-random bytes
+/// before IEND. Decoders skip the chunk, so the page decodes quickly while the
+/// archive entry stays large.
+fn padded_png(width: u32, height: u32, rgb: [u8; 3], pad: usize) -> Vec<u8> {
+    let mut png = image(width, height, rgb, ImageFormat::Png);
+    let mut chunk = Vec::with_capacity(pad + 12);
+    chunk.extend((pad as u32).to_be_bytes());
+    chunk.extend(b"zzPd");
+    let mut seed = 0x9e37_79b9u32;
+    chunk.extend((0..pad).map(|_| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed as u8
+    }));
+    let crc = crc32fast::hash(&chunk[4..]);
+    chunk.extend(crc.to_be_bytes());
+    let iend = png.len() - 12;
+    png.splice(iend..iend, chunk);
+    png
+}
+
+const LONG_PAGES: usize = 200;
+
+fn long_comic(pad: usize) -> (tempfile::TempDir, std::path::PathBuf) {
+    let pages: Vec<(String, Vec<u8>)> = (0..LONG_PAGES)
+        .map(|i| {
+            let bytes = padded_png(16, 24, page_color(i), pad);
+            (format!("page{:03}.png", i + 1), bytes)
+        })
+        .collect();
+    let entries: Vec<(&str, &[u8], u32)> = pages
+        .iter()
+        .map(|(name, bytes)| (name.as_str(), bytes.as_slice(), bytes.len() as u32))
+        .collect();
+    fixture(&common::rar(&entries))
+}
+
+fn page_color(index: usize) -> [u8; 3] {
+    [index as u8, 255 - index as u8, 17]
+}
+
+fn first_pixel(doc: &dyn kaia_doc::Document, page: u32) -> [u8; 3] {
+    let pixmap = doc.render(page, 1.0, PixelFormat::Rgb24).unwrap();
+    pixmap.data()[..3].try_into().unwrap()
+}
+
+#[test]
+fn last_page_of_a_long_archive_loads_about_as_fast_as_the_first() {
+    let (_dir, path) = long_comic(512 * 1024);
+    let mut first = std::time::Duration::MAX;
+    let mut last = std::time::Duration::MAX;
+    for _ in 0..3 {
+        let doc = open(&path).unwrap();
+        assert_eq!(doc.page_count(), LONG_PAGES);
+        let start = std::time::Instant::now();
+        assert_eq!(first_pixel(doc.as_ref(), 0), page_color(0));
+        first = first.min(start.elapsed());
+
+        let doc = open(&path).unwrap();
+        let start = std::time::Instant::now();
+        assert_eq!(
+            first_pixel(doc.as_ref(), LONG_PAGES as u32 - 1),
+            page_color(LONG_PAGES - 1)
+        );
+        last = last.min(start.elapsed());
+    }
+    let floor = std::time::Duration::from_millis(3);
+    eprintln!("first page {first:?}, last page {last:?}");
+    assert!(
+        last <= (first * 3).max(floor),
+        "last page took {last:?}, first page took {first:?}"
+    );
+}
+
+#[test]
+fn backward_jump_after_a_late_page_returns_the_requested_page() {
+    let (_dir, path) = long_comic(64 * 1024);
+    let doc = open(&path).unwrap();
+    for page in [150, 3, 199, 0, 100, 101, 102, 1] {
+        assert_eq!(
+            first_pixel(doc.as_ref(), page),
+            page_color(page as usize),
+            "page {page}"
+        );
+    }
+    for page in 0..LONG_PAGES as u32 {
+        assert_eq!(
+            first_pixel(doc.as_ref(), page),
+            page_color(page as usize),
+            "page {page}"
+        );
+    }
+}

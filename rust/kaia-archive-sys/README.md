@@ -39,10 +39,13 @@ Kaia still checks the returned length and image decoding errors. Header CRC
 errors and reported decompression errors are rejected. The binding does not
 claim independent payload-integrity verification.
 
-`kaia-doc` indexes image names and keeps only the current decoded page.
-Opening drains the archive to validate its data; a page load reopens it and
-reads preceding entries. Late pages and repeated backward turns in large
-solid archives can therefore be slow. PNG/JPEG decoding uses `kaia-gfx`'s
+`kaia-doc` indexes image names while it validates the archive. Opening reads
+every entry once. The CBR backend then keeps the archive open at its position,
+so the next page continues the stream. It caches the compressed bytes of recent
+pages in at most 64 MiB, evicting the least recently used page first. A page
+before the stream position reopens the archive and reads the entries before it.
+A cold jump to a middle page of a solid archive therefore decodes every earlier
+entry once. PNG/JPEG decoding uses `kaia-gfx`'s
 4096-pixel side and 16-megapixel limits. Render buffers have a 16-megapixel
 limit and a 16,384-pixel side limit.
 
