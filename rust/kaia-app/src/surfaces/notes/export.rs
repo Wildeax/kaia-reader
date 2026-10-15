@@ -1,4 +1,4 @@
-//! Exports all notes to Markdown and JSON in `<data>/exports/`.
+//! Exports notes to Markdown and JSON, or one PDF per book, in `<data>/exports/`.
 //!
 //! The JSON is written by hand. `kaia-app` has no JSON crate of its own, and
 //! the output is a fixed shape of strings, numbers, booleans and arrays.
@@ -40,6 +40,123 @@ pub fn export(data_dir: &Path, books: &[BookNotes], now: i64) -> io::Result<Expo
         json,
         count,
     })
+}
+
+/// Writes one PDF per book. Each completed file replaces its previous export.
+/// `fonts` is the bundled fonts directory, with its `noto` subdirectory.
+pub fn export_pdf(data_dir: &Path, books: &[BookNotes], fonts: &Path) -> io::Result<Vec<PathBuf>> {
+    let dir = data_dir.join(EXPORTS_DIR);
+    fs::create_dir_all(&dir)?;
+    for face in ["NotoSans-Regular.ttf", "NotoSans-Bold.ttf"] {
+        fs::File::open(fonts.join("noto").join(face))?;
+    }
+    let mut paths = Vec::with_capacity(books.len());
+    let mut css = String::from(PDF_CSS);
+    if fonts.join("noto/NotoSansCJKsc-Regular.otf").is_file() {
+        css.push_str("@font-face { font-family: notes-cjk; src: url(noto/NotoSansCJKsc-Regular.otf); } .cjk { font-family: notes-cjk; }");
+    }
+    for book in books {
+        // Encode the identifier so even an imported state file cannot name a path.
+        let key: String = book.md5.bytes().map(|byte| format!("{byte:02x}")).collect();
+        if key.is_empty() || key.len() > 128 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid book identifier",
+            ));
+        }
+        let path = dir.join(format!("kaia-notes-{key}.pdf"));
+        let temp = tempfile::NamedTempFile::new_in(&dir)?;
+        kaia_mupdf_sys::write_story_pdf(temp.path(), &pdf_html(book), &css, fonts)
+            .map_err(io::Error::other)?;
+        temp.as_file().sync_all()?;
+        temp.persist(&path).map_err(|error| error.error)?;
+        fs::File::open(&dir)?.sync_all()?;
+        paths.push(path);
+    }
+    Ok(paths)
+}
+
+const PDF_CSS: &str = "
+@font-face { font-family: notes; src: url(noto/NotoSans-Regular.ttf); }
+@font-face { font-family: notes; font-weight: bold; src: url(noto/NotoSans-Bold.ttf); }
+body { font-family: notes; margin: 0; line-height: 1.4; overflow-wrap: break-word; }
+h1 { font-size: 22pt; margin: 0 0 8pt; }
+h2 { font-size: 14pt; margin: 18pt 0 8pt; page-break-after: avoid; }
+p { margin: 6pt 0; }
+blockquote { margin: 8pt 0 8pt 14pt; border-left: 1pt solid #888; padding-left: 10pt; }
+.position { font-size: 9pt; color: #555; margin-bottom: 14pt; }
+";
+
+fn pdf_html(book: &BookNotes) -> String {
+    let mut out = format!("<html><body><h1>{}</h1>", html_text(&book.title));
+    if let Some(author) = &book.author {
+        let _ = write!(out, "<p>{}</p>", html_text(author));
+    }
+    let mut previous_chapter = None;
+    for note in &book.notes {
+        let chapter = note.chapter.as_deref().filter(|c| !c.trim().is_empty());
+        if previous_chapter != Some(chapter) {
+            let _ = write!(
+                out,
+                "<h2>{}</h2>",
+                html_text(&chapter.map(str::to_owned).unwrap_or_else(|| tr("Notes")))
+            );
+            previous_chapter = Some(chapter);
+        }
+        if let Some(text) = note.text.as_deref().filter(|t| !t.trim().is_empty()) {
+            let _ = write!(out, "<blockquote>{}</blockquote>", html_text(text));
+        }
+        if let Some(text) = note.note.as_deref().filter(|t| !t.trim().is_empty()) {
+            let _ = write!(out, "<p>{}</p>", html_text(text));
+        }
+        let position = match (&note.location, note.pageno) {
+            (_, Some(page)) => tr_format(&tr("Page %1"), &[&page.to_string()]),
+            (Location::Page(page), None) => tr_format(&tr("Page %1"), &[&(u64::from(*page) + 1).to_string()]),
+            (Location::Xpointer(xp), None) => xp.clone(),
+        };
+        let _ = write!(
+            out,
+            "<p class='position'>{}<br/>{}</p>",
+            html_text(&position),
+            html_text(&note.datetime)
+        );
+    }
+    for (page, count) in &book.ink_counts {
+        let _ = write!(
+            out,
+            "<p>{}</p>",
+            html_text(&tr_format(
+                &tr("Page %1: %2 ink strokes"),
+                &[&page.to_string(), &count.to_string()]
+            ))
+        );
+    }
+    out.push_str("</body></html>");
+    out
+}
+
+/// User text is always text, never markup or a resource URL.
+fn html_text(text: &str) -> String {
+    let mut out = String::new();
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\n' => out.push_str("<br/>"),
+            '\0' => out.push('\u{fffd}'),
+            '\u{2e80}'..='\u{9fff}'
+            | '\u{ac00}'..='\u{d7af}'
+            | '\u{f900}'..='\u{faff}'
+            | '\u{ff00}'..='\u{ffef}'
+            | '\u{20000}'..='\u{3134f}' => {
+                let _ = write!(out, "<span class='cjk'>{c}</span>");
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// The Markdown text: one heading per book, one list item per entry.

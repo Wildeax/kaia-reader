@@ -51,7 +51,7 @@ kaia-events = { path = "../kaia-events" }
 kaia-gfx = { path = "../kaia-gfx" }
 kaia-input = { path = "../kaia-input" }
 kaia-library = { path = "../kaia-library" }
-# Build script only: the binary and the tests need MuPDF's library directories (see build.rs).
+# PDF export and the library directories used by build.rs.
 kaia-mupdf-sys = { path = "../kaia-mupdf-sys" }
 kaia-platform = { path = "../kaia-platform" }
 kaia-ui = { path = "../kaia-ui" }

@@ -3,7 +3,8 @@
 //! - `notes:filter:<all|highlights|notes|bookmarks>` sets the filter.
 //! - `notes:book:<partial md5>` opens a book's list.
 //! - `notes:books` returns to the list of books.
-//! - `notes:export` writes every note to `<data>/exports/`.
+//! - `notes:export` offers export formats.
+//! - `notes:export:text` and `notes:export:pdf` write to `<data>/exports/`.
 //!
 //! Tapping an entry does not use these ids. The entry sends the global
 //! `open_book:<id>` (see the crate README).
@@ -16,6 +17,8 @@ pub enum Command {
     Book(String),
     Books,
     Export,
+    ExportText,
+    ExportPdf,
 }
 
 /// Parses a notes action id. None for every other id.
@@ -24,6 +27,8 @@ pub fn parse(id: &str) -> Option<Command> {
     match rest {
         "books" => Some(Command::Books),
         "export" => Some(Command::Export),
+        "export:text" => Some(Command::ExportText),
+        "export:pdf" => Some(Command::ExportPdf),
         _ => {
             if let Some(name) = rest.strip_prefix("filter:") {
                 return Filter::parse(name).map(Command::Filter);

@@ -47,7 +47,7 @@ msgid_plural "%1 books marked as unread."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:392
+#: rust/kaia-app/src/surfaces/notes/mod.rs:441
 msgid "%1 bookmark"
 msgid_plural "%1 bookmarks"
 msgstr[0] ""
@@ -89,7 +89,7 @@ msgstr ""
 msgid "%1 h left in chapter"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:380
+#: rust/kaia-app/src/surfaces/notes/mod.rs:429
 msgid "%1 highlight"
 msgid_plural "%1 highlights"
 msgstr[0] ""
@@ -119,7 +119,7 @@ msgstr ""
 msgid "%1 min left in chapter"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:386
+#: rust/kaia-app/src/surfaces/notes/mod.rs:435
 msgid "%1 note"
 msgid_plural "%1 notes"
 msgstr[0] ""
@@ -131,7 +131,7 @@ msgid_plural "%1 pages"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:374
+#: rust/kaia-app/src/surfaces/notes/mod.rs:423
 msgid "%1 sticker"
 msgid_plural "%1 stickers"
 msgstr[0] ""
@@ -141,7 +141,7 @@ msgstr[1] ""
 msgid "%1 · %2 left"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:353
+#: rust/kaia-app/src/surfaces/notes/mod.rs:402
 msgid "%1 · Repair"
 msgstr ""
 
@@ -355,7 +355,7 @@ msgstr ""
 msgid "Book's styles"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:152 rust/kaia-app/src/surfaces/notes/data.rs:165 rust/kaia-app/src/surfaces/reader/overlay.rs:224 rust/kaia-app/src/surfaces/reader/panels.rs:1505
+#: rust/kaia-app/src/surfaces/notes/data.rs:153 rust/kaia-app/src/surfaces/notes/data.rs:166 rust/kaia-app/src/surfaces/reader/overlay.rs:224 rust/kaia-app/src/surfaces/reader/panels.rs:1505
 msgid "Bookmark"
 msgstr ""
 
@@ -363,7 +363,7 @@ msgstr ""
 msgid "Bookmark added"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:151
+#: rust/kaia-app/src/surfaces/notes/data.rs:152
 msgid "Bookmark in %1"
 msgstr ""
 
@@ -767,6 +767,10 @@ msgstr ""
 msgid "Choose a catalog to add. These are KOReader's default suggestions."
 msgstr ""
 
+#: rust/kaia-app/src/surfaces/notes/mod.rs:136
+msgid "Choose a format. PDF creates one file per book."
+msgstr ""
+
 #: rust/kaia-app/src/surfaces/catalogs/mod.rs:296
 msgid "Choose a server to connect."
 msgstr ""
@@ -1117,11 +1121,11 @@ msgstr ""
 msgid "Experimental features can change or break. A flag works only while this switch is on."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:254
+#: rust/kaia-app/src/surfaces/notes/mod.rs:135 rust/kaia-app/src/surfaces/notes/mod.rs:303
 msgid "Export all notes"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:164
+#: rust/kaia-app/src/surfaces/notes/mod.rs:182 rust/kaia-app/src/surfaces/notes/mod.rs:214
 msgid "Export failed: %1"
 msgstr ""
 
@@ -1129,13 +1133,19 @@ msgstr ""
 msgid "Export notes"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:154
+#: rust/kaia-app/src/surfaces/notes/mod.rs:197
+msgid "Exported %1 PDF file to %2"
+msgid_plural "Exported %1 PDF files to %2"
+msgstr[0] ""
+msgstr[1] ""
+
+#: rust/kaia-app/src/surfaces/notes/mod.rs:172
 msgid "Exported %1 note to %2"
 msgid_plural "Exported %1 notes to %2"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rust/kaia-app/src/surfaces/notes/export.rs:49
+#: rust/kaia-app/src/surfaces/notes/export.rs:166
 msgid "Exported %1."
 msgstr ""
 
@@ -1311,7 +1321,7 @@ msgstr ""
 msgid "Imported %1."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:317
+#: rust/kaia-app/src/surfaces/notes/mod.rs:366
 msgid "In the book"
 msgstr ""
 
@@ -1375,7 +1385,7 @@ msgstr ""
 msgid "Kaia keeps a copy of the old settings as settings.json.before-reset. Copy the .kaia folder to a computer first."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/export.rs:48
+#: rust/kaia-app/src/surfaces/notes/export.rs:165
 msgid "Kaia notes"
 msgstr ""
 
@@ -1501,6 +1511,10 @@ msgstr ""
 msgid "Mark as unread"
 msgstr ""
 
+#: rust/kaia-app/src/surfaces/notes/mod.rs:139
+msgid "Markdown and JSON"
+msgstr ""
+
 #: rust/kaia-app/src/surfaces/library/mod.rs:669 rust/kaia-app/src/surfaces/reader/mod.rs:1430
 msgid "Marked as finished"
 msgstr ""
@@ -1549,7 +1563,7 @@ msgstr ""
 msgid "Needs Wi-Fi on. Syncs at most every six hours. Off by default. Kaia contacts pool.ntp.org only when this is on."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:283 rust/kaia-app/src/surfaces/notes/mod.rs:315
+#: rust/kaia-app/src/surfaces/notes/mod.rs:332 rust/kaia-app/src/surfaces/notes/mod.rs:364
 msgid "Needs repair"
 msgstr ""
 
@@ -1657,7 +1671,7 @@ msgstr ""
 msgid "No highlights yet. Hold a word to select it."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:262
+#: rust/kaia-app/src/surfaces/notes/mod.rs:311
 msgid "No highlights, notes or bookmarks yet. Select text in a book to start."
 msgstr ""
 
@@ -1705,11 +1719,11 @@ msgstr ""
 msgid "Not started"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:113 rust/kaia-app/src/surfaces/notes/mod.rs:248 rust/kaia-app/src/surfaces/reader/overlay.rs:171 rust/kaia-app/src/surfaces/settings/kobo.rs:19 rust/kaia-app/src/surfaces/settings/lua_import.rs:29 rust/kaia-app/src/surfaces/settings/sections.rs:754
+#: rust/kaia-app/src/surfaces/notes/data.rs:114 rust/kaia-app/src/surfaces/notes/export.rs:102 rust/kaia-app/src/surfaces/notes/mod.rs:297 rust/kaia-app/src/surfaces/reader/overlay.rs:171 rust/kaia-app/src/surfaces/settings/kobo.rs:19 rust/kaia-app/src/surfaces/settings/lua_import.rs:29 rust/kaia-app/src/surfaces/settings/sections.rs:754
 msgid "Notes"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:325
+#: rust/kaia-app/src/surfaces/notes/mod.rs:374
 msgid "Nothing matches this filter."
 msgstr ""
 
@@ -1785,11 +1799,15 @@ msgstr ""
 msgid "Other books in progress"
 msgstr ""
 
+#: rust/kaia-app/src/surfaces/notes/mod.rs:140
+msgid "PDF"
+msgstr ""
+
 #: rust/kaia-app/src/surfaces/settings/section.rs:69
 msgid "PIN changed."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/export.rs:66
+#: rust/kaia-app/src/surfaces/notes/export.rs:129 rust/kaia-app/src/surfaces/notes/export.rs:183
 msgid "Page %1: %2 ink strokes"
 msgstr ""
 
@@ -2087,7 +2105,7 @@ msgstr ""
 msgid "Share to Notes"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:161 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:65
+#: rust/kaia-app/src/surfaces/notes/data.rs:162 rust/kaia-app/src/surfaces/reader/sticker_actions.rs:65
 msgid "Shared to Notes"
 msgstr ""
 
@@ -2155,7 +2173,7 @@ msgstr ""
 msgid "Statistics books"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:148 rust/kaia-app/src/surfaces/notes/data.rs:159 rust/kaia-app/src/surfaces/reader/panels.rs:1036 rust/kaia-app/src/surfaces/reader/panels.rs:1665 rust/kaia-app/src/surfaces/reader/panels.rs:1692 rust/kaia-app/src/surfaces/reader/panels.rs:917 rust/kaia-app/src/surfaces/reader/stickers.rs:107
+#: rust/kaia-app/src/surfaces/notes/data.rs:149 rust/kaia-app/src/surfaces/notes/data.rs:160 rust/kaia-app/src/surfaces/reader/panels.rs:1036 rust/kaia-app/src/surfaces/reader/panels.rs:1665 rust/kaia-app/src/surfaces/reader/panels.rs:1692 rust/kaia-app/src/surfaces/reader/panels.rs:917 rust/kaia-app/src/surfaces/reader/stickers.rs:107
 msgid "Sticker"
 msgstr ""
 
@@ -2163,7 +2181,7 @@ msgstr ""
 msgid "Sticker placed"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:115 rust/kaia-app/src/surfaces/settings/lua_import.rs:30
+#: rust/kaia-app/src/surfaces/notes/data.rs:116 rust/kaia-app/src/surfaces/settings/lua_import.rs:30
 msgid "Stickers"
 msgstr ""
 
@@ -2359,7 +2377,7 @@ msgstr ""
 msgid "The sync queue could not be read or saved. Try again."
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/mod.rs:147
+#: rust/kaia-app/src/surfaces/notes/mod.rs:165 rust/kaia-app/src/surfaces/notes/mod.rs:190
 msgid "There are no notes to export."
 msgstr ""
 
@@ -2699,7 +2717,7 @@ msgstr ""
 msgid "history import failed: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:182
+#: rust/kaia-app/src/surfaces/notes/data.rs:183
 msgid "needs repair"
 msgstr ""
 
@@ -2715,11 +2733,11 @@ msgstr ""
 msgid "not found"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:178
+#: rust/kaia-app/src/surfaces/notes/data.rs:179
 msgid "note: %1"
 msgstr ""
 
-#: rust/kaia-app/src/surfaces/notes/data.rs:171
+#: rust/kaia-app/src/surfaces/notes/data.rs:172
 msgid "page %1"
 msgstr ""
 

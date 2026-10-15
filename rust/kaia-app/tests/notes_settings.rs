@@ -249,6 +249,7 @@ fn notes_export_writes_markdown_and_json() {
 
     tap_key(&mut app, "nav-notes");
     tap_key(&mut app, "notes-export");
+    tap_key(&mut app, "dialog-button:notes:export:text");
 
     let exports = dir.join("data").join("exports");
     let names: Vec<String> = fs::read_dir(&exports)
@@ -269,6 +270,42 @@ fn notes_export_writes_markdown_and_json() {
     assert!(js.contains("\"title\": \"Romeo and Juliet\""), "{js}");
     assert!(js.contains("\"highlight\": true"), "{js}");
     assert!(js.contains("\"bookmark\": true"), "{js}");
+}
+
+#[test]
+fn notes_export_pdf_choice_writes_one_file_per_book() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = scratch("notes-export-pdf");
+    let (mut app, _juliet, _leaves) = notes_app(&dir);
+    tap_key(&mut app, "nav-notes");
+    tap_key(&mut app, "notes-export");
+    assert_matches_golden(app.frame(), &golden("notes-export-formats.png"), 14);
+    tap_key(&mut app, "dialog-button:notes:export:pdf");
+    let files: Vec<_> = fs::read_dir(dir.join("data/exports"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 2);
+    let mut content = String::new();
+    for path in files {
+        assert_eq!(path.extension().unwrap(), "pdf");
+        let doc = kaia_doc::open(&path).unwrap();
+        assert!(doc.page_count() >= 1);
+        for page in 0..doc.page_count() {
+            content.push_str(&doc.page_text(page as u32).unwrap().text);
+        }
+    }
+    for expected in [
+        "Romeo and Juliet",
+        "Shakespeare",
+        "Fair Verona",
+        "check the setting",
+        "Leaves quote",
+    ] {
+        assert!(content.contains(expected), "missing {expected:?}: {content}");
+    }
+    assert_eq!(app.top_route(), Some(&Route::Notes));
+    assert!(app.unknown_commands().is_empty());
 }
 
 #[test]
