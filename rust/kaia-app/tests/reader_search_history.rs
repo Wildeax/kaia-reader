@@ -78,7 +78,9 @@ fn search_for(app: &mut App<HeadlessBackend>, text: &str) {
         cx.request_paint();
     });
     tap_key(app, "search-go");
-    let deadline = Instant::now() + Duration::from_secs(60);
+    // Leaves of Grass is about 1,100 screens at the Nickel default size; a slow
+    // CI runner needs more than a minute to search all of it.
+    let deadline = Instant::now() + Duration::from_secs(240);
     while text_of(app, "search-status").starts_with("Searching") {
         assert!(Instant::now() < deadline, "the search for {text:?} ends");
         app.iterate(Some(Duration::from_millis(20))).unwrap();
@@ -178,7 +180,9 @@ fn tapping_an_entry_runs_that_search() {
         "Romeo",
         "the field shows the search that ran"
     );
-    let deadline = Instant::now() + Duration::from_secs(60);
+    // Leaves of Grass is about 1,100 screens at the Nickel default size; a slow
+    // CI runner needs more than a minute to search all of it.
+    let deadline = Instant::now() + Duration::from_secs(240);
     while !text_of(&mut app, "search-status").ends_with("matches.") {
         assert!(Instant::now() < deadline, "the search finds Romeo");
         app.iterate(Some(Duration::from_millis(20))).unwrap();
