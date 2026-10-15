@@ -7,6 +7,7 @@ use std::sync::{mpsc, Arc};
 
 pub(super) struct Frame {
     pub session: BookSession,
+    pub overview: Option<super::zoom::Overview>,
     pub ink: Option<super::ink::PageInk>,
     pub page: Option<Arc<Pixmap>>,
     pub marks: Vec<Mark>,
@@ -149,7 +150,9 @@ pub(super) fn spawn(
                     None
                 }
             };
+            let overview = super::zoom::overview(&mut session, viewport);
             Frame {
+                overview,
                 ink,
                 stickers,
                 sticker_anchor,

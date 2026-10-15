@@ -348,24 +348,18 @@ fn zoom_sheet_area_drag_and_page_keys() {
     let state = saved_state(&mut app, "2col.pdf");
     assert_eq!(state.read("zoom").get("mode").as_str(), Some("region"));
     assert!(state.read("zoom_scale").as_f64().unwrap() > 1.9);
-    let x = state.read("zoom_pan_x").as_i64().unwrap();
     app.key(kaia_input::Key::RPgFwd).unwrap();
     settle(&mut app, &clock);
     let next = saved_state(&mut app, "2col.pdf");
-    assert_eq!(next.read("last_page").as_i64(), Some(1));
-    assert!(next.read("zoom_pan_x").as_i64().unwrap() > x);
-    app.command("reader:tap", &[Value::Number(1100.0), Value::Number(800.0)]);
-    settle(&mut app, &clock);
-    let mut down = saved_state(&mut app, "2col.pdf");
-    for _ in 0..3 {
-        if down.read("zoom_pan_x").as_i64() == Some(0) {
-            break;
-        }
-        app.command("reader:tap", &[Value::Number(1100.0), Value::Number(800.0)]);
-        settle(&mut app, &clock);
-        down = saved_state(&mut app, "2col.pdf");
+    assert_eq!(next.read("last_page").as_i64(), Some(2));
+    for key in ["zoom_scale", "zoom_pan_x", "zoom_pan_y"] {
+        assert_eq!(next.read(key), state.read(key));
     }
-    assert_eq!(down.read("last_page").as_i64(), Some(1));
-    assert_eq!(down.read("zoom_pan_x").as_i64(), Some(0));
-    assert!(down.read("zoom_pan_y").as_i64() > next.read("zoom_pan_y").as_i64());
+    app.command("reader:tap", &[Value::Number(100.0), Value::Number(800.0)]);
+    settle(&mut app, &clock);
+    let previous = saved_state(&mut app, "2col.pdf");
+    assert_eq!(previous.read("last_page").as_i64(), Some(1));
+    for key in ["zoom_scale", "zoom_pan_x", "zoom_pan_y"] {
+        assert_eq!(previous.read(key), state.read(key));
+    }
 }

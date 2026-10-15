@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use kaia_app::slider::Slider;
 use kaia_app::surfaces::reader::page::PageView;
-use kaia_app::surfaces::reader::panels::{ContentItem, SearchRow};
+use kaia_app::surfaces::reader::panels::SearchRow;
 use kaia_app::App;
 use kaia_app::HeadlessBackend;
 use kaia_app::Route;
@@ -233,17 +233,20 @@ fn chapter_pages(app: &mut App<HeadlessBackend>) -> std::collections::HashSet<u3
     open_overlay(app);
     tap_key(app, "overlay-contents");
     let mut pages = std::collections::HashSet::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
-        for item in list.items() {
-            if let Some(n) = item
-                .detail
-                .strip_prefix("Page ")
-                .and_then(|n| n.parse::<u32>().ok())
-            {
-                pages.insert(n - 1);
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| {
+            for item in list.items() {
+                if let Some(n) = item
+                    .detail
+                    .strip_prefix("Page ")
+                    .and_then(|n| n.parse::<u32>().ok())
+                {
+                    pages.insert(n - 1);
+                }
             }
-        }
-    });
+        },
+    );
     // Back closes the panel, and a tap in the middle closes the overlay.
     app.key(Key::Back).unwrap();
     wait_reader(app);
@@ -339,7 +342,10 @@ fn bookmark_button_adds_a_bookmark_listed_in_the_contents() {
     tap_key(&mut app, "overlay-contents");
     tap_key(&mut app, "contents-tab-1");
     let mut bookmarks = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| bookmarks = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| bookmarks = list.items().len(),
+    );
     assert_eq!(bookmarks, 1, "one bookmark on the page");
 }
 
@@ -352,7 +358,10 @@ fn contents_entry_jumps_and_the_overlay_follows() {
     tap_key(&mut app, "overlay-contents");
 
     let mut entries = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| entries = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| entries = list.items().len(),
+    );
     assert!(entries >= 2, "the test book has chapters, got {entries}");
 
     // The second entry of the first page jumps to its chapter.
@@ -383,10 +392,7 @@ fn font_size_change_relayouts_and_keeps_the_place() {
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-layout");
-    // The plus button sits at the right edge of the stepper.
-    let rect = app.find_rect("layout-size").expect("the size stepper");
-    app.tap(Point::new(rect.x + rect.w as i32 - 6, rect.y + rect.h as i32 / 2))
-        .unwrap();
+    tap_key(&mut app, "layout-size-plus");
     wait_reader(&mut app);
 
     // The layout runs on the engine thread. Give it time, then leave the sheet.
@@ -395,8 +401,6 @@ fn font_size_change_relayouts_and_keeps_the_place() {
         app.iterate(Some(Duration::from_millis(20))).unwrap();
     }
     app.key(Key::Back).unwrap();
-    wait_reader(&mut app);
-    app.tap(centre(&app)).unwrap();
     wait_reader(&mut app);
     assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
 
@@ -502,14 +506,15 @@ fn font_list_back_and_close_return_to_the_text_sheet() {
         app.find_rect("reader-layout-font-0").is_some(),
         "the font list is open"
     );
-    tap_key(&mut app, "panel-close");
+    app.tap(Point::new(100, 900)).unwrap();
+    wait_reader(&mut app);
     assert!(
         app.find_rect("reader-layout-font-0").is_none(),
-        "the close button closes the list"
+        "the outside tap closes the list"
     );
     assert!(
         app.find_rect("layout-font").is_some(),
-        "the close button shows the sheet"
+        "the outside tap shows the sheet"
     );
     assert_eq!(
         saved_font_family(&mut app, "juliet.epub"),
@@ -553,9 +558,12 @@ fn hold_selects_a_word_and_the_highlight_survives_reopening() {
     open_from_library(&mut app, "juliet.epub");
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
-    tap_key(&mut app, "contents-tab-2");
+    tap_key(&mut app, "contents-tab-1");
     let mut highlights = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| highlights = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| highlights = list.items().len(),
+    );
     assert_eq!(highlights, 1, "the highlight survives reopening");
 }
 
@@ -581,11 +589,14 @@ fn note_on_a_selection_is_saved_with_the_highlight() {
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-contents");
-    tap_key(&mut app, "contents-tab-2");
+    tap_key(&mut app, "contents-tab-1");
     let mut details = Vec::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
-        details = list.items().iter().map(|i| i.detail.clone()).collect();
-    });
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| {
+            details = list.items().iter().map(|i| i.detail.clone()).collect();
+        },
+    );
     assert_eq!(
         details,
         vec!["check the wording".to_string()],
@@ -619,7 +630,7 @@ fn fixed_layout_books_get_a_zoom_sheet_instead_of_text_settings() {
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-zoom");
     assert!(
-        app.find_rect("layout-zoom").is_some(),
+        app.find_rect("zoom-slider").is_some(),
         "a PDF shows the zoom choice"
     );
     assert!(app.find_rect("layout-size").is_none(), "a PDF has no font size");
@@ -739,6 +750,7 @@ fn end_of_book_sheet_appears_after_the_last_page() {
     let (_, count) = position(&mut app);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-end");
     assert_eq!(app.top_route(), Some(&Route::Overlay));
     assert_eq!(slider_value(&mut app), count as f64, "the last page is shown");
@@ -1328,16 +1340,15 @@ fn pdf_sticker_uses_page_fractions_and_shared_store_images() {
     assert!(zoomed[0].rect.h > before[0].rect.h);
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
-    let panned = page_stickers(&mut app);
-    assert_eq!(panned.len(), 1, "panning stays on the sticker's page");
-    assert!(panned[0].rect.y < zoomed[0].rect.y);
-    assert_eq!(panned[0].rect.h, zoomed[0].rect.h);
-    app.key(Key::RPgFwd).unwrap();
-    wait_reader(&mut app);
     assert!(
         page_stickers(&mut app).is_empty(),
         "a sticker belongs only to its page"
     );
+    app.key(Key::RPgBack).unwrap();
+    wait_reader(&mut app);
+    let returned = page_stickers(&mut app);
+    assert_eq!(returned.len(), 1);
+    assert_eq!(returned[0].rect, zoomed[0].rect);
 }
 
 #[test]

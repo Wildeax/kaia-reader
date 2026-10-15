@@ -80,7 +80,11 @@ fn sheet_text(app: &mut App<HeadlessBackend>) -> String {
 }
 fn back(app: &mut App<HeadlessBackend>) {
     app.command("reader:overlay", &[]);
-    tap_key(app, "overlay-back");
+    tap_key(app, "overlay-more");
+    tap_key(app, "more-tools");
+    tap_key(app, "more-back");
+    app.key(kaia_input::Key::Back).unwrap();
+    wait_reader(app);
 }
 fn enter(app: &mut App<HeadlessBackend>, text: &str, percent: bool) {
     app.command("reader:goto:open", &[]);
@@ -203,11 +207,11 @@ fn percent_entry_and_nested_jumps_return_in_order_and_back_updates_overlay() {
     app.process(vec![]).unwrap();
     assert!(app.find_rect("overlay-back").is_none_or(|r| r.is_empty()));
     app.command("reader:panel:more", &[]);
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-end");
-    assert!(
-        app.find_rect("overlay-back").is_some_and(|r| !r.is_empty()),
-        "Back appears on the existing overlay after a jump"
-    );
+    tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
+    assert!(app.find_rect("more-back").is_some_and(|r| !r.is_empty()));
     kaia_gfx::png::write_pixmap(app.frame(), &dir.join("back-overlay.png")).unwrap();
 }
 

@@ -63,7 +63,7 @@ fn choices_with(user: &[String]) -> Vec<(String, Option<String>)> {
 }
 
 /// The font choices, with the user faces the engine has registered.
-fn font_choices() -> Vec<(String, Option<String>)> {
+pub(super) fn font_choices() -> Vec<(String, Option<String>)> {
     choices_with(&kaia_doc::cre::user_font_faces())
 }
 
@@ -186,9 +186,40 @@ impl Surface for Panel {
         true
     }
 
+    fn on_show(&mut self, env: &mut SurfaceEnv<'_>) {
+        super::overlay::clear_external_tools(&self.window, env.ctx);
+        self.window.dispatch(
+            UiEvent::Named(kaia_events::Event::new("ReaderPanelFocus")),
+            env.ctx,
+        );
+    }
+
+    fn on_event(&mut self, event: &kaia_events::Event, env: &mut SurfaceEnv<'_>) -> crate::surface::Outcome {
+        if matches!(event.name.as_str(), "PageForward" | "PageBack" | "PageBackward")
+            && self.window.update::<super::book_dialogs::ContentsList, _>(
+                env.ctx,
+                "contents-list",
+                |list, cx| list.step(event.name == "PageForward", cx),
+            )
+        {
+            return crate::surface::Outcome::Handled;
+        }
+        if event.name == "ReaderSearchSubmit" {
+            return super::command(&self.core, "reader:search:go", &[], env);
+        }
+        crate::surface::Outcome::NotMine
+    }
     fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
         let mut core = self.core.borrow_mut();
+        if core
+            .advanced
+            .as_ref()
+            .is_some_and(|a| a.layer.serial == self.serial)
+        {
+            core.advanced = None;
+        }
         if core.panel.as_ref().is_some_and(|l| l.serial == self.serial) {
+            core.panel_name = None;
             core.panel = None;
             if core.selection.is_some() {
                 core.clear_selection(env.ctx);
@@ -312,75 +343,6 @@ fn labelled(services: &Services, label: &str, control: WidgetPod) -> WidgetPod {
         ])
         .gap(t.space.md)
         .cross_align(CrossAlign::Center),
-    )
-}
-
-fn tab_button(index: usize, label: &str, active: bool) -> WidgetPod {
-    let style = if active {
-        ButtonStyle::Primary
-    } else {
-        ButtonStyle::Secondary
-    };
-    WidgetPod::new(Expanded::new(
-        button(
-            style,
-            label,
-            &format!("reader:contents:tab:{index}"),
-            &format!("contents-tab-{index}"),
-        ),
-        1,
-    ))
-}
-
-/// The Contents panel. `tab` is 0 for chapters, 1 for bookmarks and 2 for highlights.
-pub fn contents(
-    services: &Services,
-    screen: Size,
-    tab: usize,
-    items: Vec<ContentItem>,
-    empty: &str,
-) -> Window {
-    let t = &services.theme;
-    let tabs = WidgetPod::new(
-        Row::new(vec![
-            tab_button(0, &tr("Chapters"), tab == 0),
-            tab_button(1, &tr("Bookmarks"), tab == 1),
-            tab_button(2, &tr("Highlights"), tab == 2),
-        ])
-        .gap(t.space.sm),
-    );
-    let mut children = vec![tabs];
-    if items.is_empty() {
-        children.push(WidgetPod::new(Paragraph::new(
-            empty.to_string(),
-            t.font.body.clone(),
-            Tone::InkSecondary,
-        )));
-    } else {
-        let list = PagedList::new(items, |item: &ContentItem, _t: &Theme| {
-            let mut row = ListRow::new(item.label.clone())
-                .indent(item.level)
-                .on_action(item.action.clone());
-            if !item.detail.is_empty() {
-                row = row.secondary(item.detail.clone());
-            }
-            if item.current {
-                row = row.value(tr("Now"));
-            }
-            WidgetPod::new(row).with_key(key_of(&item.action))
-        })
-        .labels(page_labels());
-        children.push(WidgetPod::new(Expanded::new(
-            WidgetPod::new(list).with_key("contents-list"),
-            1,
-        )));
-    }
-    sheet(
-        services,
-        screen,
-        Some(&tr("Contents")),
-        children,
-        Some(TALL_PERCENT),
     )
 }
 
@@ -514,28 +476,7 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
 /// per font choice, in the order of `font_choices`. The row of choice `current`
 /// shows "Current". Tapping a row picks that face.
 pub fn font_list(services: &Services, screen: Size, current: usize) -> Window {
-    let labels: Vec<String> = font_choices().into_iter().map(|(label, _)| label).collect();
-    let indices: Vec<usize> = (0..labels.len()).collect();
-    let list = PagedList::new(indices, move |index: &usize, _t: &Theme| {
-        let action = format!("reader:layout:font:{index}");
-        let mut row = ListRow::new(labels[*index].clone()).on_action(action.clone());
-        if *index == current {
-            row = row.value(tr("Current"));
-        }
-        WidgetPod::new(row).with_key(key_of(&action))
-    })
-    .labels(page_labels());
-    let children = vec![WidgetPod::new(Expanded::new(
-        WidgetPod::new(list).with_key("font-list"),
-        1,
-    ))];
-    sheet(
-        services,
-        screen,
-        Some(&tr("Font")),
-        children,
-        Some(WRITING_PERCENT),
-    )
+    super::typography::font_list(services, screen, current, 0)
 }
 
 /// The hyphenation language choices. Index 0 is the book language, which is the
@@ -608,15 +549,16 @@ pub fn hyphenation_list(services: &Services, screen: Size, current: usize) -> Wi
 }
 
 /// The More panel: go to either end and mark the book as finished.
-pub fn more(services: &Services, screen: Size) -> Window {
+pub fn more_tools(services: &Services, screen: Size, fixed: bool, history: bool) -> Window {
     let children = vec![WidgetPod::new(
         Column::new(vec![
             button(
                 ButtonStyle::Secondary,
-                &tr("Ink mode"),
-                "reader:ink:toggle",
-                "more-ink",
-            ),
+                &tr("Back to previous location"),
+                "reader:back",
+                "more-back",
+            )
+            .visible(history),
             button(
                 ButtonStyle::Secondary,
                 &tr("Go to page"),
@@ -652,6 +594,26 @@ pub fn more(services: &Services, screen: Size) -> Window {
                 &tr("Word list"),
                 "reader:words:open",
                 "more-words",
+            ),
+            button(
+                ButtonStyle::Secondary,
+                &tr("Text options"),
+                "reader:more:text-options",
+                "more-text-options",
+            )
+            .visible(!fixed),
+            button(
+                ButtonStyle::Secondary,
+                &tr("Fit modes"),
+                "reader:zoom:fit-modes",
+                "more-fit-modes",
+            )
+            .visible(fixed),
+            button(
+                ButtonStyle::Secondary,
+                &tr("All notes"),
+                "nav:notes",
+                "more-notes",
             ),
             button(
                 ButtonStyle::Secondary,
@@ -1949,6 +1911,7 @@ pub(super) fn selection_lookup(
         services,
         screen,
         Chrome {
+            panel_border: 1,
             size: screen,
             children,
             panels: vec![popup, card],
@@ -1976,6 +1939,89 @@ pub(super) fn selection_search(services: &Services, screen: Size) -> Window {
             ),
             button(ButtonStyle::Text, &tr("Copy"), "reader:sel:copy", "sel-copy"),
             button(ButtonStyle::Text, &tr("More"), "reader:sel:more", "sel-more"),
+        ],
+        None,
+    )
+}
+
+pub(super) fn more(services: &Services, screen: Size, model: &super::overlay::OverlayModel) -> Window {
+    use super::{chrome::rect, compact::*};
+    let mut chrome = super::overlay::chrome(services, screen, model, Some("overlay-more"));
+    chrome.panels.push(rect(screen, 713, 182, 541, 383));
+    for (i, label, id, key) in [
+        (0, tr("Book details"), "reader:more:details", "more-details"),
+        (1, tr("Dictionary"), "reader:more:dictionary", "more-dictionary"),
+        (2, tr("Reading help"), "reader:more:help", "more-help"),
+        (3, tr("More tools"), "reader:more:tools", "more-tools"),
+    ] {
+        put(
+            &mut chrome,
+            screen,
+            [728, 192 + i * 91, 510, 89],
+            action(screen, &label, id, key),
+        );
+        if i < 3 {
+            rule(&mut chrome, screen, [728, 282 + i * 91, 510, 1], Tone::Divider);
+        }
+    }
+    window(services, screen, chrome)
+}
+pub(super) fn annotation_tools(services: &Services, screen: Size) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Annotations")),
+        vec![
+            button(
+                ButtonStyle::Text,
+                &tr("Bookmark this page"),
+                "reader:bookmark",
+                "annotations-bookmark",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("All notes"),
+                "nav:notes",
+                "annotations-all",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("Back to annotations"),
+                "reader:contents:tab:1",
+                "annotations-back",
+            ),
+        ],
+        None,
+    )
+}
+pub(super) fn text_options(services: &Services, screen: Size, layout: &TextLayout) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Text options")),
+        vec![
+            labelled(
+                services,
+                &tr("Hyphenation"),
+                WidgetPod::new(Toggle::pill(layout.hyphenation).on_action("reader:layout:hyphenation"))
+                    .with_key("layout-hyphenation"),
+            ),
+            labelled(
+                services,
+                &tr("Hyphenation language"),
+                button(
+                    ButtonStyle::Secondary,
+                    &hyphenation_choice_label(layout.hyphenation_lang.as_deref()),
+                    "reader:layout:hyphlang",
+                    "layout-hyphlang",
+                ),
+            ),
+            labelled(
+                services,
+                &tr("Book's styles"),
+                WidgetPod::new(Toggle::pill(layout.embedded_styles).on_action("reader:layout:styles"))
+                    .with_key("layout-styles"),
+            ),
         ],
         None,
     )

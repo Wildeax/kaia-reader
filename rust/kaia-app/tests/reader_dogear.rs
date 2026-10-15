@@ -5,13 +5,11 @@
 
 use std::time::Duration;
 
-use kaia_app::surfaces::reader::panels::ContentItem;
 use kaia_app::{App, HeadlessBackend, Route};
 use kaia_display::InputEvent;
 use kaia_gfx::Point;
 use kaia_input::{Phase, TouchEvent};
 use kaia_ui::components::Label;
-use kaia_ui::composite::PagedList;
 use kaia_ui::controls::TextField;
 
 mod common;
@@ -88,7 +86,10 @@ fn bookmark_count(app: &mut App<HeadlessBackend>) -> usize {
     tap_key(app, "overlay-contents");
     tap_key(app, "contents-tab-1");
     let mut count = 0;
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| count = list.items().len());
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| count = list.items().len(),
+    );
     // Back to the page: close the contents panel, then the overlay.
     tap_key(app, "panel-close");
     app.tap(Point::new(app.screen().w as i32 / 2, app.screen().h as i32 / 2))

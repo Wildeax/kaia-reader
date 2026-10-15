@@ -547,6 +547,7 @@ fn a_word_is_saved_with_its_book_and_sentence_and_can_be_deleted_from_the_word_l
     wait_reader(&mut app);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-words");
     assert!(
         app.find_rect(&format!("word-row-{id}")).is_some(),
@@ -576,6 +577,7 @@ fn the_word_list_shows_the_newest_word_first() {
     }
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-words");
     let mut words = Vec::new();
     app.update_top::<PagedList<WordRow>, _>("words-list", |list, _| {

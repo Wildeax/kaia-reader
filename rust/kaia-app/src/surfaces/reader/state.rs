@@ -89,6 +89,10 @@ pub struct Core {
     pub overlay: Option<Layer>,
     pub panel: Option<Layer>,
     pub next_serial: u64,
+    pub(super) panel_name: Option<super::commands::PanelName>,
+    pub(super) advanced: Option<super::typography::Advanced>,
+    pub(super) ink_on: bool,
+    pub(super) overview: Option<super::zoom::Overview>,
     pub pages_since_full: u32,
     /// Page turns between full refreshes, from `reading.full_refresh_pages`. Zero
     /// means only chapter starts and picture pages take a full refresh.
@@ -101,10 +105,13 @@ pub struct Core {
     pub stickers: Vec<super::stickers::Drawing>,
     pub links: Vec<(kaia_gfx::Rect, kaia_book::Link)>,
     pub search_text: String,
+    pub(super) search_scope: super::search::Scope,
     search_painted: Option<(u64, usize, bool)>,
     search_paint_at: std::time::Duration,
     search_dirty: bool,
     pub contents_tab: usize,
+    pub(super) annotation_filter: usize,
+    pub(super) annotation_reverse: bool,
     /// The word of the open dictionary sheet. None when no sheet has looked up a word.
     pub lookup: Option<LookupState>,
     pub color_panel: bool,
@@ -151,6 +158,10 @@ impl Core {
             overlay: None,
             panel: None,
             next_serial: 0,
+            panel_name: None,
+            advanced: None,
+            ink_on: false,
+            overview: None,
             pages_since_full: 0,
             refresh_every: 0,
             shown: None,
@@ -162,10 +173,13 @@ impl Core {
             stickers: Vec::new(),
             links: Vec::new(),
             search_text: String::new(),
+            search_scope: super::search::Scope::Book,
             search_painted: None,
             search_paint_at: std::time::Duration::ZERO,
             search_dirty: false,
             contents_tab: 0,
+            annotation_filter: 0,
+            annotation_reverse: false,
             lookup: None,
             color_panel: false,
             ink_color_content: false,
@@ -299,6 +313,7 @@ impl Core {
             }
         }
         self.shown = Some((info.page, image_page));
+        self.overview = frame.overview;
         self.session = Some(frame.session);
         self.selection = frame.selection;
         self.sticker_anchor = frame.sticker_anchor;
@@ -389,6 +404,8 @@ impl Core {
         let info = session.current();
         let bookmarked = session.is_bookmarked().unwrap_or(false);
         Some(OverlayModel {
+            ink: self.ink_on,
+            overview: self.overview.clone(),
             title: self.title.clone(),
             fixed_layout: !session.is_reflowable(),
             chapter: info.chapter.clone().unwrap_or_else(|| self.title.clone()),
@@ -413,6 +430,21 @@ impl Core {
 
     /// Updates the slider, the chapter line and the bookmark button of the overlay.
     pub fn refresh_overlay(&mut self, ctx: &mut Ctx) {
+        for layer in [&self.overlay, &self.panel].into_iter().flatten() {
+            layer
+                .window
+                .update::<super::zoom::Map, _>(ctx, "zoom-map", |map, cx| {
+                    map.model = self.overview.clone();
+                    cx.request_paint();
+                });
+            let value = self.overview.as_ref().map_or(100.0, |o| o.percent as f64);
+            layer
+                .window
+                .update::<Slider, _>(ctx, "zoom-slider", |slider, cx| {
+                    slider.set_value(value);
+                    cx.request_paint();
+                });
+        }
         let Some(layer) = self.overlay.clone() else {
             return;
         };
@@ -437,17 +469,6 @@ impl Core {
         if hint == PaintHint::Fast {
             return;
         }
-        layer
-            .window
-            .update::<kaia_ui::components::Row, _>(ctx, "overlay-history", |row, cx| {
-                use kaia_ui::Widget;
-                let mut children = row.children_mut();
-                if children[0].is_visible() != model.can_go_back {
-                    children[0].set_visible(model.can_go_back);
-                    cx.request_layout();
-                    cx.request_paint();
-                }
-            });
         let chapter = model.chapter.clone();
         layer
             .window
@@ -700,6 +721,9 @@ impl Core {
 
     /// Shows the search results so far in the search panel, if it is open.
     pub fn update_search(&mut self, ctx: &mut Ctx) {
+        if self.search_scope != super::search::Scope::Book {
+            return;
+        }
         let Some(layer) = self.panel.clone() else {
             self.search_dirty = false;
             return;

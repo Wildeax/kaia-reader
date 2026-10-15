@@ -88,6 +88,7 @@ fn the_footer_sheet_turns_items_on_and_the_line_follows() {
 
     // More, then Footer. The sheet stays open while items change.
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-footer");
     assert_eq!(
         app.top_route(),
@@ -148,6 +149,7 @@ fn the_clock_shows_the_local_time_when_the_bars_open() {
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-footer");
     tap_key(&mut app, "footer-clock");
     close_panels(&mut app);
@@ -362,9 +364,6 @@ fn header_and_footer_reserve_both_strips_and_restore_height() {
 
 #[test]
 fn header_chapter_changes_at_the_toc_boundary() {
-    use kaia_app::surfaces::reader::panels::ContentItem;
-    use kaia_ui::composite::PagedList;
-
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("header-chapters");
     let mut app = open_reader("juliet.epub", &dir);
@@ -372,16 +371,19 @@ fn header_chapter_changes_at_the_toc_boundary() {
     app.command("reader:panel:contents", &[]);
     wait_reader(&mut app);
     let mut chapters = Vec::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
-        chapters = list
-            .items()
-            .iter()
-            .map(|item| {
-                let page = item.detail.strip_prefix("Page ").unwrap().parse::<u32>().unwrap() - 1;
-                (item.label.trim().to_string(), page)
-            })
-            .collect();
-    });
+    app.update_top::<kaia_app::surfaces::reader::book_dialogs::ContentsList, _>(
+        "contents-list",
+        |list, _| {
+            chapters = list
+                .items()
+                .iter()
+                .map(|item| {
+                    let page = item.detail.strip_prefix("Page ").unwrap().parse::<u32>().unwrap() - 1;
+                    (item.label.trim().to_string(), page)
+                })
+                .collect();
+        },
+    );
     tap_key(&mut app, "panel-close");
     let boundary = chapters
         .windows(2)
@@ -406,6 +408,7 @@ fn header_switches_save_and_reopen_with_both_groups_visible() {
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-more");
+    tap_key(&mut app, "more-tools");
     tap_key(&mut app, "more-footer");
     for key in [
         "header-title",

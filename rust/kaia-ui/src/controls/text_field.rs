@@ -20,6 +20,8 @@ use crate::widget::{EventCx, Handled, LayoutCx, PaintCx, UiEvent, Widget};
 /// Password mode draws each character as a dot. The text itself is unchanged.
 pub struct TextField {
     background: Option<Tone>,
+    borderless: bool,
+    focus_event: Option<String>,
     text: String,
     placeholder: String,
     /// Caret position in characters, from 0 to the character count.
@@ -54,6 +56,8 @@ impl TextField {
     pub fn new() -> Self {
         Self {
             background: None,
+            borderless: false,
+            focus_event: None,
             text: String::new(),
             placeholder: String::new(),
             caret: 0,
@@ -71,6 +75,18 @@ impl TextField {
     /// or `Surface`.
     pub fn background(mut self, tone: Tone) -> Self {
         self.background = Some(tone);
+        self
+    }
+
+    /// Use the enclosing control's outline and keep the caret visible on focus.
+    pub fn borderless(mut self) -> Self {
+        self.borderless = true;
+        self
+    }
+
+    /// Focus this field when its window dispatches the named event.
+    pub fn focus_on(mut self, event: impl Into<String>) -> Self {
+        self.focus_event = Some(event.into());
         self
     }
 
@@ -328,7 +344,9 @@ impl Widget for TextField {
         let radius = t.radius.button;
         let b = cx.bounds();
         let edge = cx.color(Tone::Divider);
-        cx.border(b.inset(ring as i32), radius, t.line.divider, edge);
+        if !self.borderless {
+            cx.border(b.inset(ring as i32), radius, t.line.divider, edge);
+        }
 
         let area = self.area(t, b);
         self.shape(cx.fonts, t);
@@ -359,11 +377,18 @@ impl Widget for TextField {
                 cx.fill_rect(Rect::new(caret_x, text_y, ring, line_h), caret);
             }
         }
-        cx.focus_ring(radius + ring);
+        if !self.borderless {
+            cx.focus_ring(radius + ring);
+        }
     }
 
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         match ev {
+            UiEvent::Named(e) if self.focus_event.as_deref() == Some(e.name.as_str()) => {
+                cx.request_focus();
+                cx.request_paint();
+                Handled::Yes
+            }
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
                 cx.request_focus();
                 let t = cx.theme();

@@ -209,10 +209,7 @@ fn clear_history_empties_the_list_and_the_file() {
 
     tap_key(&mut app, "search-history-clear");
     assert!(listed(&mut app).is_empty(), "Clear history empties the list");
-    assert_eq!(
-        text_of(&mut app, "search-status"),
-        "Type a word and press Search."
-    );
+    assert!(text_of(&mut app, "search-status").is_empty());
     drop(app);
 
     let mut app = open_book(&dir, "juliet.epub");

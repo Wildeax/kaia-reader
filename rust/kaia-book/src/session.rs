@@ -1027,70 +1027,42 @@ impl BookSession {
         Ok(())
     }
 
-    /// Moves right, then down, before turning the physical page. Back reverses that order.
+    /// Turns a physical page while retaining the current zoom and pan offset.
+    /// Only the new page's dimensions may clamp the offset.
     pub fn turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
-        if self.is_reflowable() {
-            return if forward {
-                self.next_page()
-            } else {
-                self.prev_page()
-            };
-        }
-        let t = self.page_transform(viewport)?;
-        let max_x = t.full_image.w.saturating_sub(viewport.w) as i32;
-        let max_y = t.full_image.h.saturating_sub(viewport.h) as i32;
-        let step_x = viewport.w.max(1) as i32;
-        let step_y = viewport.h.max(1) as i32;
-        let p = t.offset;
-        let target = if forward && p.x < max_x {
-            Some(Point::new((p.x + step_x).min(max_x), p.y))
-        } else if forward && p.y < max_y {
-            Some(Point::new(0, (p.y + step_y).min(max_y)))
-        } else if !forward && p.x > 0 {
-            Some(Point::new(((p.x - 1) / step_x) * step_x, p.y))
-        } else if !forward && p.y > 0 {
-            Some(Point::new(max_x, ((p.y - 1) / step_y) * step_y))
-        } else {
-            None
-        };
-        if let Some(target) = target {
-            self.state.zoom_pan = target;
-            self.dirty = true;
-            return Ok(true);
-        }
+        let pan = self.state.zoom_pan;
         let moved = if forward {
             self.next_page()?
         } else {
             self.prev_page()?
         };
-        if moved && !forward {
-            let t = self.page_transform(viewport)?;
-            self.state.zoom_pan = Point::new(
-                t.full_image.w.saturating_sub(viewport.w) as i32,
-                t.full_image.h.saturating_sub(viewport.h) as i32,
-            );
+        if moved && !self.is_reflowable() {
+            self.state.zoom_pan = pan;
+            self.clamp_pan(viewport)?;
         }
         Ok(moved)
     }
 
-    /// Whether a page-turn action can move within this page or to another page.
-    pub fn can_turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
-        let another_page = if forward {
+    /// Whether a physical page exists in the requested direction.
+    pub fn can_turn_view(&mut self, forward: bool, _viewport: Size) -> Result<bool> {
+        Ok(if forward {
             self.page as usize + 1 < self.page_count
         } else {
             self.page > 0
-        };
-        if another_page || self.is_reflowable() {
-            return Ok(another_page);
-        }
-        let t = self.page_transform(viewport)?;
-        Ok(if forward {
-            self.page as usize + 1 < self.page_count
-                || t.offset.x < t.full_image.w.saturating_sub(viewport.w) as i32
-                || t.offset.y < t.full_image.h.saturating_sub(viewport.h) as i32
-        } else {
-            self.page > 0 || t.offset.x > 0 || t.offset.y > 0
         })
+    }
+
+    /// A fit-page image for the zoom overview. It does not change the saved view.
+    pub fn render_overview(&mut self, viewport: Size) -> Result<Arc<Pixmap>> {
+        self.ensure_idle()?;
+        let (page, format) = (self.page, self.format);
+        let zoom = FixedView {
+            mode: ZoomMode::FitPage,
+            scale: None,
+            pan: Point::new(0, 0),
+        };
+        self.engine
+            .call(move |w| w.render_and_prefetch(page, viewport, zoom, format))
     }
 
     /// The transform between the current page and a viewport.

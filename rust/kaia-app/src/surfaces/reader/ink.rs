@@ -512,6 +512,7 @@ pub(super) fn command(
         error = session.set_ink_bookmark(active).err().map(|e| e.to_string());
     }
     c.ink_color_content |= color_content;
+    c.ink_on = on;
     if matches!(action, "toggle" | "pencil-on" | "pencil-off") {
         window.update::<kaia_ui::components::Stack, _>(env.ctx, "ink-root", |root, cx| {
             root.children_mut()[1].set_visible(on);

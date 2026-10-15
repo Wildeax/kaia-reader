@@ -31,6 +31,8 @@ pub struct OverlayModel {
     pub footer: String,
     pub bookmarked: bool,
     pub can_go_back: bool,
+    pub ink: bool,
+    pub(super) overview: Option<super::zoom::Overview>,
 }
 
 /// The overlay surface. The reader keeps a handle to its window, so it can update the bars.
@@ -67,6 +69,10 @@ impl Surface for Overlay {
         true
     }
 
+    fn on_show(&mut self, env: &mut SurfaceEnv<'_>) {
+        clear_external_tools(&self.window, env.ctx);
+    }
+
     fn on_hide(&mut self, _env: &mut SurfaceEnv<'_>) {
         let mut core = self.core.borrow_mut();
         if core.overlay.as_ref().is_some_and(|l| l.serial == self.serial) {
@@ -77,8 +83,16 @@ impl Surface for Overlay {
 
 /// The menu overlays the existing page without changing its viewport.
 pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window {
+    window(services, screen, chrome(services, screen, model, None))
+}
+
+pub(super) fn chrome(
+    services: &Services,
+    screen: Size,
+    model: &OverlayModel,
+    active: Option<&str>,
+) -> super::chrome::Chrome {
     use super::chrome::{rect, Chrome, Tool};
-    use kaia_ui::controls::IconButton;
     let t = &services.theme;
     let px = 48 * screen.w.min(screen.h) / 1264;
     let mut font = t.font.caption.clone();
@@ -96,11 +110,14 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         WidgetPod::new(Label::new(model.clock.clone(), font.clone(), Tone::Ink)).with_key("overlay-clock"),
     );
     put(
-        1100,
-        20,
-        130,
-        60,
-        WidgetPod::new(Label::new(model.battery.clone(), font.clone(), Tone::Ink)),
+        1170,
+        28,
+        56,
+        32,
+        WidgetPod::new(super::compact::Battery {
+            percent: model.battery.trim_end_matches('%').parse().ok(),
+        })
+        .with_key("overlay-battery"),
     );
     let mut home = Tool::new("chevron.left", "nav:home", px);
     home.label = tr("Back to Home");
@@ -116,13 +133,13 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         (
             798,
             "appbar.rotation",
-            "settings:quick:orientation",
+            "reader:tool:orientation",
             "overlay-orientation",
         ),
-        (888, "appbar.contrast", "settings:quick:open", "overlay-light"),
+        (888, "sun", "reader:tool:light", "overlay-light"),
         (974, "appbar.typeset", "reader:panel:layout", "overlay-layout"),
         (1060, "appbar.settings", "settings:reading", "overlay-settings"),
-        (1155, "appbar.menu", "reader:panel:more", "overlay-more"),
+        (1155, "more", "reader:panel:more", "overlay-more"),
         (
             40,
             "chevron.first",
@@ -142,10 +159,10 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         let original_key = key;
         let (icon, action) = if model.fixed_layout {
             match key {
-                "overlay-pen" => ("appbar.pagefit", "reader:panel:layout"),
+                "overlay-pen" => ("move", "reader:panel:layout"),
                 "overlay-orientation" => ("edit", "reader:ink:toggle"),
-                "overlay-light" => ("appbar.rotation", "settings:quick:orientation"),
-                "overlay-layout" => ("appbar.contrast", "settings:quick:open"),
+                "overlay-light" => ("appbar.rotation", "reader:tool:orientation"),
+                "overlay-layout" => ("sun", "reader:tool:light"),
                 _ => (icon, action),
             }
         } else {
@@ -169,15 +186,16 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         } else {
             85
         };
-        put(
-            x,
-            y,
-            88,
-            88,
-            WidgetPod::new(Tool::new(icon, action, px))
-                .focusable(true)
-                .with_key(key),
-        );
+        let mut tool = Tool::new(icon, action, px);
+        tool.active = active == Some(key) || (key == "overlay-pen" && model.ink);
+        if key == "overlay-layout" {
+            tool.icon.clear();
+            tool.label = "Aa".into();
+            tool.centered = true;
+            tool.face = Some("Noto Serif".into());
+            tool.bold = true;
+        }
+        put(x, y, 88, 88, WidgetPod::new(tool).focusable(true).with_key(key));
     }
     put(
         200,
@@ -190,18 +208,6 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
             kaia_ui::geometry::Alignment::Center,
             kaia_ui::geometry::Alignment::Center,
         )),
-    );
-    put(
-        610,
-        85,
-        88,
-        88,
-        WidgetPod::new(kaia_ui::components::Row::new(vec![WidgetPod::new(
-            IconButton::new("chevron.left").on_action("reader:back"),
-        )
-        .with_key("overlay-back")
-        .visible(model.can_go_back)]))
-        .with_key("overlay-history"),
     );
 
     put(
@@ -229,22 +235,46 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
         WidgetPod::new(Label::new(model.chapter.clone(), chapter_font, Tone::Ink))
             .with_key("overlay-chapter"),
     );
-    window(
-        services,
-        screen,
-        Chrome {
-            size: screen,
-            children,
-            panels: vec![rect(screen, 0, 0, 1264, 179), rect(screen, 0, 1344, 1264, 336)],
+    let compact = matches!(active, Some("overlay-layout" | "overlay-zoom"));
+    if compact {
+        children.retain(|(r, _)| r.y < (screen.h * 179 / 1680) as i32);
+    }
+    if !compact {
+        children.push((
+            rect(screen, 42, 294, 303, 575),
+            WidgetPod::new(super::zoom::Map {
+                model: model.overview.clone(),
+            })
+            .with_key("zoom-map"),
+        ));
+    }
+    Chrome {
+        panel_border: 3,
+        size: screen,
+        children,
+        panels: if compact {
+            vec![rect(screen, 0, 0, 1264, 179)]
+        } else {
+            vec![rect(screen, 0, 0, 1264, 179), rect(screen, 0, 1344, 1264, 336)]
         },
-    )
+    }
 }
-
 /// The label of the bookmark button. It names the state of the current page.
 pub fn bookmark_label(bookmarked: bool) -> String {
     if bookmarked {
         tr("Bookmarked")
     } else {
         tr("Bookmark")
+    }
+}
+
+pub(super) fn clear_external_tools(window: &Window, ctx: &mut kaia_events::Ctx) {
+    for key in ["overlay-light", "overlay-orientation", "overlay-settings"] {
+        window.update::<super::chrome::Tool, _>(ctx, key, |tool, cx| {
+            if tool.active {
+                tool.active = false;
+                cx.request_paint();
+            }
+        });
     }
 }

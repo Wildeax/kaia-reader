@@ -14,9 +14,11 @@
 //! start is a full refresh. So is a page of a fixed-layout book. With a page count
 //! in `reading.full_refresh_pages`, every Nth turn is one too.
 
+pub mod book_dialogs;
 mod caption;
 mod chrome;
 mod commands;
+mod compact;
 pub(crate) mod dict;
 mod footer;
 mod header;
@@ -30,11 +32,14 @@ mod persistence;
 mod plugin_doc;
 #[cfg(feature = "lua")]
 mod plugins;
+mod search;
 pub mod search_history;
 mod state;
 mod sticker_actions;
 pub mod stickers;
+mod typography;
 mod work;
+mod zoom;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -1009,10 +1014,35 @@ pub(super) fn command(
     args: &[Value],
     env: &mut SurfaceEnv<'_>,
 ) -> Outcome {
+    if cmd == "reader:tool:light" {
+        env.sheet(crate::surfaces::settings::quick::quick_settings(env.services));
+        return Outcome::Handled;
+    }
+    if cmd == "reader:tool:orientation" {
+        env.sheet(crate::surfaces::settings::quick::orientation_picker(env.services));
+        return Outcome::Handled;
+    }
+    if cmd.starts_with("reader:layout:") && cmd.ends_with(":release") {
+        return Outcome::Handled;
+    }
     if cmd == "reader:slider:release" || (cfg!(feature = "lua") && cmd == "reader:plugin-refresh") {
         rc.borrow_mut().repaint_page(env.ctx, PaintHint::Ui);
         schedule_if_pending(rc, env.ctx);
         return Outcome::Handled;
+    }
+    if let Some(outcome) = zoom::command(rc, cmd, args, env) {
+        schedule_if_pending(rc, env.ctx);
+        return outcome;
+    }
+    if let Some(outcome) = search::command(rc, cmd, env) {
+        return outcome;
+    }
+    if let Some(outcome) = book_dialogs::command(rc, cmd, env) {
+        return outcome;
+    }
+    if let Some(outcome) = typography::command(rc, cmd, args, env) {
+        schedule_if_pending(rc, env.ctx);
+        return outcome;
     }
     if let Some(outcome) = ink::command(rc, cmd, args, env) {
         return outcome;
@@ -1291,7 +1321,6 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 let text = text.trim().to_string();
                 // The recent searches and the Clear history button leave the panel when a
                 // search starts, so the panel is rebuilt then. Otherwise the results update in place.
-                let showing_recent = c.search_text.is_empty() && !recent_searches(&c, env).is_empty();
                 c.reset_search_paint();
                 c.search_text = text.clone();
                 if text.is_empty() {
@@ -1306,11 +1335,9 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     Some(Err(e)) => env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()])),
                     None => {}
                 }
-                let outcome = if showing_recent {
+                let outcome = {
                     let window = search_panel(&c, env, &text);
                     show_panel(rc, &mut c, env.ctx, window, true)
-                } else {
-                    Outcome::Handled
                 };
                 c.update_search(env.ctx);
                 outcome
@@ -1365,22 +1392,26 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
             Command::Panel(name) => {
                 // The Footer sheet replaces the open panel, More, as the word list does.
                 // Other panels wait until the open one closes.
-                let replace = name == PanelName::Footer;
-                if c.panel.is_some() && !replace {
-                    return Outcome::Handled;
+                let replace = c.panel.is_some();
+                if replace && c.panel_name == Some(name) && name != PanelName::Footer {
+                    return Outcome::Navigate(Nav::Pop);
                 }
+                c.panel_name = Some(name);
                 let window = match name {
                     PanelName::Contents => {
                         let tab = c.contents_tab;
                         contents_window(&mut c, env, tab)
                     }
-                    PanelName::Layout => layout_window(&c, env),
-                    PanelName::More => panels::more(env.services, env.screen),
+                    PanelName::Layout => layout_window(&mut c, env),
+                    PanelName::More => {
+                        let Some(model) = c.overlay_model() else {
+                            return Outcome::Handled;
+                        };
+                        panels::more(env.services, env.screen, &model)
+                    }
                     PanelName::Footer => panels::footer_sheet(env.services, env.screen, &c.header, &c.footer),
                 };
-                let replace_overlay = name == PanelName::Layout
-                    && c.overlay.is_some()
-                    && c.session.as_ref().is_some_and(|s| !s.is_reflowable());
+                let replace_overlay = name == PanelName::Layout && c.overlay.is_some();
                 let outcome = show_panel(rc, &mut c, env.ctx, window, replace);
                 if replace_overlay {
                     if let Outcome::Navigate(Nav::Push(surface)) = outcome {
@@ -1398,7 +1429,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 }
                 // Fonts copied into the user folder since the last scan show up in the list.
                 crate::surfaces::settings::commands::rescan_user_fonts();
-                let face = c.session.as_ref().and_then(|s| s.layout().font_family.clone());
+                let face = c
+                    .advanced
+                    .as_ref()
+                    .map(|a| a.draft.font_family.clone())
+                    .unwrap_or_else(|| c.session.as_ref().and_then(|s| s.layout().font_family.clone()));
                 let window = panels::font_list(env.services, env.screen, panels::font_index(face.as_deref()));
                 let serial = next_serial(&mut c);
                 Outcome::Navigate(Nav::Push(panels::panel_surface(window, serial, rc.clone())))
@@ -1419,6 +1454,7 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
             }
             Command::ContentsTab(tab) => {
                 c.contents_tab = tab;
+                c.panel_name = Some(PanelName::Contents);
                 let window = contents_window(&mut c, env, tab);
                 show_panel(rc, &mut c, env.ctx, window, true)
             }
@@ -1516,18 +1552,14 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         result
                     }
                     LayoutChange::Spacing(spacing) => c.change_layout(|l| l.line_spacing = spacing as f32),
-                    LayoutChange::Margins(px) => {
-                        let m = px as f32;
-                        c.change_layout(|l| {
-                            l.margins = Margins {
-                                top: m,
-                                right: m,
-                                bottom: m,
-                                left: m,
-                            }
-                        })
-                    }
-                    LayoutChange::Justify(on) => c.change_layout(|l| l.justify = on),
+                    LayoutChange::Margins(px) => c.change_layout(|l| {
+                        l.margins.left = px as f32;
+                        l.margins.right = px as f32;
+                    }),
+                    LayoutChange::Justify(on) => c.change_layout(|l| {
+                        l.justify = on;
+                        l.align_left = false;
+                    }),
                     LayoutChange::Hyphenation(on) => c.change_layout(|l| l.hyphenation = on),
                     LayoutChange::Styles(on) => c.change_layout(|l| l.embedded_styles = on),
                     LayoutChange::Zoom(index) => {
@@ -1539,6 +1571,9 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                         c.set_zoom(env.ctx, zoom)
                     }
                 };
+                if result.is_ok() {
+                    typography::refresh(&c, env);
+                }
                 match result {
                     Err(message) => {
                         env.toast(message, 3.0);
@@ -1958,6 +1993,44 @@ fn save_settings(env: &mut SurfaceEnv<'_>) {
 fn sheet_command(rc: &Rc<RefCell<Core>>, cmd: &str, env: &mut SurfaceEnv<'_>) -> Option<Outcome> {
     let parts: Vec<&str> = cmd.strip_prefix("reader:")?.split(':').collect();
     Some(match parts.as_slice() {
+        ["more", "details"] => {
+            let book = rc.borrow().book;
+            Outcome::Navigate(Nav::Replace(Box::new(
+                crate::surfaces::library::details::BookDetailsSurface::new(book),
+            )))
+        }
+        ["more", "tools"] => {
+            let mut c = rc.borrow_mut();
+            let fixed = c.session.as_ref().is_some_and(|s| !s.is_reflowable());
+            let history = c.session.as_ref().is_some_and(|s| s.can_go_back());
+            let window = panels::more_tools(env.services, env.screen, fixed, history);
+            show_panel(rc, &mut c, env.ctx, window, true)
+        }
+        ["more", "text-options"] => {
+            let mut c = rc.borrow_mut();
+            let layout = c.session.as_ref()?.layout().clone();
+            let window = panels::text_options(env.services, env.screen, &layout);
+            show_panel(rc, &mut c, env.ctx, window, true)
+        }
+        ["more", "dictionary"] => {
+            let mut c = rc.borrow_mut();
+            c.search_scope = search::Scope::Dictionary;
+            c.search_text.clear();
+            let window = search_panel(&c, env, "");
+            show_panel(rc, &mut c, env.ctx, window, true)
+        }
+        ["search", "dictionary"] => {
+            let mut c = rc.borrow_mut();
+            let text = c.search_text.clone();
+            let preferred = preferred_dictionaries(&c);
+            open_dictionary(rc, &mut c, env, &text, None, preferred)
+        }
+        ["more", "help"] => {
+            let mut c = rc.borrow_mut();
+            let window=panels::link_text(env.services,env.screen,&tr("Reading help"),&tr("Tap the sides to turn pages. Tap the centre for tools. Hold a word to select it. Use Contents to find a chapter or annotation. On a PDF, pinch to zoom and drag to move the page."));
+            show_panel(rc, &mut c, env.ctx, window, true)
+        }
+
         ["highlight", "color", name] => default_style(rc, env, Some(*name), None),
         ["highlight", "drawer", name] => default_style(rc, env, None, Some(*name)),
         ["annot", id, "color", name] => annotation_style(rc, env, id, None, Some(*name)),
@@ -2320,19 +2393,41 @@ fn search_panel(c: &Core, env: &SurfaceEnv<'_>, text: &str) -> Window {
     if text.trim().is_empty() {
         let recent = recent_searches(c, env);
         let status = if recent.is_empty() {
-            tr("Type a word and press Search.")
+            String::new()
         } else {
             tr("Recent searches. Tap one to run it again.")
         };
         let rows = panels::recent_rows(&recent);
-        return panels::search(env.services, env.screen, text, rows, &status, !recent.is_empty());
+        return search::panel(
+            env.services,
+            env.screen,
+            search::SearchModel {
+                title: &c.title,
+                text,
+                rows,
+                status: &status,
+                history: !recent.is_empty(),
+                scope: c.search_scope,
+            },
+        );
     }
     let rows = c
         .session
         .as_ref()
         .map(|s| panels::search_rows(s.search_results()))
         .unwrap_or_default();
-    panels::search(env.services, env.screen, text, rows, &search_status(c), false)
+    search::panel(
+        env.services,
+        env.screen,
+        search::SearchModel {
+            title: &c.title,
+            text,
+            rows,
+            status: &search_status(c),
+            history: false,
+            scope: c.search_scope,
+        },
+    )
 }
 
 /// The recent searches of the open book, newest first. No book open gives none.
@@ -2374,23 +2469,33 @@ fn search_status(c: &Core) -> String {
 
 /// The Contents panel for `tab`, built from the session.
 fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
+    let chrome = contents_chrome(c, env, tab);
+    window(
+        env.services,
+        env.screen,
+        kaia_ui::components::Stack::new(vec![WidgetPod::new(chrome).with_key("contents-root")]),
+    )
+}
+fn contents_chrome(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> chrome::Chrome {
     let (items, empty) = match c.session.as_mut() {
         None => (Vec::new(), tr("No book is open.")),
         Some(session) => match tab {
-            1 => {
-                let marks = session.bookmarks().unwrap_or_default();
-                (
-                    panels::annotation_items(&marks, true),
-                    tr("No bookmarks yet. Use the bookmark button in the top bar."),
-                )
-            }
-            2 => {
+            1 | 2 => {
                 let all = session.annotations().unwrap_or_default();
-                let highlights: Vec<_> = all.into_iter().filter(|a| !a.is_bookmark()).collect();
-                (
-                    panels::annotation_items(&highlights, false),
-                    tr("No highlights yet. Hold a word to select it."),
-                )
+                let mut items: Vec<_> = all
+                    .into_iter()
+                    .filter(|a| match c.annotation_filter {
+                        1 => a.is_bookmark(),
+                        2 => !a.is_bookmark() && a.note.as_deref().is_none_or(str::is_empty),
+                        3 => a.note.as_deref().is_some_and(|n| !n.is_empty()),
+                        _ => true,
+                    })
+                    .flat_map(|a| panels::annotation_items(std::slice::from_ref(&a), a.is_bookmark()))
+                    .collect();
+                if c.annotation_reverse {
+                    items.reverse();
+                }
+                (items, tr("No annotations yet."))
             }
             _ => {
                 let current = session.current().chapter;
@@ -2413,18 +2518,42 @@ fn contents_window(c: &mut Core, env: &SurfaceEnv<'_>, tab: usize) -> Window {
             }
         },
     };
-    panels::contents(env.services, env.screen, tab.min(2), items, &empty)
+    book_dialogs::contents(
+        env.screen,
+        &c.title,
+        tab,
+        items,
+        &empty,
+        c.annotation_filter,
+        c.annotation_reverse,
+    )
 }
 
 /// The Text and layout sheet, or the zoom sheet of a fixed-layout book.
-fn layout_window(c: &Core, env: &SurfaceEnv<'_>) -> Window {
-    match c.session.as_ref() {
-        Some(session) => {
-            let reflow = session.is_reflowable().then(|| session.layout().clone());
-            panels::layout(env.services, env.screen, reflow.as_ref(), session.zoom())
+fn layout_window(c: &mut Core, env: &mut SurfaceEnv<'_>) -> Window {
+    if let Some(layout) = c
+        .session
+        .as_ref()
+        .filter(|s| s.is_reflowable())
+        .map(|s| s.layout().clone())
+    {
+        if let Some(layer) = &c.overlay {
+            layer
+                .window
+                .update::<kaia_ui::components::Label, _>(env.ctx, "overlay-clock", |label, _| {
+                    c.status.clock = label.text().into()
+                });
+        } else if c.status.clock.is_empty() {
+            c.status = footer::Status::now(env.services.platform.battery.capacity());
         }
-        None => panels::layout(env.services, env.screen, None, ZoomMode::FitPage),
+        if let Some(model) = c.overlay_model() {
+            return typography::panel(env.services, env.screen, &layout, &model);
+        }
     }
+    if let Some(model) = c.overlay_model() {
+        return zoom::panel(env.services, env.screen, &model);
+    }
+    panels::layout(env.services, env.screen, None, ZoomMode::FitPage)
 }
 
 fn location_value(value: Value) -> Option<kaia_book::Location> {

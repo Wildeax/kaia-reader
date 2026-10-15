@@ -86,35 +86,25 @@ fn drag_clamps_and_cached_regions_are_distinct() {
 }
 
 #[test]
-fn turns_scan_right_then_down_then_the_next_page_and_back() {
+fn turns_keep_zoom_and_offset_and_stop_at_physical_boundaries() {
     let data = tempfile::tempdir().unwrap();
     let mut s = common::open(&common::repo_file("2col.pdf"), &data);
     s.set_zoom(ZoomMode::Manual { percent: 200 }).unwrap();
-    let t = s.page_transform(VIEW).unwrap();
-    let right = (t.full_image.w - VIEW.w) as i32;
-    let bottom = (t.full_image.h - VIEW.h) as i32;
-    assert!(right > 0 && bottom > 0);
-    for offset in [
-        Point::new(right, 0),
-        Point::new(0, bottom),
-        Point::new(right, bottom),
-    ] {
-        assert!(s.turn_view(true, VIEW).unwrap());
-        assert_eq!(s.current().page, 0);
-        assert_eq!(s.page_transform(VIEW).unwrap().offset, offset);
-    }
+    s.pan_by(Point::new(-200, -300), VIEW).unwrap();
+    let before = s.page_transform(VIEW).unwrap();
+    assert!(!s.can_turn_view(false, VIEW).unwrap());
     assert!(s.turn_view(true, VIEW).unwrap());
     assert_eq!(s.current().page, 1);
-    assert_eq!(s.page_transform(VIEW).unwrap().offset, Point::new(0, 0));
-    assert_eq!(s.page_transform(VIEW).unwrap().scale, t.scale);
+    let after = s.page_transform(VIEW).unwrap();
+    assert_eq!(after.offset, before.offset);
+    assert_eq!(after.scale, before.scale);
     assert!(s.turn_view(false, VIEW).unwrap());
     assert_eq!(s.current().page, 0);
-    assert_eq!(s.page_transform(VIEW).unwrap().offset, Point::new(right, bottom));
-    for offset in [Point::new(0, bottom), Point::new(right, 0), Point::new(0, 0)] {
-        assert!(s.turn_view(false, VIEW).unwrap());
-        assert_eq!(s.page_transform(VIEW).unwrap().offset, offset);
-    }
+    assert_eq!(s.page_transform(VIEW).unwrap(), before);
     assert!(!s.turn_view(false, VIEW).unwrap());
+    s.go_to(Location::Page(s.page_count() as u32 - 1)).unwrap();
+    assert!(!s.can_turn_view(true, VIEW).unwrap());
+    assert!(!s.turn_view(true, VIEW).unwrap());
 }
 
 #[test]

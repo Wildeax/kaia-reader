@@ -379,3 +379,25 @@ fn state_file_uses_koreader_field_names() {
         assert!(text.contains(key), "state file lacks {key}");
     }
 }
+
+#[test]
+fn reader_alignment_overrides_book_css_and_off_restores_it() {
+    let data = tempfile::tempdir().unwrap();
+    let path = data.path().join("alignment.epub");
+    common::epub::write_epub(&path, "<p style=\"text-align: right\">A short line.</p>", &[]);
+    let mut s = common::open(&path, &data);
+    let book_layout = s.layout().clone();
+    let original = s.render_current(VIEW).unwrap();
+    let (_, right) = common::first_word(&mut s, VIEW);
+    let right = right.screen_rects[0];
+    let mut left = book_layout.clone();
+    left.align_left = true;
+    s.set_layout(left).unwrap();
+    common::wait_layout(&mut s);
+    let (_, left) = common::first_word(&mut s, VIEW);
+    let left = left.screen_rects[0];
+    assert!(left.x < right.x - 200, "left {left:?}, book {right:?}");
+    s.set_layout(book_layout).unwrap();
+    common::wait_layout(&mut s);
+    assert_eq!(s.render_current(VIEW).unwrap().data(), original.data());
+}
