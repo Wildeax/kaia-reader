@@ -28,6 +28,14 @@ on:
       - 'l10n-kaia/**'
       - '.github/workflows/kaia-kobo.yml'
   workflow_dispatch:
+  # kaia-release.yml calls this workflow with the release tag as ref.
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to build. Empty builds the ref of the caller.'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -74,6 +82,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Empty for pushes and pull requests, so the event's ref is checked out.
+          ref: ${{ inputs.ref || '' }}
           persist-credentials: false
           # Full history and tags: KOReader's version_spec reads git describe.
           fetch-depth: 0

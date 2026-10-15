@@ -1,0 +1,138 @@
+name: kaia-release
+
+# Builds both Kobo packages for a version tag, then creates a DRAFT GitHub
+# release with the packages, SHA256SUMS and docs/kaia/release/NOTES.md. The
+# maintainer signs SHA256SUMS on a local Mac with tools/kaia/release/sign-release.sh
+# and publishes the release by hand. No signing key or secret is used here, and
+# this workflow never publishes a release.
+
+on:
+  push:
+    tags:
+      - 'kaia-v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Existing version tag to build and draft, such as v1.2.3'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kaia-release-publish-${{ inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+
+  # The same build and checks as kaia-kobo.yml, run on the tag.
+  build:
+    uses: ./.github/workflows/kaia-kobo.yml
+    with:
+      ref: ${{ inputs.ref || '' }}
+
+  draft:
+    name: draft release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Only this job can write to the repository. It creates a draft release.
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || '' }}
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      # The tag must be a version tag, and HEAD must be its commit, so the
+      # draft carries the packages built from that tag.
+      - name: Resolve the tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_REF: ${{ inputs.ref || '' }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "push" ]; then
+            tag="${REF_NAME}"
+          else
+            tag="${INPUT_REF}"
+          fi
+          printf '%s\n' "${tag}" | grep -Eq '^kaia-v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' || {
+            echo "The tag must look like v1.2.3. Got: ${tag}" >&2
+            exit 1
+          }
+          git show-ref --verify --quiet "refs/tags/${tag}" || {
+            echo "No tag ${tag} in this checkout." >&2
+            exit 1
+          }
+          test "$(git rev-parse "refs/tags/${tag}^{commit}")" = "$(git rev-parse HEAD)" || {
+            echo "HEAD is not the commit of tag ${tag}." >&2
+            exit 1
+          }
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download the kobo package
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kaia-kobo-kobo-packages
+          path: release/kobo
+
+      - name: Download the kobov5 package
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kaia-kobo-kobov5-packages
+          path: release/kobov5
+
+      # The two packages are the only assets. Each target writes its own
+      # SHA256SUMS in its package folder, so this step writes one that lists both.
+      - name: Collect the packages and write SHA256SUMS
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(release/kobo/kaia-kobo-*.zip release/kobov5/kaia-kobo-v5-*.zip)
+          test "${#zips[@]}" -eq 2
+          mkdir -p release/assets
+          for zip in "${zips[@]}"; do
+            unzip -tq "${zip}" >/dev/null
+            cp "${zip}" release/assets/
+          done
+          (cd release/assets && sha256sum kaia-kobo-*.zip > SHA256SUMS)
+          cat release/assets/SHA256SUMS
+
+      - name: Create the draft release
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # --draft keeps the release unpublished. --verify-tag stops the step
+          # if the tag is missing, so gh does not create one.
+          gh release create "${TAG}" release/assets/* \
+            --draft \
+            --verify-tag \
+            --title "Kaia Reader ${TAG}" \
+            --notes-file docs/kaia/release/NOTES.md
+          draft=$(gh release view "${TAG}" --json isDraft --jq '.isDraft')
+          test "${draft}" = "true" || {
+            echo "The release ${TAG} is not a draft. Stop and check it by hand." >&2
+            exit 1
+          }
+          {
+            echo "## Draft release ${TAG}"
+            echo
+            echo "The draft is not signed or published yet. On the maintainer's Mac, run:"
+            echo
+            echo '```sh'
+            echo "sh tools/kaia/release/sign-release.sh ${TAG}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"

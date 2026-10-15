@@ -36,4 +36,4 @@ Rules that apply to every row: no network access unless the user turns the featu
 |---|---|---|
 | B-100 | Final memory and speed budgets | After the measurements in group B |
 | B-101 | Architecture go or no-go for each remaining ADR | After device, data and plugin results |
-| B-102 | Release and maintenance owners, signing approver | Before the first public release |
+| B-102 | Release and maintenance owners, signing approver | Before the first public release. The signing key owner is Wildeax, the project owner (recorded 2026-10-15). Wildeax creates the release key on the signing Mac with the commands in RELEASE_PROCESS.md ("Create the release key"). The private key stays on that Mac and never goes to CI. The key fingerprint goes here once the key exists. Maintainers and support boundaries are still open. |

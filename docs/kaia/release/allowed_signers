@@ -1,0 +1,4 @@
+# Signers for Kaia release signatures. tools/kaia/release/verify-release.sh reads this file.
+# One line per key, in the form: release@kaia-reader namespaces="kaia-release" ssh-ed25519 KEY
+# No key is recorded yet. The owner adds one line after creating the release key with the
+# commands in docs/kaia/RELEASE_PROCESS.md ("Releases and signatures").

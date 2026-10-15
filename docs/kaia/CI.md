@@ -120,7 +120,7 @@ The job runs these steps in order, for each target:
 10. Unzips the package into a new directory and runs `tools/kaia/check-rust-package.sh` on that tree. Packaging runs the same check on the staging tree before it zips, so this step checks the bytes that ship.
 11. Sets up qemu for `arm` with `docker/setup-qemu-action`.
 12. Runs `tools/kaia/rust-app-smoke.sh --skip-binfmt` with its output under `$RUNNER_TEMP/kaia-smoke/<target>`. The `--skip-binfmt` flag stops the script from pulling the unpinned `tonistiigi/binfmt` image, because step 11 registers the handler.
-13. Uploads the logs and, on failure, the packages.
+13. Uploads the logs and the packages from every run, so a device test or a release can use a green build. `kaia-release.yml` calls this workflow with `workflow_call`.
 
 Every build step writes its output to `ci-logs/<step>-<target>.log` with `tee`.
 
@@ -190,3 +190,7 @@ The `emulator` job compiles the third-party libraries on the first build, so it 
 - The desktop emulator job runs on `x86_64` runners. The image index also has an `arm64` variant, which the local checks used.
 - The `kaia-kobo` job has not yet run on GitHub. Its 180-minute timeout, its disk use and its cache sizes are estimates until a run records them. The armv7 smoke test runs under qemu, which checks the ABI and startup, not the Libra Colour display.
 - The `kaia-lua` `emulator` job does not run on device hardware or with signing keys. Device and signing jobs belong in a protected, human-approved environment, not in these workflows.
+
+### `kaia-release.yml`
+
+Runs on a pushed tag `kaia-v*` or by hand with a ref. It calls `kaia-kobo.yml` to build both packages, writes one `SHA256SUMS` and creates a **draft** GitHub release with the packages, the sums and `docs/kaia/release/NOTES.md`. It never publishes. Only the draft job has `contents: write`. Signing happens afterwards on the maintainer's computer with `tools/kaia/release/sign-release.sh`; no key or secret is stored on GitHub. `tools/kaia/release/test-release.sh` tests the signing and verification scripts locally. See `RELEASE_PROCESS.md`.
