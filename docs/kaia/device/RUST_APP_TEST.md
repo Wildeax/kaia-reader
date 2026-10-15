@@ -24,8 +24,8 @@ frontlight or USB handover.
 
 1. Start "Kaia Reader Rust". Home should appear upright and fill the panel.
    Wait for the library scan. Record the elapsed startup time.
-2. Tap each navigation tab, then open Library. Confirm that touch follows
-   the visible target, including near each corner. The initial orientation
+2. Tap each tab in the bottom bar (Home, My books, More), then open My books.
+   Confirm that touch follows the visible target, including near each corner. The initial orientation
    is portrait; automatic rotation is not connected.
 3. Open the test EPUB. Check title, body text, margins, accents and cover
    colour. Compare the same page with the Lua app after exiting Rust.
@@ -46,7 +46,7 @@ on the device, then change it to `true` and rebuild to test the timer. Manual
 Sleep and the power button still request kernel suspend.
 
 1. Disconnect USB and the charger. MTK cannot suspend safely while plugged in.
-   Start Rust and check brightness, including zero, and warmth in Quick settings.
+   Start Rust and check brightness, including zero, and the Natural light slider in the light panel.
    Let the automatic sleep timer show its screen, then confirm a short Power press
    wakes it before testing manual Sleep.
 2. Tap Sleep in Quick settings once. Wait at least 30 seconds. The sleep picture

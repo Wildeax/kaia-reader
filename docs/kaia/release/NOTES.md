@@ -30,18 +30,28 @@ Kaia copies no Kobo code, icons, images, fonts or logos.
 
 Each item names its app when it is not in both. The Rust app items are in the experimental app.
 
+### Screens and icons
+
+- Rust: Home, My books, More, Settings, the reading menu and the light panel are rebuilt to follow Nickel's layout. They are close to Nickel's, not identical.
+- Rust: Home shows the status row (time, light, Wi-Fi, battery and search), large covers with an "N% read" line, and My books and Recent tiles. The bottom bar has Home, My books and More.
+- Rust: My books has Books, Authors, Series and Collections tabs. Filter, Sort and "..." sit under the tabs. Press and hold a cover to open its details.
+- Rust: More lists Favorites, Notes, Notebooks, Activity, Experiments, Settings and Help. Settings opens as a dialog with a close button.
+- Rust: The reading menu has a top bar with Back to Home, the pen, rotate, the light icon, Aa, the settings gear and "...". Its bottom bar has Contents, Annotations and Search, with a page slider above it.
+- Rust: Press and hold a word to open a sheet with four highlight colors, Highlight, Add note, Search and a dictionary.
+- Rust: The icons are thin outlines in Nickel's style. They come from the Phosphor Light set, which is MIT licensed. Kaia copies no Kobo icons.
+
 ### Reading
 
 - Rust: The default text size and line layout follow Nickel's large default. On the reference page it sets nine body lines, as Nickel does. This was checked on the desktop, not yet on the panel.
 - Rust: Reading fonts include Atkinson Hyperlegible and OpenDyslexic. Both fonts use the SIL Open Font License, and their license files ship in the package.
-- Rust: Font, size, weight, margins and hyphenation are set in the font panel.
+- Rust: The Aa panel sets the font, size, line spacing, margins and alignment.
 - Rust: Hyphenation covers 49 languages, using KOReader's TeX patterns. The language comes from the book, and you can override it.
 - Rust: Highlights come in several colors and styles: underline, strikethrough, invert and lighten.
 - Rust: Stylus ink on pages. Pen accuracy and latency are not measured yet.
 - Rust: Search inside a book, with a saved search history.
 - Rust: Double-tap to look up a word. This setting is off by default.
 - Rust: Dictionary lookup, with a dictionary choice per book. See the known problems about Kobo's own dictionaries.
-- Rust: PDF zoom with pinch, pan and fit modes.
+- Rust: PDF zoom with pinch, pan and fit modes. The first icon in the top bar opens a zoom bar with a slider.
 - Rust: CBR comic archives, read through libarchive. The size of each unpacked page is capped.
 - Rust: Tap zones. The left third goes back a page, the centre opens the reading menu, and the rest goes forward. A tap in the top right corner adds a bookmark.
 - Lua: All of KOReader's reading features are there, as in KOReader.
@@ -50,7 +60,7 @@ Each item names its app when it is not in both. The Rust app items are in the ex
 
 - Rust: Scans the books folder and keeps an index in SQLite. Hidden program folders are skipped.
 - Rust: Covers, collections, and favorites and tags.
-- Rust: Filters, sorts, layout memory and search suggestions. The default sort is Recent.
+- Rust: Filters, sorts, layout memory and search suggestions. Sort lists Recent, Added, Title, Author, Series, File size and File type. The default is Recent.
 - Rust: Author view, storage by source, and counts of finished books.
 - Rust: Per-book statistics in the book details, showing the days read.
 - Rust: A missing or unmounted books folder does not remove books from the index.
@@ -61,11 +71,13 @@ Each item names its app when it is not in both. The Rust app items are in the ex
 - Lua: Stickers. Place an image sticker or a text note in the margin of an EPUB, and place stickers on PDF pages. Export and import stickers, and repair orphaned stickers from Notes.
 - Rust: Stickers, and the same annotation store as the Lua app.
 - Rust: Notes export as Markdown, JSON and PDF.
+- Rust: The Annotations tab in the contents sheet lists highlights, notes and bookmarks. It has a filter and a sort menu.
 
 ### Light and power
 
-- Rust: Quick settings opens from the Light button in the reading menu. It holds the frontlight, warmth, Wi-Fi, airplane mode, orientation, and Sleep.
-- Rust: The frontlight and warmth sliders show the right levels on the Libra Colour. The first device run did not record which warmth node the warmth setting writes to.
+- Rust: The sun icon opens the light panel. Its Brightness slider shows the real level as a percentage. Its Natural light slider sets the warmth, and a bedtime time sits below it.
+- Rust: Quick settings is linked from the bottom of the light panel. It holds Wi-Fi, airplane mode, lock orientation, orientation, toggle light and Sleep.
+- Rust: The first device run did not record which warmth node the Natural light slider writes to.
 - Rust: The sleep screen shows the cover and details of the current book. It has not been checked on either panel mode.
 - Rust: A standby timeout, set in minutes. Its power draw has not been measured.
 - Rust: Automatic sleep only dims the screen for now. See the known problems about sleep.
@@ -111,7 +123,7 @@ Each item names its app when it is not in both. The Rust app items are in the ex
 - Page-turn time on the panel is not measured. A desktop run of the Rust app failed the 100 ms target for EPUB, with median page turns of 250 to 320 ms. That run came before a later change to the ink code.
 - Kobo's own dictionaries in `.kobo/dict` are encrypted, so Kaia cannot use them. A lookup says "No dictionary installed" and does not give the reason. The free dictionary downloads are the other option, and they are off by default.
 - While a PDF is zoomed, a tap does not turn the page at the same zoom as Nickel, and Kaia has no page map yet. Pinch and pan were checked on the panel.
-- In the Rust app, the reading menu, the selection sheet, the settings pages and the light panel differ from Nickel in layout and size. Settings sub-pages have no tab bar. They use a back arrow at the top left and Previous and Next buttons, where Nickel scrolls one list.
+- The Rust app now follows Nickel's layout for Home, My books, More, Settings, the light panel and the reading screens, checked in screenshot tests on a computer. It has not yet been compared with Nickel on the device; small differences in spacing and refresh are likely.
 - The Rust app starts in portrait. Sensor-driven rotation is not connected, so use the orientation setting in Quick settings.
 - Lua app stickers on PDFs can cover text, because they go where you select text. Fixed-layout pages have no margin placement. In a narrow margin, an image sticker is drawn faded over the end of its line.
 
