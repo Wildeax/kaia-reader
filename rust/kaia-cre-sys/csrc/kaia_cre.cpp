@@ -7,6 +7,8 @@
 #include "kaia_cre.h"
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -39,6 +41,26 @@ namespace {
 std::mutex g_lock;
 bool g_inited = false;
 
+// CREngine keeps a fixed table of MAX_DOCUMENT_INSTANCE_COUNT (16) live DOM
+// documents, in ldomNode::_documentInstances. Every ldomDocument takes one
+// slot, including temporary XML/HTML documents made while a book loads.
+// registerDocument returns -1 when the table is full. The constructor ignores
+// that, and the 4-bit handle field stores -1 as 15, so the new document uses a
+// slot that another document may own.
+// The call mutex does not help here: documents stay alive between calls.
+// Each open handle counts against kMaxDocuments. The rest of the table is
+// left for temporaries made during one load, which runs under g_lock.
+constexpr size_t kMaxDocuments = 8;
+static_assert(kMaxDocuments < MAX_DOCUMENT_INSTANCE_COUNT,
+              "CREngine needs free DOM slots for temporary documents");
+// A thread that waits for a slot fails only when no document closes for this
+// long. Holders need the engine lock to finish, so a busy queue makes progress.
+constexpr auto kSlotIdleLimit = std::chrono::seconds(10);
+std::condition_variable g_slot_available;
+size_t g_document_count = 0;
+// Counts closes. A waiter restarts its idle timer when this changes.
+uint64_t g_documents_closed = 0;
+
 // Largest side of a rendered page in pixels. Also bounds the size checks below.
 constexpr int kMaxRenderSide = 16384;
 
@@ -55,10 +77,10 @@ struct CreError : std::runtime_error {
 
 // Runs `body` under the lock and converts every failure into a return code.
 template <class F>
-int guard(F body) {
+int guard_locked(F body) {
     try {
-        std::lock_guard<std::mutex> hold(g_lock);
-        return body();
+        std::unique_lock<std::mutex> hold(g_lock);
+        return body(hold);
     } catch (const CreError &e) {
         g_error = e.what();
     } catch (const std::exception &e) {
@@ -67,6 +89,11 @@ int guard(F body) {
         g_error = "CREngine: unknown exception";
     }
     return KAIA_CRE_ERROR;
+}
+
+template <class F>
+int guard(F body) {
+    return guard_locked([&](std::unique_lock<std::mutex> &) { return body(); });
 }
 
 char *dup_utf8(const lString32 &s) {
@@ -238,11 +265,24 @@ int kaia_cre_init_with_data(const char *const *font_files, size_t font_count, co
 }
 
 int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
-    return guard([&]() -> int {
+    return guard_locked([&](std::unique_lock<std::mutex> &hold) -> int {
         if (width <= 0 || height <= 0 || !out) {
             fail("view size must be positive");
         }
+        *out = nullptr;
         require_init();
+        // Wait for a slot. The engine lock is not held here, so the documents
+        // that hold slots can finish and close. A thread that holds every slot
+        // itself gets no close, so its wait ends after kSlotIdleLimit.
+        while (g_document_count >= kMaxDocuments) {
+            const uint64_t closed_before = g_documents_closed;
+            const bool ready = g_slot_available.wait_for(hold, kSlotIdleLimit, [closed_before] {
+                return g_document_count < kMaxDocuments || g_documents_closed != closed_before;
+            });
+            if (!ready) {
+                fail("CREngine document capacity reached; no document closed for 10 s");
+            }
+        }
         // Same constructor and mode as newDocView in base/cre.cpp. The page
         // header is off so the page holds only the text.
         LVDocView *view = new LVDocView(-1, true);
@@ -269,6 +309,7 @@ int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
             delete view;
             throw;
         }
+        ++g_document_count;
         *out = doc;
         return KAIA_CRE_OK;
     });
@@ -284,10 +325,14 @@ void kaia_cre_doc_free(kaia_cre_doc *doc) {
             doc->view->close();
             delete doc->view;
         }
+        --g_document_count;
+        ++g_documents_closed;
+        delete doc;
+        g_slot_available.notify_all();
     } catch (...) {
-        // Freeing must not fail. The handle is gone either way.
+        // If destruction fails, keep its slot reserved: the engine may still
+        // hold its DOM. Never admit another document into that slot.
     }
-    delete doc;
 }
 
 int kaia_cre_doc_load(kaia_cre_doc *doc, const char *path, int *loaded) {
