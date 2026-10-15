@@ -255,12 +255,16 @@ fn settings_open_section(app: &mut App<HeadlessBackend>, name: &str) {
     if commands::INDEX_SECTIONS.contains(&name) {
         tap_key(app, &format!("settings-{name}"));
     } else {
-        let parent = if name == "about" {
-            "device-info"
-        } else {
-            "advanced"
+        let parent = match name {
+            "about" => "device-info",
+            "fonts" => "reading",
+            _ => "advanced",
         };
         tap_key(app, &format!("settings-{parent}"));
+        if name == "fonts" {
+            app.command("settings:page:1", &[]);
+            app.process(Vec::new()).unwrap();
+        }
         tap_key(app, &format!("settings:{name}"));
     }
 }
@@ -435,8 +439,8 @@ fn panel_matches_frame_after_each_step() {
     run.step(&mut app, "settings: display back", |app| {
         app.key(Key::Back).unwrap();
     });
-    run.step(&mut app, "settings: reading section", |app| {
-        settings_open_section(app, "reading")
+    run.step(&mut app, "settings: fonts section", |app| {
+        settings_open_section(app, "fonts")
     });
     run.step(&mut app, "settings: font size up", |app| {
         let before = app.services().settings.read("reading.font_size").as_f64();
@@ -444,7 +448,7 @@ fn panel_matches_frame_after_each_step() {
         let after = app.services().settings.read("reading.font_size").as_f64();
         assert_ne!(after, before, "the plus button changes the font size");
     });
-    run.step(&mut app, "settings: reading back", |app| {
+    run.step(&mut app, "settings: fonts back", |app| {
         app.key(Key::Back).unwrap();
     });
 

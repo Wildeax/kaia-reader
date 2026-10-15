@@ -73,7 +73,12 @@ fn saved_names(path: &Path, key: &str) -> Vec<String> {
 /// Whether the switch with `key` on the top window is on.
 fn switch_is_on(app: &mut App<HeadlessBackend>, key: &str) -> bool {
     let mut on = None;
-    app.update_top::<ListRow, _>(key, |row, _| on = Some(row.is_on()));
+    app.update_top::<kaia_app::surfaces::settings::widgets::CompactRow, _>(key, |row, _| {
+        on = Some(row.is_on())
+    });
+    if on.is_none() {
+        app.update_top::<ListRow, _>(key, |row, _| on = Some(row.is_on()));
+    }
     on.unwrap_or_else(|| panic!("no switch {key:?} on the top window"))
 }
 
@@ -95,7 +100,11 @@ fn next_page(app: &mut App<HeadlessBackend>, list: &str) {
     let side = app.services().theme.space.sm as i32;
     let button_w = (3 * touch).min(rect.w as i32 / 3);
     let strip_top = rect.y + rect.h as i32 - touch - side;
-    let at = Point::new(rect.x + rect.w as i32 - button_w / 2, strip_top + touch / 2);
+    let at = if list == "settings-entries" {
+        Point::new(rect.right() - 10, rect.bottom() - 80)
+    } else {
+        Point::new(rect.x + rect.w as i32 - button_w / 2, strip_top + touch / 2)
+    };
     app.tap(at).unwrap();
     wait_reader(app);
 }
@@ -221,6 +230,8 @@ fn without_a_dictionary_the_reading_page_has_no_dictionary_settings_row() {
     let mut app = app_with_books(&dir);
     tap_key(&mut app, "nav-settings");
     tap_key(&mut app, "settings-reading");
+    app.command("settings:fonts", &[]);
+    app.process(Vec::new()).unwrap();
     page_to(&mut app, "settings-entries", "Dictionary folder");
 
     assert!(
@@ -331,7 +342,7 @@ fn dictionary_download_page_requires_opt_in_and_airplane_blocks_requests() {
         .read(ALLOW_KEY)
         .as_bool()
         .unwrap());
-    assert!(sections::entries("reading", app.services(), 0).iter().any(|entry| matches!(entry, Entry::Row { action: Some(action), .. } if action == "settings:dictionary-downloads")));
+    assert!(sections::entries("fonts", app.services(), 0).iter().any(|entry| matches!(entry, Entry::Row { action: Some(action), .. } if action == "settings:dictionary-downloads")));
     app.command("settings:dictionary-downloads", &[]);
     app.iterate(Some(Duration::ZERO)).unwrap();
     kaia_gfx::golden::assert_matches_golden(app.frame(), &golden("settings_dictionary_downloads.png"), 14);

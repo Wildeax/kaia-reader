@@ -20,6 +20,7 @@ pub fn title(name: &str) -> String {
     match name {
         "home" => tr("Home"),
         "reading" => tr("Reading"),
+        "fonts" => tr("Fonts"),
         "dictionaries" => tr("Dictionary settings"),
         "dictionary-downloads" => tr("Download dictionaries"),
         "display" => tr("Display and light"),
@@ -53,6 +54,7 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
     match name {
         "home" => home(services),
         "reading" => reading(services),
+        "fonts" => font_management(services),
         "dictionaries" => dictionary_page(services),
         "dictionary-downloads" => download_page(services),
         "display" => display(services),
@@ -79,17 +81,127 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
 
 fn reading(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
+    vec![
+        Entry::Heading(tr("Reading progress")),
+        progress_choice(s, true),
+        progress_choice(s, false),
+        Entry::Text(tr("Choose what appears above and below the page.")),
+        Entry::Heading(tr("Button controls")),
+        Entry::DeviceDrawing {
+            inverted: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
+        },
+        Entry::PageBreak,
+        Entry::Heading(tr("Page appearance")),
+        Entry::Select {
+            key: keys::READING_FULL_REFRESH_PAGES,
+            label: tr("Full refresh"),
+            options: (0..=keys::FULL_REFRESH_PAGES_MAX)
+                .map(|n| {
+                    if n == 0 {
+                        tr("Every chapter")
+                    } else {
+                        tr_format(&tr("Every %1 pages"), &[&n.to_string()])
+                    }
+                })
+                .collect(),
+            selected: keys::full_refresh_pages(s) as usize,
+        },
+        Entry::Select {
+            key: keys::DISPLAY_ROTATION_LOCK,
+            label: tr("Orientation"),
+            options: vec![tr("Automatic"), tr("Locked")],
+            selected: usize::from(keys::bool_or(s, keys::DISPLAY_ROTATION_LOCK, false)),
+        },
+        Entry::Toggle {
+            key: keys::DISPLAY_NIGHT_MODE,
+            label: tr("Dark mode"),
+            on: keys::bool_or(s, keys::DISPLAY_NIGHT_MODE, false),
+        },
+        Entry::Select {
+            key: keys::READING_PAGE_TURN_WAVEFORM,
+            label: tr("Page turns"),
+            options: labels(keys::READING_PAGE_TURN_WAVEFORM),
+            selected: keys::preset_index(
+                &keys::PAGE_TURN_WAVEFORMS,
+                &keys::text_or(
+                    s,
+                    keys::READING_PAGE_TURN_WAVEFORM,
+                    keys::PAGE_TURN_WAVEFORMS[0].0,
+                ),
+            ),
+        },
+        Entry::Row {
+            primary: tr("Fonts"),
+            secondary: None,
+            value: None,
+            action: Some("settings:fonts".into()),
+        },
+        Entry::PageBreak,
+        Entry::Heading(tr("Touch controls")),
+        Entry::Select {
+            key: keys::READING_TAP_ZONES,
+            label: tr("Tap areas"),
+            options: labels(keys::READING_TAP_ZONES),
+            selected: keys::preset_index(
+                &keys::TAP_ZONE_PRESETS,
+                &keys::text_or(s, keys::READING_TAP_ZONES, "default"),
+            ),
+        },
+        Entry::Toggle {
+            key: keys::READING_DOUBLE_TAP_LOOKUP,
+            label: tr("Double tap to look up a word"),
+            on: keys::double_tap_lookup(s),
+        },
+        Entry::Text(tr("Double tap lookup adds a short delay to single taps.")),
+        Entry::Row {
+            primary: tr("Dictionary settings"),
+            secondary: None,
+            value: None,
+            action: Some("settings:dictionaries".into()),
+        },
+    ]
+}
+
+fn progress_choice(s: &kaia_events::Settings, header: bool) -> Entry {
+    let choices = if header {
+        &keys::HEADER_CHOICES[..]
+    } else {
+        &keys::FOOTER_CHOICES[..]
+    };
+    let on: Vec<_> = choices
+        .iter()
+        .enumerate()
+        .filter(|(i, (key, _))| !key.is_empty() && keys::bool_or(s, key, !header && *i == 1))
+        .map(|(i, _)| i)
+        .collect();
+    let selected = match on.as_slice() {
+        [] => 0,
+        [index] => *index,
+        _ => choices.len(),
+    };
+    let mut options: Vec<_> = choices.iter().map(|(_, label)| tr(label)).collect();
+    if selected == choices.len() {
+        options.push(tr("Custom"));
+    }
+    Entry::Select {
+        key: if header {
+            keys::HEADER_CHOICE
+        } else {
+            keys::FOOTER_CHOICE
+        },
+        label: if header { tr("Header") } else { tr("Footer") },
+        options,
+        selected,
+    }
+}
+
+fn font_management(services: &Services) -> Vec<Entry> {
+    let s = &services.settings;
     let family = keys::text_or(s, keys::READING_FONT_FAMILY, "");
     // Fonts copied into the user folder since the last visit show up in the list.
     rescan_user_fonts();
     let faces = font_options();
     let family_index = faces.iter().position(|(v, _)| *v == family).unwrap_or(0);
-    let zones = keys::text_or(s, keys::READING_TAP_ZONES, "default");
-    let page_turn = keys::text_or(
-        s,
-        keys::READING_PAGE_TURN_WAVEFORM,
-        keys::PAGE_TURN_WAVEFORMS[0].0,
-    );
     // The section loads the dictionaries before it builds. See `section::lists_dictionaries`.
     let dictionaries = dict::folder(services);
     let found = dict::installed(services).len();
@@ -106,52 +218,12 @@ fn reading(services: &Services) -> Vec<Entry> {
         )),
         Entry::Stepper {
             key: keys::READING_FONT_SIZE,
-            label: tr_format(
-                &tr("Font size, %1 px"),
-                &[&crate::surfaces::reader::koreader_px(
-                    kaia_gfx::Size::new(services.theme.scale.width, services.theme.scale.height),
-                    keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
-                )
-                .to_string()],
-            ),
+            label: tr("Font size"),
             value: keys::number_or(s, keys::READING_FONT_SIZE, keys::DEFAULT_FONT_SIZE),
             min: 12.0,
             max: 40.0,
             step: 1.0,
             unit: StepUnit::KoreaderUnits,
-        },
-        Entry::Heading(tr("Page turns")),
-        Entry::Toggle {
-            key: keys::READING_INVERT_PAGE_BUTTONS,
-            label: tr("Invert page buttons"),
-            on: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
-        },
-        Entry::Radio {
-            key: keys::READING_TAP_ZONES,
-            options: labels(keys::READING_TAP_ZONES),
-            selected: keys::preset_index(&keys::TAP_ZONE_PRESETS, &zones),
-        },
-        Entry::Toggle {
-            key: keys::READING_DOUBLE_TAP_LOOKUP,
-            label: tr("Double tap a word to look it up"),
-            on: keys::double_tap_lookup(s),
-        },
-        Entry::Text(tr(
-            "When this is on, a single tap turns the page 0.3 seconds after the tap, so the reader can tell it from a double tap.",
-        )),
-        Entry::Stepper {
-            key: keys::READING_FULL_REFRESH_PAGES,
-            label: tr("Full refresh every"),
-            value: f64::from(keys::full_refresh_pages(s)),
-            min: 0.0,
-            max: f64::from(keys::FULL_REFRESH_PAGES_MAX),
-            step: 1.0,
-            unit: StepUnit::ChapterOrPages,
-        },
-        Entry::Radio {
-            key: keys::READING_PAGE_TURN_WAVEFORM,
-            options: labels(keys::READING_PAGE_TURN_WAVEFORM),
-            selected: keys::preset_index(&keys::PAGE_TURN_WAVEFORMS, &page_turn),
         },
         Entry::Heading(tr("Dictionary")),
         Entry::Row {
@@ -481,12 +553,12 @@ fn network(services: &Services) -> Vec<Entry> {
         },
         Entry::Toggle {
             key: keys::SYNC_AUTO,
-            label: tr("Automatically keep documents in sync"),
+            label: tr("Automatic document sync"),
             on: s.is_true(keys::SYNC_AUTO),
         },
         Entry::Toggle {
             key: keys::SYNC_INVALID_CERTS,
-            label: tr("Accept self-signed certificates"),
+            label: tr("Trust self-signed certificates"),
             on: s.is_true(keys::SYNC_INVALID_CERTS),
         },
         Entry::Heading(tr("Sync to a newer state")),
@@ -657,8 +729,15 @@ fn minutes_choices(
     zero: String,
 ) -> Entry {
     let value = keys::number_or(s, key, default);
-    Entry::Radio {
+    Entry::Select {
         key,
+        label: if key == keys::DEVICE_SLEEP_MINUTES {
+            tr("Sleep after")
+        } else if key == keys::DEVICE_POWER_OFF_MINUTES {
+            tr("Power off after")
+        } else {
+            tr("Standby after")
+        },
         options: choices
             .iter()
             .map(|n| {
@@ -676,56 +755,42 @@ fn minutes_choices(
 /// The screen lock rows: set a PIN when none is set, or change and turn off the PIN.
 /// The PIN file is `.kaia/pin`, and the text says how to remove a lost PIN.
 fn screen_lock(services: &Services) -> Vec<Entry> {
-    if crate::surfaces::pin::store::is_on(&services.paths.data_dir) {
-        vec![
-            Entry::Heading(tr("Screen lock")),
-            Entry::Text(tr(
-                "On. Kaia asks for the PIN when the device wakes and when Kaia starts.",
-            )),
-            Entry::Button {
-                key: "settings-pin-change",
-                label: tr("Change PIN"),
-                action: "settings:pin:change".into(),
-            },
-            Entry::Button {
-                key: "settings-pin-off",
-                label: tr("Turn off"),
-                action: "settings:pin:off".into(),
-            },
-            Entry::Text(tr(
-                "To reset a forgotten PIN, connect the Kobo to a computer and delete the file .kaia/pin.",
-            )),
-        ]
-    } else {
-        vec![
-            Entry::Heading(tr("Screen lock")),
-            Entry::Text(tr("Off. Set a PIN to ask for it when the device wakes.")),
-            Entry::Button {
-                key: "settings-pin-set",
-                label: tr("Set PIN"),
-                action: "settings:pin:set".into(),
-            },
-        ]
-    }
+    let on = crate::surfaces::pin::store::is_on(&services.paths.data_dir);
+    vec![
+        Entry::Heading(tr("Screen lock")),
+        Entry::Choice {
+            label: tr("Require a PIN"),
+            selected: on,
+            action: if on {
+                "settings:pin:off"
+            } else {
+                "settings:pin:set"
+            }
+            .into(),
+        },
+        if on {
+            Entry::Row {
+                primary: tr("Change PIN"),
+                secondary: None,
+                value: None,
+                action: Some("settings:pin:change".into()),
+            }
+        } else {
+            Entry::DisabledRow(tr("Change PIN"))
+        },
+        Entry::Text(tr(
+            "The PIN protects startup and wake. To reset a forgotten PIN, remove .kaia/pin using a computer.",
+        )),
+    ]
 }
 
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
     let mut out = vec![
-        Entry::Heading(tr("Standby after")),
-        minutes_choices(s, keys::DEVICE_STANDBY_MINUTES, 0.0, &keys::STANDBY_MINUTES, tr("Off")),
-        Entry::Text(tr(
-            "Standby keeps Kaia awake and idle, so any input wakes it at once. The device still sleeps after the time under Sleep after.",
-        )),
-        Entry::Heading(tr("Sleep after")),
+        Entry::Heading(tr("Power saving")),
         idle_choices(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
-        Entry::Heading(tr("Power off after")),
         idle_choices(s, keys::DEVICE_POWER_OFF_MINUTES, 0.0),
-        Entry::Toggle {
-            key: keys::DEVICE_SLEEP_COVER,
-            label: tr("Sleep cover"),
-            on: keys::bool_or(s, keys::DEVICE_SLEEP_COVER, true),
-        },
+        Entry::Heading(tr("Sleep and wake")),
         Entry::DeviceToggle {
             key: keys::DEVICE_PAGE_BUTTON_WAKE,
             label: tr("Wake with page buttons"),
@@ -733,20 +798,33 @@ fn device(services: &Services) -> Vec<Entry> {
                 && keys::bool_or(s, keys::DEVICE_PAGE_BUTTON_WAKE, false),
             enabled: services.platform.supports_page_button_wake(),
         },
-        Entry::Heading(tr("Sleep screen")),
-        Entry::Radio {
+        Entry::Select {
             key: keys::DEVICE_SLEEP_SCREEN,
+            label: tr("Sleep screen"),
             options: labels(keys::DEVICE_SLEEP_SCREEN),
             selected: keys::preset_index(
                 &keys::SLEEP_SCREENS,
                 &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover"),
             ),
         },
-        Entry::Text(tr(
-            "Book cover shows the book you are reading. Book cover with details also shows its title, author and progress, and uses the last book you opened when no book is open.",
-        )),
+        Entry::Heading(tr("Sleep cover")),
+        Entry::Toggle {
+            key: keys::DEVICE_SLEEP_COVER,
+            label: tr("Sleep and wake with the cover"),
+            on: keys::bool_or(s, keys::DEVICE_SLEEP_COVER, true),
+        },
+        Entry::Text(tr("Close the magnetic cover to sleep. Open it to wake.")),
+        Entry::PageBreak,
     ];
     out.extend(screen_lock(services));
+    out.push(Entry::Heading(tr("Standby")));
+    out.push(minutes_choices(
+        s,
+        keys::DEVICE_STANDBY_MINUTES,
+        0.0,
+        &keys::STANDBY_MINUTES,
+        tr("Off"),
+    ));
     out
 }
 
@@ -901,7 +979,7 @@ fn about() -> Vec<Entry> {
         Entry::Text(tr(
             "Kaia Reader is a fork of KOReader, base version v2026.07.1 (commit 9192014d8). \
              KOReader is free software under AGPL-3.0, written by the KOReader developers. \
-             Kaia keeps its document engines, its Kobo support and its file formats.",
+             The Rust app uses KOReader document engines and device support, with Noto, Atkinson Hyperlegible and OpenDyslexic fonts.",
         )),
     ]
 }

@@ -45,10 +45,11 @@ fn standby_radio_offers_off_and_three_periods_and_saves_the_pick() {
     app.start().unwrap();
     let rows = sections::entries("device", app.services(), 0);
     let radio = rows.iter().find_map(|row| match row {
-        Entry::Radio {
+        Entry::Select {
             key,
             options,
             selected,
+            ..
         } if *key == keys::DEVICE_STANDBY_MINUTES => Some((options.clone(), *selected)),
         _ => None,
     });

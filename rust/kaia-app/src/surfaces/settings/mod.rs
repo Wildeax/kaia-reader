@@ -20,6 +20,7 @@ pub mod section;
 pub mod sections;
 pub mod sleep;
 pub mod storage;
+pub mod widgets;
 
 use kaia_events::Value;
 use kaia_gfx::Size;
@@ -121,8 +122,8 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("home", "More by author"),
     ("home", "Recent"),
     ("home", "Other books in progress"),
-    ("reading", "Font size"),
-    ("reading", "Font family"),
+    ("fonts", "Font size"),
+    ("fonts", "Font family"),
     ("reading", "Tap zones"),
     ("reading", "Full refresh every"),
     ("language-dictionaries", "Dictionary folder"),

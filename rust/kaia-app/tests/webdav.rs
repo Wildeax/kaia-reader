@@ -79,8 +79,8 @@ fn webdav_settings_store_password_separately_and_book_close_queues_saved_notes()
 
 #[test]
 fn webdav_network_controls_fit_the_paged_settings_screen() {
+    use kaia_app::surfaces::settings::widgets::SettingsPages;
     use kaia_gfx::golden::assert_matches_golden;
-    use kaia_ui::composite::PagedList;
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("webdav-settings-golden");
     let mut app = make_app(&dir, Vec::new());
@@ -98,16 +98,24 @@ fn webdav_network_controls_fit_the_paged_settings_screen() {
     ];
     let mut seen = std::collections::BTreeSet::new();
     let mut count = 0;
-    app.update_top::<PagedList<Entry>, _>("settings-entries", |list, _| count = list.page_count());
+    app.update_top::<SettingsPages, _>("settings-entries", |list, _| count = list.page_count());
     for page in 0..count {
-        app.update_top::<PagedList<Entry>, _>("settings-entries", |list, cx| list.set_page(page, cx));
+        app.command(&format!("settings:page:{page}"), &[]);
         app.process(Vec::new()).unwrap();
         let visible: Vec<_> = controls
             .iter()
             .filter(|key| app.find_rect(key).is_some())
             .collect();
         if !visible.is_empty() {
-            assert_matches_golden(app.frame(), &golden(&format!("settings_webdav_{page}.png")), 14);
+            let path = golden(&format!("settings_webdav_{page}.png"));
+            if !path.exists() {
+                kaia_gfx::png::write_pixmap(app.frame(), &path.with_extension("actual.png")).unwrap();
+            }
+            if !std::env::var("KAIA_REVIEW_SETTINGS").is_ok_and(|v| v == "1") {
+                assert_matches_golden(app.frame(), &path, 14);
+            } else {
+                kaia_gfx::png::write_pixmap(app.frame(), &path.with_extension("actual.png")).unwrap();
+            }
             seen.extend(visible.into_iter().copied());
         }
     }

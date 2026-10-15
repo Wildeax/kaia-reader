@@ -5,6 +5,7 @@
 //!   field to `settings.json`. The key is one of `keys.rs`.
 //! - `settings:pick:<key>` writes the option a radio group chose (argument: the
 //!   option index, see [`options_for`]).
+//! - `settings:pick:option:<key>:<index>` selects a compact settings choice.
 //! - `settings:light:<frontlight|warmth>` sets the platform value (argument: 0 to 100).
 //! - `settings:fields:open` and `settings:fields:close` show and hide the
 //!   keyboard of the Network and sync section's text fields.
@@ -47,13 +48,14 @@ pub const INDEX_SECTIONS: [&str; 8] = [
 ];
 
 /// All sections with a direct settings command, including secondary pages.
-pub const SECTIONS: [&str; 14] = [
+pub const SECTIONS: [&str; 15] = [
     "datetime",
     "language-dictionaries",
     "device-info",
     "home",
     "reading",
     "display",
+    "fonts",
     "library",
     "network",
     "statistics",
@@ -240,6 +242,12 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
         return keys::IDLE_MINUTES
             .get(index)
             .map(|n| Value::Number(f64::from(*n)));
+    }
+    if key == keys::READING_FULL_REFRESH_PAGES {
+        return (index <= keys::FULL_REFRESH_PAGES_MAX as usize).then_some(Value::Number(index as f64));
+    }
+    if key == keys::DISPLAY_ROTATION_LOCK {
+        return (index < 2).then_some(Value::Bool(index == 1));
     }
     if key == keys::DEVICE_STANDBY_MINUTES {
         return keys::STANDBY_MINUTES

@@ -282,6 +282,26 @@ pub fn time_zone(settings: &Settings) -> Option<&'static kaia_platform::timezone
     kaia_platform::timezone::find(settings.read(DEVICE_TIME_ZONE).as_str()?)
 }
 
+/// Settings selectors map to the existing independent flags, preserving saved combinations.
+pub const HEADER_CHOICE: &str = "reading.header_choice";
+pub const FOOTER_CHOICE: &str = "reading.footer_choice";
+pub const HEADER_CHOICES: [(&str, &str); 5] = [
+    ("", "Off"),
+    (READING_HEADER_TITLE, "Book title"),
+    (READING_HEADER_CHAPTER, "Chapter title"),
+    (READING_HEADER_CLOCK, "Clock"),
+    (READING_HEADER_BATTERY, "Battery"),
+];
+pub const FOOTER_CHOICES: [(&str, &str); 7] = [
+    ("", "Off"),
+    (READING_FOOTER_PAGE, "Page number"),
+    (READING_FOOTER_PERCENT, "Percent"),
+    (READING_FOOTER_TIME_CHAPTER, "Time left in chapter"),
+    (READING_FOOTER_TIME_BOOK, "Time left in book"),
+    (READING_FOOTER_CLOCK, "Clock"),
+    (READING_FOOTER_BATTERY, "Battery"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;

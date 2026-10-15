@@ -32,6 +32,7 @@ pub struct SettingsDialog {
     back: Option<WidgetPod>,
     search: Option<WidgetPod>,
     panel: Rect,
+    content_header: bool,
 }
 
 impl SettingsDialog {
@@ -51,7 +52,14 @@ impl SettingsDialog {
             search: None,
             back: None,
             panel: Rect::default(),
+            content_header: false,
         }
+    }
+
+    /// Reserves the title's trailing area for the settings page count.
+    pub fn content_header(mut self) -> Self {
+        self.content_header = true;
+        self
     }
 
     pub fn search(mut self, action: &str) -> Self {
@@ -100,7 +108,7 @@ impl Widget for SettingsDialog {
             search.set_origin(Point::new(right - 2 * side as i32, y));
         }
         let x = px(t, 100);
-        let top = px(t, 280);
+        let top = px(t, if self.content_header { 190 } else { 280 });
         let width = c.max.w.saturating_sub(x + px(t, 60));
         let height = c.max.h.saturating_sub(top + px(t, 75));
         self.content
@@ -130,7 +138,7 @@ impl Widget for SettingsDialog {
         let title = cx.fonts.layout(
             &self.title,
             &serif(t, 54, false),
-            b.w.saturating_sub(px(t, 248)),
+            b.w.saturating_sub(px(t, if self.content_header { 480 } else { 248 })),
             Some(1),
             true,
         );

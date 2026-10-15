@@ -26,6 +26,9 @@ use crate::surfaces::Route;
 pub struct SettingsSectionSurface {
     name: String,
     typing: bool,
+    page: usize,
+    choosing: Option<String>,
+    choice_page: usize,
     lua_plan: Option<crate::lua_import::Plan>,
     lua_report: Option<crate::lua_import::Report>,
     kobo_plan: Option<crate::nickel::Plan>,
@@ -40,6 +43,9 @@ impl SettingsSectionSurface {
         Self {
             name,
             typing: false,
+            page: 0,
+            choosing: None,
+            choice_page: 0,
             lua_plan: None,
             lua_report: None,
             kobo_plan: None,
@@ -107,16 +113,66 @@ impl Surface for SettingsSectionSurface {
         if lists_dictionaries(&self.name) {
             dict::load(env.services);
         }
-        Some(build(
+        Some(window(
             env.services,
             env.screen,
-            &self.name,
-            self.typing,
-            now_unix(),
+            section_page_at(
+                env.services,
+                &self.name,
+                self.typing,
+                now_unix(),
+                if self.choosing.is_some() {
+                    self.choice_page
+                } else {
+                    self.page
+                },
+                self.choosing.as_deref(),
+            ),
         ))
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if let Some(page) = cmd.strip_prefix("settings:page:").and_then(|s| s.parse().ok()) {
+            if self.choosing.is_some() {
+                self.choice_page = page;
+            } else {
+                self.page = page;
+            }
+            return Outcome::Rebuild;
+        }
+        if let Some(key) = cmd.strip_prefix("settings:choose:") {
+            self.choosing = Some(key.into());
+            self.choice_page = 0;
+            return Outcome::Rebuild;
+        }
+        if cmd == "back" && self.choosing.is_some() {
+            self.choosing = None;
+            return Outcome::Rebuild;
+        }
+        if let Some((key, index)) = cmd
+            .strip_prefix("settings:pick:option:")
+            .and_then(|s| s.rsplit_once(':'))
+        {
+            if let Ok(index) = index.parse::<usize>() {
+                self.choosing = None;
+                if key == keys::HEADER_CHOICE || key == keys::FOOTER_CHOICE {
+                    let choices = if key == keys::HEADER_CHOICE {
+                        &keys::HEADER_CHOICES[..]
+                    } else {
+                        &keys::FOOTER_CHOICES[..]
+                    };
+                    if index < choices.len() {
+                        for (i, (flag, _)) in choices.iter().enumerate().skip(1) {
+                            env.services.settings.save(*flag, Value::Bool(i == index));
+                        }
+                        save(env);
+                    }
+                    return Outcome::Rebuild;
+                }
+                pick(key, &[Value::Number(index as f64)], env);
+                return Outcome::Rebuild;
+            }
+        }
         if self.name == "device" {
             if let Some(purpose) = pin_flow_start(cmd) {
                 let now = crate::surfaces::pin::session::unix_now();
@@ -284,6 +340,9 @@ impl Surface for SettingsSectionSurface {
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
                     name: self.name.clone(),
                     typing,
+                    page: self.page,
+                    choosing: None,
+                    choice_page: 0,
                     lua_plan: None,
                     lua_report: None,
                     kobo_plan: None,
@@ -384,24 +443,69 @@ pub fn section_page(
     typing: bool,
     now: i64,
 ) -> kaia_ui::composite::SettingsDialog {
+    section_page_at(services, name, typing, now, 0, None)
+}
+
+fn section_page_at(
+    services: &Services,
+    name: &str,
+    typing: bool,
+    now: i64,
+    page: usize,
+    choosing: Option<&str>,
+) -> kaia_ui::composite::SettingsDialog {
     let mut children = Vec::new();
+    let mut list = sections::entries(name, services, now);
     if has_text_fields(name) {
-        let (label, action) = if typing {
-            (tr("Done editing"), "settings:fields:close")
-        } else {
-            (tr("Edit fields"), "settings:fields:open")
-        };
-        children.push(crate::surfaces::common::button(
-            kaia_ui::controls::ButtonStyle::Secondary,
-            &label,
-            action,
-            "settings-fields",
-        ));
+        list.insert(
+            0,
+            entries::Entry::Button {
+                key: "settings-fields",
+                label: if typing {
+                    tr("Done editing")
+                } else {
+                    tr("Edit fields")
+                },
+                action: if typing {
+                    "settings:fields:close"
+                } else {
+                    "settings:fields:open"
+                }
+                .into(),
+            },
+        );
     }
-    let list = sections::entries(name, services, now);
+    if let Some(key) = choosing {
+        list = list
+            .iter()
+            .find_map(|entry| match entry {
+                entries::Entry::Select {
+                    key: k,
+                    options,
+                    selected,
+                    ..
+                }
+                | entries::Entry::Radio {
+                    key: k,
+                    options,
+                    selected,
+                } if *k == key => Some(
+                    options
+                        .iter()
+                        .enumerate()
+                        .map(|(i, label)| entries::Entry::Choice {
+                            label: label.clone(),
+                            selected: i == *selected,
+                            action: format!("settings:pick:option:{key}:{i}"),
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .unwrap_or_default();
+    }
     children.push(kaia_ui::WidgetPod::new(Expanded::new(
-        kaia_ui::WidgetPod::new(kaia_ui::composite::PagedList::new(list, entries::widget))
-            .with_key("settings-entries"),
+        kaia_ui::WidgetPod::new(super::widgets::SettingsPages::new(list, page)).with_key("settings-entries"),
         1,
     )));
     if has_text_fields(name) && typing {
@@ -415,6 +519,7 @@ pub fn section_page(
     );
     kaia_ui::composite::SettingsDialog::new(tr("Settings"), sections::title(name), content, "settings:close")
         .back("back")
+        .content_header()
 }
 
 fn has_text_fields(name: &str) -> bool {
@@ -423,7 +528,10 @@ fn has_text_fields(name: &str) -> bool {
 
 /// Whether section `name` lists the dictionaries. Those sections load them before they build.
 fn lists_dictionaries(name: &str) -> bool {
-    matches!(name, "reading" | "dictionaries" | "language-dictionaries")
+    matches!(
+        name,
+        "reading" | "fonts" | "dictionaries" | "language-dictionaries"
+    )
 }
 
 /// Turns a dictionary on or off, or moves it one place in the lookup order. The page
