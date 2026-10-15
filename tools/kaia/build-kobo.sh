@@ -75,13 +75,23 @@ fi
 # to upstream master. Build and package without touching submodule pins.
 make TARGET="${TARGET}" KODEBUG= update
 # Save the downloads for the host cache. This runs only after a successful
-# build, so a failed run leaves the cache as it was.
+# build, so a failed run leaves the cache as it was. Git keeps its pack files
+# read-only, so the cached folder of each project is replaced, not copied over.
+# Saving is best effort: a failure here warns and never fails the build.
 if [ -d /downloads ]; then
     for dl in base/thirdparty/*/build/downloads; do
         [ -d "${dl}" ] || continue
         name="$(basename "$(dirname "$(dirname "${dl}")")")"
-        mkdir -p "/downloads/${name}"
-        cp -a "${dl}/." "/downloads/${name}/"
+        if ! {
+            if [ -e "/downloads/${name}" ]; then
+                chmod -R u+w "/downloads/${name}"
+                rm -rf "/downloads/${name}"
+            fi
+            mkdir -p "/downloads/${name}"
+            cp -a "${dl}/." "/downloads/${name}/"
+        }; then
+            echo "warning: could not save the ${name} downloads to the cache" >&2
+        fi
     done
 fi
 for f in koreader-*"${TARGET}"*.zip koreader-"${TARGET}"*.zip; do
