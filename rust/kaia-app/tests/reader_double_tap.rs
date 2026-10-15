@@ -159,7 +159,7 @@ fn forward_zone(app: &App<HeadlessBackend>) -> Point {
 
 /// The word on the text page at this point, as the hold tests use it.
 fn word_point() -> Point {
-    Point::new(200, 120)
+    Point::new(200, 250)
 }
 
 /// A point in the left margin, off the text. It is in the back zone, so a single tap there
@@ -173,12 +173,16 @@ fn corner_point(app: &App<HeadlessBackend>) -> Point {
     Point::new(app.screen().w as i32 - 10, 10)
 }
 
-/// The number of dark pixels in the `size` square at the top right corner of the frame.
-fn dark_in_corner(app: &App<HeadlessBackend>, size: i32) -> usize {
+/// The number of dark pixels in the `size` square at the top right corner of the page, below the header.
+fn dark_in_corner(app: &mut App<HeadlessBackend>, size: i32) -> usize {
+    let mut top = 0;
+    app.update_top::<kaia_app::surfaces::reader::page::PageView, _>("reader-page", |view, _| {
+        top = view.header_height as i32;
+    });
     let frame = app.frame();
     let x0 = app.screen().w as i32 - size;
     let mut dark = 0;
-    for y in 0..size {
+    for y in top..top + size {
         for x in x0..x0 + size {
             if frame.get(x, y).is_some_and(|c| c.luma() < 128) {
                 dark += 1;
@@ -304,14 +308,14 @@ fn the_corner_bookmark_still_works_on_a_single_tap() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, clock, _dir) = reader("double-tap-corner", true);
     turn_to_text(&mut app);
-    let before = dark_in_corner(&app, 20);
+    let before = dark_in_corner(&mut app, 20);
 
     let point = corner_point(&app);
     tap(&mut app, &clock, point);
     clock.advance(WINDOW);
     idle(&mut app);
     assert!(
-        dark_in_corner(&app, 20) > before,
+        dark_in_corner(&mut app, 20) > before,
         "the dog-ear is drawn after the single tap"
     );
     assert!(
@@ -325,7 +329,7 @@ fn a_double_tap_in_the_corner_does_not_toggle_the_bookmark() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, clock, _dir) = reader("double-tap-corner-twice", true);
     turn_to_text(&mut app);
-    let before = dark_in_corner(&app, 20);
+    let before = dark_in_corner(&mut app, 20);
     let page_before = page(&mut app);
 
     let point = corner_point(&app);
@@ -333,7 +337,7 @@ fn a_double_tap_in_the_corner_does_not_toggle_the_bookmark() {
     clock.advance(WINDOW);
     idle(&mut app);
     assert_eq!(
-        dark_in_corner(&app, 20),
+        dark_in_corner(&mut app, 20),
         before,
         "two bookmark toggles would cancel out, so the double tap must not reach the corner"
     );

@@ -7,7 +7,10 @@
 //! | Key | Type | Default | Meaning |
 //! |---|---|---|---|
 //! | `reading.font_family` | string | unset (engine default) | Reading font family name. |
-//! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
+//! | `reading.font_size` | number | 36 for EPUB and KEPUB | Default font size in KOReader units. The app scales it to the panel width. |
+//! | `reading.line_spacing` | number | 1.35 | CREngine line spacing multiplier. |
+//! | `reading.margin_left`, `reading.margin_right` | number | 33.5 | Side margins in KOReader units. |
+//! | `reading.margin_top`, `reading.margin_bottom` | number | 30 | Vertical margins in KOReader units. |
 //! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
 //! | `reading.double_tap_lookup` | bool | false | A double tap on a word looks it up. When on, a single tap turns the page after the double tap window (300 ms). See [`double_tap_lookup`]. |
@@ -15,7 +18,7 @@
 //! | `reading.page_turn_waveform` | string | `cleaner` | E Ink waveform of a page turn: `cleaner` (gray with ghost reduction) or `faster` (fast black and white). Full refreshes keep their waveform. See [`page_turn`]. |
 //! | `reading.highlight_shade` | number | 0.2 | Shade of a box highlight, from 0 to 1 in steps of 0.1, as KOReader's "Gray highlight opacity". A higher value is darker. The reader's More sheet shows it as a percent. See [`highlight_shade`]. |
 //! | `reading.header_title` | bool | false | Reader header shows the book title at the left. |
-//! | `reading.header_chapter` | bool | false | Reader header shows the current TOC chapter at the right. |
+//! | `reading.header_chapter` | bool | true | Reader header shows the current TOC chapter, centred when it is the only item. |
 //! | `reading.header_clock` | bool | false | Reader header shows the clock at the right, read on redraw. |
 //! | `reading.header_battery` | bool | false | Reader header shows the battery level at the right, read on redraw. |
 //! | `reading.footer_page` | bool | true | Reader footer shows the page number, as `Page 3 of 200`. |
@@ -39,6 +42,7 @@
 //! | `home.show_recent` | bool | true | Home shows the Recent shelf of up to four books. Off hides the shelf. |
 //! | `home.show_in_progress` | bool | true | Home shows the other books in progress under Continue. Off hides the rows. |
 //! | `library.layout` | string | `covers` | Layout of the Books tab: `covers` or `list`. Kept between runs, also while another tab is open. |
+//! | `library.sort` | string | `read` | Most recently read first, with insertion order for unread books. |
 //! | `library.source` | string | empty | Source filter of the Books tab: `calibre`, `opds` or `other`. Empty shows every source. Kept between runs. |
 //! | `library.format` | string | empty | File type filter of the Books tab, as a lowercase extension such as `epub`. Empty shows every type. Kept between runs. |
 //! | `sync.auto` | bool | false | Automatic sync: a book pulls the remote position when it opens and when reading resumes. Off means no pull on open or resume. KOReader's "Automatically keep documents in sync". |
@@ -48,9 +52,9 @@
 //! | `sync.password` | string | unset | Old plain password. The startup migration replaces it with `sync.userkey` and removes it. |
 //! | `opds.catalogs` | array of tables | empty | User OPDS catalogs: `{ title = ..., url = ... }`. |
 //! | `device.standby_minutes` | number | 0 | Minutes of no input before the device stands by: the app idles without suspending, and any input wakes it at once. `0` is off. Choices are in `STANDBY_MINUTES`. |
-//! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
+//! | `device.sleep_minutes` | number | 5 | Minutes of no input before the device sleeps. |
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
-//! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book), `details` (the current book with its title, author and progress, or the last book opened) or `blank`. |
+//! | `device.sleep_screen` | string | `details` | Sleep screen: `cover` (the current book), `details` (the current book with its title, author and progress, or the last book opened) or `blank`. |
 //! | `device.time_zone` | string | unset (system zone) | IANA name of the zone for Kaia's clock, such as `America/Bogota`. Set from the Time zone page. Kaia sets `TZ` at startup, so the footer clock, natural light and statistics dates follow it. An unknown name counts as unset. See `kaia_platform::timezone`. |
 //! | `device.network_time` | bool | false | Sets the clock from pool.ntp.org while Wi-Fi is connected and airplane mode is off, at most every six hours. Off sends no packet. Set from the Device page. On a Kobo, BusyBox `ntpd` sets the clock. On the desktop, Kaia reports the offset and does not change the clock. See `kaia_platform::ntp`. |
 //! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
@@ -148,14 +152,27 @@ pub const DISPLAY_LARGE_PRINT: &str = "display.large_print";
 pub const NETWORK_AIRPLANE_MODE: &str = "network.airplane_mode";
 pub const EXPERIMENTAL_ENABLED: &str = "experimental.enabled";
 
-/// Default reading font size in KOReader units. It becomes 47 px on the Libra Colour.
-pub const DEFAULT_FONT_SIZE: f64 = 22.0;
+/// Open-serif fallback for both EPUB and KEPUB. 76 px on the Libra Colour.
+pub const DEFAULT_FONT_SIZE: f64 = 36.0;
+/// Noto Serif's font metrics turn this multiplier into a 140 px baseline pitch.
+pub const DEFAULT_LINE_SPACING: f64 = 1.35;
+/// 71 px plus Juliet's 1 em body margin matches all nine reference line breaks.
+pub const DEFAULT_SIDE_MARGIN: f64 = 33.5;
+/// 64 px inside the reading strips puts ordinary body ink near y=225.
+pub const DEFAULT_VERTICAL_MARGIN: f64 = 30.0;
+pub const READING_LINE_SPACING: &str = "reading.line_spacing";
+pub const READING_MARGIN_LEFT: &str = "reading.margin_left";
+pub const READING_MARGIN_RIGHT: &str = "reading.margin_right";
+pub const READING_MARGIN_TOP: &str = "reading.margin_top";
+pub const READING_MARGIN_BOTTOM: &str = "reading.margin_bottom";
+/// Cover and information panel on a new installation.
+pub const DEFAULT_SLEEP_SCREEN: &str = "details";
 /// Default full refresh cadence: zero, which means at each chapter.
 pub const DEFAULT_FULL_REFRESH_PAGES: f64 = 0.0;
 /// The largest page count the full refresh choice offers. Larger saved values read as this.
 pub const FULL_REFRESH_PAGES_MAX: u32 = 10;
 /// Default sleep timeout in minutes.
-pub const DEFAULT_SLEEP_MINUTES: f64 = 15.0;
+pub const DEFAULT_SLEEP_MINUTES: f64 = 5.0;
 /// KOReader's default highlight opacity, `highlight_lighten_factor`. Kaia draws the
 /// default shade as it drew boxes before the setting existed. See `page::shade_tint`.
 pub const DEFAULT_HIGHLIGHT_SHADE: f64 = 0.2;
@@ -172,8 +189,7 @@ pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
 pub const PAGE_TURN_WAVEFORMS: [(&str, &str); 2] =
     [("cleaner", "Cleaner page turns"), ("faster", "Faster page turns")];
 
-/// The sleep screen choices, in the order the Device section lists them. The
-/// first is the default.
+/// The sleep screen choices, in the order the Device section lists them.
 pub const SLEEP_SCREENS: [(&str, &str); 3] = [
     ("cover", "Book cover"),
     ("details", "Book cover with details"),

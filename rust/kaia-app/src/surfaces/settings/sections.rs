@@ -726,7 +726,7 @@ fn device(services: &Services) -> Vec<Entry> {
             options: labels(keys::DEVICE_SLEEP_SCREEN),
             selected: keys::preset_index(
                 &keys::SLEEP_SCREENS,
-                &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover"),
+                &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, keys::DEFAULT_SLEEP_SCREEN),
             ),
         },
         Entry::Text(tr(

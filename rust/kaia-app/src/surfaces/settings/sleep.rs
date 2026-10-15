@@ -19,7 +19,11 @@ use crate::surfaces::common;
 
 /// Whether the sleep screen shows a cover: the setting is `cover` and the book has one.
 pub fn shows_cover(services: &Services) -> bool {
-    keys::text_or(&services.settings, keys::DEVICE_SLEEP_SCREEN, "cover") != "blank"
+    keys::text_or(
+        &services.settings,
+        keys::DEVICE_SLEEP_SCREEN,
+        keys::DEFAULT_SLEEP_SCREEN,
+    ) != "blank"
 }
 
 /// The cover scaled to fit `screen` and placed in its middle. The white margins

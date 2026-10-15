@@ -424,7 +424,7 @@ fn stepper_saves_the_new_value() {
     app.tap(plus).unwrap();
 
     let saved = Settings::open(&path);
-    assert_eq!(saved.read(keys::READING_FONT_SIZE).as_f64(), Some(23.0));
+    assert_eq!(saved.read(keys::READING_FONT_SIZE).as_f64(), Some(37.0));
 }
 
 #[test]

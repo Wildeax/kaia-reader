@@ -114,8 +114,7 @@ impl Footer {
         self.on.iter().any(|on| *on)
     }
 
-    /// One caption line plus `space.sm`, with the space split above and below.
-    /// At the Libra Colour theme size this is 40 + 16 = 56 pixels.
+    /// Reserve 120 px on the Libra Colour, with the caption centred in the strip.
     pub fn height(&self, theme: &kaia_ui::Theme) -> u32 {
         if self.is_visible() {
             strip_height(theme)
@@ -133,10 +132,16 @@ impl Footer {
     }
 }
 
-/// One caption line and the space above and below it, shared by both strips.
+/// The capture centres the reading captions near y=60 and y=1620.
 pub(super) fn strip_height(theme: &kaia_ui::Theme) -> u32 {
-    let style = theme.style(&theme.font.caption, kaia_ui::Tone::InkSecondary);
-    style.line_height.ceil() as u32 + theme.space.sm
+    (120.0 * f64::from(theme.scale.width.min(theme.scale.height)) / 1264.0).round() as u32
+}
+
+/// Noto Sans at 28 px has the capture's 20 px capital height on Libra Colour.
+pub(super) fn strip_style(theme: &kaia_ui::Theme) -> kaia_gfx::text::TextStyle {
+    let mut font = theme.font.caption.clone();
+    font.size = 28.0 * theme.scale.width.min(theme.scale.height) as f32 / 1264.0 * theme.text_scale;
+    theme.style(&font, kaia_ui::Tone::Ink)
 }
 
 fn index(item: Item) -> usize {

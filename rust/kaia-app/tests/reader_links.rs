@@ -2,7 +2,7 @@ mod common;
 #[path = "../../kaia-doc/tests/support/links_fixture.rs"]
 mod fixture;
 use common::*;
-use kaia_app::{surfaces::reader::page::PageView, App, HeadlessBackend, Route};
+use kaia_app::{surfaces::reader::page::PageView, surfaces::settings::keys, App, HeadlessBackend, Route};
 use kaia_book::{BookSession, Link, LinkTarget, Margins, OpenOptions, TextLayout};
 use kaia_events::{Settings, Value};
 use kaia_gfx::Point;
@@ -30,14 +30,19 @@ fn open(dir: &Path, pdf: bool) -> (App<HeadlessBackend>, BookSession, i64) {
     wait_reader(&mut app);
     let mut opts = OpenOptions::new(dir.join("probe"));
     opts.viewport = app.screen();
+    app.update_top::<PageView, _>("reader-page", |page, _| {
+        opts.viewport.h -= page.header_height + page.footer_height;
+    });
     let px = |n: f64| (n * app.screen().w.min(app.screen().h) as f64 / 600.0).ceil() as f32;
     opts.default_layout = TextLayout {
-        font_size: px(22.0),
+        font_size: px(keys::DEFAULT_FONT_SIZE),
+        line_spacing: keys::DEFAULT_LINE_SPACING as f32,
+        hyphenation: false,
         margins: Margins {
-            top: px(15.0),
-            right: px(10.0),
-            bottom: px(15.0),
-            left: px(10.0),
+            top: px(keys::DEFAULT_VERTICAL_MARGIN),
+            right: px(keys::DEFAULT_SIDE_MARGIN),
+            bottom: px(keys::DEFAULT_VERTICAL_MARGIN),
+            left: px(keys::DEFAULT_SIDE_MARGIN),
         },
         ..TextLayout::default()
     };

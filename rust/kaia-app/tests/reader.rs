@@ -984,7 +984,7 @@ fn autosave_suspend_and_shutdown_preserve_position_without_closing_first() {
     let mut opts = kaia_book::OpenOptions::new(dir.join("data"));
     opts.viewport = app.screen();
     app.update_top::<PageView, _>("reader-page", |view, _| {
-        opts.viewport.h -= view.footer_height;
+        opts.viewport.h -= view.header_height + view.footer_height;
     });
     let session = kaia_book::BookSession::open(&row.path, opts).unwrap();
     assert_eq!(session.current().page, 3);
@@ -1309,15 +1309,19 @@ fn pdf_selection_creates_a_sticker_and_reopens_it() {
     let doc = kaia_doc::open(&path).unwrap();
     let size = doc.page_size(0).unwrap();
     let mut screen = app.screen();
+    let mut header = 0;
     app.update_top::<PageView, _>("reader-page", |view, _| {
-        screen.h -= view.footer_height;
+        header = view.header_height;
+        screen.h -= view.header_height + view.footer_height;
     });
     let scale = (screen.w as f32 / size.width).min(screen.h as f32 / size.height);
     // This scanned PDF has no text layer. A hold can still place a page sticker.
     assert!(doc.page_text(0).unwrap().chars.is_empty());
     let point = Point::new(350, 500);
     let x_expected = (point.x as f32 - (screen.w as f32 - size.width * scale) / 2.0) / scale / size.width;
-    let y_expected = (point.y as f32 - (screen.h as f32 - size.height * scale) / 2.0) / scale / size.height;
+    let y_expected = (point.y as f32 - header as f32 - (screen.h as f32 - size.height * scale) / 2.0)
+        / scale
+        / size.height;
     hold_at(&mut app, point);
     // A scanned page has no words, so the sheet offers Sticker at once.
     tap_key(&mut app, "sel-sticker");

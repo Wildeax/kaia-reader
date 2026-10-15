@@ -1,7 +1,8 @@
 //! The optional top line. The book title sits at the left. The chapter, clock
 //! and battery sit at the right, separated by vertical bars. Each side gets
 //! half the line when both have text, or the whole line when the other is empty.
-//! Both sides use one caption line with an ellipsis when the text does not fit.
+//! A single group is centred. Both groups use one caption line with an ellipsis
+//! when the text does not fit.
 
 use kaia_book::{PageInfo, Size};
 use kaia_events::Settings;
@@ -54,15 +55,23 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Header {
     on: [bool; 4],
+}
+
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            on: [false, true, false, false],
+        }
+    }
 }
 
 impl Header {
     pub fn from_settings(settings: &Settings) -> Self {
         Self {
-            on: Item::ALL.map(|item| keys::bool_or(settings, item.key(), false)),
+            on: Item::ALL.map(|item| keys::bool_or(settings, item.key(), item == Item::Chapter)),
         }
     }
 
@@ -119,7 +128,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn header_items_default_off_and_join_only_available_text() {
+    fn chapter_defaults_on_and_items_join_only_available_text() {
         let mut header = Header::default();
         let mut info = PageInfo {
             page: 0,
@@ -135,7 +144,7 @@ mod tests {
         };
         assert_eq!(
             header.text("Book", &info, &status),
-            (String::new(), String::new())
+            (String::new(), "First chapter".into())
         );
         for item in Item::ALL {
             assert_eq!(Item::from_id(item.id()), Some(item));

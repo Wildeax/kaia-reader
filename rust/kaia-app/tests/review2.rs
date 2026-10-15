@@ -100,7 +100,14 @@ fn idle_jump_saves_and_updates_index() {
         app.iterate(Some(Duration::from_millis(50))).unwrap();
     }
     assert_ne!(before, fs::read(path).unwrap());
-    assert!(app.services().library.book(id).unwrap().unwrap().percent > 0.05);
+    let mut expected = None;
+    app.update_top::<PageView, _>("reader-page", |view, _| {
+        expected = view
+            .position
+            .map(|(page, count)| (page + 1) as f64 / count as f64);
+    });
+    let saved = app.services().library.book(id).unwrap().unwrap().percent;
+    assert!((saved - expected.unwrap()).abs() < 0.000001);
 }
 #[test]
 fn failed_close_keeps_reader_until_retry() {

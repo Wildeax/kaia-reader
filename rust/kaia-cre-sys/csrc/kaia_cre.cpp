@@ -291,6 +291,9 @@ int kaia_cre_doc_new(int width, int height, kaia_cre_doc **out) {
             view->setViewMode(DVM_PAGES, -1);
             view->Resize(width, height);
             view->setPageHeaderInfo(0);
+            // The app's panel-scaled sizes exceed CREngine's stock 72 px cap.
+            // Use KOReader's upper bound so saved and rendered sizes agree.
+            view->setMaxFontSize(340);
             // The fallback values from readDefaults in base/cre.cpp, used when no
             // cr3.ini exists: autohinting (2) and harfbuzz kerning (3).
             CRPropRef props = LVCreatePropsContainer();
@@ -587,7 +590,12 @@ int kaia_cre_xpointer_page(kaia_cre_doc *doc, const char *xpointer, int32_t *out
         if (xp.isNull()) {
             return KAIA_CRE_NOT_FOUND;
         }
-        *out = view->getBookmarkPage(xp, false);
+        // Include block padding in the character's position. The unextended
+        // caret rectangle can fall on the previous page when a padded block
+        // wraps, as Juliet's title-page URL does at the larger default size.
+        const lvPoint point = xp.toPoint(true);
+        const int internal = view->getPageList()->FindNearestPage(point.y, 0);
+        *out = view->getExternalPageNumber(internal);
         return KAIA_CRE_OK;
     });
 }
