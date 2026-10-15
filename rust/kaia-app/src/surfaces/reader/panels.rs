@@ -1385,8 +1385,16 @@ fn dictionary_lines(services: &Services, text: &str, width: u32) -> Vec<String> 
 }
 
 /// The search panel: a text field with a Search button, the status, the results
-/// and the on-screen keyboard.
-pub fn search(services: &Services, screen: Size, text: &str, rows: Vec<SearchRow>, status: &str) -> Window {
+/// and the on-screen keyboard. `clear_history` adds a Clear history button beside
+/// the status, for the recent searches that an empty field lists.
+pub fn search(
+    services: &Services,
+    screen: Size,
+    text: &str,
+    rows: Vec<SearchRow>,
+    status: &str,
+    clear_history: bool,
+) -> Window {
     let t = &services.theme;
     let field = WidgetPod::new(
         TextField::new()
@@ -1412,18 +1420,36 @@ pub fn search(services: &Services, screen: Size, text: &str, rows: Vec<SearchRow
         Tone::InkSecondary,
     ))
     .with_key("search-status");
-    let list = PagedList::new(rows, |row: &SearchRow, _t: &Theme| {
+    let status_line = if clear_history {
         WidgetPod::new(
-            ListRow::new(row.label.clone())
-                .secondary(row.snippet.clone())
-                .on_action(row.action.clone()),
+            Row::new(vec![
+                WidgetPod::new(Expanded::new(status_label, 1)),
+                button(
+                    ButtonStyle::Secondary,
+                    &tr("Clear history"),
+                    "reader:search:history:clear",
+                    "search-history-clear",
+                ),
+            ])
+            .gap(t.space.sm)
+            .cross_align(CrossAlign::Center),
         )
-        .with_key(key_of(&row.action))
+    } else {
+        status_label
+    };
+    let list = PagedList::new(rows, |row: &SearchRow, _t: &Theme| {
+        let line = ListRow::new(row.label.clone());
+        let line = if row.snippet.is_empty() {
+            line
+        } else {
+            line.secondary(row.snippet.clone())
+        };
+        WidgetPod::new(line.on_action(row.action.clone())).with_key(key_of(&row.action))
     })
     .labels(page_labels());
     let children = vec![
         entry,
-        status_label,
+        status_line,
         WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("search-results"), 1)),
         WidgetPod::new(OnScreenKeyboard::new(&ENGLISH)),
     ];
@@ -1546,6 +1572,20 @@ pub fn search_rows(results: &[kaia_book::SearchResult]) -> Vec<SearchRow> {
             label: tr_format(&tr("Page %1"), &[&(r.page + 1).to_string()]),
             snippet: r.snippet.clone(),
             action: format!("reader:search:hit:{}", r.index),
+        })
+        .collect()
+}
+
+/// The rows for the recent searches of a book, newest first. Tapping one runs
+/// that search again.
+pub fn recent_rows(searches: &[String]) -> Vec<SearchRow> {
+    searches
+        .iter()
+        .enumerate()
+        .map(|(i, text)| SearchRow {
+            label: text.clone(),
+            snippet: String::new(),
+            action: format!("reader:search:recent:{i}"),
         })
         .collect()
 }

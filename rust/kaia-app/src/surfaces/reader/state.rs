@@ -656,6 +656,12 @@ impl Core {
             self.search_dirty = false;
             return;
         };
+        // An empty field lists the recent searches. A search that is still running
+        // must not paint its hits over that list.
+        if self.search_text.trim().is_empty() {
+            self.search_dirty = false;
+            return;
+        }
         let snapshot = self
             .session
             .as_ref()

@@ -236,7 +236,9 @@ fn dropped_cover_is_extracted_after_version_three_migration() {
          DROP INDEX collections_name_key;
          ALTER TABLE collections DROP COLUMN name_key;
          ALTER TABLE collections DROP COLUMN position;
-         DROP TABLE recent_searches;",
+         DROP TABLE recent_searches;
+         DROP TABLE book_tags;
+         DROP TABLE tags;",
     )
     .unwrap();
     raw.pragma_update(None, "user_version", 2).unwrap();

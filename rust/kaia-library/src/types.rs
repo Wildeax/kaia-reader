@@ -115,6 +115,19 @@ pub struct Filter {
     pub folder: Option<PathBuf>,
     /// Books in this series. The name matches without regard to case.
     pub series: Option<String>,
+    /// Only favorite books: the members of the collection named `favorites`.
+    pub favorite: bool,
+    /// Books with this tag. The name matches without regard to case, after the
+    /// spaces are trimmed. Blank text does not filter.
+    pub tag: Option<String>,
+}
+
+/// A tag and the number of books that carry it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tag {
+    pub id: i64,
+    pub name: String,
+    pub books: u64,
 }
 
 /// A stored cover thumbnail: the encoded image and its MIME type.

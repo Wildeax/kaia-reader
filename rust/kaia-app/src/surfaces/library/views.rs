@@ -7,19 +7,19 @@ use kaia_events::Value;
 use kaia_gfx::{Pixmap, Size};
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::storage::Source;
-use kaia_library::{Book, Collection, Library};
+use kaia_library::{Book, Collection, Library, Tag, FAVORITES, MAX_TAG_CHARS};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Frame, Label, Paragraph, ProgressBar, Row, SizedBox, Spacer,
 };
 use kaia_ui::composite::Header;
 use kaia_ui::composite::{BookInfo, BookTile, CoverImage, Grid, ListRow, PagedList};
-use kaia_ui::controls::{Button, ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
+use kaia_ui::controls::{Button, ButtonStyle, IconButton, OnScreenKeyboard, TextField, ENGLISH};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, WidgetPod};
 
 use crate::surfaces::common::short;
 use crate::surfaces::library::commands::{Chip, SortChoice, View};
-use crate::surfaces::library::data::{self, AuthorGroup, Rating, SeriesGroup};
+use crate::surfaces::library::data::{self, AuthorGroup, Prefs, Rating, SeriesGroup};
 use crate::surfaces::library::press::Pressable;
 
 /// One row of a list: a title, a line of detail, an optional cover, and the
@@ -199,23 +199,24 @@ pub fn books_controls(t: &Theme, filter: &str, sort: &str, layout: View) -> Widg
 
 /// The name of the filter in force: each active filter, joined with a comma.
 /// "All books" when none is set.
-pub fn filter_name(
-    chip: Option<Chip>,
-    collection: Option<&str>,
-    source: Option<Source>,
-    format: Option<&str>,
-) -> String {
+pub fn filter_name(prefs: &Prefs, collection: Option<&str>) -> String {
     let mut parts = Vec::new();
-    if let Some(chip) = chip {
+    if let Some(chip) = prefs.chip {
         parts.push(chip_name(chip));
+    }
+    if prefs.favorite {
+        parts.push(tr("Favorites"));
+    }
+    if let Some(tag) = prefs.tag.as_deref() {
+        parts.push(tag.to_string());
     }
     if let Some(name) = collection {
         parts.push(name.to_string());
     }
-    if let Some(source) = source {
+    if let Some(source) = prefs.source {
         parts.push(source_name(source));
     }
-    if let Some(format) = format {
+    if let Some(format) = prefs.format.as_deref() {
         parts.push(format_name(format));
     }
     if parts.is_empty() {
@@ -401,6 +402,30 @@ pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
         .collect();
     let list = PagedList::new(items, |(c, position): &(Collection, usize), t: &Theme| {
         let id = c.id;
+        // The favorites collection keeps its name and its members: no rename or delete.
+        let mut actions = Vec::new();
+        if !c.name.eq_ignore_ascii_case(FAVORITES) {
+            actions.push(button(
+                ButtonStyle::Secondary,
+                &tr("Rename"),
+                &format!("library:collections:rename:{id}"),
+            ));
+            actions.push(button(
+                ButtonStyle::Secondary,
+                &tr("Delete"),
+                &format!("library:collections:delete:{id}"),
+            ));
+        }
+        actions.push(button(
+            ButtonStyle::Secondary,
+            &tr("Move up"),
+            &format!("library:collections:move:{id}:{}", position.saturating_sub(1)),
+        ));
+        actions.push(button(
+            ButtonStyle::Secondary,
+            &tr("Move down"),
+            &format!("library:collections:move:{id}:{}", position + 1),
+        ));
         WidgetPod::new(
             Column::new(vec![
                 WidgetPod::new(
@@ -412,31 +437,7 @@ pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
                         .on_action(format!("library:collection:{id}")),
                 )
                 .with_key(format!("collection-{id}")),
-                WidgetPod::new(
-                    Row::new(vec![
-                        button(
-                            ButtonStyle::Secondary,
-                            &tr("Rename"),
-                            &format!("library:collections:rename:{id}"),
-                        ),
-                        button(
-                            ButtonStyle::Secondary,
-                            &tr("Delete"),
-                            &format!("library:collections:delete:{id}"),
-                        ),
-                        button(
-                            ButtonStyle::Secondary,
-                            &tr("Move up"),
-                            &format!("library:collections:move:{id}:{}", position.saturating_sub(1)),
-                        ),
-                        button(
-                            ButtonStyle::Secondary,
-                            &tr("Move down"),
-                            &format!("library:collections:move:{id}:{}", position + 1),
-                        ),
-                    ])
-                    .gap(t.space.sm),
-                ),
+                WidgetPod::new(Row::new(actions).gap(t.space.sm)),
             ])
             .shrink(),
         )
@@ -528,17 +529,43 @@ pub fn search(
 }
 
 /// A sheet: a bordered panel with a title and the content, used for every panel.
-pub fn sheet(t: &Theme, title: &str, mut children: Vec<WidgetPod>) -> WidgetPod {
-    let mut all = vec![WidgetPod::new(Label::new(title, t.font.title.clone(), Tone::Ink))];
-    all.append(&mut children);
+pub fn sheet(t: &Theme, title: &str, children: Vec<WidgetPod>) -> WidgetPod {
+    let head = WidgetPod::new(Label::new(title, t.font.title.clone(), Tone::Ink));
+    sheet_with(t, head, children, t.space.md)
+}
+
+/// A sheet whose head is a widget of its own, with `gap` between its parts.
+pub fn sheet_with(t: &Theme, head: WidgetPod, children: Vec<WidgetPod>, gap: u32) -> WidgetPod {
+    let mut all = vec![head];
+    all.extend(children);
     let column = Column::new(all)
-        .gap(t.space.md)
+        .gap(gap)
         .cross_align(CrossAlign::Stretch)
         .shrink();
-    let padded = WidgetPod::new(kaia_ui::components::Padding::new(
-        WidgetPod::new(column),
-        Insets::all(t.space.md),
-    ));
+    framed(t, WidgetPod::new(column))
+}
+
+/// A sheet with a list that takes the height the other parts leave. The parts
+/// before and after it keep their natural height, so a long list pages and the
+/// buttons below it stay on the page.
+pub fn sheet_list(
+    t: &Theme,
+    title: &str,
+    before: Vec<WidgetPod>,
+    list: WidgetPod,
+    after: Vec<WidgetPod>,
+) -> WidgetPod {
+    let mut all = vec![WidgetPod::new(Label::new(title, t.font.title.clone(), Tone::Ink))];
+    all.extend(before);
+    all.push(WidgetPod::new(Expanded::new(list, 1)));
+    all.extend(after);
+    let column = Column::new(all).gap(t.space.md).cross_align(CrossAlign::Stretch);
+    framed(t, WidgetPod::new(column))
+}
+
+/// The border, the fill and the padding of a sheet around its column.
+fn framed(t: &Theme, column: WidgetPod) -> WidgetPod {
+    let padded = WidgetPod::new(kaia_ui::components::Padding::new(column, Insets::all(t.space.md)));
     WidgetPod::new(
         Frame::new(padded)
             .fill(Tone::Surface)
@@ -596,13 +623,10 @@ pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
 /// The filter panel: the statuses and the collection as buttons, the choice in
 /// force filled. A button fits the page where a row list would not, so the panel
 /// keeps its Cancel on screen.
-pub fn filter_panel(
-    t: &Theme,
-    chip: Option<Chip>,
-    collection: Option<&str>,
-    source: Option<Source>,
-    format: Option<&str>,
-) -> WidgetPod {
+pub fn filter_panel(t: &Theme, prefs: &Prefs, collection: Option<&str>) -> WidgetPod {
+    let chip = prefs.chip;
+    let source = prefs.source;
+    let format = prefs.format.as_deref();
     let choice = |active: bool| {
         if active {
             ButtonStyle::Primary
@@ -619,7 +643,6 @@ pub fn filter_panel(
             .gap(t.space.sm),
         )
     };
-    let full = |button: WidgetPod| WidgetPod::new(Row::new(vec![WidgetPod::new(Expanded::new(button, 1))]));
     let all = button(choice(chip.is_none()), &tr("All books"), "library:filter:all");
     let reading = button(
         choice(chip == Some(Chip::Reading)),
@@ -651,6 +674,13 @@ pub fn filter_panel(
         |which: Source, action: &str| button(choice(source == Some(which)), &source_name(which), action);
     let type_label = format.map_or_else(|| tr("File type"), format_name);
     let type_button = button(choice(format.is_some()), &type_label, "library:filter:type");
+    let favorites = button(
+        choice(prefs.favorite),
+        &tr("Favorites"),
+        "library:filter:favorite",
+    );
+    let tags_label = prefs.tag.clone().unwrap_or_else(|| tr("Tags"));
+    let tags = button(choice(prefs.tag.is_some()), &tags_label, "library:filter:tags");
     sheet(
         t,
         &tr("Show books"),
@@ -659,7 +689,7 @@ pub fn filter_panel(
                 Column::new(vec![
                     pair(all, reading),
                     pair(not_started, finished),
-                    full(collection_button),
+                    pair(collection_button, type_button),
                     pair(
                         any_source,
                         source_button(Source::Calibre, "library:filter:source:calibre"),
@@ -668,7 +698,7 @@ pub fn filter_panel(
                         source_button(Source::Opds, "library:filter:source:opds"),
                         source_button(Source::Other, "library:filter:source:other"),
                     ),
-                    full(type_button),
+                    pair(favorites, tags),
                 ])
                 .gap(t.space.sm)
                 .cross_align(CrossAlign::Stretch)
@@ -773,6 +803,112 @@ pub fn collection_panel(
     sheet(t, &title, children)
 }
 
+/// The tag picker of the filter: every tag the books carry, with its book count.
+/// The tag in force shows a value. The list pages when there are many tags.
+pub fn tag_filter_panel(t: &Theme, tags: &[Tag], current: Option<&str>) -> WidgetPod {
+    let list = if tags.is_empty() {
+        body_text(t, &tr("No tags yet."))
+    } else {
+        let current = current.map(str::to_lowercase);
+        WidgetPod::new(PagedList::new(tags.to_vec(), move |tag: &Tag, _t: &Theme| {
+            let action = format!("library:filter:tag:{}", tag.id);
+            let mut row = ListRow::new(tag.name.clone())
+                .secondary(tr_format(
+                    &tr_n("%1 book", "%1 books", tag.books as i64),
+                    &[&tag.books.to_string()],
+                ))
+                .on_action(action.clone());
+            if current.as_deref() == Some(tag.name.to_lowercase().as_str()) {
+                row = row.value(tr("Showing"));
+            }
+            WidgetPod::new(row).with_key(action.replace(':', "-"))
+        }))
+        .with_key("tag-list")
+    };
+    let mut after = Vec::new();
+    if current.is_some() {
+        after.push(button(
+            ButtonStyle::Secondary,
+            &tr("Show all tags"),
+            "library:filter:tag:none",
+        ));
+    }
+    after.push(button(
+        ButtonStyle::Secondary,
+        &tr("Cancel"),
+        "library:panel:close",
+    ));
+    sheet_list(t, &tr("Filter by tag"), Vec::new(), list, after)
+}
+
+/// The tag sheet of a book. The list shows its tags, each with a Remove action,
+/// and an Add tag button. Typing shows the field and the keyboard for the new
+/// tag, with Back to the list and Add. The two do not share the page: the keyboard
+/// takes most of its height. `text` is the tag being typed.
+pub fn tags_panel(t: &Theme, book: i64, tags: &[Tag], text: &str, typing: bool) -> WidgetPod {
+    if typing {
+        let field = WidgetPod::new(
+            TextField::new()
+                .placeholder(tr("New tag"))
+                .with_text(text)
+                .max_length(MAX_TAG_CHARS)
+                .on_change("library:tag")
+                .on_submit(format!("library:tag:add:{book}")),
+        )
+        .focusable(true)
+        .with_key("tag-field");
+        let keyboard = WidgetPod::new(OnScreenKeyboard::new(&ENGLISH).background(Tone::Surface));
+        return sheet(
+            t,
+            &tr("New tag"),
+            vec![
+                field,
+                keyboard,
+                pair(
+                    t,
+                    button(
+                        ButtonStyle::Secondary,
+                        &tr("Back"),
+                        &format!("library:tags:list:{book}"),
+                    ),
+                    button(
+                        ButtonStyle::Primary,
+                        &tr("Add"),
+                        &format!("library:tag:add:{book}"),
+                    ),
+                ),
+            ],
+        );
+    }
+    let list = if tags.is_empty() {
+        body_text(t, &tr("No tags yet."))
+    } else {
+        WidgetPod::new(PagedList::new(tags.to_vec(), move |tag: &Tag, _t: &Theme| {
+            let action = format!("library:tag:remove:{book}:{}", tag.id);
+            WidgetPod::new(
+                ListRow::new(tag.name.clone())
+                    .value(tr("Remove"))
+                    .on_action(action.clone()),
+            )
+            .with_key(action.replace(':', "-"))
+        }))
+        .with_key("tag-list")
+    };
+    let after = vec![
+        button(
+            ButtonStyle::Primary,
+            &tr("Add tag"),
+            &format!("library:tags:new:{book}"),
+        ),
+        button(
+            ButtonStyle::Secondary,
+            &tr("Back"),
+            &format!("library:tags:back:{book}"),
+        ),
+    ];
+    sheet_list(t, &tr("Tags"), Vec::new(), list, after)
+}
+
 /// The name panel for a new collection: a field, the keyboard and two buttons.
 pub fn name_panel(t: &Theme, name: &str) -> WidgetPod {
     let field = WidgetPod::new(
@@ -831,20 +967,34 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
     )
 }
 
-/// The details of one book: cover and facts, the rating, the description, and the
+/// What the details sheet shows about a book, beside its row.
+pub struct DetailsInfo<'a> {
+    pub rating: Rating,
+    /// True when the book has a row in the statistics database, which adds the
+    /// reading statistics button after the rating.
+    pub statistics: bool,
+    pub favorite: bool,
+    pub tags: &'a [Tag],
+}
+
+/// The details of one book: cover and facts, the star, the description, and the
 /// actions. `remove` is the action that takes the book out of the collection being
-/// viewed. None when the book is not in that collection.
-/// The details sheet. `statistics` adds the reading statistics button after the
-/// rating, for a book that has a row in the statistics database.
+/// viewed. None when the book is not in that collection, and then the sheet offers
+/// to add the book to a collection.
 pub fn details_panel(
     t: &Theme,
     book: &Book,
     cover: Option<Pixmap>,
     close: &str,
     remove: Option<String>,
-    rating: Rating,
-    statistics: bool,
+    info: DetailsInfo<'_>,
 ) -> WidgetPod {
+    let DetailsInfo {
+        rating,
+        statistics,
+        favorite,
+        tags,
+    } = info;
     let title = crate::surfaces::common::display_title(book);
     let mut facts = vec![WidgetPod::new(Label::new(
         title.clone(),
@@ -875,18 +1025,18 @@ pub fn details_panel(
     }
     facts.push(WidgetPod::new(ProgressBar::new(book.percent as f32)));
     facts.push(body_text(t, &data::status_label(book)));
-    let mut info = tr_format(
+    let mut file_info = tr_format(
         &tr("%1 file, %2"),
         &[&book.format.to_uppercase(), &data::size_text(book.size)],
     );
     if let Some(pages) = book.pages {
-        info.push_str(&tr_format(
+        file_info.push_str(&tr_format(
             &tr_n(", %1 page", ", %1 pages", pages as i64),
             &[&pages.to_string()],
         ));
     }
     facts.push(WidgetPod::new(Label::new(
-        info,
+        file_info,
         t.font.caption.clone(),
         Tone::InkSecondary,
     )));
@@ -896,6 +1046,17 @@ pub fn details_panel(
             t.font.caption.clone(),
             Tone::InkSecondary,
         )));
+    }
+    if !tags.is_empty() {
+        let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
+        facts.push(
+            WidgetPod::new(Label::new(
+                tr_format(&tr("Tags: %1"), &[&names.join(", ")]),
+                t.font.caption.clone(),
+                Tone::InkSecondary,
+            ))
+            .with_key("details-tags"),
+        );
     }
     let cover_box = WidgetPod::new(
         SizedBox::new(Some(WidgetPod::new(CoverImage::new(title.clone(), cover))))
@@ -929,34 +1090,36 @@ pub fn details_panel(
     } else {
         pair(t, open, rating_button(rating, id))
     });
-    children.push(pair(
-        t,
-        button(
+    // The second row holds the tags and the collection action. Inside a collection
+    // that action removes the book, so the sheet does not also offer to add it.
+    let tags_button = button(
+        ButtonStyle::Secondary,
+        &tr("Tags"),
+        &format!("library:tags:open:{id}"),
+    );
+    let collection = match remove {
+        Some(action) => button(ButtonStyle::Secondary, &tr("Remove from collection"), &action),
+        None => button(
             ButtonStyle::Secondary,
             &tr("Add to collection"),
             &format!("library:book:collection:{id}"),
         ),
+    };
+    children.push(pair(t, tags_button, collection));
+    // The rows keep to four, so the sheet fits the page.
+    children.push(pair(
+        t,
         button(
             ButtonStyle::Secondary,
             &tr("Mark as finished"),
             &format!("library:book:finished:{id}"),
         ),
-    ));
-    // The rows keep to four, so the sheet fits the page. Inside a collection the
-    // removal shares the history row.
-    let history = button(
-        ButtonStyle::Secondary,
-        &tr("Remove from history"),
-        &format!("library:book:history:{id}"),
-    );
-    children.push(match remove {
-        Some(action) => pair(
-            t,
-            button(ButtonStyle::Secondary, &tr("Remove from collection"), &action),
-            history,
+        button(
+            ButtonStyle::Secondary,
+            &tr("Remove from history"),
+            &format!("library:book:history:{id}"),
         ),
-        None => history,
-    });
+    ));
     children.push(pair(
         t,
         button(
@@ -966,7 +1129,26 @@ pub fn details_panel(
         ),
         button(ButtonStyle::Secondary, &tr("Close"), close),
     ));
-    sheet(t, &tr("Book details"), children)
+    // The star sits in the head row. It names the state it sets, and its shape
+    // shows the state too, so the value does not depend on colour.
+    let (icon, next) = if favorite {
+        ("star.full", "off")
+    } else {
+        ("star.empty", "on")
+    };
+    let star = WidgetPod::new(IconButton::new(icon).on_action(format!("library:favorite:{id}:{next}")))
+        .with_key(format!("library-favorite-{id}-{next}"));
+    let head = WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(
+                WidgetPod::new(Label::new(tr("Book details"), t.font.title.clone(), Tone::Ink)),
+                1,
+            )),
+            star,
+        ])
+        .gap(t.space.sm),
+    );
+    sheet_with(t, head, children, t.space.sm)
 }
 
 /// The rating button of the details: the current value. It opens the rating sheet.

@@ -9,7 +9,7 @@ use kaia_gfx::image::{decode_rgb, DecodeLimits};
 use kaia_gfx::Pixmap;
 use kaia_i18n::{format as tr_format, tr};
 use kaia_library::storage::{Source, Sources};
-use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
+use kaia_library::{Book, CoverSize, Filter, Library, LibraryError, Sort, SortKey, Status, Tag};
 use kaia_ui::composite::BookInfo;
 
 use crate::services::Services;
@@ -31,6 +31,10 @@ pub struct Prefs {
     pub source: Option<Source>,
     /// Books of one file type, as a lowercase extension. None shows every type.
     pub format: Option<String>,
+    /// Only the favorite books.
+    pub favorite: bool,
+    /// Books with this tag. None shows every tag.
+    pub tag: Option<String>,
     pub show_finished: bool,
 }
 
@@ -44,6 +48,8 @@ impl Default for Prefs {
             collection: None,
             source: None,
             format: None,
+            favorite: false,
+            tag: None,
             show_finished: true,
         }
     }
@@ -87,6 +93,7 @@ impl Prefs {
         let format = text("library.format")
             .filter(|f| !f.is_empty())
             .map(|f| f.to_ascii_lowercase());
+        let tag = text("library.tag").filter(|t| !t.trim().is_empty());
         Prefs {
             view,
             layout,
@@ -95,6 +102,8 @@ impl Prefs {
             collection: settings.read("library.collection").as_i64(),
             source,
             format,
+            favorite: settings.is_true("library.favorite"),
+            tag,
             show_finished: !settings.is_false("library.show_finished"),
         }
     }
@@ -142,6 +151,8 @@ impl Prefs {
             "library.format",
             Value::Str(self.format.clone().unwrap_or_default()),
         );
+        settings.save("library.favorite", Value::Bool(self.favorite));
+        settings.save("library.tag", Value::Str(self.tag.clone().unwrap_or_default()));
     }
 }
 
@@ -158,8 +169,8 @@ pub fn sort_for(choice: SortChoice) -> Sort {
     }
 }
 
-/// The index filter for the status, the collection and the file type. The
-/// source is not in the index, so [`list`] applies it.
+/// The index filter for the status, the collection, the file type, the favorites
+/// and the tag. The source is not in the index, so [`list`] applies it.
 pub fn filter_for(prefs: &Prefs) -> Filter {
     Filter {
         status: prefs.chip.map(|c| match c {
@@ -169,7 +180,34 @@ pub fn filter_for(prefs: &Prefs) -> Filter {
         }),
         collection: prefs.collection,
         format: prefs.format.clone(),
+        favorite: prefs.favorite,
+        tag: prefs.tag.clone(),
         ..Filter::default()
+    }
+}
+
+/// The favorite flag and the tags of a book, as the details sheet shows them.
+pub fn marks(library: &Library, book: i64) -> (bool, Vec<Tag>) {
+    (
+        library.is_favorite(book).unwrap_or(false),
+        library.book_tags(book).unwrap_or_default(),
+    )
+}
+
+/// Every tag that a book in the library carries, with its book count.
+pub fn tags(library: &Library) -> Vec<Tag> {
+    library.tags().unwrap_or_default()
+}
+
+/// The text the Library shows for a tag the library refused.
+pub fn tag_error(error: &LibraryError) -> String {
+    match error {
+        LibraryError::TagEmpty => tr("Type a tag first"),
+        LibraryError::TagTooLong(n) => {
+            tr_format(&tr("A tag can have at most %1 characters."), &[&n.to_string()])
+        }
+        LibraryError::TooManyTags(n) => tr_format(&tr("A book can have at most %1 tags."), &[&n.to_string()]),
+        other => tr_format(&tr("cannot add the tag: %1"), &[&other.to_string()]),
     }
 }
 

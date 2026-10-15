@@ -94,6 +94,10 @@ pub enum Command {
     SearchGo,
     /// Jumps to a search hit by its index.
     SearchHit(usize),
+    /// Runs a recent search of the book by its index in the list.
+    SearchRecent(usize),
+    /// Empties the recent searches of the book.
+    SearchClearHistory,
     /// Opens a panel above the overlay.
     Panel(PanelName),
     /// Closes the top panel.
@@ -252,6 +256,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["search", "open"] => Command::SearchOpen,
         ["search", "go"] => Command::SearchGo,
         ["search", "hit", n] => Command::SearchHit(n.parse().ok()?),
+        ["search", "recent", n] => Command::SearchRecent(n.parse().ok()?),
+        ["search", "history", "clear"] => Command::SearchClearHistory,
         ["panel", "contents"] => Command::Panel(PanelName::Contents),
         ["panel", "layout"] => Command::Panel(PanelName::Layout),
         ["panel", "more"] => Command::Panel(PanelName::More),
@@ -336,6 +342,19 @@ mod tests {
             Some(Command::ContentsAnnotation(7))
         );
         assert_eq!(parse("reader:search:hit:x", &[]), None);
+    }
+
+    #[test]
+    fn parses_search_history_commands() {
+        assert_eq!(
+            parse("reader:search:recent:2", &[]),
+            Some(Command::SearchRecent(2))
+        );
+        assert_eq!(parse("reader:search:recent:x", &[]), None);
+        assert_eq!(
+            parse("reader:search:history:clear", &[]),
+            Some(Command::SearchClearHistory)
+        );
     }
 
     #[test]

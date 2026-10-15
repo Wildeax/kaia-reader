@@ -119,7 +119,8 @@ fn version_five_library_gains_the_table_and_keeps_its_books() {
     drop(lib);
 
     let raw = raw_connection(tmp.path());
-    raw.execute_batch("DROP TABLE recent_searches;").unwrap();
+    raw.execute_batch("DROP TABLE recent_searches; DROP TABLE book_tags; DROP TABLE tags;")
+        .unwrap();
     raw.pragma_update(None, "user_version", 5).unwrap();
     drop(raw);
 
@@ -141,5 +142,5 @@ fn version_five_library_gains_the_table_and_keeps_its_books() {
     let version: u32 = raw_connection(tmp.path())
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 8);
 }

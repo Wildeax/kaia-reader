@@ -68,6 +68,37 @@ pub enum Command {
     Source(Option<Source>),
     /// `library:filter:type`: open the file type picker.
     OpenFileType,
+    /// `library:filter:favorite`: show only the favorites, or all books again.
+    /// The other filters stay.
+    FavoriteFilter,
+    /// `library:filter:tags`: open the tag picker for the filter.
+    FilterTags,
+    /// `library:filter:tag:<id>` or `library:filter:tag:none`: show the books with
+    /// one tag (None clears the tag filter).
+    PickTag(Option<i64>),
+    /// `library:favorite:<book>:on` or `library:favorite:<book>:off`: mark or
+    /// unmark a book as a favorite.
+    SetFavorite {
+        book: i64,
+        on: bool,
+    },
+    /// `library:tags:open:<book>`: the tag sheet of a book.
+    OpenTags(i64),
+    /// `library:tags:back:<book>`: leave the tag sheet for the details.
+    BackTags(i64),
+    /// `library:tags:new:<book>`: type a new tag for the book.
+    NewTag(i64),
+    /// `library:tags:list:<book>`: leave the typing for the list of tags.
+    TagList(i64),
+    /// `library:tag:<text>` from the tag field's change event.
+    TagChanged(String),
+    /// `library:tag:add:<book>`: add the typed tag to the book.
+    AddTag(i64),
+    /// `library:tag:remove:<book>:<tag>`: take a tag off a book.
+    RemoveTag {
+        book: i64,
+        tag: i64,
+    },
     /// `library:format:<extension>` or `library:format:all`: show the books of one
     /// file type. None shows every type.
     PickFormat(Option<String>),
@@ -228,6 +259,12 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ("filter", Some("finished")) => Command::Chip(Chip::Finished),
         ("filter", Some("collection")) => Command::FilterCollection,
         ("filter", Some("type")) => Command::OpenFileType,
+        ("filter", Some("favorite")) => Command::FavoriteFilter,
+        ("filter", Some("tags")) => Command::FilterTags,
+        ("filter", Some(t)) if t.starts_with("tag:") => Command::PickTag(match &t["tag:".len()..] {
+            "none" => None,
+            id => Some(id.parse().ok()?),
+        }),
         ("filter", Some(t)) if t.starts_with("source:") => Command::Source(match &t["source:".len()..] {
             "all" => None,
             "calibre" => Some(Source::Calibre),
@@ -258,6 +295,36 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             ("back", book) => Command::BackStats(book.parse().ok()?),
             _ => return None,
         },
+        ("favorite", Some(t)) => {
+            let (book, state) = t.split_once(':')?;
+            Command::SetFavorite {
+                book: book.parse().ok()?,
+                on: match state {
+                    "on" => true,
+                    "off" => false,
+                    _ => return None,
+                },
+            }
+        }
+        ("tags", Some(t)) => match t.split_once(':')? {
+            ("open", book) => Command::OpenTags(book.parse().ok()?),
+            ("back", book) => Command::BackTags(book.parse().ok()?),
+            ("new", book) => Command::NewTag(book.parse().ok()?),
+            ("list", book) => Command::TagList(book.parse().ok()?),
+            _ => return None,
+        },
+        ("tag", None) => Command::TagChanged(arg_text?),
+        ("tag", Some(t)) => {
+            if let Some(book) = t.strip_prefix("add:") {
+                Command::AddTag(book.parse().ok()?)
+            } else {
+                let (book, tag) = t.strip_prefix("remove:")?.split_once(':')?;
+                Command::RemoveTag {
+                    book: book.parse().ok()?,
+                    tag: tag.parse().ok()?,
+                }
+            }
+        }
         ("collection", Some("none")) => Command::PickCollection(None),
         ("collection", _) => Command::PickCollection(Some(tail_id.or(arg_id)?)),
         ("search", Some("open")) => Command::SearchOpen,
@@ -453,6 +520,54 @@ mod tests {
                 collection: 5
             })
         );
+    }
+
+    #[test]
+    fn parses_favorite_and_tag_actions() {
+        assert_eq!(
+            parse("library:filter:favorite", &none()),
+            Some(Command::FavoriteFilter)
+        );
+        assert_eq!(parse("library:filter:tags", &none()), Some(Command::FilterTags));
+        assert_eq!(
+            parse("library:filter:tag:7", &none()),
+            Some(Command::PickTag(Some(7)))
+        );
+        assert_eq!(
+            parse("library:filter:tag:none", &none()),
+            Some(Command::PickTag(None))
+        );
+        assert_eq!(parse("library:filter:tag:x", &none()), None);
+        assert_eq!(
+            parse("library:favorite:42:on", &none()),
+            Some(Command::SetFavorite { book: 42, on: true })
+        );
+        assert_eq!(
+            parse("library:favorite:42:off", &none()),
+            Some(Command::SetFavorite { book: 42, on: false })
+        );
+        assert_eq!(parse("library:favorite:42:maybe", &none()), None);
+        assert_eq!(
+            parse("library:tags:open:42", &none()),
+            Some(Command::OpenTags(42))
+        );
+        assert_eq!(
+            parse("library:tags:back:42", &none()),
+            Some(Command::BackTags(42))
+        );
+        assert_eq!(parse("library:tags:new:42", &none()), Some(Command::NewTag(42)));
+        assert_eq!(parse("library:tags:list:42", &none()), Some(Command::TagList(42)));
+        assert_eq!(
+            parse("library:tag", &[Value::Str("Sci-fi".into())]),
+            Some(Command::TagChanged("Sci-fi".into()))
+        );
+        assert_eq!(parse("library:tag:add:42", &none()), Some(Command::AddTag(42)));
+        assert_eq!(
+            parse("library:tag:remove:42:9", &none()),
+            Some(Command::RemoveTag { book: 42, tag: 9 })
+        );
+        assert_eq!(parse("library:tag:remove:42", &none()), None);
+        assert_eq!(parse("library:tag:add:x", &none()), None);
     }
 
     #[test]

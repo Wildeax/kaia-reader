@@ -55,8 +55,14 @@ impl Surface for BookDetailsSurface {
                 } else if self.rating_open {
                     views::rating_panel(&t, book.id, rating)
                 } else {
-                    let has_stats = stats.is_some();
-                    views::details_panel(&t, &book, cover, "back", None, rating, has_stats)
+                    let (favorite, tags) = data::marks(&env.services.library, book.id);
+                    let info = views::DetailsInfo {
+                        rating,
+                        statistics: stats.is_some(),
+                        favorite,
+                        tags: &tags,
+                    };
+                    views::details_panel(&t, &book, cover, "back", None, info)
                 };
                 let page = Padding::new(
                     WidgetPod::new(Column::new(vec![content]).gap(t.space.md)),

@@ -2,7 +2,8 @@
 //!
 //! [`Library`] is the index. It stores one row per book file (keyed by path,
 //! identified by KOReader's partial MD5), extracted metadata, two cover
-//! thumbnails, collections, reading history and a full-text index.
+//! thumbnails, collections (favorites are one of them), tags, reading history and
+//! a full-text index.
 //!
 //! # Threads
 //!
@@ -22,6 +23,7 @@
 mod error;
 mod extract;
 mod import;
+mod marks;
 mod query;
 mod scan;
 mod schema;
@@ -35,9 +37,10 @@ use rusqlite::Connection;
 
 pub use error::{LibraryError, Result};
 pub use kaia_id::partial_md5;
+pub use marks::{FAVORITES, MAX_TAGS_PER_BOOK, MAX_TAG_CHARS};
 pub use types::{
     Book, Collection, CoverImage, CoverSize, Filter, ImportReport, Progress, ScanReport, Sort, SortKey,
-    Status,
+    Status, Tag,
 };
 
 /// Time allowed for extracting one book. Passed to [`Library::set_extract_budget`]

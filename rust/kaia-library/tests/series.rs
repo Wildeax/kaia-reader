@@ -254,6 +254,8 @@ fn version_six_series_books_without_a_number_are_queued_again() {
         [id],
     )
     .unwrap();
+    raw.execute_batch("DROP TABLE book_tags; DROP TABLE tags;")
+        .unwrap();
     raw.pragma_update(None, "user_version", 6).unwrap();
     drop(raw);
 

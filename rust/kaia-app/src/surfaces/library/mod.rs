@@ -65,6 +65,12 @@ pub enum Panel {
     Filter,
     /// The file type picker of the filter.
     FileType,
+    /// The tag picker of the filter.
+    TagFilter,
+    /// The tags of `book`: the list to remove from, or the field to add to.
+    Tags {
+        book: i64,
+    },
     CollectionName {
         id: Option<i64>,
     },
@@ -127,6 +133,10 @@ pub struct LibrarySurface {
     author: Option<String>,
     /// The author rows of the last build. The author actions index into them.
     author_names: Vec<String>,
+    /// The tag being typed in the tag sheet, and whether the sheet shows the
+    /// field and the keyboard.
+    tag_text: String,
+    tag_typing: bool,
     /// True in select mode, where a tap checks a book.
     selecting: bool,
     /// The books checked in select mode.
@@ -161,6 +171,8 @@ impl LibrarySurface {
             series_names: Vec::new(),
             author: None,
             author_names: Vec::new(),
+            tag_text: String::new(),
+            tag_typing: false,
             selecting: false,
             selected: BTreeSet::new(),
             marking: Rc::new(Cell::new(false)),
@@ -352,6 +364,90 @@ impl LibrarySurface {
             }
             Command::FilterCollection => {
                 self.panel = Some(Panel::Collection { book: None });
+                Outcome::Rebuild
+            }
+            Command::FavoriteFilter => {
+                self.prefs.favorite = !self.prefs.favorite;
+                self.panel = None;
+                self.save_prefs(env);
+                Outcome::Rebuild
+            }
+            Command::FilterTags => {
+                self.panel = Some(Panel::TagFilter);
+                Outcome::Rebuild
+            }
+            Command::PickTag(id) => {
+                self.prefs.tag = match id {
+                    None => None,
+                    Some(id) => match data::tags(&env.services.library).into_iter().find(|t| t.id == id) {
+                        Some(tag) => Some(tag.name),
+                        None => return Outcome::Handled,
+                    },
+                };
+                self.panel = None;
+                self.save_prefs(env);
+                Outcome::Rebuild
+            }
+            Command::SetFavorite { book, on } => {
+                match env.services.library.set_favorite(book, on) {
+                    Ok(()) if on => {
+                        env.toast(tr("Added to favorites"), 2.0);
+                    }
+                    Ok(()) => {
+                        env.toast(tr("Removed from favorites"), 2.0);
+                    }
+                    Err(e) => env.notice(tr_format(
+                        &tr("cannot change the favorite: %1"),
+                        &[&e.to_string()],
+                    )),
+                }
+                Outcome::Rebuild
+            }
+            Command::OpenTags(book) => {
+                self.tag_text.clear();
+                self.tag_typing = false;
+                self.panel = Some(Panel::Tags { book });
+                Outcome::Rebuild
+            }
+            Command::BackTags(book) => {
+                self.tag_typing = false;
+                self.panel = Some(Panel::Details { book });
+                Outcome::Rebuild
+            }
+            Command::NewTag(_) => {
+                self.tag_text.clear();
+                self.tag_typing = true;
+                Outcome::Rebuild
+            }
+            Command::TagList(_) => {
+                self.tag_text.clear();
+                self.tag_typing = false;
+                Outcome::Rebuild
+            }
+            Command::TagChanged(text) => {
+                self.tag_text = text;
+                Outcome::Handled
+            }
+            Command::AddTag(book) => {
+                match env.services.library.add_tag(book, &self.tag_text) {
+                    Ok(_) => {
+                        self.tag_text.clear();
+                        self.tag_typing = false;
+                    }
+                    // The field keeps the text, so the user can correct it.
+                    Err(e) => {
+                        env.toast(data::tag_error(&e), 4.0);
+                    }
+                }
+                Outcome::Rebuild
+            }
+            Command::RemoveTag { book, tag } => {
+                if let Err(e) = env.services.library.remove_tag(book, tag) {
+                    env.toast(
+                        tr_format(&tr("Cannot remove the tag: %1"), &[&e.to_string()]),
+                        4.0,
+                    );
+                }
                 Outcome::Rebuild
             }
             Command::Source(source) => {
@@ -934,15 +1030,14 @@ impl LibrarySurface {
             Panel::Sort => views::sort_panel(t, self.prefs.sort),
             Panel::Filter => {
                 let collection = collection_name(lib, self.prefs.collection);
-                views::filter_panel(
-                    t,
-                    self.prefs.chip,
-                    collection.as_deref(),
-                    self.prefs.source,
-                    self.prefs.format.as_deref(),
-                )
+                views::filter_panel(t, &self.prefs, collection.as_deref())
             }
             Panel::FileType => views::file_type_panel(t, &data::formats(lib), self.prefs.format.as_deref()),
+            Panel::TagFilter => views::tag_filter_panel(t, &data::tags(lib), self.prefs.tag.as_deref()),
+            Panel::Tags { book } => {
+                let (_, tags) = data::marks(lib, book);
+                views::tags_panel(t, book, &tags, &self.tag_text, self.tag_typing)
+            }
             Panel::Collection { book } => {
                 let collections = lib.collections().unwrap_or_default();
                 views::collection_panel(t, &collections, book, self.prefs.collection)
@@ -967,7 +1062,14 @@ impl LibrarySurface {
                         .map(|cid| format!("library:remove:{book}:{cid}"));
                     let rating = data::rating(env.services, &row);
                     let statistics = book_stats::load(env.services, &row).is_some();
-                    views::details_panel(t, &row, cover, "library:panel:close", remove, rating, statistics)
+                    let (favorite, tags) = data::marks(lib, book);
+                    let info = views::DetailsInfo {
+                        rating,
+                        statistics,
+                        favorite,
+                        tags: &tags,
+                    };
+                    views::details_panel(t, &row, cover, "library:panel:close", remove, info)
                 }
                 None => gone(t),
             },
@@ -1000,12 +1102,7 @@ impl LibrarySurface {
             head.push(views::view_tabs(&t, self.prefs.view));
             if matches!(self.prefs.view, View::Covers | View::List) {
                 let collection = collection_name(&env.services.library, self.prefs.collection);
-                let filter = views::filter_name(
-                    self.prefs.chip,
-                    collection.as_deref(),
-                    self.prefs.source,
-                    self.prefs.format.as_deref(),
-                );
+                let filter = views::filter_name(&self.prefs, collection.as_deref());
                 let sort = views::sort_name(self.prefs.sort);
                 head.push(views::books_controls(&t, &filter, &sort, self.prefs.view));
             }

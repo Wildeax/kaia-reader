@@ -32,6 +32,18 @@ pub enum LibraryError {
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
 
+    /// A tag is empty after its spaces are trimmed.
+    #[error("a tag cannot be empty")]
+    TagEmpty,
+
+    /// A tag has more characters than the limit, which is the number given.
+    #[error("a tag can have at most {0} characters")]
+    TagTooLong(usize),
+
+    /// The book has the number of tags given, so it takes no new one.
+    #[error("a book can have at most {0} tags")]
+    TooManyTags(usize),
+
     /// A KOReader data file could not be read or parsed.
     #[error("cannot read {}: {message}", path.display())]
     KoreaderData { path: PathBuf, message: String },

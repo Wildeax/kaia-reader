@@ -334,7 +334,8 @@ fn version_four_books_get_the_larger_cover_on_their_next_scan() {
     .unwrap();
     raw.execute("UPDATE books SET extracted = 1, attempts = 0 WHERE id = ?1", [id])
         .unwrap();
-    raw.execute_batch("DROP TABLE recent_searches;").unwrap();
+    raw.execute_batch("DROP TABLE recent_searches; DROP TABLE book_tags; DROP TABLE tags;")
+        .unwrap();
     raw.pragma_update(None, "user_version", 4).unwrap();
     drop(raw);
 
@@ -370,7 +371,8 @@ fn version_four_book(tmp: &Path, root: &Path, file: &Path) -> (i64, Vec<u8>) {
         [id],
     )
     .unwrap();
-    raw.execute_batch("DROP TABLE recent_searches;").unwrap();
+    raw.execute_batch("DROP TABLE recent_searches; DROP TABLE book_tags; DROP TABLE tags;")
+        .unwrap();
     raw.pragma_update(None, "user_version", 4).unwrap();
     (id, old_cover)
 }
@@ -468,7 +470,8 @@ fn refresh_keeps_the_stored_fields_the_new_extraction_does_not_produce() {
         [id],
     )
     .unwrap();
-    raw.execute_batch("DROP TABLE recent_searches;").unwrap();
+    raw.execute_batch("DROP TABLE recent_searches; DROP TABLE book_tags; DROP TABLE tags;")
+        .unwrap();
     raw.pragma_update(None, "user_version", 4).unwrap();
     drop(raw);
 

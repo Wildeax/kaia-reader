@@ -13,6 +13,7 @@ use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{LibraryError, Result};
+use crate::marks::{is_favorites_collection, tag_filter_key, FAVORITES_KEY};
 use crate::scan::{book_file, mtime_secs};
 use crate::types::{Book, Collection, CoverImage, CoverSize, Filter, Sort, SortKey, Status};
 use crate::Library;
@@ -137,6 +138,20 @@ impl Library {
         if let Some(series) = &filter.series {
             sql.push_str(" AND series IS NOT NULL AND series COLLATE NOCASE = ?");
             args.push(Value::Text(series.trim().to_string()));
+        }
+        if filter.favorite {
+            sql.push_str(
+                " AND id IN (SELECT cb.book_id FROM collection_books cb
+                   JOIN collections c ON c.id = cb.collection_id WHERE c.name_key = ?)",
+            );
+            args.push(Value::Text(FAVORITES_KEY.to_string()));
+        }
+        if let Some(key) = filter.tag.as_deref().and_then(tag_filter_key) {
+            sql.push_str(
+                " AND id IN (SELECT bt.book_id FROM book_tags bt
+                   JOIN tags t ON t.id = bt.tag_id WHERE t.name_key = ?)",
+            );
+            args.push(Value::Text(key));
         }
 
         let dir = if sort.descending { "DESC" } else { "ASC" };
@@ -454,7 +469,8 @@ impl Library {
         })
     }
 
-    /// Renames a collection. Names are unique without regard to case.
+    /// Renames a collection. Names are unique without regard to case. The
+    /// favorites collection keeps its name, because the favorites are its members.
     pub fn rename_collection(&mut self, collection_id: i64, name: &str) -> Result<()> {
         let name = name.trim();
         let key = collection_key(name)?;
@@ -469,6 +485,11 @@ impl Library {
         if !exists {
             return Err(LibraryError::CollectionNotFound(collection_id));
         }
+        if is_favorites_collection(&tx, collection_id)? {
+            return Err(LibraryError::InvalidArgument(
+                "the Favorites collection cannot be renamed".into(),
+            ));
+        }
         if collection_id_by_key(&tx, &key)?.is_some_and(|id| id != collection_id) {
             return Err(LibraryError::CollectionNameExists(name.to_string()));
         }
@@ -481,7 +502,13 @@ impl Library {
     }
 
     /// Deletes a collection and its book memberships. Returns false if absent.
+    /// The favorites collection cannot be deleted: its members are the favorites.
     pub fn delete_collection(&mut self, collection_id: i64) -> Result<bool> {
+        if is_favorites_collection(&self.conn, collection_id)? {
+            return Err(LibraryError::InvalidArgument(
+                "the Favorites collection cannot be deleted".into(),
+            ));
+        }
         Ok(self
             .conn
             .execute("DELETE FROM collections WHERE id = ?1", [collection_id])?
@@ -959,7 +986,7 @@ fn set_status_in(conn: &Connection, book_id: i64, status: Status) -> Result<usiz
 }
 
 /// Fails with `NotFound` when no book has this id.
-fn ensure_book(conn: &Connection, book_id: i64) -> Result<()> {
+pub(crate) fn ensure_book(conn: &Connection, book_id: i64) -> Result<()> {
     let found: Option<i64> = conn
         .query_row("SELECT 1 FROM books WHERE id = ?1", [book_id], |r| r.get(0))
         .optional()?;

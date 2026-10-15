@@ -31,6 +31,7 @@ The rating is `summary.rating`, 1 to 5, or absent. The Library's book details wr
 | App settings | `kaia-app` | `<data dir>/settings.json` |
 | Screen lock PIN (salt and hash) | `kaia-app` | `<data dir>/pin`, see "Screen lock PIN" |
 | Screen lock wrong tries and wait | `kaia-app` | `<data dir>/pin-attempts` |
+| Recent in-book searches | `kaia-app` | `<data dir>/kaia/search-history.json`, see "Search history" |
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
 
@@ -39,6 +40,24 @@ One exception writes a Nickel file, by the owner's decision (B-91, 2026-10-14): 
 The `layout` table of a book state holds `font_weight`, a KOReader font weight value (0 is regular, -1 to 3 in the Text and layout sheet). A missing key reads as 0.
 
 Removed books keep their reading data. When a book file is gone from a root that the scan read completely, the scan marks its row in `library.sqlite3` as missing. A scan never deletes that row. The row keeps its history, collections, status and cover. Lists, search and counts leave a missing book out until its file returns. A file copied back to its old path, or to a new path with the same content, gets the same book id. Only an explicit delete removes a row. The storage page deletes present files only, and a catalog server's delete request removes the row for its file. Reading state in `kaia/books/<partial_md5>.json` belongs to `kaia-book`. It is keyed by content, and `kaia-library` never touches it, so a returning book keeps its position, notes and status.
+
+## Search history
+
+`kaia-app` keeps the recent searches of each book in
+`<data dir>/kaia/search-history.json`. The file holds one `format` and
+`version` pair, currently `kaia-search-history` version 1, and a `books` table
+keyed by the book's partial MD5. Each entry is a list of up to 10 search texts,
+newest first. A book with no searches has no entry.
+
+The list stays out of the book state file. The open book session rewrites that
+file from memory on every save, so a second writer during a search would lose
+the list. `kaia-app` is the only writer of this file. A missing, damaged or
+other-format file reads as no searches, and the next search writes a new file.
+
+A search moves its trimmed text to the front. A repeat, without regard to case,
+moves the older entry instead of adding one. Blank searches are not kept. Erase
+all Kaia data removes the file with the data folder. Reset settings leaves it.
+Other owners never read it.
 
 ## Kobo import
 
@@ -580,6 +599,41 @@ Notes export includes `ink_counts`, an array of `{page, count}` objects per book
 and a count per page in Markdown. Export page numbers start at one and refer to
 the original layout. Counts can therefore differ from the current page numbers
 after a relayout. The sticker transfer format does not include ink.
+
+### Library database (`library.sqlite3`, version 8)
+
+`kaia-library` owns this file. Its schema lives in `rust/kaia-library/src/schema.rs`.
+Version 8 adds the tag tables:
+
+```sql
+CREATE TABLE tags (
+  id       INTEGER PRIMARY KEY,
+  name     TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE
+);
+CREATE TABLE book_tags (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  tag_id  INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (book_id, tag_id)
+);
+CREATE INDEX book_tags_tag ON book_tags(tag_id);
+```
+
+`name_key` is the trimmed name, with each run of spaces as one space, in lower
+case. A tag matches another tag by that key, so "Sci-Fi" and "sci-fi" are one
+tag, shown with the spelling stored first. A book carries at most 20 tags. A tag
+name has at most 40 characters. Removing a tag from a book deletes the tag when no
+book carries it. Removing a book deletes its tag links. A tag row left without
+books stays in the table, and the lists leave it out.
+
+A favorite has no column. It is a membership of the collection named `favorites`
+(key `favorites`). KOReader keeps its favorites in the same collection name, and
+the import reads it into this table, so a favorite set in either app is one row.
+The favorites collection cannot be renamed or deleted, as in KOReader.
+
+Version 8 needs no data change. A version 7 file opens, takes a backup under
+`backups/`, and gains the empty tag tables. A file at version 9 or later is refused
+without changes, as for every version.
 
 ## Export format
 

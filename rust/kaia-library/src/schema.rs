@@ -149,7 +149,25 @@ UPDATE books SET extracted = 0, attempts = 0
 WHERE extracted = 1 AND series IS NOT NULL AND series_index IS NULL;
 ";
 
-pub(crate) const MIGRATIONS: [Migration; 7] = [
+/// Version 8 adds tags. A tag is free text that a book carries. `tags` holds each
+/// distinct tag once, under its lower-case key, and `book_tags` links books to
+/// tags. Favorites need no change: a favorite is a membership of the collection
+/// named `favorites`. Existing rows stay as they are.
+const SCHEMA_V8: &str = "
+CREATE TABLE tags (
+  id       INTEGER PRIMARY KEY,
+  name     TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE
+);
+CREATE TABLE book_tags (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  tag_id  INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (book_id, tag_id)
+);
+CREATE INDEX book_tags_tag ON book_tags(tag_id);
+";
+
+pub(crate) const MIGRATIONS: [Migration; 8] = [
     Migration {
         version: 1,
         sql: SCHEMA_V1,
@@ -183,6 +201,11 @@ pub(crate) const MIGRATIONS: [Migration; 7] = [
     Migration {
         version: 7,
         sql: SCHEMA_V7,
+        step: None,
+    },
+    Migration {
+        version: 8,
+        sql: SCHEMA_V8,
         step: None,
     },
 ];
@@ -339,7 +362,7 @@ mod tests {
         let v: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let fts: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name = 'book_fts'",
@@ -364,7 +387,7 @@ mod tests {
             err,
             LibraryError::SchemaTooNew {
                 found: 99,
-                supported: 7
+                supported: 8
             }
         ));
         assert_eq!(fs::read(&path).unwrap(), before, "file is unchanged");
@@ -471,7 +494,7 @@ mod tests {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         assert_eq!(
             fs::read_dir(dir.path().join("backups")).unwrap().count(),
             1,
@@ -498,6 +521,51 @@ mod tests {
         assert!(
             !lib.book(2).unwrap().unwrap().extracted,
             "book is queued for extraction"
+        );
+    }
+
+    /// A version 7 database, as the previous build left it, with a favorites
+    /// collection of KOReader's name. It opens at version 8, keeps the favorite,
+    /// takes a backup, and accepts tags.
+    #[test]
+    fn version_seven_database_migrates_and_keeps_its_favorites() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.sqlite3");
+        {
+            let conn = open_with_migrations(&path, &MIGRATIONS[..7]).unwrap();
+            conn.execute(
+                "INSERT INTO books (id, path, size, mtime, partial_md5, title, format, added_at)
+                 VALUES (3, '/books/a.epub', 12, 3, 'hash', 'Title', 'epub', 4)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO collections (id, name, position, name_key) VALUES (5, 'favorites', 0, 'favorites')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO collection_books (collection_id, book_id, position) VALUES (5, 3, 1)",
+                [],
+            )
+            .unwrap();
+        }
+
+        let mut lib = Library::open(&path).unwrap();
+        assert!(lib.is_favorite(3).unwrap(), "the KOReader favorite is kept");
+        assert_eq!(lib.collections().unwrap()[0].name, "favorites");
+        assert!(lib.tags().unwrap().is_empty());
+        lib.add_tag(3, "after upgrade").unwrap();
+        assert_eq!(lib.book_tags(3).unwrap()[0].name, "after upgrade");
+        let v: u32 = Connection::open(&path)
+            .unwrap()
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 8);
+        assert_eq!(
+            fs::read_dir(dir.path().join("backups")).unwrap().count(),
+            1,
+            "a backup of version 7 is taken"
         );
     }
 
@@ -548,6 +616,6 @@ mod tests {
         let version: u32 = raw
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
     }
 }

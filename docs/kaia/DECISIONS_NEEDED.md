@@ -16,7 +16,7 @@ Rules that apply to every row: no network access unless the user turns the featu
 | B-86 | Hyphenation (T3-7) | KOReader's TeX patterns | Build. The hyph-utf8 patterns KOReader ships, the same source Nickel uses, chosen by the book's language with a manual override. |
 | B-87 | Notebook export (T3-16) | Add PDF export | Build. A PDF of notes and highlights per book, written with MuPDF, which Kaia already links. Word and image archives stay out. |
 | B-88 | Read aloud and screen reader (T3-2) | Leave out for now | Closed for now. The firmware has no offline speech engine and the device has no speaker. |
-| B-89 | Handwriting recognition (T3-1) | Leave out, keep ink | Closed. Nickel's engine (MyScript) is closed and its license does not fit AGPL. |
+| B-89 | Handwriting recognition (T3-1) | Build an open-source recognizer (changed 2026-10-14) | Build, as B-146. Nickel's engine (MyScript) is closed and its license does not fit AGPL, so Kaia uses or trains an open model. MyScript is studied only from the outside: no code, models or data are taken. |
 | B-90 | Network time (T3-13) | NTP, off by default | Build. A switch that sets the clock from pool.ntp.org when Wi-Fi is on. |
 | B-91 | Lua app writing Nickel's brightness (issue 6.3) | Keep writing by default | No code change. Record in `specs/STORAGE.md` that the Lua app writes Nickel's light settings by default, as KOReader does. |
 | B-92 | Translate and Wikipedia (issue 6.1) | Keep both, opt-in | Build. Each one off by default behind a switch that warns the selected text leaves the device. |
@@ -26,6 +26,7 @@ Rules that apply to every row: no network access unless the user turns the featu
 | B-96 | Ambient light sensor (T3-19) | Experiment after device tests | Moved to group B. Check the sensor on the device first; if it works, add opt-in auto brightness. |
 | B-97 | Experimental features (T3-5) | Put new features there first | Build. Large new features ship behind an experimental switch until their device tests pass. |
 | B-98 | Reading and library gaps | Build all four | Build. In-book search history; per-book statistics; Home controls and double-tap lookup; favorites and tags; extra PDF zoom modes. |
+| B-103 | Design reference (2026-10-14) | Match Nickel one to one | Build, as B-145 and B-147. Nickel's layout, flows, gestures and behavior are the reference for the Rust app. Kaia copies no Kobo code, icons, images, fonts or logos. Features that need Kobo's servers or DRM (store, account sync, OverDrive, cloud links, store books) stay in Nickel. |
 | B-99 | Device gaps | PIN, screenshots, sleep screen and standby | Build. Screen lock PIN; screenshots; sleep screen with book info; standby timeout. Captive portal login stays out. |
 
 ## Later, after device testing

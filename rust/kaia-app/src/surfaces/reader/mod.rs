@@ -28,6 +28,7 @@ mod persistence;
 mod plugin_doc;
 #[cfg(feature = "lua")]
 mod plugins;
+pub mod search_history;
 mod state;
 mod sticker_actions;
 pub mod stickers;
@@ -1193,13 +1194,8 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if c.panel.is_some() {
                     return Outcome::Handled;
                 }
-                let rows = c
-                    .session
-                    .as_ref()
-                    .map(|s| panels::search_rows(s.search_results()))
-                    .unwrap_or_default();
-                let status = search_status(&c);
-                let window = panels::search(env.services, env.screen, &c.search_text, rows, &status);
+                let text = c.search_text.clone();
+                let window = search_panel(&c, env, &text);
                 push_panel(rc, &mut c, env.ctx, window)
             }
             Command::SearchGo => {
@@ -1208,19 +1204,65 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 };
                 let text = read_field(&layer.window, env.ctx, "search-field").unwrap_or_default();
                 let text = text.trim().to_string();
+                // The recent searches and the Clear history button leave the panel when a
+                // search starts, so the panel is rebuilt then. Otherwise the results update in place.
+                let showing_recent = c.search_text.is_empty() && !recent_searches(&c, env).is_empty();
                 c.reset_search_paint();
                 c.search_text = text.clone();
                 if text.is_empty() {
+                    // An empty field lists the recent searches instead.
                     env.toast(tr("Type a word to search."), 2.0);
-                    return Outcome::Handled;
+                    let window = search_panel(&c, env, &text);
+                    return show_panel(rc, &mut c, env.ctx, window, true);
                 }
                 let started = c.session.as_mut().map(|s| s.start_search(&text));
                 match started {
-                    Some(Ok(())) => c.update_search(env.ctx),
+                    Some(Ok(())) => remember_search(&c, env, &text),
                     Some(Err(e)) => env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()])),
                     None => {}
                 }
-                Outcome::Handled
+                let outcome = if showing_recent {
+                    let window = search_panel(&c, env, &text);
+                    show_panel(rc, &mut c, env.ctx, window, true)
+                } else {
+                    Outcome::Handled
+                };
+                c.update_search(env.ctx);
+                outcome
+            }
+            Command::SearchRecent(index) => {
+                let Some(text) = recent_searches(&c, env).get(index).cloned() else {
+                    return Outcome::Handled;
+                };
+                c.reset_search_paint();
+                c.search_text = text.clone();
+                let started = c.session.as_mut().map(|s| s.start_search(&text));
+                match started {
+                    Some(Ok(())) => remember_search(&c, env, &text),
+                    Some(Err(e)) => env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()])),
+                    None => {}
+                }
+                let window = search_panel(&c, env, &text);
+                let outcome = show_panel(rc, &mut c, env.ctx, window, true);
+                c.update_search(env.ctx);
+                outcome
+            }
+            Command::SearchClearHistory => {
+                let Some(layer) = c.panel.clone() else {
+                    return Outcome::Handled;
+                };
+                if let Some(session) = c.session.as_ref() {
+                    let path = search_history::path(&env.services.paths.data_dir);
+                    if let Err(e) = search_history::clear(&path, &session.identity().partial_md5) {
+                        env.notice(tr_format(
+                            &tr("Cannot save search history: %1"),
+                            &[&e.to_string()],
+                        ));
+                    }
+                }
+                let text = read_field(&layer.window, env.ctx, "search-field").unwrap_or_default();
+                let window = search_panel(&c, env, &text);
+                show_panel(rc, &mut c, env.ctx, window, true)
             }
             Command::SearchHit(index) => {
                 let location = c
@@ -1519,16 +1561,12 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 c.search_text = text.clone();
                 c.clear_selection(env.ctx);
                 let started = c.session.as_mut().map(|s| s.start_search(&text));
-                if let Some(Err(e)) = started {
-                    env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()]));
+                match started {
+                    Some(Ok(())) => remember_search(&c, env, &text),
+                    Some(Err(e)) => env.notice(tr_format(&tr("cannot search: %1"), &[&e.to_string()])),
+                    None => {}
                 }
-                let rows = c
-                    .session
-                    .as_ref()
-                    .map(|s| panels::search_rows(s.search_results()))
-                    .unwrap_or_default();
-                let status = search_status(&c);
-                let window = panels::search(env.services, env.screen, &text, rows, &status);
+                let window = search_panel(&c, env, &text);
                 show_panel(rc, &mut c, env.ctx, window, true)
             }
             Command::NoteSave => {
@@ -2112,6 +2150,51 @@ fn move_dictionary(rc: &Rc<RefCell<Core>>, env: &mut SurfaceEnv<'_>, action: &st
     }
     save_settings(env);
     open_dictionary_settings(rc, env)
+}
+
+/// The search panel for the text in its field. An empty field lists the recent
+/// searches of the book. Otherwise the panel lists the hits found so far.
+fn search_panel(c: &Core, env: &SurfaceEnv<'_>, text: &str) -> Window {
+    if text.trim().is_empty() {
+        let recent = recent_searches(c, env);
+        let status = if recent.is_empty() {
+            tr("Type a word and press Search.")
+        } else {
+            tr("Recent searches. Tap one to run it again.")
+        };
+        let rows = panels::recent_rows(&recent);
+        return panels::search(env.services, env.screen, text, rows, &status, !recent.is_empty());
+    }
+    let rows = c
+        .session
+        .as_ref()
+        .map(|s| panels::search_rows(s.search_results()))
+        .unwrap_or_default();
+    panels::search(env.services, env.screen, text, rows, &search_status(c), false)
+}
+
+/// The recent searches of the open book, newest first. No book open gives none.
+fn recent_searches(c: &Core, env: &SurfaceEnv<'_>) -> Vec<String> {
+    let Some(session) = c.session.as_ref() else {
+        return Vec::new();
+    };
+    let path = search_history::path(&env.services.paths.data_dir);
+    search_history::load(&path, &session.identity().partial_md5)
+}
+
+/// Moves a search that ran to the front of the book's recent searches. A failed
+/// write is a notice, and the search keeps running.
+fn remember_search(c: &Core, env: &mut SurfaceEnv<'_>, search: &str) {
+    let Some(session) = c.session.as_ref() else {
+        return;
+    };
+    let path = search_history::path(&env.services.paths.data_dir);
+    if let Err(e) = search_history::record(&path, &session.identity().partial_md5, search) {
+        env.notice(tr_format(
+            &tr("Cannot save search history: %1"),
+            &[&e.to_string()],
+        ));
+    }
 }
 
 fn search_status(c: &Core) -> String {
