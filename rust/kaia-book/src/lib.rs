@@ -33,6 +33,9 @@ pub mod state;
 pub mod text;
 pub mod view;
 
+mod logical;
+pub use logical::LogicalProgress;
+
 mod doc;
 mod engine;
 mod time;

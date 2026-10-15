@@ -173,6 +173,7 @@ impl Status {
 /// The footer line for a page: the items that are on, in order, with a middle dot
 /// between them. Empty when no item is on, or when the book has no pages and the
 /// line needs the page.
+#[cfg(test)]
 pub fn line(footer: &Footer, info: &PageInfo, seconds_per_page: f64, status: &Status) -> String {
     joined_line(footer, info, seconds_per_page, status, " · ")
 }
@@ -180,6 +181,36 @@ pub fn line(footer: &Footer, info: &PageInfo, seconds_per_page: f64, status: &St
 /// The page uses KOReader's default item separator from `readerfooter.lua`.
 pub fn page_line(footer: &Footer, info: &PageInfo, seconds_per_page: f64, status: &Status) -> String {
     joined_line(footer, info, seconds_per_page, status, " | ")
+}
+
+pub fn logical_page_line(
+    logical: Option<kaia_book::LogicalProgress>,
+    footer: &Footer,
+    info: &PageInfo,
+    pace: f64,
+    status: &Status,
+) -> String {
+    let Some(logical) = logical else {
+        return page_line(footer, info, pace, status);
+    };
+    let mut labels = info.clone();
+    labels.page = logical.page - 1;
+    labels.page_count = logical.total as usize;
+    let in_chapter = info.chapter.is_some() && info.pages_left_in_chapter.is_some();
+    Item::ALL
+        .into_iter()
+        .filter(|&item| footer.is_on(item))
+        .filter(|&item| !(item == Item::TimeBook && footer.is_on(Item::TimeChapter) && !in_chapter))
+        .filter_map(|item| {
+            text(
+                item,
+                if item == Item::Page { &labels } else { info },
+                pace,
+                status,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 fn joined_line(
@@ -281,6 +312,29 @@ mod tests {
             pages_left_in_chapter: Some(left),
             ..info(page, count)
         }
+    }
+
+    #[test]
+    fn logical_labels_leave_percent_and_time_estimates_on_screen_counts() {
+        let mut footer = Footer::default();
+        footer.set(Item::Percent, true);
+        footer.set(Item::TimeBook, true);
+        footer.set(Item::TimeChapter, true);
+        let info = in_chapter(5, 1090, 12);
+        let screen = page_line(&footer, &info, 60.0, &Status::default());
+        let logical = logical_page_line(
+            Some(kaia_book::LogicalProgress {
+                page: 3,
+                total: 96,
+                chapter_page: 1,
+                chapter_total: 2,
+            }),
+            &footer,
+            &info,
+            60.0,
+            &Status::default(),
+        );
+        assert_eq!(logical, screen.replace("Page 6 of 1090", "Page 3 of 96"));
     }
 
     #[test]

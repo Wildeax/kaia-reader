@@ -106,7 +106,7 @@ fn open_once(app: &mut App<HeadlessBackend>, id: i64) {
     wait_reader(app);
     app.broadcast_app(Event::new("SaveState"));
     app.command("reader:overlay", &[]);
-    tap_key(app, "overlay-back");
+    tap_key(app, "overlay-home");
     // The book may have been opened from Home, so the back action lands there.
     open_library(app);
 }

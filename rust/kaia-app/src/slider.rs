@@ -6,6 +6,7 @@ use kaia_ui::geometry::Constraints;
 use kaia_ui::widget::{AppAction, EventCx, Handled, LayoutCx, PaintCx, PaintHint, UiEvent, Widget};
 
 pub struct Slider {
+    reader: bool,
     inner: kaia_ui::controls::Slider,
     min: f64,
     max: f64,
@@ -18,6 +19,7 @@ pub struct Slider {
 impl Slider {
     pub fn new(value: f64, min: f64, max: f64, step: f64) -> Self {
         Self {
+            reader: false,
             inner: kaia_ui::controls::Slider::new(value, min, max, step),
             min,
             max,
@@ -27,6 +29,10 @@ impl Slider {
             dragging: false,
             format: Box::new(|v| format!("{v}")),
         }
+    }
+    pub fn reader(mut self) -> Self {
+        self.reader = true;
+        self
     }
     pub fn format(mut self, f: impl Fn(f64) -> String + Clone + 'static) -> Self {
         self.format = Box::new(f.clone());
@@ -60,6 +66,17 @@ impl Slider {
         }
     }
     fn at(&mut self, cx: &mut EventCx, x: i32, hint: PaintHint) {
+        if self.reader {
+            let b = cx.bounds();
+            let pad = (b.h / 4).min(b.w / 4);
+            let fraction = f64::from(x - b.x - pad as i32) / f64::from(b.w.saturating_sub(2 * pad).max(1));
+            self.change(
+                cx,
+                self.min + fraction.clamp(0.0, 1.0) * (self.max - self.min),
+                hint,
+            );
+            return;
+        }
         let t = cx.theme();
         let style = t.style(&t.font.body, kaia_ui::Tone::Ink);
         let lo = cx
@@ -87,7 +104,29 @@ impl Widget for Slider {
         self.inner.layout(cx, c)
     }
     fn paint(&mut self, cx: &mut PaintCx) {
-        self.inner.paint(cx);
+        if !self.reader {
+            self.inner.paint(cx);
+            return;
+        }
+        let b = cx.bounds();
+        let pad = (b.h / 4).min(b.w / 4);
+        let width = b.w.saturating_sub(2 * pad);
+        let fraction = if self.max > self.min {
+            (self.value() - self.min) / (self.max - self.min)
+        } else {
+            0.0
+        };
+        let x = b.x + pad as i32;
+        let y = b.y + b.h as i32 / 2;
+        let ink = cx.color(kaia_ui::Tone::Ink);
+        let fill = (fraction * f64::from(width)) as u32;
+        cx.fill_rect(kaia_gfx::Rect::new(x, y, width, 1), ink);
+        cx.fill_rect(kaia_gfx::Rect::new(x, y - 2, fill, 5), ink);
+        let center = kaia_gfx::Point::new(x + fill as i32, y);
+        let radius = pad as f32;
+        cx.fill_circle(center, radius, cx.color(kaia_ui::Tone::Surface));
+        cx.stroke_circle(center, radius, 2.0, ink);
+        cx.stroke_circle(center, (radius - 7.0).max(1.0), 1.0, ink);
     }
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         if !self.enabled {

@@ -79,6 +79,7 @@ pub struct PageView {
     chapter_progress: Option<super::caption::ChapterProgress>,
     book_title: String,
     pub header_height: u32,
+    pub logical_progress: Option<kaia_book::LogicalProgress>,
     footer_content: Option<(super::footer::Footer, kaia_book::PageInfo, f64)>,
     pub(crate) footer_battery: Option<u8>,
     /// The strip reserved by the book layout, including its vertical space.
@@ -124,6 +125,7 @@ impl PageView {
             chapter_progress: None,
             book_title: String::new(),
             header_height: 0,
+            logical_progress: None,
             footer_content: None,
             footer_battery: None,
             footer_height: 0,
@@ -408,11 +410,22 @@ impl Widget for PageView {
             cx.dim(*rect, 80);
             cx.border(*rect, 0, 2, ink);
         }
+        if let (Some(first), Some(last)) = (self.selection.first(), self.selection.last()) {
+            for center in [
+                Point::new(first.x, first.y - 12),
+                Point::new(last.right(), last.bottom() + 12),
+            ] {
+                cx.fill_circle(center, 14.0, cx.color(Tone::Surface));
+                cx.stroke_circle(center, 14.0, 2.0, ink);
+                cx.stroke_circle(center, 9.0, 1.0, ink);
+            }
+        }
         // Kaia's header and footer go under stickers and plugin overlays, so a plugin can draw
         // in the footer strip as it does in KOReader.
         if self.footer_height > 0 {
             let caption = if let Some((footer, info, pace)) = &self.footer_content {
-                let status = super::footer::page_line(
+                let status = super::footer::logical_page_line(
+                    self.logical_progress,
                     footer,
                     info,
                     *pace,

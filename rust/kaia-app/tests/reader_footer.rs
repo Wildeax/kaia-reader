@@ -40,6 +40,12 @@ fn open_overlay(app: &mut App<HeadlessBackend>) {
     app.tap(p).unwrap();
     wait_reader(app);
     assert_eq!(app.top_route(), Some(&Route::Overlay));
+    app.update_top::<kaia_ui::components::Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
 }
 
 /// The footer line on the bars. The overlay must be the top window.
@@ -115,10 +121,20 @@ fn the_footer_sheet_turns_items_on_and_the_line_follows() {
 
     close_panels(&mut app);
     assert_eq!(app.top_route(), Some(&Route::Overlay), "back on the bars");
-    let line = footer_line(&mut app);
-    assert!(line.starts_with("Page "), "the page number leads: {line:?}");
+    assert_eq!(
+        footer_line(&mut app),
+        default_line,
+        "the menu keeps one position label"
+    );
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    let line = page_state(&mut app).0;
+    assert!(
+        line.starts_with("Romeo and Juliet · Page "),
+        "the page number follows the title: {line:?}"
+    );
     assert!(line.contains(" of "), "page of total: {line:?}");
-    assert!(line.contains(" · "), "two items are joined: {line:?}");
+    assert!(line.contains(" | "), "two items are joined: {line:?}");
     assert!(line.contains("left in"), "the time is still on: {line:?}");
     assert!(!line.contains('%'), "the percent is off: {line:?}");
 }
@@ -136,9 +152,11 @@ fn the_clock_shows_the_local_time_when_the_bars_open() {
     tap_key(&mut app, "footer-clock");
     close_panels(&mut app);
 
-    let line = footer_line(&mut app);
+    app.key(Key::Back).unwrap();
+    wait_reader(&mut app);
+    let line = page_state(&mut app).0;
     let clock = line
-        .split(" · ")
+        .split(" | ")
         .find(|part| part.len() == 5 && part.as_bytes()[2] == b':')
         .unwrap_or_else(|| panic!("a HH:MM part in {line:?}"));
     assert!(clock[..2].parse::<u32>().is_ok_and(|h| h < 24), "hours: {clock}");
@@ -174,12 +192,17 @@ fn the_persistent_footer_reserves_space_and_updates_after_a_page_turn() {
     let (before, strip, page) = page_state(&mut app);
     assert_eq!(strip, 120, "the capture centres the footer in a 120 px strip");
     assert_eq!(page.height(), app.screen().h - strip - header_state(&mut app).1);
-    assert!(before.starts_with("Romeo and Juliet · Page 9 of "), "{before}");
+    assert_eq!(before, "Romeo and Juliet · Page 3 of 96");
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
     let (after, next_strip, _) = page_state(&mut app);
-    assert!(after.starts_with("Romeo and Juliet · Page 10 of "), "{after}");
-    assert_ne!(before, after);
+    assert_eq!(
+        after, before,
+        "a screen turn within a logical block keeps its label"
+    );
+    app.command("reader:location", &[Value::Number(11.0)]);
+    wait_reader(&mut app);
+    assert_eq!(page_state(&mut app).0, "Romeo and Juliet · Page 4 of 96");
     assert_eq!(strip, next_strip);
 }
 
@@ -368,23 +391,12 @@ fn header_chapter_changes_at_the_toc_boundary() {
     let (after, page) = &boundary[1];
     app.command("reader:location", &[Value::Number(f64::from(page - 1))]);
     wait_reader(&mut app);
-    let before_total = page - boundary[0].1;
-    assert_eq!(
-        header_state(&mut app).0 .1,
-        format!("{before} · {before_total} of {before_total}")
-    );
+    assert_eq!(before, "Title");
+    assert_eq!(after, "About");
+    assert_eq!(header_state(&mut app).0 .1, format!("{before} · 1 of 1"));
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
-    let next = chapters
-        .iter()
-        .filter(|(_, p)| p > page)
-        .map(|(_, p)| *p)
-        .min()
-        .unwrap();
-    assert_eq!(
-        header_state(&mut app).0 .1,
-        format!("{after} · 1 of {}", next - page)
-    );
+    assert_eq!(header_state(&mut app).0 .1, format!("{after} · 1 of 2"));
 }
 
 #[test]

@@ -186,10 +186,13 @@ impl Surface for Panel {
         true
     }
 
-    fn on_hide(&mut self, _env: &mut SurfaceEnv<'_>) {
+    fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
         let mut core = self.core.borrow_mut();
         if core.panel.as_ref().is_some_and(|l| l.serial == self.serial) {
             core.panel = None;
+            if core.selection.is_some() {
+                core.clear_selection(env.ctx);
+            }
         }
     }
 }
@@ -1029,10 +1032,11 @@ pub(super) fn selection_more(
     screen: Size,
     edge: Edge,
     drawer: &str,
+    color: &str,
     shade: f64,
 ) -> Window {
     let t = &services.theme;
-    let mut children = vec![group_heading(services, &tr("Style"))];
+    let mut children = vec![color_dots(services, color), group_heading(services, &tr("Style"))];
     children.extend(drawer_rows(services, "reader:highlight", drawer));
     let shade = WidgetPod::new(
         Stepper::new(shade * 100.0, 0.0, 100.0, 10.0)
@@ -1819,6 +1823,161 @@ pub fn link_text(services: &Services, screen: Size, title: &str, text: &str) -> 
             1,
         ))],
         Some(TALL_PERCENT),
+    )
+}
+
+/// Selection actions stay beside the word while its definition opens below.
+pub(super) fn selection_lookup(
+    services: &Services,
+    screen: Size,
+    word: &str,
+    style: (&str, &str),
+    selection: Option<&Selection>,
+    header: u32,
+    definition: &str,
+) -> Window {
+    use super::chrome::{rect, Chrome, Tool};
+    let t = &services.theme;
+    let (drawer, color) = style;
+    let mut font = t.font.body.clone();
+    font.size = 34.0 * screen.w.min(screen.h) as f32 / 1264.0;
+    let compact = |label: &str, action: &str, key: &str| {
+        let mut tool = Tool::new("", action, 48 * screen.w.min(screen.h) / 1264);
+        tool.label = label.into();
+        WidgetPod::new(tool).focusable(true).with_key(key)
+    };
+    let bounds = selection
+        .and_then(|s| s.screen_rects.first())
+        .copied()
+        .unwrap_or(kaia_gfx::Rect::new(
+            (screen.w / 2) as i32,
+            (screen.h / 3) as i32,
+            1,
+            1,
+        ));
+    let width = screen.w * 342 / 1264;
+    let height = screen.h * 379 / 1680;
+    let gap = screen.h * 24 / 1680;
+    let x =
+        (bounds.x + bounds.w as i32 / 2 - width as i32 / 2).clamp(0, screen.w.saturating_sub(width) as i32);
+    let above = bounds.y + header as i32 - height as i32 - gap as i32;
+    let y = if above >= 0 {
+        above
+    } else {
+        bounds.bottom() + header as i32 + gap as i32
+    };
+    let y = y
+        .min((screen.h * 980 / 1680).saturating_sub(height) as i32)
+        .max(0);
+    let popup = kaia_gfx::Rect::new(x, y, width, height);
+    let mut children = Vec::new();
+    let mut add = |dx, dy, w, h, pod| {
+        let r = rect(screen, dx, dy, w, h);
+        children.push((kaia_gfx::Rect::new(x + r.x, y + r.y, r.w, r.h), pod));
+    };
+    for (i, name) in ["yellow", "purple", "blue", "green"]
+        .iter()
+        .enumerate()
+        .filter(|_| t.color_panel && drawer != "invert")
+    {
+        let rgb = kaia_book::highlight_rgb(name).unwrap();
+        add(
+            20 + i as u32 * 80,
+            24,
+            62,
+            62,
+            WidgetPod::new(Swatch {
+                color: Color::rgb(rgb[0], rgb[1], rgb[2]),
+                selected: *name == color,
+                action: Some(format!("reader:sel:color:{name}")),
+                round: true,
+            })
+            .with_key(format!("color-{name}")),
+        );
+    }
+    for (y, label, action, key) in [
+        (104, tr("Highlight"), "reader:sel:highlight", "sel-highlight"),
+        (193, tr("Add note"), "reader:sel:note", "sel-note"),
+        (282, tr("Search ›"), "reader:sel:search-menu", "sel-search"),
+    ] {
+        add(10, y, 322, 87, compact(&label, action, key));
+    }
+    let card = rect(screen, 31, 1002, 1202, 647);
+    children.push((
+        rect(screen, 60, 1015, 1000, 80),
+        compact(&tr("Dictionaries ▾"), "reader:dicts:open", "dict-selector"),
+    ));
+    children.push((
+        rect(screen, 72, 1110, 1120, 70),
+        WidgetPod::new(Label::new(word, font.clone(), Tone::Ink)).with_key("sel-word"),
+    ));
+    children.push((
+        rect(screen, 72, 1185, 1120, 350),
+        WidgetPod::new(Paragraph::new(definition, font.clone(), Tone::Ink).max_lines(7))
+            .with_key("dict-body"),
+    ));
+    children.push((
+        rect(screen, 60, 1560, 520, 75),
+        compact(&tr("More"), "reader:sel:more", "sel-more"),
+    ));
+    children.push((
+        rect(screen, 560, 1560, 470, 75),
+        compact(
+            &tr("Free dictionaries"),
+            "settings:dictionary-downloads",
+            "dict-downloads",
+        ),
+    ));
+    children.push((
+        rect(screen, 1050, 1560, 140, 75),
+        WidgetPod::new(IconButton::new("appbar.pagefit").on_action("reader:sel:dict")).with_key("sel-dict"),
+    ));
+    for dy in [104, 193, 282] {
+        let r = rect(screen, 10, dy, 322, 1);
+        children.push((
+            kaia_gfx::Rect::new(x + r.x, y + r.y, r.w, 1),
+            WidgetPod::new(Frame::new(WidgetPod::new(SizedBox::new(None))).fill(Tone::Ink)),
+        ));
+    }
+    for dy in [1103, 1558] {
+        children.push((
+            rect(screen, 32, dy, 1200, 1),
+            WidgetPod::new(Frame::new(WidgetPod::new(SizedBox::new(None))).fill(Tone::Ink)),
+        ));
+    }
+    window(
+        services,
+        screen,
+        Chrome {
+            size: screen,
+            children,
+            panels: vec![popup, card],
+        },
+    )
+}
+
+pub(super) fn selection_search(services: &Services, screen: Size) -> Window {
+    sheet(
+        services,
+        screen,
+        Some(&tr("Search")),
+        vec![
+            button(
+                ButtonStyle::Text,
+                &tr("In this book"),
+                "reader:sel:search",
+                "sel-search-book",
+            ),
+            button(
+                ButtonStyle::Text,
+                &tr("Dictionary"),
+                "reader:sel:dict",
+                "sel-dict",
+            ),
+            button(ButtonStyle::Text, &tr("Copy"), "reader:sel:copy", "sel-copy"),
+            button(ButtonStyle::Text, &tr("More"), "reader:sel:more", "sel-more"),
+        ],
+        None,
     )
 }
 

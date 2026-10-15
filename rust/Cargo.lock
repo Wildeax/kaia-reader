@@ -985,8 +985,11 @@ dependencies = [
  "kaia-luadata",
  "kaia-mupdf-sys",
  "md-5",
+ "percent-encoding",
+ "roxmltree 0.21.1",
  "tempfile",
  "thiserror",
+ "zip",
 ]
 
 [[package]]

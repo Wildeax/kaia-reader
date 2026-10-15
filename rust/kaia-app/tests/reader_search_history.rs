@@ -38,6 +38,12 @@ fn open_search(app: &mut App<HeadlessBackend>) {
     app.tap(p).unwrap();
     wait_reader(app);
     assert_eq!(app.top_route(), Some(&Route::Overlay), "the overlay opens");
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(app, "overlay-search");
 }
 

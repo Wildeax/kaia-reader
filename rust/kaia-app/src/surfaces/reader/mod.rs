@@ -15,6 +15,7 @@
 //! in `reading.full_refresh_pages`, every Nth turn is one too.
 
 mod caption;
+mod chrome;
 mod commands;
 pub(crate) mod dict;
 mod footer;
@@ -1132,6 +1133,34 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 c.go_to(env.ctx, kaia_book::Location::Page(page));
                 Outcome::Navigate(Nav::Pop)
             }
+            Command::Jump(forward) => {
+                if let Some(session) = c.session.as_ref() {
+                    let page = session.current().page;
+                    let target = if forward {
+                        session
+                            .toc()
+                            .iter()
+                            .filter_map(|e| e.page)
+                            .filter(|&p| p > page)
+                            .min()
+                            .unwrap_or(session.page_count().saturating_sub(1) as u32)
+                    } else {
+                        session
+                            .toc()
+                            .iter()
+                            .filter_map(|e| e.page)
+                            .filter(|&p| p < page)
+                            .max()
+                            .unwrap_or(0)
+                    };
+                    c.go_to(env.ctx, kaia_book::Location::Page(target));
+                }
+                Outcome::Handled
+            }
+            Command::SelSearchMenu => {
+                let window = panels::selection_search(env.services, env.screen);
+                show_panel(rc, &mut c, env.ctx, window, true)
+            }
             Command::Next => step(rc, &mut c, env, true),
             Command::Prev => step(rc, &mut c, env, false),
             Command::Hold(x, y) => {
@@ -1149,14 +1178,39 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     let word = c.selection.as_ref().map(|s| s.text.clone()).unwrap_or_default();
                     let (drawer, color) = highlight_style(env.services, c.color_panel);
                     let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
-                    let window = panels::selection_popover(
-                        env.services,
-                        env.screen,
-                        &word,
-                        c.moving_sticker.is_some(),
-                        (drawer.as_str(), &color),
-                        edge,
-                    );
+                    let preferred = preferred_dictionaries(&c);
+                    let answer = dict::lookup(&word, env.services, &preferred);
+                    let context = c.selection.clone().and_then(|selection| {
+                        c.session
+                            .as_mut()
+                            .and_then(|s| s.selection_sentence(&selection).ok().flatten())
+                    });
+                    c.lookup = Some(LookupState {
+                        word: word.clone(),
+                        context,
+                        dictionary: answer.first.clone(),
+                        book_title: c.title.clone(),
+                    });
+                    let window = if word.is_empty() {
+                        panels::selection_popover(
+                            env.services,
+                            env.screen,
+                            &word,
+                            c.moving_sticker.is_some(),
+                            (drawer.as_str(), &color),
+                            edge,
+                        )
+                    } else {
+                        panels::selection_lookup(
+                            env.services,
+                            env.screen,
+                            &word,
+                            (drawer.as_str(), &color),
+                            c.selection.as_ref(),
+                            c.header_height,
+                            &answer.text,
+                        )
+                    };
                     return push_panel(rc, &mut c, env.ctx, window);
                 }
                 Outcome::Handled
@@ -1599,10 +1653,11 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if c.selection.is_none() {
                     return Outcome::Handled;
                 }
-                let (drawer, _) = highlight_style(env.services, c.color_panel);
+                let (drawer, color) = highlight_style(env.services, c.color_panel);
                 let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
                 let shade = crate::surfaces::settings::keys::highlight_shade(&env.services.settings);
-                let window = panels::selection_more(env.services, env.screen, edge, drawer.as_str(), shade);
+                let window =
+                    panels::selection_more(env.services, env.screen, edge, drawer.as_str(), &color, shade);
                 show_panel(rc, &mut c, env.ctx, window, true)
             }
             Command::SelShade(percent) => {
@@ -1637,15 +1692,13 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     return Outcome::Handled;
                 };
                 let word = kaia_dict::clean_selection(&selection.text);
-                // Read the session before the selection clears. Clearing repaints the
-                // page, and the repaint takes the session until its frame comes back.
+                // Keep the selected word visible behind the definition.
                 let context = c.session.as_mut().map(|s| dict::LookupContext {
                     sentence: s.selection_sentence(&selection).ok().flatten(),
                     #[cfg(feature = "lua")]
                     surrounding: s.selection_context(&selection).ok().flatten(),
                 });
                 let preferred = preferred_dictionaries(&c);
-                c.clear_selection(env.ctx);
                 open_dictionary(rc, &mut c, env, &word, context, preferred)
             }
             Command::SelSearch => {
@@ -1945,14 +1998,27 @@ fn default_style(
     };
     let (drawer, color) = highlight_style(env.services, c.color_panel);
     let edge = panels::edge_for(env.screen, c.selection.as_ref(), c.header_height);
-    let window = panels::selection_popover(
-        env.services,
-        env.screen,
-        &word,
-        c.moving_sticker.is_some(),
-        (drawer.as_str(), &color),
-        edge,
-    );
+    let answer = dict::lookup(&word, env.services, &preferred_dictionaries(&c));
+    let window = if word.is_empty() {
+        panels::selection_popover(
+            env.services,
+            env.screen,
+            &word,
+            c.moving_sticker.is_some(),
+            (drawer.as_str(), &color),
+            edge,
+        )
+    } else {
+        panels::selection_lookup(
+            env.services,
+            env.screen,
+            &word,
+            (drawer.as_str(), &color),
+            c.selection.as_ref(),
+            c.header_height,
+            &answer.text,
+        )
+    };
     show_panel(rc, &mut c, env.ctx, window, true)
 }
 

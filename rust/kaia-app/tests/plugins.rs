@@ -645,6 +645,8 @@ fn anki_native_selection_saves_one_offline_card_across_restart() {
     fs::write(dict.join("test.dict"), definition).unwrap();
     fs::write(dict.join("test.idx"), &index).unwrap();
     fs::write(dict.join("test.ifo"), format!("StarDict's dict ifo file\nversion=2.4.2\nbookname=Offline Dictionary\nwordcount=1\nidxfilesize={}\nsametypesequence=m\n", index.len())).unwrap();
+    // The hold already looked up the word before this fixture was installed.
+    app.services_mut().dictionary = None;
     tap_key(&mut app, "sel-dict");
     tap_key(&mut app, "dictionary-plugins");
     app.tap(Point::new(632, 145)).unwrap();

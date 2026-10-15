@@ -312,8 +312,8 @@ fn the_more_sheet_marks_the_saved_style_and_returns_to_the_selection_panel() {
         "the shade stepper is in More"
     );
     assert!(
-        app.find_rect("color-yellow").is_none(),
-        "the colors stay on the selection panel"
+        app.find_rect("color-yellow").is_some(),
+        "More keeps the full color palette available"
     );
     assert_matches_golden(app.frame(), &golden("reader-selection-more.png"), 14);
 
@@ -358,6 +358,7 @@ fn tapping_a_highlight_changes_its_style_and_keeps_its_color() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     hold_at(&mut app, word_point());
+    tap_key(&mut app, "sel-more");
     tap_key(&mut app, "color-red");
     wait_reader(&mut app);
     assert_eq!(highlights(&dir), [("lighten".to_string(), "red".to_string())]);
@@ -410,6 +411,7 @@ fn dictionary_settings_reorder_and_switch_dictionaries_off() {
         &word,
         "second definition",
     );
+    app.services_mut().dictionary = None;
     tap_key(&mut app, "sel-dict");
     tap_key(&mut app, "dict-settings");
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
@@ -475,6 +477,7 @@ fn a_book_can_use_one_dictionary_first_and_keeps_that_after_a_reopen() {
         "dictionary.order",
         string_list(&["Test Dictionary", "Second Dictionary"]),
     );
+    app.services_mut().dictionary = None;
     tap_key(&mut app, "sel-dict");
     assert!(
         text_of(&mut app, "dict-body").starts_with(&format!("{word} (Test Dictionary)")),
@@ -587,4 +590,10 @@ fn open_overlay(app: &mut App<HeadlessBackend>) {
     app.tap(p).unwrap();
     wait_reader(app);
     assert_eq!(app.top_route(), Some(&Route::Overlay));
+    app.update_top::<kaia_ui::components::Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
 }

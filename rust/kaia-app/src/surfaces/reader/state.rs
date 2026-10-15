@@ -19,7 +19,7 @@ use kaia_ui::controls::{TextField, ToolButton};
 use kaia_ui::widget::PaintHint;
 use kaia_ui::Window;
 
-use super::footer::{self, Footer, Status};
+use super::footer::{Footer, Status};
 use super::overlay::{bookmark_label, OverlayModel};
 use super::page::{PageView, PAGE_KEY};
 use super::panels::{search_rows, SearchRow, FONT_CHOICES};
@@ -319,6 +319,18 @@ impl Core {
             .session
             .as_ref()
             .and_then(|session| super::caption::ChapterProgress::from_toc(&info, session.toc()));
+        let logical = self.session.as_ref().and_then(|s| s.logical_progress());
+        let mut caption_info = info.clone();
+        let chapter_progress = if let Some(logical) = logical {
+            caption_info.page = logical.page - 1;
+            caption_info.page_count = logical.total as usize;
+            Some(super::caption::ChapterProgress {
+                page: logical.chapter_page,
+                total: logical.chapter_total,
+            })
+        } else {
+            chapter_progress
+        };
         let header = self.header.clone();
         let title = self.title.clone();
         let header_height = self.header_height;
@@ -340,8 +352,9 @@ impl Core {
                 view.page = frame.page;
             }
             view.message = error;
-            view.set_header(header, title, info.clone(), chapter_progress);
+            view.set_header(header, title, caption_info.clone(), chapter_progress);
             view.header_height = header_height;
+            view.logical_progress = logical;
             view.set_footer(footer, info.clone(), pace);
             view.footer_height = footer_height;
             *ink_color_content |= view.ink_color != "black";
@@ -377,9 +390,22 @@ impl Core {
         let bookmarked = session.is_bookmarked().unwrap_or(false);
         Some(OverlayModel {
             title: self.title.clone(),
+            fixed_layout: !session.is_reflowable(),
+            chapter: info.chapter.clone().unwrap_or_else(|| self.title.clone()),
+            clock: self.status.clock.clone(),
+            battery: self.status.battery.map(|b| format!("{b}%")).unwrap_or_default(),
             page: info.page,
             page_count: info.page_count,
-            footer: footer::line(&self.footer, &info, self.seconds_per_page, &self.status),
+            footer: {
+                let logical = session.logical_progress();
+                kaia_i18n::format(
+                    &kaia_i18n::tr("Page %1 of %2"),
+                    &[
+                        &logical.map_or(info.page + 1, |p| p.page).to_string(),
+                        &logical.map_or(info.page_count as u32, |p| p.total).to_string(),
+                    ],
+                )
+            },
             bookmarked,
             can_go_back: session.can_go_back(),
         })
@@ -407,21 +433,28 @@ impl Core {
                     cx.request_paint_with(hint);
                 }
             });
-        // Text layout waits for release so it cannot promote a Fast preview to Ui.
+        // Text layout waits for release so a drag keeps its fast refresh.
         if hint == PaintHint::Fast {
             return;
         }
         layer
             .window
             .update::<kaia_ui::components::Row, _>(ctx, "overlay-history", |row, cx| {
-                use kaia_ui::widget::Widget;
+                use kaia_ui::Widget;
                 let mut children = row.children_mut();
-                let back = &mut children[1];
-                if back.is_visible() != model.can_go_back {
-                    back.set_visible(model.can_go_back);
+                if children[0].is_visible() != model.can_go_back {
+                    children[0].set_visible(model.can_go_back);
                     cx.request_layout();
                     cx.request_paint();
                 }
+            });
+        let chapter = model.chapter.clone();
+        layer
+            .window
+            .update::<Label, _>(ctx, "overlay-chapter", move |label, cx| {
+                label.set_text(chapter);
+                cx.request_layout();
+                cx.request_paint_with(hint);
             });
         let footer = model.footer.clone();
         layer

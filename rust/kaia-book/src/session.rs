@@ -302,6 +302,8 @@ struct OrderCache {
 
 /// An open book: its document, its Kaia state, and a reader's view of it.
 pub struct BookSession {
+    logical: Option<crate::logical::SpinePages>,
+    logical_starts: Vec<u32>,
     path: PathBuf,
     engine: Handle,
     cache: Arc<Mutex<PageCache>>,
@@ -503,7 +505,11 @@ impl BookSession {
             Err(e) => return Err(e),
         };
         let (page, position, page_count, layout_gen) = restored;
-        facts.toc = engine.call(|w| Ok(w.doc.doc().toc()))?;
+        let logical = crate::logical::SpinePages::open(&path);
+        let spine_len = logical.as_ref().map_or(0, |s| s.len());
+        let (toc, logical_starts) =
+            engine.call(move |w| Ok((w.doc.doc().toc(), spine_starts(w, spine_len))))?;
+        facts.toc = toc;
         if !opts.import_only {
             state.position = Some(position);
             state.percent = fraction(page, page_count);
@@ -551,6 +557,8 @@ impl BookSession {
         let saved_position = state.position.clone();
         let stale = state.file_change_pending;
         let mut session = BookSession {
+            logical,
+            logical_starts,
             path,
             engine,
             cache,
@@ -701,6 +709,28 @@ impl BookSession {
             pages_left_in_chapter: self.pages_left(self.page),
             location: self.state.position.clone().unwrap_or(Location::Page(self.page)),
         }
+    }
+
+    /// Logical EPUB labels, separate from screen-based navigation and statistics.
+    /// Cached CREngine fragment boundaries supply the fraction through the item.
+    /// This never waits for the document engine.
+    pub fn logical_progress(&self) -> Option<crate::LogicalProgress> {
+        if !self.facts.reflowable || self.layout_pending {
+            return None;
+        }
+        let spine = self.logical.as_ref()?;
+        let starts = &self.logical_starts;
+        if starts.len() != spine.len() {
+            return None;
+        }
+        let item = starts
+            .partition_point(|&start| start <= self.page)
+            .saturating_sub(1);
+        let start = starts[item];
+        let end = starts.get(item + 1).copied().unwrap_or(self.page_count as u32);
+        let fraction =
+            f64::from(self.page.saturating_sub(start)) / f64::from(end.saturating_sub(start).max(1));
+        spine.progress(item, fraction)
     }
 
     /// Moves to a location. Fails with [`BookError::LayoutPending`] during a layout change.
@@ -1771,6 +1801,7 @@ impl BookSession {
                 self.page = outcome.page;
                 self.page_count = outcome.page_count;
                 self.facts.toc = outcome.toc;
+                self.logical_starts = outcome.logical_starts;
                 self.state.position = Some(outcome.position);
                 self.state.percent = fraction(self.page, self.page_count);
                 self.selection = None;
@@ -1832,10 +1863,15 @@ impl BookSession {
         let viewport = self.viewport;
         let position = self.state.position.clone();
         let percent = self.state.percent;
+        let spine_len = self.logical.as_ref().map_or(0, |s| s.len());
         self.layout_pending = true;
         self.engine.post(move |w| {
             let result = w
                 .apply_layout(&layout, dict, viewport, position, percent)
+                .map(|mut outcome| {
+                    outcome.logical_starts = spine_starts(w, spine_len);
+                    outcome
+                })
                 .map_err(|e| e.to_string());
             w.send(Event::Layout(result));
         })
@@ -2170,6 +2206,21 @@ fn hyphenation_for(layout: &TextLayout, book: Option<&str>, ui: Option<&str>) ->
     layout
         .hyphenation
         .then(|| crate::layout::hyphenation_pattern(choice, book, ui))
+}
+
+/// Called on the engine thread after layout, never from a UI status read.
+fn spine_starts(worker: &Worker, len: usize) -> Vec<u32> {
+    (1..=len)
+        .map(|item| {
+            worker
+                .doc
+                .xpointer_page(&format!("/body/DocFragment[{item}]/body"))
+                .ok()
+                .flatten()
+        })
+        .collect::<Option<Vec<_>>>()
+        .filter(|starts| starts.windows(2).all(|pair| pair[0] <= pair[1]))
+        .unwrap_or_default()
 }
 
 /// The job that restores the reading position on the engine thread. For a

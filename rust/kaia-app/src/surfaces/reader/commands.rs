@@ -72,6 +72,8 @@ pub enum Command {
     Next,
     /// Turn to the previous page.
     Prev,
+    Jump(bool),
+    SelSearchMenu,
     /// Hold starts a word selection at a point.
     Hold(f64, f64),
     /// A drag while held extends the selection to a point.
@@ -299,6 +301,9 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["search", "hit", n] => Command::SearchHit(n.parse().ok()?),
         ["search", "recent", n] => Command::SearchRecent(n.parse().ok()?),
         ["search", "history", "clear"] => Command::SearchClearHistory,
+        ["jump", "previous"] => Command::Jump(false),
+        ["jump", "next"] => Command::Jump(true),
+        ["sel", "search-menu"] => Command::SelSearchMenu,
         ["panel", "contents"] => Command::Panel(PanelName::Contents),
         ["panel", "layout"] => Command::Panel(PanelName::Layout),
         ["panel", "more"] => Command::Panel(PanelName::More),

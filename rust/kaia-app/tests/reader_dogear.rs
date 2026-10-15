@@ -152,7 +152,7 @@ fn the_rest_of_the_top_edge_still_opens_the_overlay() {
 }
 
 #[test]
-fn the_bookmark_button_also_draws_the_dog_ear() {
+fn the_bookmark_command_updates_the_dog_ear_under_the_overlay() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("dogear-button");
     let mut app = open_reader("juliet.epub", &dir);
@@ -161,13 +161,13 @@ fn the_bookmark_button_also_draws_the_dog_ear() {
     let before = dark_in_corner(&mut app, 20);
 
     open_overlay(&mut app);
-    tap_key(&mut app, "overlay-bookmark");
+    app.command("reader:bookmark", &[]);
     // The centre tap closes the overlay, and the page shows the new state.
     app.tap(Point::new(w / 2, app.screen().h as i32 / 2)).unwrap();
     wait_reader(&mut app);
     assert!(
         dark_in_corner(&mut app, 20) > before + 100,
-        "the page shows the dog-ear after the bookmark button"
+        "the page shows the dog-ear after the bookmark command"
     );
 }
 
@@ -209,8 +209,5 @@ fn the_overlay_footer_line_is_a_label_on_the_bars() {
     let mut text = None;
     app.update_top::<Label, _>("overlay-footer", |label, _| text = Some(label.text().to_string()));
     let text = text.expect("the overlay has the footer line");
-    assert!(
-        text.starts_with("Page 9 of "),
-        "the default footer is the page count: {text:?}"
-    );
+    assert_eq!(text, "Page 3 of 96", "the menu labels logical EPUB pages");
 }

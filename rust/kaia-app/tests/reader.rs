@@ -334,7 +334,8 @@ fn bookmark_button_adds_a_bookmark_listed_in_the_contents() {
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
 
-    tap_key(&mut app, "overlay-bookmark");
+    app.command("reader:bookmark", &[]);
+    wait_reader(&mut app);
     tap_key(&mut app, "overlay-contents");
     tap_key(&mut app, "contents-tab-1");
     let mut bookmarks = 0;
@@ -433,6 +434,12 @@ fn font_row_opens_the_font_list_and_picking_a_face_returns_to_the_sheet() {
     let dir = scratch("font-pick");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     assert!(
         app.find_rect("layout-font").is_some(),
@@ -517,6 +524,12 @@ fn font_list_golden() {
     let dir = scratch("golden-font-list");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     tap_key(&mut app, "layout-font");
     assert_matches_golden(app.frame(), &golden("reader-font-list.png"), 14);
@@ -589,6 +602,7 @@ fn copy_closes_the_popover() {
     hold_at(&mut app, word_point());
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
     let selection = text_of(&mut app, "sel-word");
+    tap_key(&mut app, "sel-search");
     tap_key(&mut app, "sel-copy");
     assert_eq!(app.services().clipboard.as_deref(), Some(selection.as_str()));
     assert!(
@@ -603,7 +617,7 @@ fn fixed_layout_books_get_a_zoom_sheet_instead_of_text_settings() {
     let dir = scratch("zoom");
     let mut app = open_reader("2col.pdf", &dir);
     open_overlay(&mut app);
-    tap_key(&mut app, "overlay-layout");
+    tap_key(&mut app, "overlay-zoom");
     assert!(
         app.find_rect("layout-zoom").is_some(),
         "a PDF shows the zoom choice"
@@ -621,7 +635,8 @@ fn dictionary_sheet_shows_the_definition_of_the_selected_word() {
     let word = word_of(&text_of(&mut app, "sel-word"));
     assert!(!word.is_empty(), "a word is selected");
 
-    // The dictionary is read when the word is looked up, so write it now.
+    // Reload after installing a dictionary following the automatic lookup.
+    app.services_mut().dictionary = None;
     write_stardict(&dir.join("data"), &word, "first line\nsecond line");
     let dictionaries = dir.join("data/dict");
     fs::copy(dictionaries.join("test.idx"), dictionaries.join("second.idx")).unwrap();
@@ -672,8 +687,8 @@ fn dictionary_sheet_says_when_none_is_installed() {
     let body = text_of(&mut app, "dict-body");
     assert!(body.starts_with("No dictionary installed."), "got {body:?}");
     assert!(
-        body.contains("StarDict"),
-        "the sheet says what to copy, got {body:?}"
+        body.contains("free dictionary downloads"),
+        "the sheet points to free dictionaries, got {body:?}"
     );
 }
 
@@ -802,6 +817,18 @@ fn overlay_golden() {
     let dir = scratch("golden-overlay");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     assert_matches_golden(app.frame(), &golden("reader-overlay.png"), 14);
 }
 
@@ -811,6 +838,12 @@ fn contents_golden() {
     let dir = scratch("golden-contents");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-contents");
     assert_matches_golden(app.frame(), &golden("reader-contents.png"), 14);
 }
@@ -821,6 +854,12 @@ fn text_and_layout_golden() {
     let dir = scratch("golden-layout");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-layout");
     assert_matches_golden(app.frame(), &golden("reader-layout.png"), 14);
 }
@@ -836,38 +875,23 @@ fn selection_popover_golden() {
 }
 
 #[test]
-fn selection_panel_takes_a_quarter_of_the_screen_and_moves_up_for_a_low_word() {
+fn selection_callout_stays_above_a_low_word_with_dictionary_below() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("selection-edge");
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
-    let screen = app.screen();
-
-    // A word in the upper half: the panel sits at the bottom.
-    hold_at(&mut app, word_point());
-    let more = app.find_rect("sel-more").expect("the panel shows More");
-    assert!(
-        more.y >= screen.h as i32 * 3 / 4,
-        "the bottom panel is in the lower quarter, got y {}",
-        more.y
-    );
-    app.key(Key::Back).unwrap();
-    wait_reader(&mut app);
-
-    // A word in the lower half: the panel moves to the top and stays above the word.
-    let low = Point::new(200, screen.h as i32 * 3 / 5);
+    let low = Point::new(200, app.screen().h as i32 * 3 / 5);
     hold_at(&mut app, low);
     assert_eq!(app.top_route(), Some(&Route::ReaderPanel));
-    let more = app.find_rect("sel-more").expect("the panel shows More");
-    assert!(
-        more.y + more.h as i32 <= screen.h as i32 / 4,
-        "the top panel ends in the top quarter, got bottom {}",
-        more.y + more.h as i32
-    );
-    assert!(
-        more.y + more.h as i32 <= low.y,
-        "the panel does not cover the word"
-    );
+    let highlight = app.find_rect("sel-highlight").unwrap();
+    assert!(highlight.bottom() < low.y);
+    let dictionary = app.find_rect("dict-body").unwrap();
+    assert!(dictionary.y > low.y);
+    assert!(app.find_rect("color-yellow").is_some());
+    assert!(app.find_rect("color-purple").is_some());
+    assert!(app.find_rect("color-blue").is_some());
+    assert!(app.find_rect("color-green").is_some());
+    assert!(app.find_rect("color-red").is_none());
 }
 
 #[test]
@@ -879,7 +903,9 @@ fn dictionary_golden() {
     hold_at(&mut app, word_point());
     let word = word_of(&text_of(&mut app, "sel-word"));
     write_stardict(&dir.join("data"), &word, "a test definition for the word");
+    app.services_mut().dictionary = None;
     tap_key(&mut app, "sel-dict");
+    assert!(text_of(&mut app, "dict-body").contains("a test definition for the word"));
     assert_matches_golden(app.frame(), &golden("reader-dictionary.png"), 14);
 }
 
@@ -889,6 +915,12 @@ fn search_golden() {
     let dir = scratch("golden-search");
     let mut app = open_reader("juliet.epub", &dir);
     open_overlay(&mut app);
+    app.update_top::<Label, _>("overlay-clock", |text, cx| {
+        text.set_text("09:41");
+        cx.request_layout();
+        cx.request_paint();
+    });
+    app.iterate(None).unwrap();
     tap_key(&mut app, "overlay-search");
     app.update_top::<TextField, _>("search-field", |field, cx| {
         field.set_text("Romeo");
