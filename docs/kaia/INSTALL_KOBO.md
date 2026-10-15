@@ -1,6 +1,6 @@
 # Install Kaia Reader on a Kobo
 
-Status: not tested on a device. The package builds, and `spec/kobo-package/test-package.sh` checks its layout and the launcher against the upstream script. The ARM smoke test runs the native library and LuaJIT under emulation. Neither check replaces a test on a Kobo. Follow the device test procedure in `docs/kaia/device/BACKUP_AND_RECOVERY.md` before using Kaia for a library you care about.
+Status: partly checked on a device. The first device run on 2026-10-14 ran the 4.x package on a Kobo Libra Colour (firmware 4.42.23303). It checked the install, both NickelMenu entries, the Nickel library cleanup in the ExcludeSyncFolders step below, and that the Lua and Rust apps start. Its record is in `device/FIRST_DEVICE_RUN.md`. No 5.x package run is recorded. The package builds, and `spec/kobo-package/test-package.sh` checks its layout and the launcher against the upstream script. The ARM smoke test runs the native library and LuaJIT under emulation. Back up the device first (`device/BACKUP_AND_RECOVERY.md`) before using Kaia for a library you care about.
 
 Kaia installs next to stock KOReader. It has its own folder, its own settings file and its own launch entry. It does not download KOReader packages, and it hides KOReader's update menu.
 
@@ -13,7 +13,7 @@ Kaia builds one package per firmware family.
 | 4.x | `kaia-kobo-<version>-<hash>.zip` | `dist/koreader-kobo-*.zip` and `dist/kobo/libkaia.so` |
 | 5.x | `kaia-kobo-v5-<version>-<hash>.zip` | `dist/koreader-kobov5-*.zip` and `dist/kobov5/libkaia.so` |
 
-Both packages include the Lua app and an optional Rust app. Choose the package that matches your firmware. Neither package has passed a real device test.
+Both packages include the Lua app and an optional Rust app. Choose the package that matches your firmware. The 4.x package ran on a Libra Colour on 2026-10-14 (`device/FIRST_DEVICE_RUN.md`). No 5.x run is recorded.
 
 ## Check the firmware version
 
@@ -37,7 +37,7 @@ Nickel scans every folder on the storage for books, hidden ones included, so aft
 ExcludeSyncFolders=(\\.(?!kobo|adobe).+|([^.][^/]*/)+\\..+)
 ```
 
-Save, eject and unplug. Nickel then ignores folders whose names start with a dot. Edit the file only while the Kobo is in USB mode, and keep a copy of it first.
+Save, eject and unplug. Nickel then ignores folders whose names start with a dot. Edit the file only while the Kobo is in USB mode, and keep a copy of it first. On 2026-10-14 the first device run added this line, then did a full library rescan from NickelMenu (`nickel_misc:rescan_books_full`), and Nickel listed the 3 test books instead of 129.
 
 NickelMenu states that it does not support firmware 5.x. On firmware 5.x, start Kaia with another launcher, such as KFMon, and follow that launcher's documentation. The Kaia launcher reads `.adds/kfmon/config/kaia.ini` when it exits under KFMon. If that file contains the line `reboot_on_exit=false`, the launcher restarts Nickel. Without that line, the launcher reboots the device.
 

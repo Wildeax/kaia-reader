@@ -1,6 +1,6 @@
 # Backup and recovery (KR-003)
 
-Status: the backup and restore scripts exist. `tools/kaia/device/test-backup-restore.sh` checks both against a fake volume on a desktop, including `.kaia`. The Kaia safe mode described below is a design requirement. It is not implemented in this tree yet, so the KR-003 acceptance test cannot pass until it is.
+Status: the backup and restore scripts exist. `tools/kaia/device/test-backup-restore.sh` checks both against a fake volume on a desktop, including `.kaia`. Safe mode is implemented in both apps (see recovery path 1). The first device run on 2026-10-14 found that `backup.sh` stopped on macOS at `.Spotlight-V100`, and commit `8b21616e3` fixed it. `device/FIRST_DEVICE_RUN.md` records no completed device backup, restore, or injected-fault test, so KR-003 Test A and Test B have not run on the device.
 
 Owner: platform engineer and QA. Depends on the hardware profile (HARDWARE_PROFILE.md).
 
@@ -91,19 +91,19 @@ A factory reset removes books and reading data. It fails the KR-003 acceptance c
 
 | Path | When to use | What it needs | Limits |
 |---|---|---|---|
-| **1. Kaia safe mode (automatic)** | A third-party plugin or a user patch breaks startup. | Safe mode in the Lua launcher (`kaia.sh`) and the Rust launcher (`kaia-rust.sh`). The launcher logic has host tests; no device test yet. | Does not help when the launcher itself is broken. |
+| **1. Kaia safe mode (automatic)** | A third-party plugin or a user patch breaks startup. | Safe mode in the Lua app (`frontend/kaia/safemode.lua`) and in the Rust launcher (`platform/kobo/kaia/kaia-rust.sh`). Host tests: `spec/unit/kaia_safemode_spec.lua`, `platform/kobo/kaia/test-kaia-rust.sh` and `rust/kaia-app/tests/safe_mode.rs`. No device test yet. | Does not help when the launcher itself is broken. |
 | **2. Return to Nickel** | Kaia fails before its UI starts, or the launch entry is the problem. | Nothing extra. Nickel and its launchers stay installed. | If the launch entry runs a broken launcher, the screen may stay blank. Power the device off and on again. |
 | **3. USB manual restore** | The launcher, the binary or the app directory is broken and safe mode cannot start. | The backup, the scripts and a USB connection that mounts the volume. | Needs the volume to mount while Kaia is in its failure state. Test this (see test B). |
 | **4. Remove the launch entry** | The entry itself keeps starting Kaia. | Access to the NickelMenu or KFMon configuration over USB. | Only for entries you created. Leave Nickel's own entries alone. |
 
 ### 1. Kaia safe mode
 
-Required behavior, for the Kaia launcher owner to implement:
+Required behavior, as both apps implement it:
 
 - Safe mode starts when either condition holds:
   - three startup failures happened in a row, or
   - the file `.adds/kaia/safemode` exists at launch.
-- A startup failure is counted in a file that survives the launcher's own restarts. The upstream launcher keeps its crash count in shell variables and resets it after 20 seconds without a crash, so it cannot be reused for this. Kaia writes the counter at the start of each launch and clears it after a healthy start, for example when the first screen is drawn and stays up for a fixed time. The exact values belong to the launcher owner and need a test.
+- A startup failure is counted in a file that survives the launcher's own restarts. The upstream launcher keeps its crash count in shell variables and resets it after 20 seconds without a crash, so it cannot be reused for this. Kaia writes the counter at the start of each launch and clears it after a healthy start, for example when the first screen is drawn and stays up for a fixed time. The values are 15 seconds in the Lua app (`stable_after` in `frontend/kaia/safemode.lua`) and 10 seconds in the Rust app (`HEALTHY_AFTER` in `rust/kaia-app/src/safe_mode.rs`).
 - In safe mode, Kaia does not load third-party plugins or user patches. Core Kaia starts, so the user can open a book, read it and leave.
 - Safe mode shows a visible notice on screen. Leaving safe mode removes the `safemode` file and the failure count.
 
@@ -169,7 +169,7 @@ The acceptance test has two parts. Test A checks automatic recovery through safe
    - the time from the tap to the crash screen,
    - the crash number on screen,
    - the `crash.log` lines written for each failure.
-5. Expect a crash screen on the first and second failed starts. On the third consecutive failure, Kaia starts in safe mode. The safe-mode notice must be visible.
+5. Expect a crash screen after the first, second and third failed starts. The fourth start runs in safe mode, and the safe-mode notice must be visible.
 6. In safe mode, open one of the test books. Check that the page and the highlights match what they were before the test. Turn a few pages.
 7. Connect over USB. Check the book and sidecar hashes against the list from the preconditions. Check that the book count is unchanged.
 8. Recover: remove `.adds/kaia/plugins/zz-injected-fault.koplugin/`. Leave safe mode from the notice or by removing the `safemode` file. Launch Kaia. Expect a normal start with the plugin missing.

@@ -39,7 +39,7 @@ Values are passed through `Screen:scaleBySize`.
 
 ### Type
 
-Fonts are the bundled Noto families, so no new font licenses enter the product.
+Interface fonts are the bundled Noto families. Reading fonts add Atkinson Hyperlegible and OpenDyslexic, both under the SIL Open Font License (see `inventory/LICENSES.md`).
 
 | Token | Face | Size |
 |---|---|---|

@@ -1,6 +1,6 @@
 # KR-006 benchmark baseline (desktop emulator)
 
-Status: desktop emulator baseline, debug build. These numbers are for regression comparison between commits on one machine. They are not device claims. Device numbers come from the procedure in the last section, and the reference conditions are defined in `MEASUREMENT_METHOD.md`.
+Status: desktop emulator baseline, debug build. These numbers are for regression comparison between commits on one machine. They are not device claims. Device numbers come from the procedure under "Running on a Kobo", and the reference conditions are defined in `MEASUREMENT_METHOD.md`. No benchmark has run on a Kobo. `FIRST_DEVICE_RUN.md` does not record this workload or any page-turn timing.
 
 ## Machine and build
 
@@ -212,7 +212,7 @@ Device runs follow the same thresholds, but they are a separate series. Do not c
 
 ## Rust app, desktop release
 
-Status: partial measurement of the R1 page turn exit check (REWRITE_PLAN.md R1: page turn under 100 ms on the desktop release build). The check fails. Every EPUB that completed a run has a page turn of about 250 to 320 ms at p50, and the reader's ink anchor call takes most of that time. Rendering takes about 2 ms. The check should be rerun after the ink anchor is fixed. The raw files sit outside the repository, as the Lua results do: `~/kaia-bench/rust-page-turn-2026-10-14-partial/` holds `page-turns.csv`, `run.txt` and `summary.md`.
+Status: partial measurement of the R1 page turn exit check (REWRITE_PLAN.md R1: page turn under 100 ms on the desktop release build). Update on 2026-10-15. Commit `bd977b9c7` landed later on 2026-10-14 (16:56, against 14:34 for `61a72323e`). It changes the ink anchor path that this run identifies as the cost, and its commit message reports juliet and leaves page turns at about 15 ms. This section has no rerun at HEAD, so the result below applies to `61a72323e` only. Rerun the benchmark at HEAD before calling the 100 ms check passed or failed. At `61a72323e` the check fails. Every EPUB that completed a run has a page turn of about 250 to 320 ms at p50, and the reader's ink anchor call takes most of that time. Rendering takes about 2 ms. The check should be rerun after the ink anchor is fixed. The raw files sit outside the repository, as the Lua results do: `~/kaia-bench/rust-page-turn-2026-10-14-partial/` holds `page-turns.csv`, `run.txt` and `summary.md`.
 
 ### Machine and build
 
@@ -268,11 +268,11 @@ The command call takes under 0.1 ms. The pump tick adds up to 20 ms to the wait.
 
 ### Pass or fail
 
-The check fails. EPUB page turns take 250 to 320 ms at p50 and p95 for juliet and 11, and leaves takes about 31 s. Only paper.pdf passes, with a p95 of 38 ms. sample.pdf fails at p95 (198 ms) for the reasons below.
+At `61a72323e` the check fails. EPUB page turns take 250 to 320 ms at p50 and p95 for juliet and 11, and leaves takes about 31 s. Only paper.pdf passes, with a p95 of 38 ms. sample.pdf fails at p95 (198 ms) for the reasons below.
 
 ### The dominant stage: ink anchoring
 
-On every turn of a reflowable book, the reader job calls `BookSession::ink_anchor` for the current page. It runs in `kaia-app/src/surfaces/reader/ink.rs` (`frame`), which `work.rs` calls for each turn. The call happens even when the page has no ink strokes, and the origin it returns is used only for stroke placement. Inside the book engine, `ink_anchor` calls CREngine `char_boxes`. A sample of the leaves run during a turn showed the engine thread in `ldomNode::getChildIndex`, `ldomXPointer::getRect` and `ldomXPointerEx::initIndex`, under `kaia_cre_char_boxes`. Rendering the page takes about 2 ms, so the check cannot pass until this call is skipped or cached. The fix belongs to the ink code and was not made in this task.
+On every turn of a reflowable book, the reader job calls `BookSession::ink_anchor` for the current page. It runs in `kaia-app/src/surfaces/reader/ink.rs` (`frame`), which `work.rs` calls for each turn. The call happens even when the page has no ink strokes, and the origin it returns is used only for stroke placement. Inside the book engine, `ink_anchor` calls CREngine `char_boxes`. A sample of the leaves run during a turn showed the engine thread in `ldomNode::getChildIndex`, `ldomXPointer::getRect` and `ldomXPointerEx::initIndex`, under `kaia_cre_char_boxes`. Rendering the page takes about 2 ms, so the check cannot pass until this call is skipped or cached. That fix landed in `bd977b9c7`, see the update at the top of this section.
 
 Other findings from the same run:
 

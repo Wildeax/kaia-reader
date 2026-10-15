@@ -1,6 +1,6 @@
 # First Rust app test on a Kobo Libra Colour
 
-Status: procedure for the first device run. ARM emulation checks startup and
+Status: procedure for device runs. The first run on 2026-10-14 covered parts of it, and `FIRST_DEVICE_RUN.md` lists what was and was not checked. ARM emulation checks startup and
 rendering only. It cannot check panel updates, touch calibration, power,
 frontlight or USB handover.
 

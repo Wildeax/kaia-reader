@@ -1,6 +1,6 @@
 # Measurement method (KR-006)
 
-Status: method only. Nothing in this document is a measured result. The thresholds in the table at the end are proposed and not measured. The device rig, workload scripts and full approved corpus do not exist yet. The desktop CREngine comparison uses a two-book subset of existing repository fixtures, described below. Build the device rig and full corpus with the baseline before reporting device measurements.
+Status: method only. Nothing in this document is a measured result. The thresholds in the table at the end are proposed and not measured. The latency rig (a camera or photodiode with a trigger LED) and the full approved corpus do not exist yet. The desktop workload exists in `tools/kaia/bench/`, and its results are in `BENCHMARKS.md`. The desktop CREngine comparison uses a two-book subset of existing repository fixtures, described below. The remote tools in `tools/kaia/device/remote/` drive a Kobo over Wi-Fi for screen captures and input, and they measure no latency. The first device run (2026-10-14) recorded no page-turn, power or refresh measurement. Its one recorded timing is a Rust app start of about 20 seconds ([FIRST_DEVICE_RUN.md](FIRST_DEVICE_RUN.md)). Build the device rig and full corpus with the baseline before reporting device measurements.
 
 Owner: QA and performance engineer. Depends on the hardware profile (KR-002) and the test scripts and corpus (KR-004 and KR-006).
 
