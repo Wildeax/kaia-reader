@@ -14,6 +14,7 @@ pub mod entries;
 pub mod experiments;
 pub mod facts;
 pub mod keys;
+pub mod light;
 pub mod quick;
 pub mod reset;
 pub mod section;

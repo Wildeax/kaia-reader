@@ -36,7 +36,8 @@ use super::{experiments, keys};
 use crate::surfaces::reader::dict::Change;
 
 /// The index groups. Kaia-specific pages remain reachable through Advanced.
-pub const INDEX_SECTIONS: [&str; 8] = [
+pub const INDEX_SECTIONS: [&str; 9] = [
+    "wifi",
     "datetime",
     "language-dictionaries",
     "network",
@@ -48,7 +49,8 @@ pub const INDEX_SECTIONS: [&str; 8] = [
 ];
 
 /// All sections with a direct settings command, including secondary pages.
-pub const SECTIONS: [&str; 15] = [
+pub const SECTIONS: [&str; 16] = [
+    "wifi",
     "datetime",
     "language-dictionaries",
     "device-info",
@@ -281,6 +283,10 @@ pub fn is_known_key(key: &str) -> bool {
         || matches!(
             key,
             keys::DISPLAY_LARGE_PRINT
+                | keys::READING_PINCH_SIZE
+                | keys::READING_EDGE_LIGHT
+                | keys::DEVICE_SLEEP_DETAILS
+                | keys::DEVICE_SHOW_BOOK
                 | keys::READING_INVERT_PAGE_BUTTONS
                 | keys::DEVICE_SLEEP_COVER
                 | keys::DEVICE_PAGE_BUTTON_WAKE

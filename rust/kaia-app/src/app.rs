@@ -958,6 +958,15 @@ impl<B: Backend> App<B> {
 
     /// Routes an action id through surfaces from top to bottom, then global commands. An id nobody knows is recorded.
     pub fn command(&mut self, id: &str, args: &[Value]) {
+        if matches!(id, "reader:size:smaller" | "reader:size:larger")
+            && !surfaces::settings::keys::bool_or(
+                &self.services.settings,
+                surfaces::settings::keys::READING_PINCH_SIZE,
+                true,
+            )
+        {
+            return;
+        }
         #[cfg(not(feature = "lua"))]
         if id == "reader:plugins" {
             self.push(Box::new(
@@ -1013,6 +1022,47 @@ impl<B: Backend> App<B> {
                         self.wifi(on);
                     }
                 }
+                return;
+            }
+            "settings:reading:open" => {
+                self.push(Box::new(
+                    surfaces::settings::section::SettingsSectionSurface::from_reader(),
+                ));
+                return;
+            }
+            "settings:light:open" => {
+                let reader = self
+                    .router
+                    .routes()
+                    .iter()
+                    .any(|r| matches!(r, Route::Reader { .. }));
+                if self.find_rect("quick-light-panel").is_some() {
+                    self.back();
+                }
+                let anchor = self.find_rect("overlay-light").map(|r| r.x + r.w as i32 / 2);
+                let panel = surfaces::settings::light::LightPanel::new(&self.services, reader).anchor(anchor);
+                let window = kaia_ui::Window::new(
+                    panel,
+                    self.services.theme.clone(),
+                    self.services.assets.clone(),
+                    self.screen,
+                );
+                env!(self).show(
+                    window,
+                    kaia_events::ShowOpts {
+                        covers_fullscreen: false,
+                        ..Default::default()
+                    },
+                );
+                return;
+            }
+            "settings:wifi:open" => {
+                if self.find_rect("quick-wifi-settings").is_some() {
+                    self.back();
+                }
+                self.push(Box::new(
+                    surfaces::settings::section::SettingsSectionSurface::new("wifi".into()),
+                ));
                 return;
             }
             "settings:quick:open" => {

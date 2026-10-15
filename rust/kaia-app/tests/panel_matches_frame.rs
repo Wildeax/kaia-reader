@@ -456,11 +456,11 @@ fn panel_matches_frame_after_each_step() {
     // The light sliders work on a Kobo only, so the test platform reports one.
     run.step(&mut app, "quick settings: open", |app| {
         app.services_mut().platform.kind = Kind::Kobo(Model::LibraColour);
-        app.command("settings:quick:open", &[]);
+        app.command("settings:light:open", &[]);
     });
     run.step(&mut app, "quick settings: warmth", |app| {
         let before = app.services().platform.frontlight.warmth();
-        let rect = app.find_rect("quick-warmth").expect("the warmth slider");
+        let rect = app.find_rect("light-warmth").expect("the warmth slider");
         let p = Point::new(rect.x + rect.w as i32 * 3 / 4, rect.y + rect.h as i32 / 2);
         app.tap(p).unwrap();
         let after = app.services().platform.frontlight.warmth();

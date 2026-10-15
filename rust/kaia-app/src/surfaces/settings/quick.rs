@@ -1,63 +1,31 @@
-//! The quick settings sheet: frontlight and warmth sliders, a Wi-Fi switch, an
-//! airplane mode switch, a manual orientation picker and a Sleep button. The app
-//! opens it from a swipe down with `env.sheet(quick_settings(env.services))`.
-//!
-//! The sheet's controls send `settings:quick:<name>` ids. The top surface does
-//! not own them, so the app passes them to [`command`] before global routing
-//! in the app loop. The Sleep button sends the global id
-//! `sleep`, which the app handles.
+//! General device controls, separate from the anchored light panel.
+//! Commands also handle the light panel's live values and persistence.
 
-use crate::slider::Slider;
+use super::widgets::CompactRow as ListRow;
 use kaia_events::Value;
 use kaia_i18n::{format as tr_format, tr};
-use kaia_ui::components::{Column, CrossAlign, Expanded, Label, Row};
-use kaia_ui::composite::{ListRow, SheetPanel};
-use kaia_ui::controls::{Button, ButtonStyle};
-use kaia_ui::{Theme, Tone, WidgetPod};
+use kaia_ui::components::{Column, CrossAlign, Expanded, Row};
+use kaia_ui::composite::SheetPanel;
+use kaia_ui::{Theme, WidgetPod};
 
-use super::{commands, keys, sections};
+use super::{commands, keys};
 use crate::services::Services;
 use crate::surface::{Outcome, SurfaceEnv};
 
 /// The quick settings sheet, with the values the platform and settings hold now.
 pub fn quick_settings(services: &Services) -> SheetPanel {
     let t = &services.theme;
-    let kobo = sections::has_frontlight(services);
-    let frontlight = f64::from(services.platform.frontlight.intensity());
-    let warmth = f64::from(services.platform.frontlight.warmth());
     let wifi_on = services.platform.network.is_wifi_on();
     let airplane = keys::airplane_mode(&services.settings);
-
-    let sliders = vec![
-        slider(
-            &tr("Frontlight"),
-            frontlight,
-            kobo,
-            "settings:quick:frontlight",
-            "quick-frontlight",
-            t,
-        ),
-        slider(
-            &tr("Warmth"),
-            warmth,
-            kobo,
-            "settings:quick:warmth",
-            "quick-warmth",
-            t,
-        ),
-    ];
-    let mut rows = if t.scale.width > t.scale.height {
-        vec![equal_row(sliders, t)]
-    } else {
-        sliders
-    };
-    if !kobo {
-        rows.push(WidgetPod::new(Label::new(
-            tr("The light controls work on the Kobo only."),
-            t.font.caption.clone(),
-            Tone::InkSecondary,
-        )));
-    }
+    let mut rows = vec![equal_row(
+        vec![
+            WidgetPod::new(ListRow::new(tr("Light")).on_action("settings:light:open"))
+                .with_key("quick-light-panel"),
+            WidgetPod::new(ListRow::new(tr("Wi-Fi settings")).on_action("settings:wifi:open"))
+                .with_key("quick-wifi-settings"),
+        ],
+        t,
+    )];
     // While airplane mode is on, the Wi-Fi switch only shows a notice.
     let wifi_action = if airplane {
         "settings:quick:wifi-blocked"
@@ -90,41 +58,24 @@ pub fn quick_settings(services: &Services) -> SheetPanel {
         .with_key("quick-rotation")],
         t,
     ));
-    rows.push(WidgetPod::new(
-        Row::new(vec![
-            WidgetPod::new(Expanded::new(
-                WidgetPod::new(
-                    Button::new(ButtonStyle::Secondary)
-                        .text(tr("Orientation"))
-                        .on_action("settings:quick:orientation"),
-                )
+    rows.push(equal_row(
+        vec![
+            WidgetPod::new(ListRow::new(tr("Orientation")).on_action("settings:quick:orientation"))
                 .with_key("quick-orientation"),
-                1,
-            )),
-            WidgetPod::new(Expanded::new(
-                WidgetPod::new(
-                    Button::new(ButtonStyle::Secondary)
-                        .text(tr("Toggle light"))
-                        .on_action("settings:quick:toggle-light"),
-                )
+            WidgetPod::new(ListRow::new(tr("Toggle light")).on_action("settings:quick:toggle-light"))
                 .with_key("quick-toggle-light"),
-                1,
-            )),
-            WidgetPod::new(Expanded::new(
-                WidgetPod::new(
-                    Button::new(ButtonStyle::Primary)
-                        .text(tr("Sleep"))
-                        .on_action("sleep"),
-                )
-                .with_key("quick-sleep"),
-                1,
-            )),
-        ])
-        .gap(t.space.md),
+            WidgetPod::new(ListRow::new(tr("Sleep")).on_action("sleep")).with_key("quick-sleep"),
+        ],
+        t,
     ));
 
     // The sheet is short, so its rows are spaced by the small gap.
-    let content = WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch));
+    let content = WidgetPod::new(
+        Column::new(rows)
+            .gap(t.space.sm)
+            .cross_align(CrossAlign::Stretch)
+            .shrink(),
+    );
     SheetPanel::new(t, tr("Quick settings"), content)
 }
 
@@ -140,31 +91,32 @@ fn equal_row(children: Vec<WidgetPod>, t: &Theme) -> WidgetPod {
     )
 }
 
-fn slider(label: &str, value: f64, enabled: bool, id: &str, key: &str, t: &Theme) -> WidgetPod {
-    let control = Slider::new(value, 0.0, 100.0, 1.0)
-        .format(|v| tr_format(&tr("%1%"), &[&v.to_string()]))
-        .enabled(enabled)
-        .on_action(id);
-    WidgetPod::new(
-        Column::new(vec![
-            WidgetPod::new(Label::new(label, t.font.body.clone(), Tone::Ink)),
-            WidgetPod::new(control),
-        ])
-        .gap(t.space.sm)
-        .cross_align(CrossAlign::Stretch)
-        .shrink(),
-    )
-    .with_key(key)
-}
-
 /// Runs a control of the quick settings sheet. Returns NotMine for other ids.
 pub fn command(cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let Some(commands::Command::Quick(name)) = commands::parse(cmd) else {
         return Outcome::NotMine;
     };
     match name.as_str() {
-        "frontlight:release" => Outcome::Handled,
-        "warmth:release" => {
+        "auto" | "bedtime" => {
+            let (key, value) = if name == "auto" {
+                let Some(on) = args.first().and_then(Value::as_bool) else {
+                    return Outcome::Handled;
+                };
+                (keys::DISPLAY_NATURAL_LIGHT_ENABLED, Value::Bool(on))
+            } else {
+                let Some(minutes) = args.first().and_then(Value::as_f64).filter(|v| v.is_finite()) else {
+                    return Outcome::Handled;
+                };
+                (
+                    keys::DISPLAY_NATURAL_LIGHT_BEDTIME,
+                    Value::Number(minutes.round().clamp(0.0, 1439.0)),
+                )
+            };
+            env.services.settings.save(key, value);
+            super::save(env);
+            Outcome::Handled
+        }
+        "frontlight:release" | "warmth:release" => {
             super::save(env);
             Outcome::Handled
         }

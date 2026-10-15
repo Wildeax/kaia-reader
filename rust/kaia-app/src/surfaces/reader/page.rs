@@ -91,6 +91,7 @@ pub struct PageView {
     zoom_drag: Option<(Point, Point)>,
     zoom_pinch: Option<(f32, Point, Point)>,
     light_drag: Option<bool>,
+    pub brightness_swipe: bool,
     light_start: Point,
     touch_flip: bool,
     held_key: Option<bool>,
@@ -132,6 +133,7 @@ impl PageView {
             zoom_drag: None,
             zoom_pinch: None,
             light_drag: None,
+            brightness_swipe: true,
             light_start: Point::new(0, 0),
             touch_flip: false,
             held_key: None,
@@ -732,7 +734,10 @@ impl Widget for PageView {
                 let vertical = (pos.y - start_pos.y).abs() >= (pos.x - start_pos.x).abs();
                 let edge = start_pos.x >= bounds.x
                     && i64::from(start_pos.x - bounds.x) * 100 < i64::from(bounds.w) * 13;
-                if *self.light_drag.get_or_insert(edge && vertical) {
+                if *self
+                    .light_drag
+                    .get_or_insert(edge && vertical && self.brightness_swipe)
+                {
                     self.light_start = *start_pos;
                     self.brightness_action(cx, *start_pos, *pos, false);
                     Handled::Yes

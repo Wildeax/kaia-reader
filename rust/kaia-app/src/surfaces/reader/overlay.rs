@@ -131,6 +131,13 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
             WidgetPod::new(Expanded::new(title, 1)),
             search,
             bookmark,
+            tool("light.sun", &tr("Light"), "settings:light:open", "overlay-light"),
+            tool(
+                "appbar.settings",
+                &tr("Reading"),
+                "settings:reading:open",
+                "overlay-reading-settings",
+            ),
             more,
         ])
         .gap(sp)
@@ -177,15 +184,6 @@ pub fn build(services: &Services, screen: Size, model: &OverlayModel) -> Window 
                     &tr("Text and layout"),
                     "reader:panel:layout",
                     "overlay-layout",
-                ),
-                1,
-            )),
-            WidgetPod::new(Expanded::new(
-                tool(
-                    "appbar.contrast",
-                    &tr("Light"),
-                    "settings:quick:open",
-                    "overlay-light",
                 ),
                 1,
             )),

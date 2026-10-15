@@ -25,6 +25,7 @@ pub fn title(name: &str) -> String {
         "dictionary-downloads" => tr("Download dictionaries"),
         "display" => tr("Display and light"),
         "library" => tr("Library"),
+        "wifi" => tr("Wi-Fi"),
         "network" => tr("Network and sync"),
         "statistics" => tr("Statistics"),
         "device" => tr("Power and privacy"),
@@ -59,12 +60,13 @@ pub fn entries(name: &str, services: &Services, now: i64) -> Vec<Entry> {
         "dictionary-downloads" => download_page(services),
         "display" => display(services),
         "library" => library(services),
+        "wifi" => wifi(services),
         "network" => network(services),
         "statistics" => statistics(services, now),
         "device" => device(services),
-        "datetime" => date_time(services),
+        "datetime" => date_time(services, now),
         "language-dictionaries" => language_dictionaries(services),
-        "device-info" => device_info(),
+        "device-info" => device_info(services),
         "storage" => super::storage::entries(services),
         "extensions" => extensions(services),
         "plugin-menus" => reader_menus(services),
@@ -146,6 +148,16 @@ fn reading(services: &Services) -> Vec<Entry> {
                 &keys::TAP_ZONE_PRESETS,
                 &keys::text_or(s, keys::READING_TAP_ZONES, "default"),
             ),
+        },
+        Entry::Toggle {
+            key: keys::READING_PINCH_SIZE,
+            label: tr("Pinch to change text size"),
+            on: keys::bool_or(s, keys::READING_PINCH_SIZE, true),
+        },
+        Entry::Toggle {
+            key: keys::READING_EDGE_LIGHT,
+            label: tr("Swipe the left edge for brightness"),
+            on: keys::bool_or(s, keys::READING_EDGE_LIGHT, true),
         },
         Entry::Toggle {
             key: keys::READING_DOUBLE_TAP_LOOKUP,
@@ -446,10 +458,19 @@ fn language_dictionaries(services: &Services) -> Vec<Entry> {
         },
         Entry::Heading(tr("Dictionaries")),
         Entry::Row {
-            primary: tr("Installed dictionaries"),
+            primary: tr_format(
+                &tr("Installed dictionaries: %1"),
+                &[&dict::ordered(services).len().to_string()],
+            ),
             secondary: None,
-            value: Some(dict::ordered(services).len().to_string()),
+            value: Some(tr("Edit")),
             action: Some("settings:dictionaries".into()),
+        },
+        Entry::Row {
+            primary: tr("Dictionary files"),
+            secondary: None,
+            value: Some(super::storage::size(facts::dictionary_bytes(services))),
+            action: None,
         },
     ]
 }
@@ -540,6 +561,38 @@ fn home(services: &Services) -> Vec<Entry> {
         "When every section is off, Home shows a short note and a button to the Library.",
     )));
     out
+}
+
+fn wifi(services: &Services) -> Vec<Entry> {
+    let airplane = keys::airplane_mode(&services.settings);
+    vec![
+        Entry::Heading(tr("Wi-Fi")),
+        Entry::Choice {
+            label: tr("Wi-Fi"),
+            selected: services.platform.network.is_wifi_on(),
+            action: if airplane {
+                "settings:quick:wifi-blocked"
+            } else {
+                "settings:quick:wifi"
+            }
+            .into(),
+        },
+        Entry::Text(if airplane {
+            tr("Turn off airplane mode to use Wi-Fi.")
+        } else {
+            tr("Wi-Fi connects only when you ask it to.")
+        }),
+        Entry::Heading(tr("Connections")),
+        Entry::DisabledRow(tr("Connect to a network")),
+        Entry::DisabledRow(tr("Remove a saved network")),
+        Entry::Text(tr("Manage connections in the device's Wi-Fi settings.")),
+        Entry::Row {
+            primary: tr("Network and sync"),
+            secondary: None,
+            value: None,
+            action: Some("settings:network".into()),
+        },
+    ]
 }
 
 fn network(services: &Services) -> Vec<Entry> {
@@ -798,14 +851,15 @@ fn device(services: &Services) -> Vec<Entry> {
                 && keys::bool_or(s, keys::DEVICE_PAGE_BUTTON_WAKE, false),
             enabled: services.platform.supports_page_button_wake(),
         },
-        Entry::Select {
-            key: keys::DEVICE_SLEEP_SCREEN,
-            label: tr("Sleep screen"),
-            options: labels(keys::DEVICE_SLEEP_SCREEN),
-            selected: keys::preset_index(
-                &keys::SLEEP_SCREENS,
-                &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover"),
-            ),
+        Entry::Toggle {
+            key: keys::DEVICE_SHOW_BOOK,
+            label: tr("Show current book"),
+            on: keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover") != "blank",
+        },
+        Entry::Toggle {
+            key: keys::DEVICE_SLEEP_DETAILS,
+            label: tr("Show book details"),
+            on: keys::sleep_details(s),
         },
         Entry::Heading(tr("Sleep cover")),
         Entry::Toggle {
@@ -828,17 +882,21 @@ fn device(services: &Services) -> Vec<Entry> {
     out
 }
 
-fn date_time(services: &Services) -> Vec<Entry> {
+fn date_time(services: &Services, now: i64) -> Vec<Entry> {
     let s = &services.settings;
+    let local = chrono::DateTime::from_timestamp(now, 0).map(|date| date.with_timezone(&chrono::Local));
     vec![
-        Entry::Text(tr("Date and time use the device clock. Set them on the device.")),
-        Entry::Heading(tr("Time zone")),
+        Entry::Row { primary: tr("Date"), secondary: None,
+            value: local.map(|d| d.format("%Y-%m-%d").to_string()), action: None },
+        Entry::Row { primary: tr("Time"), secondary: None,
+            value: local.map(|d| d.format("%H:%M").to_string()), action: None },
         Entry::Row {
-            primary: keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string()),
+            primary: tr("Time zone"),
             secondary: None,
-            value: None,
+            value: Some(keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string())),
             action: Some("settings:timezone".into()),
         },
+        Entry::Text(tr("Set the date and time in the device settings.")),
         Entry::Heading(tr("Network time")),
         Entry::Toggle {
             key: keys::DEVICE_NETWORK_TIME,
@@ -851,13 +909,49 @@ fn date_time(services: &Services) -> Vec<Entry> {
     ]
 }
 
-fn device_info() -> Vec<Entry> {
+fn device_info(services: &Services) -> Vec<Entry> {
     vec![
         Entry::Heading(tr("Hardware")),
         Entry::Row {
+            primary: tr("Model"),
+            secondary: None,
+            value: Some(services.platform.device.model_name.clone()),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("Firmware"),
+            secondary: None,
+            value: Some(
+                services
+                    .platform
+                    .device
+                    .firmware
+                    .clone()
+                    .unwrap_or_else(|| tr("Not available")),
+            ),
+            action: None,
+        },
+        Entry::Row {
+            primary: tr("Connection"),
+            secondary: None,
+            value: Some(if services.platform.network.is_connected() {
+                tr("Connected")
+            } else {
+                tr("Not connected")
+            }),
+            action: None,
+        },
+        Entry::Row {
             primary: tr("Storage"),
             secondary: None,
-            value: None,
+            value: kaia_platform::storage::volume_space(&services.paths.books_dir)
+                .ok()
+                .map(|s| {
+                    tr_format(
+                        &tr("%1 free of %2"),
+                        &[&super::storage::size(s.available), &super::storage::size(s.total)],
+                    )
+                }),
             action: Some("settings:storage".into()),
         },
         Entry::Heading(tr("Software")),
@@ -874,6 +968,18 @@ fn device_info() -> Vec<Entry> {
             action: Some("settings:about".into()),
         },
         Entry::Heading(tr("Maintenance")),
+        Entry::Row {
+            primary: tr("Reset settings"),
+            secondary: None,
+            value: None,
+            action: Some("settings:reset:settings".into()),
+        },
+        Entry::Row {
+            primary: tr("Erase Kaia data"),
+            secondary: None,
+            value: None,
+            action: Some("settings:reset:erase".into()),
+        },
         Entry::Row {
             primary: tr("Advanced"),
             secondary: None,

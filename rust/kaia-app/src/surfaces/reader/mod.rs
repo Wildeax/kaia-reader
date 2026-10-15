@@ -522,7 +522,9 @@ impl Surface for ReaderSurface {
         opts.pixel_format = env.services.theme.pixel_format();
         opts.ui_language = Some(env.services.language.clone());
         let color_panel = env.services.theme.color_panel;
-        let page = WidgetPod::new(PageView::new()).with_key(PAGE_KEY);
+        let mut page = PageView::new();
+        page.brightness_swipe = keys::bool_or(&env.services.settings, keys::READING_EDGE_LIGHT, true);
+        let page = WidgetPod::new(page).with_key(PAGE_KEY);
         let mut toolbar = ink::toolbar(env.theme());
         toolbar.set_visible(false);
         let root = WidgetPod::new(Stack::new(vec![page, toolbar])).with_key("ink-root");

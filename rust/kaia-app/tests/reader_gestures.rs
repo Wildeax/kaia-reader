@@ -454,7 +454,7 @@ fn page_key_hold_over_quick_settings_keeps_only_the_existing_first_turn() {
     let initial = page_state(&mut app);
     app.command("settings:quick:open", &[]);
     app.process(vec![]).unwrap();
-    assert!(app.find_rect("quick-frontlight").is_some());
+    assert!(app.find_rect("quick-light-panel").is_some());
     for value in [1, 2, 2, 2, 2, 2, 2, 0] {
         app.process(page_key_input(value, clock.now().as_micros() as u64))
             .unwrap();
@@ -494,7 +494,7 @@ fn top_edge_brightness_swipe_finishes_before_quick_settings_but_outside_swipe_op
             .unwrap();
         }
         if x < boundary {
-            assert!(app.find_rect("quick-frontlight").is_none());
+            assert!(app.find_rect("quick-light-panel").is_none());
             assert!(matches!(app.top_route(), Some(kaia_app::Route::Reader { .. })));
             assert_eq!(level(&app), before.saturating_sub(50));
             clock.advance(Duration::from_millis(2000));
@@ -503,7 +503,7 @@ fn top_edge_brightness_swipe_finishes_before_quick_settings_but_outside_swipe_op
                 assert_eq!(view.brightness, None);
             }));
         } else {
-            assert!(app.find_rect("quick-frontlight").is_some());
+            assert!(app.find_rect("quick-light-panel").is_some());
             assert_eq!(level(&app), before);
         }
     }

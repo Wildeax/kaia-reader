@@ -181,11 +181,36 @@ fn settings_group_golden(name: &str) {
     tap_key(&mut app, "nav-settings");
     app.command(&format!("settings:{name}"), &[]);
     app.process(Vec::new()).unwrap();
-    let path = golden(&format!("settings_{name}.png"));
-    if !path.exists() {
-        kaia_gfx::png::write_pixmap(app.frame(), &path.with_extension("actual.png")).unwrap();
+    // Pin the clock and volume facts in visual fixtures; production reads live values.
+    let mut entries = kaia_app::surfaces::settings::sections::entries(name, app.services(), 1_700_000_000);
+    for entry in &mut entries {
+        if let kaia_app::surfaces::settings::entries::Entry::Row { primary, value, .. } = entry {
+            match primary.as_str() {
+                "Date" => *value = Some("2026-10-15".into()),
+                "Time" => *value = Some("02:51".into()),
+                "Storage" => *value = Some("12.00 GB free of 32.00 GB".into()),
+                _ => (),
+            }
+        }
     }
-    kaia_gfx::golden::assert_matches_golden(app.frame(), &path, 14);
+    let content = kaia_ui::WidgetPod::new(kaia_app::surfaces::settings::widgets::SettingsPages::new(
+        entries, 0,
+    ));
+    let dialog = kaia_ui::composite::SettingsDialog::new(
+        "Settings",
+        kaia_app::surfaces::settings::sections::title(name),
+        content,
+        "settings:close",
+    )
+    .back("back")
+    .content_header();
+    let frame = kaia_ui::render(
+        dialog,
+        app.screen(),
+        &app.services().theme,
+        &app.services().assets,
+    );
+    kaia_gfx::golden::assert_matches_golden(&frame, &golden(&format!("settings_{name}.png")), 14);
 }
 
 #[test]

@@ -351,8 +351,8 @@ fn quick_settings_controls_fit_portrait_and_landscape() {
         app.command("settings:quick:open", &[]);
         app.process(vec![]).unwrap();
         for name in [
-            "quick-frontlight",
-            "quick-warmth",
+            "quick-light-panel",
+            "quick-wifi-settings",
             "quick-wifi",
             "quick-rotation",
             "quick-orientation",

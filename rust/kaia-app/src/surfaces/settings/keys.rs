@@ -77,6 +77,12 @@ pub const READING_FONT_SIZE: &str = "reading.font_size";
 pub const READING_FONT_WEIGHT_PREFIX: &str = "reading.font_weight.";
 /// The family segment of the text weight key for the book's own font.
 pub const FONT_WEIGHT_BOOK_FONT: &str = "(book)";
+/// Existing pinch sizing and edge brightness stay enabled unless explicitly disabled.
+pub const READING_PINCH_SIZE: &str = "reading.pinch_size";
+pub const READING_EDGE_LIGHT: &str = "reading.edge_light";
+/// Details preference retained while the sleep cover is hidden.
+pub const DEVICE_SLEEP_DETAILS: &str = "device.sleep_details";
+pub const DEVICE_SHOW_BOOK: &str = "device.show_book";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 /// A double tap on a word looks it up. See [`double_tap_lookup`].
 pub const READING_DOUBLE_TAP_LOOKUP: &str = "reading.double_tap_lookup";
@@ -192,6 +198,16 @@ pub const STANDBY_MINUTES: [u32; 4] = [0, 1, 2, 5];
 
 pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
     settings.read(key).as_bool().unwrap_or(default)
+}
+
+/// The active legacy sleep mode owns the details state. While hidden, retain
+/// the user's last details choice for the next time the cover is enabled.
+pub fn sleep_details(settings: &Settings) -> bool {
+    match text_or(settings, DEVICE_SLEEP_SCREEN, "cover").as_str() {
+        "blank" => bool_or(settings, DEVICE_SLEEP_DETAILS, false),
+        "details" => true,
+        _ => false,
+    }
 }
 
 /// Whether airplane mode is on. Kaia must not turn Wi-Fi on while it is.

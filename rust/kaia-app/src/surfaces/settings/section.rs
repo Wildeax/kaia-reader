@@ -25,6 +25,8 @@ use crate::surfaces::Route;
 /// keyboard for the section's text fields (Network and sync only).
 pub struct SettingsSectionSurface {
     name: String,
+    reader_entry: bool,
+    scan_status: Option<String>,
     typing: bool,
     page: usize,
     choosing: Option<String>,
@@ -39,9 +41,18 @@ pub struct SettingsSectionSurface {
 }
 
 impl SettingsSectionSurface {
+    pub fn from_reader() -> Self {
+        Self {
+            reader_entry: true,
+            ..Self::new("reading".into())
+        }
+    }
+
     pub fn new(name: String) -> Self {
         Self {
             name,
+            reader_entry: false,
+            scan_status: None,
             typing: false,
             page: 0,
             choosing: None,
@@ -121,12 +132,16 @@ impl Surface for SettingsSectionSurface {
                 &self.name,
                 self.typing,
                 now_unix(),
-                if self.choosing.is_some() {
-                    self.choice_page
-                } else {
-                    self.page
+                PageState {
+                    page: if self.choosing.is_some() {
+                        self.choice_page
+                    } else {
+                        self.page
+                    },
+                    choosing: self.choosing.as_deref(),
+                    back: !self.reader_entry || self.choosing.is_some(),
+                    status: self.scan_status.as_deref(),
                 },
-                self.choosing.as_deref(),
             ),
         ))
     }
@@ -339,6 +354,8 @@ impl Surface for SettingsSectionSurface {
                 let typing = commands::parse(cmd) == Some(Command::FieldsOpen);
                 Outcome::Navigate(Nav::Replace(Box::new(SettingsSectionSurface {
                     name: self.name.clone(),
+                    reader_entry: self.reader_entry,
+                    scan_status: self.scan_status.clone(),
                     typing,
                     page: self.page,
                     choosing: None,
@@ -404,6 +421,25 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_event(&mut self, event: &kaia_events::Event, _env: &mut SurfaceEnv<'_>) -> Outcome {
+        if self.name == "library" {
+            let number = |i: usize| event.args.get(i).and_then(Value::as_i64).unwrap_or(0).to_string();
+            let status = match event.name.as_str() {
+                "LibraryScanProgress" => Some(tr_format(
+                    &tr("Scanned %1 of %2 files"),
+                    &[&number(0), &number(1)],
+                )),
+                "LibraryUpdated" => Some(tr_format(
+                    &tr("Scan complete. Added %1, updated %2, removed %3."),
+                    &[&number(0), &number(1), &number(2)],
+                )),
+                "LibraryScanFailed" => Some(tr("Scan failed. Check that the book folder is available.")),
+                _ => None,
+            };
+            if let Some(status) = status {
+                self.scan_status = Some(status);
+                return Outcome::Rebuild;
+            }
+        }
         if event.name == "DictionariesChanged"
             && matches!(
                 self.name.as_str(),
@@ -443,7 +479,25 @@ pub fn section_page(
     typing: bool,
     now: i64,
 ) -> kaia_ui::composite::SettingsDialog {
-    section_page_at(services, name, typing, now, 0, None)
+    section_page_at(
+        services,
+        name,
+        typing,
+        now,
+        PageState {
+            page: 0,
+            choosing: None,
+            back: true,
+            status: None,
+        },
+    )
+}
+
+struct PageState<'a> {
+    page: usize,
+    choosing: Option<&'a str>,
+    back: bool,
+    status: Option<&'a str>,
 }
 
 fn section_page_at(
@@ -451,11 +505,39 @@ fn section_page_at(
     name: &str,
     typing: bool,
     now: i64,
-    page: usize,
-    choosing: Option<&str>,
+    state: PageState<'_>,
 ) -> kaia_ui::composite::SettingsDialog {
+    let PageState {
+        page,
+        choosing,
+        back,
+        status,
+    } = state;
     let mut children = Vec::new();
     let mut list = sections::entries(name, services, now);
+    if let Some(status) = status {
+        let index = list
+            .iter()
+            .position(|entry| {
+                matches!(
+                    entry,
+                    entries::Entry::Button {
+                        key: "settings-scan",
+                        ..
+                    }
+                )
+            })
+            .map_or(list.len(), |i| i + 1);
+        list.insert(
+            index,
+            entries::Entry::Row {
+                primary: status.into(),
+                secondary: None,
+                value: None,
+                action: None,
+            },
+        );
+    }
     if has_text_fields(name) {
         list.insert(
             0,
@@ -517,9 +599,18 @@ fn section_page_at(
     let content = kaia_ui::WidgetPod::new(
         kaia_ui::components::Column::new(children).cross_align(kaia_ui::components::CrossAlign::Stretch),
     );
-    kaia_ui::composite::SettingsDialog::new(tr("Settings"), sections::title(name), content, "settings:close")
-        .back("back")
-        .content_header()
+    let dialog = kaia_ui::composite::SettingsDialog::new(
+        tr("Settings"),
+        sections::title(name),
+        content,
+        "settings:close",
+    )
+    .content_header();
+    if back {
+        dialog.back("back")
+    } else {
+        dialog
+    }
 }
 
 fn has_text_fields(name: &str) -> bool {
@@ -579,6 +670,36 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         // The typed text never reaches settings.json. Only its user key is stored.
         crate::sync::store_password(&mut env.services.settings, value.as_str().unwrap_or(""));
         return Outcome::Handled;
+    }
+    if key == keys::DEVICE_SHOW_BOOK || key == keys::DEVICE_SLEEP_DETAILS {
+        let Some(on) = value.as_bool() else {
+            return Outcome::Handled;
+        };
+        let settings = &mut env.services.settings;
+        let legacy = keys::text_or(settings, keys::DEVICE_SLEEP_SCREEN, "cover");
+        let details = if key == keys::DEVICE_SLEEP_DETAILS {
+            on
+        } else {
+            keys::sleep_details(settings)
+        };
+        let show = if key == keys::DEVICE_SHOW_BOOK {
+            on
+        } else {
+            legacy != "blank"
+        };
+        settings.save(keys::DEVICE_SLEEP_DETAILS, Value::Bool(details));
+        settings.save(
+            keys::DEVICE_SLEEP_SCREEN,
+            Value::from(if !show {
+                "blank"
+            } else if details {
+                "details"
+            } else {
+                "cover"
+            }),
+        );
+        save(env);
+        return Outcome::Rebuild;
     }
     env.services.settings.save(key, value);
     if key == crate::webdav::ENABLED {
