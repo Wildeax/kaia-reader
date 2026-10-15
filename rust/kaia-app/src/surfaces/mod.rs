@@ -12,6 +12,7 @@ pub mod notes;
 pub mod pin;
 pub mod reader;
 pub mod settings;
+pub mod status;
 
 use crate::surface::Surface;
 

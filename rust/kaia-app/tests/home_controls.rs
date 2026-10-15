@@ -336,7 +336,8 @@ fn home_hidden_sections_golden() {
     drop(app);
     save_switch(&dir, keys::HOME_SHOW_NEXT_IN_SERIES, false);
     save_switch(&dir, keys::HOME_SHOW_IN_PROGRESS, false);
-    let app = reopen(&dir);
+    let mut app = reopen(&dir);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("home_hidden_sections.png"), 14);
 }
 
@@ -348,6 +349,7 @@ fn home_all_hidden_golden() {
     for key in SWITCHES {
         save_switch(&dir, key, false);
     }
-    let app = reopen(&dir);
+    let mut app = reopen(&dir);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("home_all_hidden.png"), 14);
 }

@@ -19,7 +19,6 @@ use kaia_library::{Book, CoverSize, Filter, Library, Sort, SortKey, Status};
 use kaia_ui::components::{
     Column, CrossAlign, Expanded, Label, Padding, Paragraph, ProgressBar, Row, SizedBox,
 };
-use kaia_ui::composite::Header;
 use kaia_ui::composite::{BookInfo, BookTile, CoverImage, ListRow};
 use kaia_ui::controls::ButtonStyle;
 use kaia_ui::geometry::Insets;
@@ -148,11 +147,7 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
         .cloned()
         .or_else(|| newest_added(lib));
 
-    let header = crate::surfaces::common::status_header(
-        Header::new(&t, "Kaia")
-            .status(data::status_line(services).unwrap_or_default())
-            .action("appbar.settings", "nav:settings"),
-    );
+    let header = super::status::row(services);
 
     let shown = controls::Shown::read(&services.settings);
     // The book card on the page. The other sections leave it out. A hidden card is
@@ -231,7 +226,7 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     ));
     let page = Padding::new(
         WidgetPod::new(
-            Column::new(vec![header, content, counts])
+            Column::new(vec![content, counts])
                 .gap(t.space.md)
                 .cross_align(CrossAlign::Stretch),
         ),
@@ -241,7 +236,14 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     window(
         services,
         env.screen,
-        common::tabbed_page(page, kaia_ui::composite::NavItem::Home),
+        common::tabbed_page(
+            Column::new(vec![
+                header,
+                WidgetPod::new(Expanded::new(WidgetPod::new(page), 1)),
+            ])
+            .cross_align(CrossAlign::Stretch),
+            kaia_ui::composite::NavItem::Home,
+        ),
     )
 }
 

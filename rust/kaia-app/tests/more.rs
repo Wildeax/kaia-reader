@@ -117,6 +117,7 @@ fn more_golden() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     tap_key(&mut app, "nav-more");
+    freeze_status_clock(&mut app);
     check_golden(&app, "more.png");
 }
 

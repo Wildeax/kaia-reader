@@ -190,7 +190,8 @@ fn home_next_and_author_golden() {
     let mut app = reopen(&dir);
     app.services_mut().library.record_open(juliet, 0.4).unwrap();
     drop(app);
-    let app = reopen(&dir);
+    let mut app = reopen(&dir);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("home_next_author.png"), 14);
     let _ = fs::remove_dir_all(dir);
 }

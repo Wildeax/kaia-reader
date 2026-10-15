@@ -140,7 +140,8 @@ fn home_golden() {
     lib.record_open(pdf, 0.0).unwrap();
     lib.set_status(pdf, kaia_library::Status::Complete).unwrap();
     drop(app);
-    let app = reopen(&dir);
+    let mut app = reopen(&dir);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("home.png"), 14);
 }
 
@@ -148,6 +149,7 @@ fn home_golden() {
 fn home_empty_golden() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("golden-home-empty");
-    let app = reopen(&dir);
+    let mut app = reopen(&dir);
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("home_empty.png"), 14);
 }

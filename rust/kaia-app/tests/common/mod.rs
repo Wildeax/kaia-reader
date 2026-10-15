@@ -128,6 +128,9 @@ pub fn wait_reader(app: &mut App<HeadlessBackend>) {
 }
 
 pub fn tap_key(app: &mut App<HeadlessBackend>, key: &str) {
+    if app.find_rect("status-clock").is_some() {
+        freeze_status_clock(app);
+    }
     // Notes and Settings now open through More. Keep callers exercising taps.
     if matches!(key, "nav-notes" | "nav-settings") {
         tap_key(app, "nav-more");
@@ -175,4 +178,13 @@ pub fn open_from_library(app: &mut App<HeadlessBackend>, name: &str) {
     }
     let id = book_id(app, name);
     tap_key(app, &format!("book-{id}"));
+}
+
+/// Keeps the live status clock stable in golden captures.
+pub fn freeze_status_clock(app: &mut App<HeadlessBackend>) {
+    app.update_top::<kaia_app::surfaces::status::Clock, _>("status-clock", |clock, cx| {
+        clock.set_text("09:41");
+        cx.request_paint();
+    });
+    app.process(Vec::new()).unwrap();
 }

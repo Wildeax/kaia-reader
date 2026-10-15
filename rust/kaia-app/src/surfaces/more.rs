@@ -26,14 +26,6 @@ impl Surface for MoreSurface {
         heading.weight = 400;
         let mut children = vec![
             WidgetPod::new(
-                SizedBox::new(Some(WidgetPod::new(Label::new(
-                    library::data::status_line(env.services).unwrap_or_default(),
-                    t.font.caption.clone(),
-                    Tone::InkSecondary,
-                ))))
-                .height(t.scale.dp(20)),
-            ),
-            WidgetPod::new(
                 SizedBox::new(Some(WidgetPod::new(Align::new(
                     WidgetPod::new(Padding::new(
                         WidgetPod::new(Label::new(tr("More"), heading, Tone::Ink)),
@@ -42,7 +34,7 @@ impl Surface for MoreSurface {
                     Alignment::Start,
                     Alignment::Center,
                 ))))
-                .height(t.scale.dp(58)),
+                .height(t.scale.dp(36)),
             ),
             rule(),
         ];
@@ -86,14 +78,21 @@ impl Surface for MoreSurface {
             Insets {
                 left: t.scale.dp(33),
                 right: t.scale.dp(33),
-                top: t.scale.dp(32),
+                top: 0,
                 bottom: 0,
             },
         );
         Some(common::root_window(
             env.services,
             env.screen,
-            common::tabbed_page(content, NavItem::More),
+            common::tabbed_page(
+                Column::new(vec![
+                    super::status::row(env.services),
+                    WidgetPod::new(Expanded::new(WidgetPod::new(content), 1)),
+                ])
+                .cross_align(CrossAlign::Stretch),
+                NavItem::More,
+            ),
         ))
     }
 

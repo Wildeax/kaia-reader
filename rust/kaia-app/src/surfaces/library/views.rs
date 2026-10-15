@@ -120,8 +120,13 @@ pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: boo
 pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
     let books = matches!(active, View::Covers | View::List);
     let tab = |weight: u32, selected: bool, label: &str, action: &str| {
-        let button = WidgetPod::new(Button::new(ButtonStyle::Text).text(label).on_action(action))
-            .with_key(action.replace(':', "-"));
+        let button = WidgetPod::new(
+            Button::new(ButtonStyle::Text)
+                .accent(selected)
+                .text(label)
+                .on_action(action),
+        )
+        .with_key(action.replace(':', "-"));
         let mark = if selected {
             WidgetPod::new(
                 Frame::new(WidgetPod::new(SizedBox::new(None).height(t.line.focus))).fill(Tone::Accent),
@@ -627,6 +632,15 @@ pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
 /// force filled. A button fits the page where a row list would not, so the panel
 /// keeps its Cancel on screen.
 pub fn filter_panel(t: &Theme, prefs: &Prefs, collection: Option<&str>) -> WidgetPod {
+    let button = |style: ButtonStyle, label: &str, action: &str| {
+        WidgetPod::new(
+            Button::new(style)
+                .accent(style == ButtonStyle::Primary)
+                .text(label)
+                .on_action(action),
+        )
+        .with_key(action.replace(':', "-"))
+    };
     let chip = prefs.chip;
     let source = prefs.source;
     let format = prefs.format.as_deref();

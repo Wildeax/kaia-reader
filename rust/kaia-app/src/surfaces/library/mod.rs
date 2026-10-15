@@ -192,6 +192,13 @@ impl LibrarySurface {
         view
     }
 
+    /// Opens local search from the application status row.
+    pub fn search() -> Self {
+        let mut view = Self::new(0);
+        view.search = true;
+        view
+    }
+
     /// Writes the prefs to settings and flushes the file, so a choice survives a
     /// restart that skips the normal exit. A failed write stays a notice.
     fn save_prefs(&self, env: &mut SurfaceEnv<'_>) {

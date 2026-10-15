@@ -56,8 +56,8 @@ impl NavItem {
 }
 
 /// The bar at the bottom of the Home, Library, Notes and Settings surfaces.
-/// The active item has a bold label and a red mark above it on color panels. In RTL the items
-/// run from right to left.
+/// The active item uses the theme accent for its label, icon and top mark.
+/// In RTL the items run from right to left.
 pub struct NavBar {
     active: NavItem,
     labels: [String; 3],
@@ -114,16 +114,12 @@ impl Widget for NavBar {
             let item = Self::slot_item(t.rtl, slot);
             let cell = Rect::new(b.x + (slot as u32 * cell_w) as i32, b.y, cell_w, b.h);
             let active = item == self.active.tab();
-            let tone = Tone::Ink;
+            let tone = if active { Tone::Accent } else { Tone::Ink };
             let mut label_font = t.font.caption.clone();
             if active {
                 label_font.weight = 700;
             }
-            let color = if active && t.color_panel {
-                kaia_gfx::Color::rgb(0xbf, 0, 0)
-            } else {
-                cx.color(tone)
-            };
+            let color = cx.color(tone);
             let mut style = t.style(&label_font, tone);
             style.color = color;
             let label = cx.fonts.layout(

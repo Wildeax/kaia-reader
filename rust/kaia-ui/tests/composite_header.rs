@@ -184,3 +184,14 @@ fn nav_bar_golden_matches() {
     let pm = render(nav_screen(NavItem::Library), SCREEN, &t, &assets());
     assert_matches_golden(&pm, &golden("navbar_gray.png"), 0);
 }
+
+#[test]
+fn nav_bar_uses_the_configured_accent() {
+    let mut t = theme(true);
+    t.palette.accent = kaia_gfx::Color::rgb(23, 82, 139);
+    let pm = render(nav_screen(NavItem::Library), SCREEN, &t, &assets());
+    assert_eq!(
+        pm.get((SCREEN.w / 2) as i32, (SCREEN.h - t.nav_bar) as i32),
+        Some(t.palette.accent)
+    );
+}
