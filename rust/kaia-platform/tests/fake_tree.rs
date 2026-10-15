@@ -296,7 +296,10 @@ fn suspend_then_resume_against_fake_tree() {
     let pm = PowerManager::kobo(&root, PathBuf::from("/mnt/onboard/.adds/kaia"), vec![], true);
     let mut io = FakeIo::new(dir.path());
 
-    let first = pm.prepare_suspend(PowerContext::default());
+    let first = pm.prepare_suspend(PowerContext {
+        wifi_on: true,
+        charging: false,
+    });
     let outcome = execute(&first, &mut io, &mut |_| {});
     assert_eq!(outcome, Outcome::Completed);
     assert_eq!(get(dir.path(), STATE_EXTENDED), "1");
@@ -306,14 +309,38 @@ fn suspend_then_resume_against_fake_tree() {
     let outcome = execute(&second, &mut io, &mut |d| slept.push(d));
     assert_eq!(outcome, Outcome::Completed);
     assert_eq!(get(dir.path(), POWER_STATE), "mem");
-    assert_eq!(io.runs.len(), 1);
-    assert_eq!(io.runs[0].program, "sync");
+    assert_eq!(io.runs.len(), 3);
+    assert_eq!(io.runs[2].program, "sync");
 
     let resume = pm.resume(ResumeContext::default());
     let mut slept = Vec::new();
     execute(&resume, &mut io, &mut |d| slept.push(d));
     assert_eq!(get(dir.path(), STATE_EXTENDED), "0");
     assert_eq!(slept, vec![Duration::from_millis(100)]);
+    assert_eq!(
+        io.writes,
+        vec![
+            (STATE_EXTENDED.into(), "1".into()),
+            (POWER_STATE.into(), "mem".into()),
+            (STATE_EXTENDED.into(), "0".into()),
+        ]
+    );
+    assert_eq!(
+        io.trace
+            .iter()
+            .filter(|line| line.starts_with("begin "))
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec![
+            "begin run /mnt/onboard/.adds/kaia/release-ip.sh",
+            "begin run /mnt/onboard/.adds/kaia/disable-wifi.sh",
+            r#"begin Write { path: "/sys/power/state-extended", value: "1" }"#,
+            "begin run sync",
+            r#"begin Write { path: "/sys/power/state", value: "mem" }"#,
+            r#"begin Write { path: "/sys/power/state-extended", value: "0" }"#,
+            "begin Sleep(100ms)",
+        ]
+    );
 }
 
 #[test]
@@ -333,6 +360,14 @@ fn refused_suspend_resets_state_extended() {
         }
     );
     assert_eq!(get(dir.path(), STATE_EXTENDED), "0");
+    assert_eq!(
+        io.writes,
+        vec![
+            (POWER_STATE.into(), "mem".into()),
+            (STATE_EXTENDED.into(), "0".into()),
+        ]
+    );
+    assert!(io.trace.iter().any(|line| line.contains("FAILED")));
 }
 
 #[test]

@@ -10,6 +10,7 @@ use kaia_platform::sysfs::{Root, Runner, SysfsWriter, SystemIo};
 /// Writes go into a fake device tree on disk. Commands are recorded and never run.
 pub struct FakeIo {
     pub io: SystemIo,
+    pub trace: Vec<String>,
     pub runs: Vec<Run>,
     /// Program names whose run should report failure.
     pub failing_programs: Vec<String>,
@@ -45,6 +46,7 @@ impl FakeIo {
     pub fn new(root: &Path) -> Self {
         FakeIo {
             io: SystemIo::new(Root::new(root)),
+            trace: Vec::new(),
             runs: Vec::new(),
             failing_programs: Vec::new(),
             writes: Vec::new(),
@@ -61,6 +63,10 @@ impl FakeIo {
 }
 
 impl SysfsWriter for FakeIo {
+    fn trace(&mut self, message: &str) {
+        self.trace.push(message.to_string());
+    }
+
     fn write(&mut self, device_path: &str, value: &str) -> io::Result<()> {
         self.writes.push((device_path.to_string(), value.to_string()));
         if self.wakealarm_busy_while_set && device_path == "/sys/class/rtc/rtc0/wakealarm" && value != "0" {

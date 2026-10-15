@@ -72,6 +72,9 @@ impl Root {
 /// implements them with the calls in [`crate::ioctl`]. Tests implement them to
 /// record the calls.
 pub trait SysfsWriter {
+    /// Records a device-plan step. Fake writers can capture the sequence.
+    fn trace(&mut self, _message: &str) {}
+
     /// Writes `value` to the device path. Errors mean the kernel refused the write.
     fn write(&mut self, device_path: &str, value: &str) -> io::Result<()>;
 
@@ -146,13 +149,39 @@ impl SystemIo {
     }
 }
 
+/// Writes a power diagnostic to the launcher's Rust log and syncs that file.
+/// A terminal or pipe has no file to sync. Logging must not prevent recovery.
+pub fn power_trace(message: &str) {
+    let mut stderr = io::stderr().lock();
+    let _ = writeln!(stderr, "kaia: power: {message}");
+    let _ = stderr.flush();
+    #[cfg(target_os = "linux")]
+    if let Ok(file) = OpenOptions::new().write(true).open("/proc/self/fd/2") {
+        if file.metadata().is_ok_and(|m| m.is_file()) {
+            let _ = file.sync_all();
+        }
+    }
+}
+
 impl SysfsWriter for SystemIo {
+    fn trace(&mut self, message: &str) {
+        if self.root.base() == Path::new("/") {
+            power_trace(message);
+        }
+    }
+
     fn write(&mut self, device_path: &str, value: &str) -> io::Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(self.root.path(device_path))?;
-        file.write_all(value.as_bytes())
+        let result = (|| {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(self.root.path(device_path))?;
+            file.write_all(value.as_bytes())
+        })();
+        if let Err(error) = &result {
+            self.trace(&format!("write {device_path}={value}: {error}"));
+        }
+        result
     }
 
     fn rtc_set_alarm(&mut self, device_path: &str, epoch: u64) -> io::Result<()> {
