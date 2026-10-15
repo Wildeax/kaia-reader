@@ -116,6 +116,13 @@ pub enum Command {
         larger: bool,
         distance: f64,
         axis: Option<Axis>,
+        view: Option<(f32, kaia_gfx::Point, kaia_gfx::Point)>,
+    },
+    ZoomArea,
+    ViewDrag {
+        start: kaia_gfx::Point,
+        end: kaia_gfx::Point,
+        area: bool,
     },
     /// Highlights the selection.
     SelHighlight,
@@ -177,6 +184,7 @@ fn pinch(args: &[Value], larger: bool) -> Option<Command> {
         larger,
         distance,
         axis: axis(args),
+        view: None,
     })
 }
 
@@ -234,6 +242,39 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
         ["tap"] => {
             let (x, y) = position(args);
             Command::Tap(x, y)
+        }
+        ["zoom", "area"] => Command::ZoomArea,
+        ["zoom", "reset"] => Command::Layout(LayoutChange::Zoom(0)),
+        ["zoom", "pinch"] => {
+            let ratio = number(args, 0)? as f32;
+            if !ratio.is_finite() || ratio <= 0.0 {
+                return None;
+            }
+            let point = |i| {
+                Some(kaia_gfx::Point::new(
+                    number(args, i)? as i32,
+                    number(args, i + 1)? as i32,
+                ))
+            };
+            Command::Pinch {
+                larger: ratio > 1.0,
+                distance: 0.0,
+                axis: None,
+                view: Some((ratio, point(1)?, point(3)?)),
+            }
+        }
+        ["zoom", "drag"] => {
+            let point = |i| {
+                Some(kaia_gfx::Point::new(
+                    number(args, i)? as i32,
+                    number(args, i + 1)? as i32,
+                ))
+            };
+            Command::ViewDrag {
+                start: point(0)?,
+                end: point(2)?,
+                area: args.get(4).and_then(Value::as_bool) == Some(true),
+            }
         }
         ["next"] => Command::Next,
         ["prev"] => Command::Prev,
@@ -395,6 +436,7 @@ mod tests {
                 larger: false,
                 distance: 42.0,
                 axis: Some(Axis::Vertical),
+                view: None,
             })
         );
         assert_eq!(
@@ -406,6 +448,7 @@ mod tests {
                 larger: true,
                 distance: 3.0,
                 axis: None,
+                view: None,
             })
         );
         assert_eq!(parse("reader:size:larger", &[]), None);

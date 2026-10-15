@@ -475,21 +475,34 @@ pub fn layout(services: &Services, screen: Size, reflow: Option<&TextLayout>, zo
         }
         None => {
             let index = match zoom {
-                ZoomMode::FitPage | ZoomMode::Manual { .. } => 0,
-                ZoomMode::FitWidth => 1,
+                ZoomMode::FitPage => Some(0),
+                ZoomMode::FitWidth => Some(1),
+                ZoomMode::FitColumns => Some(2),
+                ZoomMode::Manual { .. } | ZoomMode::Region => None,
             };
-            let options = vec![tr("Fit page"), tr("Fit width")];
-            let zoom_group =
-                WidgetPod::new(RadioGroup::new(options, Some(index)).on_action("reader:layout:zoom"))
-                    .with_key("layout-zoom");
+            let options = vec![tr("Fit page"), tr("Fit width"), tr("Fit columns")];
+            let zoom_group = WidgetPod::new(RadioGroup::new(options, index).on_action("reader:layout:zoom"))
+                .with_key("layout-zoom");
             children.push(group_heading(services, &tr("Zoom")));
             children.push(zoom_group);
+            children.push(button(
+                ButtonStyle::Secondary,
+                &tr("Zoom to area"),
+                "reader:zoom:area",
+                "zoom-area",
+            ));
+            children.push(button(
+                ButtonStyle::Secondary,
+                &tr("Reset"),
+                "reader:zoom:reset",
+                "zoom-reset",
+            ));
         }
     }
     let title = if reflow.is_some() {
         tr("Text and layout")
     } else {
-        tr("Page view")
+        tr("Zoom")
     };
     sheet(services, screen, Some(&title), children, Some(WRITING_PERCENT))
 }

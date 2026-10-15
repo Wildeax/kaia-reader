@@ -704,6 +704,11 @@ impl Surface for ReaderSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if cmd == "reader:zoom:begin" {
+            self.pending_tap = None;
+            self.lookup = None;
+            return Outcome::Handled;
+        }
         if let Some(outcome) = navigation::command(&self.core, cmd, args, env) {
             return outcome;
         }
@@ -1251,7 +1256,16 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     PanelName::More => panels::more(env.services, env.screen),
                     PanelName::Footer => panels::footer_sheet(env.services, env.screen, &c.header, &c.footer),
                 };
-                show_panel(rc, &mut c, env.ctx, window, replace)
+                let replace_overlay = name == PanelName::Layout
+                    && c.overlay.is_some()
+                    && c.session.as_ref().is_some_and(|s| !s.is_reflowable());
+                let outcome = show_panel(rc, &mut c, env.ctx, window, replace);
+                if replace_overlay {
+                    if let Outcome::Navigate(Nav::Push(surface)) = outcome {
+                        return Outcome::Navigate(Nav::Replace(surface));
+                    }
+                }
+                outcome
             }
             Command::PanelClose => Outcome::Navigate(Nav::Pop),
             Command::FontList => {
@@ -1395,10 +1409,10 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     LayoutChange::Hyphenation(on) => c.change_layout(|l| l.hyphenation = on),
                     LayoutChange::Styles(on) => c.change_layout(|l| l.embedded_styles = on),
                     LayoutChange::Zoom(index) => {
-                        let zoom = if index == 1 {
-                            ZoomMode::FitWidth
-                        } else {
-                            ZoomMode::FitPage
+                        let zoom = match index {
+                            1 => ZoomMode::FitWidth,
+                            2 => ZoomMode::FitColumns,
+                            _ => ZoomMode::FitPage,
                         };
                         c.set_zoom(env.ctx, zoom)
                     }
@@ -1412,13 +1426,69 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                     Ok(()) => Outcome::Handled,
                 }
             }
+            Command::ZoomArea => {
+                if let Some(window) = &c.page_window {
+                    window.update::<page::PageView, _>(env.ctx, page::PAGE_KEY, |view, _| {
+                        view.zoom_area = view.fixed_layout;
+                    });
+                }
+                env.toast(tr("Drag a rectangle around the area to read."), 3.0);
+                Outcome::Navigate(Nav::Pop)
+            }
+            Command::ViewDrag { start, end, area } => {
+                let viewport = c.viewport;
+                let header = c.header_height as i32;
+                if let Some(session) = c.session.as_mut() {
+                    let result = if area {
+                        session.zoom_to_area(
+                            Point::new(start.x, start.y - header),
+                            Point::new(end.x, end.y - header),
+                            viewport,
+                        )
+                    } else {
+                        session.pan_by(Point::new(end.x - start.x, end.y - start.y), viewport)
+                    };
+                    match result {
+                        Ok(()) => c.repaint_page(env.ctx, kaia_ui::widget::PaintHint::Full),
+                        Err(e) => {
+                            env.toast(e.to_string(), 3.0);
+                        }
+                    }
+                }
+                Outcome::Handled
+            }
             Command::Pinch {
                 larger,
                 distance,
                 axis,
+                view,
             } => {
-                // Only a reflowable book has a text size. On a fixed-layout book the
-                // gesture does nothing, as the Text and layout sheet does not open for it.
+                if c.session.as_ref().is_some_and(|s| !s.is_reflowable()) {
+                    let viewport = c.viewport;
+                    let center = Point::new(viewport.w as i32 / 2, viewport.h as i32 / 2);
+                    let (ratio, start, end) = view
+                        .map(|(ratio, start, end)| {
+                            let header = c.header_height as i32;
+                            (
+                                ratio,
+                                Point::new(start.x, start.y - header),
+                                Point::new(end.x, end.y - header),
+                            )
+                        })
+                        .unwrap_or_else(|| {
+                            let ratio = 1.0 + distance as f32 / viewport.w.min(viewport.h).max(1) as f32;
+                            (if larger { ratio } else { 1.0 / ratio }, center, center)
+                        });
+                    if let Some(session) = c.session.as_mut() {
+                        match session.pinch_zoom(ratio, start, end, viewport) {
+                            Ok(()) => c.repaint_page(env.ctx, PaintHint::Full),
+                            Err(e) => {
+                                env.toast(e.to_string(), 3.0);
+                            }
+                        }
+                    }
+                    return Outcome::Handled;
+                }
                 let Some(current) = c
                     .session
                     .as_ref()

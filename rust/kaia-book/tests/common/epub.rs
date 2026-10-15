@@ -164,7 +164,7 @@ fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Builds a stored zip archive from (name, bytes) entries.
-fn zip(entries: &[(&str, Vec<u8>)]) -> Vec<u8> {
+pub fn zip(entries: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut central = Vec::new();
     for (name, data) in entries {

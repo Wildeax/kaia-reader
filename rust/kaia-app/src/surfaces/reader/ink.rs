@@ -100,8 +100,10 @@ pub(super) fn frame(session: &mut BookSession, viewport: Size) -> Result<PageInk
 impl PageInk {
     fn point(&self, point: &InkPoint, origin: (f32, f32)) -> Point {
         Point::new(
-            self.offset.x + ((point.x + origin.0) * self.transform.scale).round() as i32,
-            self.offset.y + ((point.y + origin.1) * self.transform.scale).round() as i32,
+            self.offset.x + ((point.x + origin.0) * self.transform.scale).round() as i32
+                - self.transform.offset.x,
+            self.offset.y + ((point.y + origin.1) * self.transform.scale).round() as i32
+                - self.transform.offset.y,
         )
     }
 
@@ -233,8 +235,10 @@ impl PageInk {
         } else if let Some(active) = &mut self.active {
             if active.stroke.points.len() < 100_000 {
                 active.stroke.points.push(InkPoint {
-                    x: (p.x - self.offset.x) as f32 / self.transform.scale - active.origin.0,
-                    y: (p.y - self.offset.y) as f32 / self.transform.scale - active.origin.1,
+                    x: (p.x - self.offset.x + self.transform.offset.x) as f32 / self.transform.scale
+                        - active.origin.0,
+                    y: (p.y - self.offset.y + self.transform.offset.y) as f32 / self.transform.scale
+                        - active.origin.1,
                     pressure: pen.pressure,
                 });
             }
@@ -576,6 +580,38 @@ mod tests {
             width: 3.0,
             color: "black".into(),
         }
+    }
+
+    #[test]
+    fn fixed_page_ink_coordinates_follow_pan() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/2col.pdf");
+        let mut session = BookSession::open(path, OpenOptions::new(dir.path())).unwrap();
+        session
+            .set_zoom(kaia_book::ZoomMode::Manual { percent: 200 })
+            .unwrap();
+        session.pan_by(Point::new(-200, -300), VIEW).unwrap();
+        let mut ink = frame(&mut session, VIEW).unwrap();
+        let at = Point::new(400, 500);
+        ink.pen(
+            PenEvent {
+                phase: Phase::Down,
+                pos: at,
+                pressure: 500,
+                eraser: false,
+                button: false,
+                time_us: 0,
+            },
+            3.0,
+            "black",
+            false,
+        )
+        .unwrap();
+        let drawing = ink.active.as_ref().unwrap();
+        let point = drawing.stroke.points.first().unwrap();
+        assert_eq!(ink.point(point, drawing.origin), at);
+        assert!((point.x * ink.transform.scale - 600.0).abs() < 1.0);
+        assert!((point.y * ink.transform.scale - 800.0).abs() < 1.0);
     }
 
     #[test]

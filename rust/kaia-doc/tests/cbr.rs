@@ -128,3 +128,16 @@ fn cbr_rejects_malformed_empty_oversize_and_unsafe_archives() {
         assert!(CbrDocument::open(&path).is_err());
     }
 }
+
+#[test]
+fn four_times_panel_size_renders_only_the_clip() {
+    let png = image(1264, 1680, [100, 140, 200], ImageFormat::Png);
+    let (_dir, path) = fixture(&common::rar(&[("page.png", &png, png.len() as u32)]));
+    let doc = open(&path).unwrap();
+    assert!(doc.render(0, 4.0, PixelFormat::Gray8).is_err());
+    let clip = doc
+        .render_clip(0, 4.0, PixelFormat::Gray8, Rect::new(2000, 3000, 1264, 1680))
+        .unwrap();
+    assert_eq!(clip.size(), Size::new(1264, 1680));
+    assert!(clip.data().iter().all(|p| *p == clip.data()[0]));
+}

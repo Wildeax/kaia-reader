@@ -17,6 +17,7 @@ pub(crate) struct RenderKey {
     pub page: u32,
     pub viewport: Size,
     pub zoom: ZoomMode,
+    pub view: (u32, i32, i32),
     pub format: PixelFormat,
 }
 
@@ -144,6 +145,7 @@ mod tests {
             page,
             viewport: Size { w: 4, h: 4 },
             zoom: ZoomMode::FitPage,
+            view: (0, 0, 0),
             format: PixelFormat::Gray8,
         }
     }

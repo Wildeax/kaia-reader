@@ -1291,7 +1291,15 @@ fn pdf_sticker_uses_page_fractions_and_shared_store_images() {
     app.command("reader:layout:zoom", &[kaia_events::Value::Number(1.0)]);
     app.process(Vec::new()).unwrap();
     wait_reader(&mut app);
-    assert_eq!(page_stickers(&mut app).len(), 1);
+    let zoomed = page_stickers(&mut app);
+    assert_eq!(zoomed.len(), 1);
+    assert!(zoomed[0].rect.h > before[0].rect.h);
+    app.key(Key::RPgFwd).unwrap();
+    wait_reader(&mut app);
+    let panned = page_stickers(&mut app);
+    assert_eq!(panned.len(), 1, "panning stays on the sticker's page");
+    assert!(panned[0].rect.y < zoomed[0].rect.y);
+    assert_eq!(panned[0].rect.h, zoomed[0].rect.h);
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
     assert!(

@@ -85,6 +85,11 @@ pub struct PageView {
     pub highlight_shade: f64,
     pub brightness: Option<u8>,
     pub flipping: bool,
+    pub fixed_layout: bool,
+    pub zoomed: bool,
+    pub zoom_area: bool,
+    zoom_drag: Option<(Point, Point)>,
+    zoom_pinch: Option<(f32, Point, Point)>,
     light_drag: Option<bool>,
     light_start: Point,
     touch_flip: bool,
@@ -121,11 +126,36 @@ impl PageView {
             highlight_shade: DEFAULT_HIGHLIGHT_SHADE,
             brightness: None,
             flipping: false,
+            fixed_layout: false,
+            zoomed: false,
+            zoom_area: false,
+            zoom_drag: None,
+            zoom_pinch: None,
             light_drag: None,
             light_start: Point::new(0, 0),
             touch_flip: false,
             held_key: None,
             repeats: 0,
+        }
+    }
+
+    fn finish_zoom_drag(&mut self, cx: &mut EventCx, start: Point, end: Point, bounds: Rect) {
+        let mut args = point_args(start, bounds);
+        args.extend(point_args(end, bounds));
+        args.push(Value::Bool(self.zoom_area));
+        self.zoom_area = false;
+        self.zoom_drag = None;
+        cx.action(action("reader:zoom:drag", args));
+    }
+
+    fn finish_zoom_pinch(&mut self, cx: &mut EventCx, bounds: Rect) {
+        self.zoom_drag = None;
+        self.light_drag = None;
+        if let Some((ratio, start, end)) = self.zoom_pinch.take() {
+            let mut args = vec![Value::Number(f64::from(ratio))];
+            args.extend(point_args(start, bounds));
+            args.extend(point_args(end, bounds));
+            cx.action(action("reader:zoom:pinch", args));
         }
     }
 
@@ -147,6 +177,9 @@ impl PageView {
     }
 
     pub(super) fn cancel_gestures(&mut self) {
+        self.zoom_drag = None;
+        self.zoom_pinch = None;
+        self.zoom_area = false;
         self.light_drag = None;
         self.touch_flip = false;
         self.held_key = None;
@@ -342,6 +375,21 @@ impl Widget for PageView {
                         w: width,
                         h: 1,
                     },
+                    ink,
+                );
+            }
+        }
+        if self.zoom_area {
+            if let Some((start, end)) = self.zoom_drag {
+                cx.border(
+                    Rect::new(
+                        start.x.min(end.x),
+                        start.y.min(end.y),
+                        start.x.abs_diff(end.x),
+                        start.y.abs_diff(end.y),
+                    ),
+                    0,
+                    3,
                     ink,
                 );
             }
@@ -575,8 +623,109 @@ impl Widget for PageView {
                 Handled::Yes
             }
             UiEvent::Gesture(Gesture::Touch { .. }) => {
+                self.zoom_drag = None;
+                self.zoom_pinch = None;
                 self.light_drag = None;
                 self.touch_flip = false;
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Pan { pos, start_pos, .. })
+                if self.fixed_layout && (self.zoomed || self.zoom_area) =>
+            {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_drag = Some((*start_pos, *pos));
+                if self.zoom_area {
+                    cx.request_paint_with(kaia_ui::widget::PaintHint::Fast);
+                }
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::PanRelease { pos, .. }) if self.zoom_drag.is_some() => {
+                let (start, _) = self.zoom_drag.unwrap();
+                self.finish_zoom_drag(cx, start, *pos, bounds);
+                Handled::Yes
+            }
+            UiEvent::Gesture(
+                Gesture::Swipe { pos, end_pos, .. } | Gesture::Multiswipe { pos, end_pos, .. },
+            ) if self.fixed_layout && (self.zoomed || self.zoom_area) => {
+                self.finish_zoom_drag(cx, *pos, *end_pos, bounds);
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::InwardPan {
+                pos,
+                start_pos,
+                span,
+                start_span,
+                ..
+            }) if self.fixed_layout => {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_pinch =
+                    (*start_span > 0.0).then_some((*span as f32 / *start_span as f32, *start_pos, *pos));
+                self.zoom_drag = None;
+                self.light_drag = None;
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::OutwardPan {
+                pos,
+                end_pos,
+                span,
+                start_span,
+                ..
+            }) if self.fixed_layout => {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_pinch =
+                    (*start_span > 0.0).then_some((*span as f32 / *start_span as f32, *pos, *end_pos));
+                self.zoom_drag = None;
+                self.light_drag = None;
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Pinch {
+                pos,
+                start_pos,
+                span,
+                start_span,
+                ..
+            }) if self.fixed_layout => {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_pinch =
+                    (*start_span > 0.0).then_some((*span as f32 / *start_span as f32, *start_pos, *pos));
+                self.finish_zoom_pinch(cx, bounds);
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::Spread {
+                pos,
+                end_pos,
+                span,
+                start_span,
+                ..
+            }) if self.fixed_layout => {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_pinch =
+                    (*start_span > 0.0).then_some((*span as f32 / *start_span as f32, *pos, *end_pos));
+                self.finish_zoom_pinch(cx, bounds);
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::HoldPan {
+                pos,
+                start_pos,
+                end_pos,
+                span: Some(span),
+                start_span: Some(start_span),
+                ..
+            }) if self.fixed_layout => {
+                cx.action(action("reader:zoom:begin", Vec::new()));
+                self.zoom_pinch = (*start_span > 0.0).then_some((
+                    *span as f32 / *start_span as f32,
+                    start_pos.unwrap_or(*pos),
+                    end_pos.unwrap_or(*pos),
+                ));
+                self.zoom_drag = None;
+                self.light_drag = None;
+                Handled::Yes
+            }
+            UiEvent::Gesture(
+                Gesture::TwoFingerPanRelease { .. } | Gesture::TwoFingerHoldPanRelease { .. },
+            ) if self.fixed_layout => {
+                self.finish_zoom_pinch(cx, bounds);
                 Handled::Yes
             }
             UiEvent::Gesture(Gesture::Pan { pos, start_pos, .. }) => {
@@ -591,12 +740,12 @@ impl Widget for PageView {
                     Handled::No
                 }
             }
+            UiEvent::Gesture(Gesture::Tap { .. }) if self.zoom_area => Handled::Yes,
             UiEvent::Gesture(Gesture::Tap { pos, .. }) => {
                 cx.action(action("reader:tap", point_args(*pos, bounds)));
                 Handled::Yes
             }
-            // Pinch and spread change the text size of a reflowable book. The reader
-            // ignores them on a fixed-layout book.
+            // Reflowable books keep the font-size gesture.
             UiEvent::Gesture(Gesture::Pinch { distance, axis, .. }) => {
                 cx.action(size_action("reader:size:smaller", *distance, *axis));
                 Handled::Yes
@@ -627,6 +776,26 @@ impl Widget for PageView {
                     }
                     _ => Handled::No,
                 }
+            }
+            UiEvent::Gesture(Gesture::Hold { pos, .. }) if self.zoom_area => {
+                self.zoom_drag = Some((*pos, *pos));
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::HoldPan { pos, start_pos, .. }) if self.zoom_area => {
+                let start = self
+                    .zoom_drag
+                    .map(|(start, _)| start)
+                    .or(*start_pos)
+                    .unwrap_or(*pos);
+                self.zoom_drag = Some((start, *pos));
+                cx.request_paint_with(kaia_ui::widget::PaintHint::Fast);
+                Handled::Yes
+            }
+            UiEvent::Gesture(Gesture::HoldRelease { pos, .. }) if self.zoom_area => {
+                if let Some((start, _)) = self.zoom_drag {
+                    self.finish_zoom_drag(cx, start, *pos, bounds);
+                }
+                Handled::Yes
             }
             UiEvent::Gesture(Gesture::Hold { pos, .. }) => {
                 if i64::from(pos.y - bounds.y) * 10 >= i64::from(bounds.h) * 9 {

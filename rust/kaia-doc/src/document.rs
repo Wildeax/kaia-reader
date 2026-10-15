@@ -40,6 +40,16 @@ pub trait Document {
     /// Text and character boxes of a page.
     fn page_text(&self, page: u32) -> Result<PageText>;
 
+    /// Text block boxes in page points, for fixed-layout column detection.
+    fn text_blocks(&self, page: u32) -> Result<Vec<crate::RectF>> {
+        Ok(self
+            .page_text(page)?
+            .lines
+            .into_iter()
+            .map(|line| line.bbox)
+            .collect())
+    }
+
     /// Hit quads for `needle` on a page. An empty needle has no hits.
     fn search(&self, page: u32, needle: &str) -> Result<Vec<Quad>>;
 

@@ -23,6 +23,7 @@ pub(crate) enum EngineDoc {
     #[cfg(feature = "cre")]
     Cre(CreDocument),
     Mupdf(MupdfDocument),
+    Fixed(Box<dyn Document>),
 }
 
 impl EngineDoc {
@@ -40,6 +41,9 @@ impl EngineDoc {
             };
         }
         let format = format::detect(path)?;
+        if matches!(format, Format::Djvu | Format::Cbr) {
+            return kaia_doc::open_with(path, engine).map(EngineDoc::Fixed);
+        }
         let use_cre = match engine {
             Engine::Cre => true,
             Engine::Mupdf => false,
@@ -75,6 +79,7 @@ impl EngineDoc {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d,
             EngineDoc::Mupdf(d) => d,
+            EngineDoc::Fixed(d) => d.as_ref(),
         }
     }
 
@@ -84,6 +89,7 @@ impl EngineDoc {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d,
             EngineDoc::Mupdf(d) => d,
+            EngineDoc::Fixed(d) => d.as_mut(),
         }
     }
 
@@ -92,7 +98,7 @@ impl EngineDoc {
         match self {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(_) => true,
-            EngineDoc::Mupdf(_) => false,
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => false,
         }
     }
 
@@ -103,7 +109,7 @@ impl EngineDoc {
         match self {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d.xpointer_page(xp),
-            EngineDoc::Mupdf(_) => Ok(None),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(None),
         }
     }
 
@@ -113,7 +119,7 @@ impl EngineDoc {
         match self {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d.page_xpointer(page).map(Some),
-            EngineDoc::Mupdf(_) => Ok(None),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(None),
         }
     }
 
@@ -123,7 +129,7 @@ impl EngineDoc {
         match self {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d.xpointer_at(page, p.x.round() as i32, p.y.round() as i32),
-            EngineDoc::Mupdf(_) => Ok(None),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(None),
         }
     }
 
@@ -150,7 +156,7 @@ impl EngineDoc {
                     })
                     .collect(),
             )),
-            EngineDoc::Mupdf(_) => Ok(None),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(None),
         }
     }
 
@@ -167,7 +173,7 @@ impl EngineDoc {
                     b.line,
                 )
             })),
-            EngineDoc::Mupdf(_) => Ok(None),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(None),
         }
     }
 
@@ -181,7 +187,7 @@ impl EngineDoc {
                 d.set_hyphenation(dict)?;
                 d.set_embedded_styles(embedded_styles)
             }
-            EngineDoc::Mupdf(_) => Ok(()),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(()),
         }
     }
 }

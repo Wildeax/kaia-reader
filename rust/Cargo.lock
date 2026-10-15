@@ -976,6 +976,7 @@ name = "kaia-book"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crc32fast",
  "kaia-doc",
  "kaia-events",
  "kaia-gfx",

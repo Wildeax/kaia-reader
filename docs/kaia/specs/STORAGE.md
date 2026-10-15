@@ -38,6 +38,22 @@ One exception writes a Nickel file, by the owner's decision (B-91, 2026-10-14): 
 
 The `layout` table of a book state holds `font_weight`, a KOReader font weight value (0 is regular, -1 to 3 in the Text and layout sheet). A missing key reads as 0.
 
+Fixed-layout books keep their view in the same per-book JSON file. `zoom.mode` is
+`fit_page`, `fit_width`, `fit_columns`, `region` or `manual`. The existing
+`zoom.percent` remains for older readers. These version 1 fields are optional:
+
+| Field | Value | Default when absent |
+|---|---|---|
+| `zoom_scale` | Continuous scale relative to fit page, from 1 to 4 | Derive from `zoom.mode` and `zoom.percent` |
+| `zoom_pan_x` | Left edge of the visible region, in scaled page pixels | 0 |
+| `zoom_pan_y` | Top edge of the visible region, in scaled page pixels | 0 |
+
+Kaia ignores nonfinite or out-of-range scales and clamps pan to the current
+page edges. Fit columns and region views save their computed scale. A page
+turn retains the zoom and starts the next page at its top left. Reset clears
+the scale override and pan and selects Fit page. Reflowable books ignore these
+fields. Their pinch gesture still changes the saved font size.
+
 Removed books keep their reading data. When a book file is gone from a root that the scan read completely, the scan marks its row in `library.sqlite3` as missing. A scan never deletes that row. The row keeps its history, collections, status and cover. Lists, search and counts leave a missing book out until its file returns. A file copied back to its old path, or to a new path with the same content, gets the same book id. Only an explicit delete removes a row. The storage page deletes present files only, and a catalog server's delete request removes the row for its file. Reading state in `kaia/books/<partial_md5>.json` belongs to `kaia-book`. It is keyed by content, and `kaia-library` never touches it, so a returning book keeps its position, notes and status.
 
 ## Kobo import
