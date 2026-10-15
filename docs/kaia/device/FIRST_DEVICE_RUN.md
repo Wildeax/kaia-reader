@@ -18,9 +18,9 @@ The owner ran the Lua app and the Rust app by hand. The orchestrator then drove 
 | Problem | Effect | Status |
 |---|---|---|
 | `tools/kaia/device/backup.sh` stopped on macOS, which refuses to list `.Spotlight-V100` on the volume. | No backup. | Fixed in 8b21616e3. |
-| Nickel imported about 120 files from `.adds/kaia` (icons, help pages) as books. | Nickel's library shows 129 books instead of 3. | Open. The usual fix is `ExcludeSyncFolders` in Nickel's config, as KOReader's install guide says. `INSTALL_KOBO.md` must say so. |
-| Rust app: the frontlight slider shows 0% while the light is at 26%. `mxc_msp430.0/brightness` reads 0 on this device; `actual_brightness` holds the level. | Wrong slider; the light may jump when moved. | Being fixed. |
-| Rust app: on Notes with no notes, the navigation bar sits mid-screen under the empty text. | The bottom of the screen does nothing. | Being fixed. |
+| Nickel imported about 120 files from `.adds/kaia` (icons, help pages) as books. | Nickel's library shows 129 books instead of 3. | Fixed on the device: `ExcludeSyncFolders` added to Nickel's config while Kaia ran (Nickel stopped), then a full rescan from NickelMenu (`nickel_misc:rescan_books_full`). Nickel now lists the 3 real books. `INSTALL_KOBO.md` explains the step. |
+| Rust app: the frontlight slider shows 0% while the light is at 26%. `mxc_msp430.0/brightness` reads 0 on this device; `actual_brightness` holds the level. | Wrong slider; the light may jump when moved. | Fixed in b4f28477a and checked on the device: the slider shows 18 percent with the light at 18, and warmth 100 with the mixer at 0. |
+| Rust app: on Notes with no notes, the navigation bar sits mid-screen under the empty text. | The bottom of the screen does nothing. | Fixed in b4f28477a and checked on the device. |
 | Rust app: Kobo's own dictionaries in `.kobo/dict` are encrypted (the word index is plain, every entry is not). | Kaia cannot use them, by design. The lookup says "No dictionary installed" instead of naming the cause. | Decision B-82 holds: offer the free downloads. The message needs a fix. |
 | Rust app: default text is about half Nickel's size (17 lines a page against 9; the book is 248 pages against 96). Kaia also hyphenates and does not justify by default, and shows only "Page x of y" at the bottom. | The owner prefers Nickel's large default. | Nickel defaults study running; see `nickel/DEFAULTS.md` when done. |
 | Rust app: the reading menu, selection sheet, settings pages and light panel differ from Nickel in layout and size. | Feels unlike Nickel. | See `nickel/GAPS.md`. |
@@ -32,6 +32,12 @@ The owner ran the Lua app and the Rust app by hand. The orchestrator then drove 
 - Nickel turns Wi-Fi off when it sleeps.
 - PDF: pinch out zooms around the fingers with no chrome. A tap while zoomed turns to the next page at the same zoom and offset. The menu while zoomed shows a page map with the visible area, the page number and the zoom percent, and a move tool with a zoom slider.
 - List rows react to a press of about 180 ms; icons react to a shorter tap.
+
+## Checked after the first fixes
+
+- Package b4f28477a installed over Wi-Fi; all 1,147 files match.
+- PDF zoom (B-137): a two-finger pinch zooms about 3x around the fingers and renders sharp on release; a drag pans. Nickel's tap-to-next-page at the same zoom and its page map are not in Kaia yet.
+- Nickel switches Wi-Fi off after a few minutes without traffic, even awake. The remote entry turns on Nickel's `force_wifi` setting and the off entry turns it back off.
 
 ## Next device checks
 

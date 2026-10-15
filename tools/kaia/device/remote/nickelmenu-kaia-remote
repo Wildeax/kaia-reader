@@ -1,0 +1,9 @@
+menu_item :main :Kaia remote on :nickel_setting :enable :force_wifi
+  chain_always :nickel_wifi :autoconnect
+  chain_always :cmd_spawn :quiet:/bin/mount -t devpts | /bin/grep -q /dev/pts || { /bin/mkdir -p /dev/pts && /bin/mount -t devpts devpts /dev/pts; }
+  chain_always :cmd_spawn :quiet:cd /mnt/onboard/.adds/kaia && LD_LIBRARY_PATH=/mnt/onboard/.adds/kaia/libs exec ./dropbear -E -R -s -p 2222 -P /tmp/kaia-dropbear.pid
+menu_item :main :Kaia remote off :cmd_spawn :quiet:kill $(cat /tmp/kaia-dropbear.pid) ; rm -f /tmp/kaia-dropbear.pid
+  chain_always :nickel_setting :disable :force_wifi
+menu_item :main :Screenshots on/off :nickel_setting :toggle :screenshots
+menu_item :reader :Screenshots on/off :nickel_setting :toggle :screenshots
+menu_item :main :Rescan books :nickel_misc :rescan_books_full
