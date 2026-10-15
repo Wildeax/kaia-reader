@@ -52,7 +52,7 @@ fn reader_sheet_refresh_stays_inside_sheet() {
     app.process(vec![]).unwrap();
     wait_reader(&mut app);
     let before = app.backend().display().refreshes().len();
-    app.command("reader:panel:contents", &[]);
+    app.command("reader:panel:footer", &[]);
     app.process(vec![]).unwrap();
     app.command("back", &[]);
     app.process(vec![]).unwrap();

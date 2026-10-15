@@ -355,16 +355,23 @@ fn panel_matches_frame_after_each_step() {
     run.step(&mut app, "reader: font list opened again", |app| {
         tap_key(app, "layout-font")
     });
-    run.step(&mut app, "reader: font list closed by its close button", |app| {
-        tap_key(app, "panel-close")
-    });
+    run.step(
+        &mut app,
+        "reader: font list dismissed outside its bounds",
+        |app| {
+            app.tap(Point::new(20, 800)).unwrap();
+        },
+    );
     run.step(&mut app, "reader: Text and layout sheet closed by Back", |app| {
         app.key(Key::Back).unwrap();
     });
-    run.step(&mut app, "reader: overlay closed after the sheet", open_overlay);
+    run.step(&mut app, "reader: font panel returned to the book", |app| {
+        assert!(matches!(app.top_route(), Some(Route::Reader { .. })));
+    });
     run.step(&mut app, "reader: overlay open for More", open_overlay);
     run.step(&mut app, "reader: More sheet", |app| tap_key(app, "overlay-more"));
     run.step(&mut app, "reader: Header and footer sheet", |app| {
+        tap_key(app, "more-tools");
         tap_key(app, "more-footer")
     });
     run.step(&mut app, "reader: Header and footer sheet closed", |app| {

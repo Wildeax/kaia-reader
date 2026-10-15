@@ -1,7 +1,6 @@
 //! Compact reader controls, measured at 1264 by 1680 and scaled with the screen.
 use super::chrome::{rect, Chrome, Tool};
 use kaia_gfx::{Color, Point, Rect, Size};
-use kaia_i18n::tr;
 use kaia_ui::{Constraints, LayoutCx, PaintCx, Tone, Widget, WidgetPod};
 
 pub(super) fn text(screen: Size, label: &str) -> WidgetPod {
@@ -178,7 +177,7 @@ pub(super) fn dropdown(screen: Size, label: &str, id: &str, key: &str) -> Widget
 
 pub(super) fn flat(screen: Size, label: &str, id: &str, key: &str) -> WidgetPod {
     let mut tool = Tool::new("", id, 48 * screen.w.min(screen.h) / 1264);
-    tool.label = tr(label);
+    tool.label = label.into();
     tool.fill = true;
     tool.centered = true;
     WidgetPod::new(tool).focusable(true).with_key(key)

@@ -71,6 +71,12 @@ fn sleep_preferences_remain_independent_and_keep_existing_defaults() {
     }
     tap_key(&mut app, "set-device.cover_fullscreen");
     tap_key(&mut app, "set-device.charging_indicator");
+    assert!(keys::sleep_details(&app.services().settings));
+    tap_key(&mut app, "set-device.sleep_details");
+    assert_eq!(
+        app.services().settings.read(keys::DEVICE_SLEEP_SCREEN).as_str(),
+        Some("cover")
+    );
     tap_key(&mut app, "set-device.sleep_details");
     tap_key(&mut app, "set-device.show_book");
     tap_key(&mut app, "set-device.show_book");
@@ -78,7 +84,7 @@ fn sleep_preferences_remain_independent_and_keep_existing_defaults() {
     assert!(saved.is_false(keys::DEVICE_COVER_FULLSCREEN));
     assert!(saved.is_true(keys::DEVICE_CHARGING_INDICATOR));
     assert_eq!(saved.read(keys::DEVICE_SLEEP_SCREEN).as_str(), Some("details"));
-    assert_eq!(keys::DEFAULT_SLEEP_MINUTES, 15.);
+    assert_eq!(keys::DEFAULT_SLEEP_MINUTES, 5.);
     assert!(saved.read(keys::DEVICE_PAGE_BUTTON_WAKE).is_nil());
     assert!(app.unknown_commands().is_empty());
 }

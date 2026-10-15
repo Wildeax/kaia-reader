@@ -411,7 +411,12 @@ impl Keyboard {
             (867.0, 110.0, "→", KeyAction::Right),
             (985.0, 214.0, "Go", KeyAction::Go),
         ] {
-            put(x, 513.0, w, tr(label), key);
+            let label = if matches!(key, KeyAction::Go) {
+                tr("Go")
+            } else {
+                label.into()
+            };
+            put(x, 513.0, w, label, key);
         }
         out
     }

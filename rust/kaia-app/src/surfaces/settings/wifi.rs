@@ -1,11 +1,9 @@
 //! Explicit Wi-Fi requests. Credentials and scan results live only in this screen.
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::Receiver;
 
 use kaia_events::{Event, TaskId, Value};
 use kaia_i18n::tr;
-use kaia_platform::network::Network;
 use kaia_platform::wpa::{SavedNetwork, ScanResult};
-use kaia_platform::PlatformError;
 use kaia_ui::components::{Column, CrossAlign, Expanded};
 use kaia_ui::composite::SettingsDialog;
 use kaia_ui::controls::{OnScreenKeyboard, TextField};
@@ -19,51 +17,7 @@ use super::{
 use crate::surface::{Outcome, Surface, SurfaceEnv};
 use crate::surfaces::{common::root_window, Route};
 
-enum Request {
-    Scan,
-    Saved,
-    Join(String, Option<String>),
-    Forget(u32),
-}
-enum Reply {
-    Scan(Vec<ScanResult>),
-    Saved(Vec<SavedNetwork>),
-    Joined,
-    Forgotten,
-}
-type Completion = (Box<dyn Network>, Result<Reply, PlatformError>);
-
-/// A status-only stand-in while the worker owns the radio. It refuses concurrent operations.
-struct BusyRadio {
-    on: bool,
-    connected: bool,
-}
-impl Network for BusyRadio {
-    fn is_wifi_on(&self) -> bool {
-        self.on
-    }
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-    fn enable_wifi(&mut self) -> Result<(), PlatformError> {
-        Err(PlatformError::NotSupported("Wi-Fi busy"))
-    }
-    fn disable_wifi(&mut self) -> Result<(), PlatformError> {
-        self.enable_wifi()
-    }
-    fn obtain_ip(&mut self) -> Result<(), PlatformError> {
-        self.enable_wifi()
-    }
-    fn release_ip(&mut self) -> Result<(), PlatformError> {
-        self.enable_wifi()
-    }
-    fn scan(&mut self) -> Result<Vec<ScanResult>, PlatformError> {
-        Err(PlatformError::NotSupported("Wi-Fi busy"))
-    }
-    fn connect(&mut self, _: &str, _: Option<&str>) -> Result<(), PlatformError> {
-        self.enable_wifi()
-    }
-}
+use crate::surfaces::wifi_worker::{self, Completion, Reply, Request};
 
 pub struct WifiSurface {
     saved_mode: bool,
@@ -105,26 +59,9 @@ impl WifiSurface {
             Request::Saved => tr("Loading…"),
             Request::Join(..) => tr("Connecting…"),
             Request::Forget(_) => tr("Removing…"),
+            Request::Toggle => tr("Connecting…"),
         };
-        let placeholder = BusyRadio {
-            on: env.services.platform.network.is_wifi_on(),
-            connected: env.services.platform.network.is_connected(),
-        };
-        let mut radio = std::mem::replace(&mut env.services.platform.network, Box::new(placeholder));
-        let (send, receive) = mpsc::channel();
-        std::thread::spawn(move || {
-            let result = match request {
-                Request::Scan => radio.scan().map(Reply::Scan),
-                Request::Saved => radio.saved_networks().map(Reply::Saved),
-                Request::Join(name, password) => radio
-                    .connect(&name, password.as_deref())
-                    .and_then(|()| radio.obtain_ip())
-                    .map(|()| Reply::Joined),
-                Request::Forget(id) => radio.forget_network(id).map(|()| Reply::Forgotten),
-            };
-            let _ = send.send((radio, result));
-        });
-        self.pending = Some(receive);
+        self.pending = Some(wifi_worker::start(&mut env.services.platform.network, request));
         self.timer = Some(env.schedule_in(0.1, |_| {}));
     }
     fn rows(&self) -> Vec<Entry> {
@@ -394,6 +331,7 @@ impl Surface for WifiSurface {
                     self.status = tr("No saved connections.");
                 }
             }
+            Ok(Reply::Toggled { .. }) => {}
             Ok(Reply::Joined) => {
                 self.selected = None;
                 self.status = tr("Connected.");

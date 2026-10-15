@@ -435,13 +435,18 @@ fn advanced_window(services: &Services, screen: Size, before: &TextLayout, draft
         &mut chrome,
         screen,
         [789, 1524, 214, 80],
-        flat(screen, "Restore", "reader:advanced:restore", "advanced-restore"),
+        flat(
+            screen,
+            &tr("Restore"),
+            "reader:advanced:restore",
+            "advanced-restore",
+        ),
     );
     put(
         &mut chrome,
         screen,
         [1013, 1524, 175, 80],
-        flat(screen, "Apply", "reader:advanced:apply", "advanced-apply"),
+        flat(screen, &tr("Apply"), "reader:advanced:apply", "advanced-apply"),
     );
     window(services, screen, chrome)
 }

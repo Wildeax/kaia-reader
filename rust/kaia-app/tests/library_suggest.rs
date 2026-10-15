@@ -29,9 +29,10 @@ fn position(app: &App<HeadlessBackend>, key: &str) -> (i32, i32) {
     (r.y, r.x)
 }
 
-/// Taps the search action at the trailing edge of the header.
-fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    tap_key(app, "status-search");
+/// Opens local search through the My books overflow menu.
+fn open_local_search(app: &mut App<HeadlessBackend>) {
+    tap_key(app, "library-options");
+    tap_key(app, "library-search-open");
 }
 
 fn open_library(app: &mut App<HeadlessBackend>) {
@@ -57,7 +58,7 @@ fn indexed(name: &str, extra: &[(&str, &str)]) -> (App<HeadlessBackend>, PathBuf
 /// Opens the search page and focuses its field.
 fn open_search(app: &mut App<HeadlessBackend>) {
     open_library(app);
-    tap_search_icon(app);
+    open_local_search(app);
     tap_key(app, "search-field");
 }
 
@@ -71,7 +72,7 @@ fn a_short_field_shows_the_recent_searches_and_no_suggestions() {
     type_text(&mut app, "leaves");
     wait_for(&mut app, "the suggestion", |a| a.find_rect("suggest-0").is_some());
     tap_key(&mut app, "library-search-close");
-    tap_search_icon(&mut app);
+    open_local_search(&mut app);
     tap_key(&mut app, "search-field");
 
     type_text(&mut app, "l");

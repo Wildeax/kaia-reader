@@ -17,16 +17,17 @@ fn a_scripted_session_produces_the_expected_refreshes() {
     // Find where the Library button sits on the empty Home, so the script can tap it.
     let mut probe = make_app(&dir, Vec::new());
     probe.start().unwrap();
-    let p = centre_of(&probe, "library");
-    drop(probe);
+    let p = centre_of(&probe, "nav-library");
 
-    let script = format!("tap {} {}\nkey Back\n", p.x, p.y);
+    let home = centre_of(&probe, "nav-home");
+    let script = format!("tap {} {}\ntap {} {}\n", p.x, p.y, home.x, home.y);
+    drop(probe);
     let input = ScriptInput::from_script(&script, true).unwrap();
     let mut app = make_app_with(&dir, Vec::new(), input);
     app.start().unwrap();
     app.run().unwrap();
 
-    // Home draws in full. The card opens Library, then Back returns to Home.
+    // Home draws in full. The tabs open My books, then return to Home.
     assert_eq!(
         app.refresh_modes(),
         &[RefreshMode::Full, RefreshMode::Ui, RefreshMode::Ui]

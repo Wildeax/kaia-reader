@@ -186,7 +186,7 @@ fn the_date_time_section_shows_the_zone_in_use() {
     let rows = sections::entries("datetime", app.services(), 0);
     assert!(rows.iter().any(|row| matches!(
         row,
-        Entry::Row { primary, action: Some(action), .. }
-            if primary == "America/Bogota" && action == "settings:timezone"
+        Entry::Row { primary, value: Some(value), action: Some(action), .. }
+            if primary == "Time zone" && value == "America/Bogota" && action == "settings:timezone"
     )));
 }

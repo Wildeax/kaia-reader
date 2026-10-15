@@ -1294,7 +1294,7 @@ impl LibrarySurface {
             let rect = match panel {
                 Panel::Filter => kaia_gfx::Rect::new(34, 163, 215, 286),
                 Panel::Sort => kaia_gfx::Rect::new(175, 163, 223, 332),
-                Panel::Options => kaia_gfx::Rect::new(373, 154, 226, 240),
+                Panel::Options => kaia_gfx::Rect::new(373, 154, 226, 288),
                 Panel::BookMenu { .. } => self.menu_anchor,
                 _ => kaia_gfx::Rect::new(12, 12, 608, 816),
             };

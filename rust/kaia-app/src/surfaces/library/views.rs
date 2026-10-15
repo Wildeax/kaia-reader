@@ -917,6 +917,14 @@ pub fn options_panel(t: &Theme, layout: View) -> WidgetPod {
     menu(
         t,
         vec![
+            menu_row(
+                t,
+                &tr("Search books"),
+                "library:search:open",
+                "library-search-open",
+                false,
+                None,
+            ),
             menu_row(t, &label, action, &action.replace(':', "-"), false, None),
             menu_row(
                 t,

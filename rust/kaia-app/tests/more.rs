@@ -43,12 +43,7 @@ fn more_destinations_return_to_more() {
                 name: "statistics".into(),
             },
         ),
-        (
-            "more-experimental",
-            Route::SettingsSection {
-                name: "experimental".into(),
-            },
-        ),
+        ("more-experimental", Route::Experiments),
     ] {
         tap_key(&mut app, key);
         assert_eq!(app.top_route(), Some(&route));
@@ -76,6 +71,9 @@ fn empty_notes_filters_and_settings_keep_the_footer_at_the_bottom() {
     tap_key(&mut app, "nav-more");
     assert_eq!(app.top_route(), Some(&Route::More));
     tap_key(&mut app, "more-settings");
+    assert!(app.find_rect("nav-bar").is_none(), "settings is a dialog");
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.top_route(), Some(&Route::More));
     assert_footer(&app);
     tap_key(&mut app, "nav-library");
     assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));

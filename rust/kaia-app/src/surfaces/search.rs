@@ -290,11 +290,11 @@ impl Surface for SearchSurface {
                 )),
                 WidgetPod::new(Label::new(
                     tr_format(
-                        &tr(if self.hits.len() == 1 {
-                            "%1 result"
+                        &if self.hits.len() == 1 {
+                            tr("%1 result")
                         } else {
-                            "%1 results"
-                        }),
+                            tr("%1 results")
+                        },
                         &[&self.hits.len().to_string()],
                     ),
                     t.font.caption.clone(),

@@ -686,7 +686,7 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
             return Outcome::Handled;
         };
         let settings = &mut env.services.settings;
-        let legacy = keys::text_or(settings, keys::DEVICE_SLEEP_SCREEN, "cover");
+        let legacy = keys::text_or(settings, keys::DEVICE_SLEEP_SCREEN, keys::DEFAULT_SLEEP_SCREEN);
         let details = if key == keys::DEVICE_SLEEP_DETAILS {
             on
         } else {

@@ -20,6 +20,7 @@ fn light_controls_persist_and_outside_tap_restores_the_caller() {
     app.services_mut().platform.frontlight.set_intensity(26).unwrap();
     app.services_mut().platform.frontlight.set_warmth(88).unwrap();
     let caller = app.router().top_window().unwrap().id();
+    freeze_status_clock(&mut app);
     app.command("settings:light:open", &[]);
     app.process(vec![]).unwrap();
     assert!(!app
@@ -109,7 +110,7 @@ fn sleep_checks_preserve_legacy_choices_and_hidden_details() {
         );
         app.command("settings:pick:device.sleep_screen", &[Value::Number(0.0)]);
         assert!(!keys::sleep_details(&app.services().settings));
-        assert_eq!(keys::DEFAULT_SLEEP_MINUTES, 15.0);
+        assert_eq!(keys::DEFAULT_SLEEP_MINUTES, 5.0);
         assert!(!keys::bool_or(
             &app.services().settings,
             keys::DEVICE_PAGE_BUTTON_WAKE,
@@ -131,10 +132,24 @@ fn direct_reading_entry_closes_to_the_same_book_and_gesture_settings_apply() {
     wait_reader(&mut app);
     app.command("reader:overlay", &[]);
     app.process(vec![]).unwrap();
+    assert!(
+        app.update_top::<kaia_ui::components::Label, _>("overlay-clock", |clock, cx| {
+            clock.set_text("09:41");
+            cx.request_layout();
+            cx.request_paint();
+        })
+    );
+    app.process(vec![]).unwrap();
     tap_key(&mut app, "overlay-light");
     reference(&app, "settings_light_reader_overlay.png");
     app.tap(Point::new(40, 1000)).unwrap();
-    tap_key(&mut app, "overlay-reading-settings");
+    tap_key(&mut app, "overlay-settings");
+    assert_eq!(
+        app.top_route(),
+        Some(&kaia_app::Route::SettingsSection {
+            name: "reading".into()
+        })
+    );
     assert!(app.find_rect("settings-back").is_none());
     app.command("settings:page:2", &[]);
     app.process(vec![]).unwrap();

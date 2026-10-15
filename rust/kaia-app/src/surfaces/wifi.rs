@@ -1,4 +1,5 @@
 //! Wi-Fi status and joining. Names and credentials stay in memory.
+use super::wifi_worker::{self, Completion, Reply, Request};
 use super::{
     common,
     library::{
@@ -8,7 +9,7 @@ use super::{
     settings, Route,
 };
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use kaia_events::{Event, Value};
+use kaia_events::{Event, TaskId, Value};
 use kaia_gfx::Rect;
 use kaia_i18n::tr;
 use kaia_platform::wpa::ScanResult;
@@ -16,6 +17,7 @@ use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Icon, Label, Padd
 use kaia_ui::controls::{Checkbox, TextField};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Tone, WidgetPod, Window};
+use std::sync::mpsc::Receiver;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -34,6 +36,8 @@ pub struct WifiSurface {
     password: String,
     error: String,
     pending: bool,
+    worker: Option<Receiver<Completion>>,
+    timer: Option<TaskId>,
     ready_at: std::time::Instant,
     initialized: bool,
 }
@@ -46,6 +50,8 @@ impl Default for WifiSurface {
             password: String::new(),
             error: String::new(),
             pending: false,
+            worker: None,
+            timer: None,
             ready_at: std::time::Instant::now(),
             initialized: false,
         }
@@ -60,48 +66,81 @@ impl WifiSurface {
         self.password.clear();
         self.error.clear();
     }
-    fn fail(&mut self, message: &str) {
+    fn fail(&mut self, message: String) {
         self.state = State::Failed;
-        self.error = tr(message);
+        self.error = message;
         self.password.clear();
     }
     fn work(&mut self, env: &mut SurfaceEnv<'_>) {
         self.pending = false;
         if settings::keys::airplane_mode(&env.services.settings) {
-            self.fail("Turn off airplane mode in Network settings.");
+            self.fail(tr("Turn off airplane mode in Network settings."));
             return;
         }
-        let radio = &mut env.services.platform.network;
-        if self.state == State::Scanning {
-            match radio.scan() {
-                Ok(mut networks) => {
-                    networks.sort_by_key(|n| -n.signal_dbm);
-                    networks.dedup_by(|a, b| a.ssid == b.ssid);
-                    self.networks = networks;
-                    self.state = State::Idle;
-                }
-                Err(_) => self.fail("Cannot scan for networks. Try again."),
-            }
+        let request = if self.state == State::Scanning {
+            Request::Scan
         } else if self.state == State::Joining {
             let Some(network) = self.selected.and_then(|n| self.networks.get(n)) else {
                 return;
             };
             let password = std::mem::take(&mut self.password);
-            match radio
-                .connect(
-                    &network.ssid,
-                    if password.is_empty() {
-                        None
-                    } else {
-                        Some(&password)
-                    },
-                )
-                .and_then(|()| radio.obtain_ip())
-            {
-                Ok(()) => self.state = State::Connected,
-                Err(_) => self.fail("Cannot join this network. Check the password and try again."),
+            Request::Join(
+                network.ssid.clone(),
+                if password.is_empty() { None } else { Some(password) },
+            )
+        } else {
+            return;
+        };
+        self.start(request, env);
+    }
+    fn start(&mut self, request: Request, env: &mut SurfaceEnv<'_>) {
+        self.pending = true;
+        self.worker = Some(wifi_worker::start(&mut env.services.platform.network, request));
+        self.timer = Some(env.schedule_in(0.1, |_| {}));
+    }
+    fn poll(&mut self, env: &mut SurfaceEnv<'_>) -> Outcome {
+        let Some(receiver) = &self.worker else {
+            return Outcome::NotMine;
+        };
+        let Ok((radio, result)) = receiver.try_recv() else {
+            if let Some(timer) = self.timer.take() {
+                env.ctx.scheduler.unschedule(timer);
             }
+            self.timer = Some(env.schedule_in(0.1, |_| {}));
+            return Outcome::Handled;
+        };
+        env.services.platform.network = radio;
+        self.worker = None;
+        self.pending = false;
+        if let Some(timer) = self.timer.take() {
+            env.ctx.scheduler.unschedule(timer);
         }
+        match result {
+            Ok(Reply::Scan(mut networks)) => {
+                networks.sort_by_key(|n| std::cmp::Reverse(n.signal_dbm));
+                let mut seen = std::collections::HashSet::new();
+                networks.retain(|n| seen.insert(n.ssid.clone()));
+                self.networks = networks;
+                self.state = State::Idle;
+            }
+            Ok(Reply::Joined) => self.state = State::Connected,
+            Ok(Reply::Toggled { requested_on }) => {
+                self.networks.clear();
+                self.state = State::Idle;
+                if env.services.platform.network.is_wifi_on() {
+                    self.scan();
+                } else if requested_on {
+                    self.fail(tr("Wi-Fi is unavailable on this device."));
+                }
+            }
+            Err(_) if self.state == State::Scanning => self.fail(tr("Cannot scan for networks. Try again.")),
+            Err(_) if self.state == State::Joining => {
+                self.fail(tr("Cannot join this network. Check the password and try again."))
+            }
+            Err(_) => self.fail(tr("Cannot change Wi-Fi power. Try again.")),
+            _ => {}
+        }
+        Outcome::Rebuild
     }
 }
 impl Surface for WifiSurface {
@@ -110,6 +149,14 @@ impl Surface for WifiSurface {
     }
     fn busy(&self) -> bool {
         self.pending
+    }
+    fn can_hide(&mut self, env: &mut SurfaceEnv<'_>) -> bool {
+        if self.worker.is_some() {
+            env.toast(tr("Wait for the Wi-Fi request to finish."), 2.0);
+            false
+        } else {
+            true
+        }
     }
     fn show_opts(&self) -> kaia_events::ShowOpts {
         kaia_events::ShowOpts {
@@ -267,6 +314,9 @@ impl Surface for WifiSurface {
         ))
     }
     fn on_event(&mut self, ev: &Event, env: &mut SurfaceEnv<'_>) -> Outcome {
+        if ev.name == "ReaderTick" && self.worker.is_some() {
+            return self.poll(env);
+        }
         if ev.name == "ReaderTick" && self.pending && std::time::Instant::now() >= self.ready_at {
             self.work(env);
             return Outcome::Rebuild;
@@ -274,26 +324,18 @@ impl Surface for WifiSurface {
         Outcome::NotMine
     }
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if self.worker.is_some() && cmd.starts_with("wifi:") {
+            return Outcome::Handled;
+        }
         match cmd {
             "wifi:toggle" => {
                 self.password.clear();
                 self.selected = None;
                 if settings::keys::airplane_mode(&env.services.settings) {
-                    self.fail("Turn off airplane mode in Network settings.");
-                } else if env.services.platform.network.is_wifi_on() {
-                    if env.services.platform.network.disable_wifi().is_err() {
-                        self.fail("Cannot turn off Wi-Fi.");
-                    } else {
-                        self.networks.clear();
-                        self.state = State::Idle;
-                        self.pending = false;
-                    }
-                } else if env.services.platform.network.enable_wifi().is_err() {
-                    self.fail("Cannot turn on Wi-Fi.");
-                } else if env.services.platform.network.is_wifi_on() {
-                    self.scan();
+                    self.fail(tr("Turn off airplane mode in Network settings."));
                 } else {
-                    self.fail("Wi-Fi is unavailable on this device.");
+                    self.state = State::Idle;
+                    self.start(Request::Toggle, env);
                 }
             }
             "wifi:scan" => {
@@ -340,7 +382,7 @@ impl Surface for WifiSurface {
                         if network.flags.contains("WPA") {
                             self.state = State::Password;
                         } else if network.flags.contains("WEP") {
-                            self.fail("This network uses unsupported security.");
+                            self.fail(tr("This network uses unsupported security."));
                         } else {
                             self.state = State::Joining;
                             self.ready_at = std::time::Instant::now() + std::time::Duration::from_millis(250);

@@ -138,7 +138,12 @@ pub(super) fn chrome(
         ),
         (888, "sun", "settings:light:open", "overlay-light"),
         (974, "appbar.typeset", "reader:panel:layout", "overlay-layout"),
-        (1060, "appbar.settings", "settings:reading", "overlay-settings"),
+        (
+            1060,
+            "appbar.settings",
+            "settings:reading:open",
+            "overlay-settings",
+        ),
         (1155, "more", "reader:panel:more", "overlay-more"),
         (
             40,

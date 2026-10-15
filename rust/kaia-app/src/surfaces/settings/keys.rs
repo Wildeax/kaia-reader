@@ -244,7 +244,7 @@ pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
 /// The active legacy sleep mode owns the details state. While hidden, retain
 /// the user's last details choice for the next time the cover is enabled.
 pub fn sleep_details(settings: &Settings) -> bool {
-    match text_or(settings, DEVICE_SLEEP_SCREEN, "cover").as_str() {
+    match text_or(settings, DEVICE_SLEEP_SCREEN, DEFAULT_SLEEP_SCREEN).as_str() {
         "blank" => bool_or(settings, DEVICE_SLEEP_DETAILS, false),
         "details" => true,
         _ => false,

@@ -1,5 +1,5 @@
-//! Every icon name the app passes to an icon component resolves to an SVG in the
-//! Kaia folder or in the mdlight fallback. The list below is the set of names
+//! Every icon name the app passes to an icon component resolves to a Phosphor SVG.
+//! Unmapped names still use the mdlight fallback. The list below is the set of names
 //! that `rust/kaia-app/src` and `rust/kaia-ui/src` pass to icons.
 
 use std::fs;
@@ -10,22 +10,46 @@ use kaia_gfx::{Color, Size};
 use kaia_ui::assets::Assets;
 
 const APP_ICON_NAMES: &[&str] = &[
-    "appbar.contrast",
+    "align.justify",
+    "align.left",
     "appbar.menu",
     "appbar.navigation",
+    "appbar.pagefit",
+    "appbar.rotation",
     "appbar.search",
     "appbar.settings",
+    "appbar.tools",
     "appbar.typeset",
     "book.opened",
     "bookmark",
     "check",
+    "chevron.down",
+    "chevron.first",
+    "chevron.last",
     "chevron.left",
     "chevron.right",
+    "chevron.up",
     "close",
     "edit",
     "home",
+    "light.moon",
+    "light.sun",
+    "more",
+    "move",
+    "notice-question",
+    "settings.back",
+    "settings.back.rtl",
+    "settings.down",
     "star.empty",
     "star.full",
+    "sun",
+    "wifi",
+    "wifi.open.100",
+    "wifi.open.25",
+    "wifi.open.50",
+    "wifi.secure.100",
+    "wifi.secure.25",
+    "wifi.secure.50",
 ];
 
 fn resources() -> PathBuf {
@@ -59,10 +83,7 @@ fn every_app_icon_name_resolves() {
         .unwrap_or_else(|e| panic!("cannot load assets: {e}"));
     for name in APP_ICON_NAMES {
         let file = format!("{name}.svg");
-        assert!(
-            dirs.iter().any(|dir| dir.join(&file).is_file()),
-            "{name} is in neither icon folder"
-        );
+        assert!(dirs[0].join(&file).is_file(), "{name} has no Phosphor icon");
         assets
             .icons
             .get(name, Size::new(64, 64), Color::BLACK)

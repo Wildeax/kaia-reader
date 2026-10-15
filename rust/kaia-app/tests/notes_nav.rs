@@ -1,6 +1,5 @@
-//! Notes layout: the nav bar sits at the bottom of the screen whatever the
-//! content height, at the same y as on Settings. The Settings button of the bar
-//! opens Settings from an empty Notes root.
+//! Notes keeps the three-tab navigation at the screen edge. Settings opens
+//! through More and closes back to More.
 
 mod common;
 
@@ -88,26 +87,28 @@ fn nav_rect(app: &App<HeadlessBackend>) -> Rect {
     app.find_rect("nav-bar").expect("the navigation bar")
 }
 
-/// Opens Settings, reads the nav bar there, and goes back to Notes. Settings
-/// is the reference: its nav bar sits at the bottom of the screen.
-fn settings_nav_rect(app: &mut App<HeadlessBackend>) -> Rect {
-    tap_key(app, "nav-settings");
-    assert_eq!(app.top_route(), Some(&Route::Settings));
+/// Checks More and its Settings dialog, then returns to Notes.
+fn more_nav_rect(app: &mut App<HeadlessBackend>) -> Rect {
+    tap_key(app, "nav-more");
+    assert_eq!(app.top_route(), Some(&Route::More));
     let rect = nav_rect(app);
-    tap_key(app, "nav-notes");
+    tap_key(app, "more-settings");
+    assert!(app.find_rect("nav-bar").is_none(), "settings is a dialog");
+    tap_key(app, "settings-close");
+    assert_eq!(app.top_route(), Some(&Route::More));
+    tap_key(app, "more-notes");
     assert_eq!(app.top_route(), Some(&Route::Notes));
     rect
 }
 
-/// The nav bar of the top window sits at the Settings y and at the bottom margin.
-fn assert_bottom(app: &App<HeadlessBackend>, settings: Rect, what: &str) {
+/// The navigation stays aligned with More at the screen edge.
+fn assert_bottom(app: &App<HeadlessBackend>, reference: Rect, what: &str) {
     let nav = nav_rect(app);
-    assert_eq!(nav.y, settings.y, "{what}: the nav bar is at the Settings y");
-    let margin = app.services().theme.space.lg as i32;
+    assert_eq!(nav.y, reference.y, "{what}: the nav bar is at the More y");
     assert_eq!(
         nav.bottom(),
-        app.screen().h as i32 - margin,
-        "{what}: the nav bar ends at the bottom margin"
+        app.screen().h as i32,
+        "{what}: the nav bar ends at the screen edge"
     );
 }
 
@@ -122,8 +123,8 @@ fn notes_empty_nav_bar_sits_at_the_bottom_and_opens_settings() {
     assert_eq!(app.top_route(), Some(&Route::Notes));
     assert!(app.find_rect("notes-export").is_some(), "the Notes root is shown");
 
-    let settings = settings_nav_rect(&mut app);
-    assert_bottom(&app, settings, "Notes with no notes");
+    let reference = more_nav_rect(&mut app);
+    assert_bottom(&app, reference, "Notes with no notes");
 
     tap_key(&mut app, "nav-settings");
     assert_eq!(
@@ -139,8 +140,8 @@ fn notes_nav_bar_stays_at_the_bottom_with_few_notes_and_no_match() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, juliet) = app_with_book("notes-nav-few", vec![highlight(1), highlight(2)]);
     tap_key(&mut app, "nav-notes");
-    let settings = settings_nav_rect(&mut app);
-    assert_bottom(&app, settings, "Notes with two highlights");
+    let reference = more_nav_rect(&mut app);
+    assert_bottom(&app, reference, "Notes with two highlights");
 
     // The book has no bookmark, so the Bookmarks filter matches nothing on its page.
     tap_key(&mut app, &format!("notes-book-{juliet}"));
@@ -149,7 +150,7 @@ fn notes_nav_bar_stays_at_the_bottom_with_few_notes_and_no_match() {
         app.find_rect("notes-filter-bookmarks").is_some(),
         "the filter row stays on the book page"
     );
-    assert_bottom(&app, settings, "a book page with no matching entries");
+    assert_bottom(&app, reference, "a book page with no matching entries");
 }
 
 #[test]
@@ -158,8 +159,8 @@ fn notes_nav_bar_stays_at_the_bottom_with_a_full_page() {
     let annotations = (1..=40).map(bookmark).collect();
     let (mut app, _) = app_with_book("notes-nav-full", annotations);
     tap_key(&mut app, "nav-notes");
-    let settings = settings_nav_rect(&mut app);
-    assert_bottom(&app, settings, "Notes with a full page of entries");
+    let reference = more_nav_rect(&mut app);
+    assert_bottom(&app, reference, "Notes with a full page of entries");
 }
 
 #[test]
@@ -169,23 +170,14 @@ fn other_surfaces_keep_the_nav_bar_at_the_bottom_with_little_content() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     assert_eq!(app.top_route(), Some(&Route::Home));
-    // Home uses the medium vertical margin, the other pages use the large one.
-    let home = nav_rect(&app);
-    let medium = app.services().theme.space.md as i32;
-    assert_eq!(
-        home.bottom(),
-        app.screen().h as i32 - medium,
-        "Home with no books"
-    );
-
-    tap_key(&mut app, "nav-settings");
-    let settings = nav_rect(&app);
-    assert_bottom(&app, settings, "Settings root");
-
+    let reference = nav_rect(&app);
+    assert_bottom(&app, reference, "Home with no books");
     tap_key(&mut app, "nav-library");
-    assert_bottom(&app, settings, "Library with no books");
-
-    tap_key(&mut app, "nav-settings");
+    assert_bottom(&app, reference, "My books with no books");
+    tap_key(&mut app, "nav-more");
+    assert_bottom(&app, reference, "More");
+    tap_key(&mut app, "more-settings");
+    assert!(app.find_rect("nav-bar").is_none());
     tap_key(&mut app, "settings-search");
     tap_key(&mut app, "settings-search-field");
     for c in "zzqx".chars() {
@@ -193,6 +185,12 @@ fn other_surfaces_keep_the_nav_bar_at_the_bottom_with_little_content() {
     }
     app.key(Key::Press).unwrap();
     assert!(app.find_rect("settings-hit-0").is_none(), "the query has no hit");
-    assert_bottom(&app, settings, "Settings search with no match");
+    assert!(
+        app.find_rect("nav-bar").is_none(),
+        "search stays in the settings dialog"
+    );
+    tap_key(&mut app, "settings-close");
+    assert_eq!(app.top_route(), Some(&Route::More));
+    assert_bottom(&app, reference, "More after settings closes");
     assert!(app.unknown_commands().is_empty(), "{:?}", app.unknown_commands());
 }

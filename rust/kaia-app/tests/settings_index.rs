@@ -12,7 +12,8 @@ fn index_rows_fit_and_close_restores_home() {
     let dir = scratch("settings-index");
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
-    tap_key(&mut app, "nav-settings");
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
     assert!(app.find_rect("nav-bar").is_none());
     for (index, section) in INDEX_SECTIONS.iter().enumerate() {
         let row = app.find_rect(&format!("settings-{section}")).unwrap();
@@ -41,6 +42,7 @@ fn close_restores_each_caller_and_back_only_leaves_one_settings_page() {
         ("home", "nav:home", Route::Home),
         ("library", "nav:library", Route::Library { page: 0 }),
         ("notes", "nav:notes", Route::Notes),
+        ("more", "nav:more", Route::More),
     ] {
         let dir = scratch(&format!("settings-caller-{name}"));
         let mut app = make_app(&dir, Vec::new());
@@ -48,7 +50,8 @@ fn close_restores_each_caller_and_back_only_leaves_one_settings_page() {
         app.command(command, &[]);
         app.process(Vec::new()).unwrap();
         let caller_window = app.router().top_window().unwrap().id();
-        tap_key(&mut app, "nav-settings");
+        app.command("nav:settings", &[]);
+        app.process(Vec::new()).unwrap();
         app.command("nav:settings", &[]);
         app.process(Vec::new()).unwrap();
         assert_eq!(app.router().routes(), vec![&caller, &Route::Settings]);
@@ -73,7 +76,8 @@ fn search_replacement_and_close_preserve_the_library_caller() {
     app.command("nav:library", &[]);
     app.process(Vec::new()).unwrap();
     let caller_window = app.router().top_window().unwrap().id();
-    tap_key(&mut app, "nav-settings");
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
     tap_key(&mut app, "settings-search");
     app.command("settings:search", &[kaia_events::Value::from("refresh")]);
     app.process(Vec::new()).unwrap();
@@ -111,7 +115,8 @@ fn grouped_settings_keep_secondary_pages_reachable() {
     let dir = scratch("settings-groups");
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
-    tap_key(&mut app, "nav-settings");
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
     tap_key(&mut app, "settings-language-dictionaries");
     tap_key(&mut app, "settings:language");
     assert_eq!(
@@ -178,7 +183,8 @@ fn settings_group_golden(name: &str) {
     let dir = scratch(&format!("settings-groups-golden-{name}"));
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
-    tap_key(&mut app, "nav-settings");
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
     app.command(&format!("settings:{name}"), &[]);
     app.process(Vec::new()).unwrap();
     // Pin the clock and volume facts in visual fixtures; production reads live values.
@@ -220,7 +226,8 @@ fn changing_a_setting_rebuilds_the_caller_when_settings_closes() {
     let mut app = make_app(&dir, Vec::new());
     app.start().unwrap();
     let caller_window = app.router().top_window().unwrap().id();
-    tap_key(&mut app, "nav-settings");
+    app.command("nav:settings", &[]);
+    app.process(Vec::new()).unwrap();
     tap_key(&mut app, "settings-advanced");
     tap_key(&mut app, "settings:home");
     app.command(

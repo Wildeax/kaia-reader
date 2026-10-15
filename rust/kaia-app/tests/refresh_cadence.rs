@@ -6,11 +6,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 
-use kaia_app::surfaces::reader::panels::ContentItem;
+use kaia_app::surfaces::reader::book_dialogs::ContentsList;
 use kaia_app::{App, HeadlessBackend, Route};
 use kaia_events::{RefreshMode, Settings, Value};
 use kaia_input::Key;
-use kaia_ui::composite::PagedList;
 
 mod common;
 
@@ -89,7 +88,7 @@ fn chapter_pages(app: &mut App<HeadlessBackend>) -> HashSet<u32> {
     assert_eq!(app.top_route(), Some(&Route::Overlay));
     tap_key(app, "overlay-contents");
     let mut pages = HashSet::new();
-    app.update_top::<PagedList<ContentItem>, _>("contents-list", |list, _| {
+    app.update_top::<ContentsList, _>("contents-list", |list, _| {
         for item in list.items() {
             if let Some(n) = item
                 .detail

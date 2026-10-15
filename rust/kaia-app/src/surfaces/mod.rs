@@ -15,6 +15,7 @@ pub mod search;
 pub mod settings;
 pub mod status;
 pub mod wifi;
+mod wifi_worker;
 
 use crate::surface::Surface;
 

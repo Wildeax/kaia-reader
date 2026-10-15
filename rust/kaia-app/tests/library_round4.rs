@@ -260,6 +260,9 @@ fn wifi_scan_password_failure_retry_and_off() {
     capture(&mut app, "wifi_off.png");
     app.tap(centre_of(&app, "quick-wifi")).unwrap();
     assert!(app.reader_busy());
+    wait_for(&mut app, "radio enabled", |a| {
+        a.services().platform.network.is_wifi_on()
+    });
     assert_matches_golden(app.frame(), &golden("wifi_scanning.png"), 14);
     wait_for(&mut app, "networks", |a| a.find_rect("wifi-network-0").is_some());
     app.broadcast_app(Event::new("ReaderTick"));

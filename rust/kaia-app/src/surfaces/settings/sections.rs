@@ -220,7 +220,21 @@ fn progress_choice(s: &kaia_events::Settings, header: bool) -> Entry {
         [index] => *index,
         _ => choices.len(),
     };
-    let mut options: Vec<_> = choices.iter().map(|(_, label)| tr(label)).collect();
+    let mut options: Vec<_> = choices
+        .iter()
+        .map(|(_, label)| match *label {
+            "Off" => tr("Off"),
+            "Book title" => tr("Book title"),
+            "Chapter title" => tr("Chapter title"),
+            "Clock" => tr("Clock"),
+            "Battery" => tr("Battery"),
+            "Page number" => tr("Page number"),
+            "Percent" => tr("Percent"),
+            "Time left in chapter" => tr("Time left in chapter"),
+            "Time left in book" => tr("Time left in book"),
+            _ => unreachable!("header/footer choice"),
+        })
+        .collect();
     if selected == choices.len() {
         options.push(tr("Custom"));
     }

@@ -430,19 +430,25 @@ impl Core {
 
     /// Updates the slider, the chapter line and the bookmark button of the overlay.
     pub fn refresh_overlay(&mut self, ctx: &mut Ctx) {
+        let hint = if self.pending_hint == PaintHint::Fast {
+            PaintHint::Fast
+        } else {
+            PaintHint::Ui
+        };
+
         for layer in [&self.overlay, &self.panel].into_iter().flatten() {
             layer
                 .window
                 .update::<super::zoom::Map, _>(ctx, "zoom-map", |map, cx| {
                     map.model = self.overview.clone();
-                    cx.request_paint();
+                    cx.request_paint_with(hint);
                 });
             let value = self.overview.as_ref().map_or(100.0, |o| o.percent as f64);
             layer
                 .window
                 .update::<Slider, _>(ctx, "zoom-slider", |slider, cx| {
                     slider.set_value(value);
-                    cx.request_paint();
+                    cx.request_paint_with(hint);
                 });
         }
         let Some(layer) = self.overlay.clone() else {
@@ -450,11 +456,6 @@ impl Core {
         };
         let Some(model) = self.overlay_model() else {
             return;
-        };
-        let hint = if self.pending_hint == PaintHint::Fast {
-            PaintHint::Fast
-        } else {
-            PaintHint::Ui
         };
         let value = f64::from(model.page + 1);
         layer

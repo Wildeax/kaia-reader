@@ -49,9 +49,10 @@ fn open_library(app: &mut App<HeadlessBackend>) {
     assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));
 }
 
-/// Taps the search action at the trailing edge of the header.
-fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    tap_key(app, "status-search");
+/// Opens local search through the My books overflow menu.
+fn open_local_search(app: &mut App<HeadlessBackend>) {
+    tap_key(app, "library-options");
+    tap_key(app, "library-search-open");
 }
 
 /// Taps the select action, the icon left of the search icon.
@@ -144,7 +145,7 @@ fn recent_searches_run_from_the_empty_search_page_and_clear() {
     let leaves = book_id(&app, "leaves.epub");
     open_library(&mut app);
 
-    tap_search_icon(&mut app);
+    open_local_search(&mut app);
     tap_key(&mut app, "search-field");
     type_text(&mut app, "leaves");
     wait_for(&mut app, "the results", |a| {
@@ -152,7 +153,7 @@ fn recent_searches_run_from_the_empty_search_page_and_clear() {
     });
     tap_key(&mut app, "library-search-close");
 
-    tap_search_icon(&mut app);
+    open_local_search(&mut app);
     assert!(
         app.find_rect("recent-heading").is_some(),
         "the empty search page lists the recent searches"
@@ -169,7 +170,7 @@ fn recent_searches_run_from_the_empty_search_page_and_clear() {
     );
 
     tap_key(&mut app, "library-search-close");
-    tap_search_icon(&mut app);
+    open_local_search(&mut app);
     tap_key(&mut app, "library-search-recent-clear");
     assert!(
         app.find_rect("recent-0").is_none(),
@@ -265,6 +266,7 @@ fn details_take_a_book_out_of_the_collection_being_viewed() {
     hold_key(&mut app, &format!("book-{leaves}"), |a| {
         a.find_rect("library-panel-close").is_some()
     });
+    tap_key(&mut app, &format!("details-menu-{leaves}"));
     let remove = key(&format!("library:remove:{leaves}:{cid}"));
     assert!(
         app.find_rect(&remove).is_some(),

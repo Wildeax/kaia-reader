@@ -64,25 +64,18 @@ fn details_is_a_sleep_screen_choice_after_the_cover() {
     );
     assert!(commands::is_known_key(keys::DEVICE_SLEEP_SCREEN));
     let rows = sections::entries("device", app.services(), 0);
-    let radio = rows.iter().find_map(|row| match row {
-        Entry::Select {
-            key,
-            options,
-            selected,
-            ..
-        } if *key == keys::DEVICE_SLEEP_SCREEN => Some((options.clone(), *selected)),
-        _ => None,
-    });
-    let (options, selected) = radio.expect("the Device section has the sleep screen radio");
-    assert_eq!(
-        options,
-        vec![
-            "Book cover".to_string(),
-            "Book cover with details".to_string(),
-            "Blank".to_string()
-        ]
-    );
-    assert_eq!(selected, 1, "the cover with details is the default");
+    for key in [
+        keys::DEVICE_SHOW_BOOK,
+        keys::DEVICE_SLEEP_DETAILS,
+        keys::DEVICE_COVER_FULLSCREEN,
+    ] {
+        assert!(
+            rows.iter().any(|row| matches!(row,
+                Entry::Toggle { key: found, on: true, .. } if *found == key
+            )),
+            "the default sleep screen enables {key}"
+        );
+    }
 }
 
 #[test]

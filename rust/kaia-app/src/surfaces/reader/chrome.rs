@@ -214,7 +214,7 @@ impl Widget for Tool {
             return kaia_ui::Handled::No;
         }
         cx.request_focus_if_focusable();
-        if self.action.starts_with("reader:tool:") || self.action == "settings:reading" {
+        if self.action.starts_with("reader:tool:") || self.action == "settings:reading:open" {
             self.active = true;
         }
         self.pressed = true;
