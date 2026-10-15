@@ -156,6 +156,9 @@ mkdir -p "${APP}/resources/fonts/freefont"
 cp "${ROOT}/resources/fonts/freefont/FreeSans.ttf" "${ROOT}/resources/fonts/freefont/FreeSerif.ttf" \
     "${ROOT}/resources/fonts/freefont/COPYING" "${APP}/resources/fonts/freefont/"
 cp -R "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/"
+# Kaia's own icons (Phosphor Light) come first in the Rust app. mdlight is the fallback.
+mkdir -p "${APP}/resources/kaia-icons"
+cp -R "${ROOT}/resources/kaia-icons/phosphor-light" "${APP}/resources/kaia-icons/"
 # The Rust app reads KOReader's l10n/ (already in the package) and Kaia's own
 # catalogs in l10n-kaia/<lang>/kaia.po. The template is not needed on the device.
 mkdir -p "${APP}/l10n-kaia"

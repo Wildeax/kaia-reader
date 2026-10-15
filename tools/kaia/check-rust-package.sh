@@ -66,6 +66,8 @@ check 'OpenDyslexic folder matches the source' diff -qr "${ROOT}/resources/kaia-
 check 'UI font is present' test -s "${APP}/resources/fonts/noto/NotoSans-Regular.ttf"
 check 'UI font license is present' test -s "${APP}/resources/fonts/noto/LICENSE"
 check 'UI icons match the source' diff -qr "${ROOT}/resources/icons/mdlight" "${APP}/resources/icons/mdlight"
+check 'Kaia icons match the source' diff -qr "${ROOT}/resources/kaia-icons/phosphor-light" "${APP}/resources/kaia-icons/phosphor-light"
+check 'Kaia icons license is present' test -s "${APP}/resources/kaia-icons/phosphor-light/LICENSE"
 check 'Lua shims match the source' diff -qr "${ROOT}/rust/kaia-lua/lua" "${APP}/lua"
 check 'libarchive license matches the source' cmp -s "${ROOT}/rust/kaia-archive-sys/COPYING.libarchive" "${APP}/COPYING.libarchive"
 check 'libarchive for CBR is present' test -s "${APP}/libs/libarchive.so.13"

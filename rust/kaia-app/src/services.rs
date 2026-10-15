@@ -193,7 +193,7 @@ impl Services {
             .with_text_scale(large_print_factor(&settings));
 
         let resources = resources_dir(&platform);
-        let assets = Assets::load(&resources.join("fonts/noto"), &resources.join("icons/mdlight"))
+        let assets = Assets::load_icons(&resources.join("fonts/noto"), &icon_dirs(&resources))
             .map_err(ServicesError::Assets)?
             .shared();
 
@@ -263,6 +263,15 @@ pub fn large_print_factor(settings: &Settings) -> f32 {
     } else {
         1.0
     }
+}
+
+/// The icon folders in lookup order: Kaia's Phosphor Light set, then KOReader's
+/// `mdlight` set for any name the first folder does not have.
+pub fn icon_dirs(resources: &Path) -> Vec<PathBuf> {
+    vec![
+        resources.join("kaia-icons/phosphor-light"),
+        resources.join("icons/mdlight"),
+    ]
 }
 
 /// The `resources` folder: `KAIA_RESOURCES` when set, else the installed copy on

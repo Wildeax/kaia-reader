@@ -102,7 +102,8 @@ pub fn host(data: &TempDir) -> LuaHost {
 /// The bundled Noto fonts and mdlight icons that the UI tests need.
 pub fn ui_assets() -> kaia_ui::assets::SharedAssets {
     let root = repo_root().join("resources");
-    kaia_ui::assets::Assets::load(&root.join("fonts/noto"), &root.join("icons/mdlight"))
+    let icons = [root.join("kaia-icons/phosphor-light"), root.join("icons/mdlight")];
+    kaia_ui::assets::Assets::load_icons(&root.join("fonts/noto"), &icons)
         .unwrap_or_else(|e| panic!("cannot load the bundled fonts and icons: {e}"))
         .shared()
 }

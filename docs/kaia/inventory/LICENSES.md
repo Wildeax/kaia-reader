@@ -508,6 +508,17 @@ Loose files in `resources/kaia-fonts`: `resources/kaia-fonts/README.md`
 | resources/kaia/stickers | 4 | 0 | - | no | yes |
 | resources/quickstart | 6 | 0 | - | no | yes |
 
+## Kaia icons (`resources/kaia-icons`)
+
+This supplement is maintained by hand. The generator lists the image directory only after git tracks the files, and it does not read the source, version or checksum of the icons. Preserve this section when regenerating.
+The name map and the reason for each icon are in [README.md](../../../resources/kaia-icons/phosphor-light/README.md).
+
+| Directory | Source | Version | License | License file | Archive SHA-256 | Needs review |
+|---|---|---|---|---|---|---|
+| `resources/kaia-icons/phosphor-light` | [phosphor-icons/core](https://github.com/phosphor-icons/core), npm `@phosphor-icons/core` | 2.1.1 | MIT, Copyright (c) 2023 Phosphor Icons | [LICENSE](../../../resources/kaia-icons/phosphor-light/LICENSE) | `313332be6190b724da24107addd781799b48bf76b13963f24501112ffe1baadd` | no |
+
+Files: 15 Phosphor Light icons from `assets/light/`, and `star.full.svg` from `assets/fill/star-fill.svg`. Light has no filled star, and the filled star marks a favourite. The app loads these names before `resources/icons/mdlight`.
+
 ## Lua code outside frontend
 
 | Directory | Lua files | License files | License | Needs review |
