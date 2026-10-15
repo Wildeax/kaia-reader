@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, TaskId, WindowId};
 use kaia_gfx::image::FitMode;
-use kaia_gfx::{Pixmap, Size};
+use kaia_gfx::{Color, Pixmap, Rect, Size};
 use kaia_library::Library;
 use kaia_platform::frontlight::RampStep;
 use kaia_platform::plan::Outcome;
@@ -21,8 +21,8 @@ use kaia_platform::sysfs::{power_trace, SystemIo};
 use kaia_ui::components::{
     Align, Column, CrossAlign, Divider, Frame, Image, Label, Padding, ProgressBar, SizedBox, Spacer, Stack,
 };
-use kaia_ui::geometry::Insets;
-use kaia_ui::{Alignment, Theme, Tone, WidgetPod, Window};
+use kaia_ui::geometry::{Constraints, Insets};
+use kaia_ui::{Alignment, LayoutCx, PaintCx, Theme, Tone, Widget, WidgetPod, Window};
 
 use super::sleep_picture::{self, SleepPicture};
 use super::App;
@@ -51,6 +51,9 @@ const STANDBY_BATTERY_POLL: Duration = Duration::from_secs(300);
 /// The height of the book band on the details sleep screen, in dp. It holds the
 /// title, the author, the progress bar and the state label.
 const BAND_DP: u32 = 150;
+
+/// The side of the charging mark on the sleep screen, in dp.
+const CHARGING_MARK_DP: u32 = 48;
 
 pub(super) struct State {
     flow: SuspendFlow,
@@ -83,6 +86,8 @@ pub(super) struct State {
     sleep_book: Option<i64>,
     /// Whether the sleep screen shows its final picture. It is false while the cover is still being prepared.
     sleep_covered: bool,
+    /// The charger state the sleep screen was drawn with. A change redraws the screen.
+    sleep_charging: bool,
     picture: SleepPicture,
     restore_light: bool,
     ramp_generation: u64,
@@ -121,6 +126,7 @@ impl State {
             screen: None,
             sleep_book: None,
             sleep_covered: true,
+            sleep_charging: false,
             picture: SleepPicture::new(library),
             restore_light: false,
             ramp_generation: 0,
@@ -163,16 +169,16 @@ impl<B: Backend> App<B> {
         if let Some(book) = self.reader_book() {
             return Some(book);
         }
-        if !self.details_sleep_screen() {
+        if !self.sleep_details_shown() {
             return None;
         }
         self.services.library.recent(1).ok()?.first().map(|book| book.id)
     }
 
-    /// The size of the cover picture. With the details choice the cover fills the
-    /// screen above the book band, so the picture is that area.
+    /// The size of the cover picture. A full-screen cover uses the whole screen. A fitted
+    /// cover with details keeps the area above the book band.
     fn sleep_picture_size(&self) -> Size {
-        if self.details_sleep_screen() {
+        if self.sleep_details_shown() && !self.sleep_fullscreen() {
             Size::new(
                 self.screen.w,
                 self.screen.h.saturating_sub(band_height(&self.services.theme)),
@@ -182,18 +188,38 @@ impl<B: Backend> App<B> {
         }
     }
 
-    fn details_sleep_screen(&self) -> bool {
-        settings::keys::text_or(
+    /// "Show current book". It is off when `device.sleep_screen` is `blank`.
+    fn sleep_shows_book(&self) -> bool {
+        settings::sleep::shows_cover(&self.services)
+    }
+
+    /// "Show book details", read from `device.sleep_details`. The book must be shown too.
+    fn sleep_details_shown(&self) -> bool {
+        self.sleep_shows_book() && settings::keys::sleep_details(&self.services.settings)
+    }
+
+    /// "Full-screen cover" from `device.cover_fullscreen`. On by default.
+    fn sleep_fullscreen(&self) -> bool {
+        settings::keys::bool_or(
             &self.services.settings,
-            settings::keys::DEVICE_SLEEP_SCREEN,
-            settings::keys::DEFAULT_SLEEP_SCREEN,
-        ) == settings::keys::SLEEP_SCREEN_DETAILS
+            settings::keys::DEVICE_COVER_FULLSCREEN,
+            true,
+        )
+    }
+
+    /// "Charging indicator" from `device.charging_indicator`. Off by default.
+    fn charging_indicator(&self) -> bool {
+        settings::keys::bool_or(
+            &self.services.settings,
+            settings::keys::DEVICE_CHARGING_INDICATOR,
+            false,
+        )
     }
 
     /// The text of the book band. None when the sleep screen shows no band: the
-    /// choice is not details, the power-off screen is up, or no book is shown.
+    /// details choice is off, the power-off screen is up, or no book is shown.
     fn sleep_band(&self) -> Option<Band> {
-        if self.power.off_started || !self.details_sleep_screen() {
+        if self.power.off_started || !self.sleep_details_shown() {
             return None;
         }
         let book = self.services.library.book(self.power.sleep_book?).ok()??;
@@ -610,6 +636,7 @@ impl<B: Backend> App<B> {
         }
         self.check_idle_power();
         self.sleep_picture_due();
+        self.sleep_charger_due();
         while let Some((job, outcome)) = self.power.scripts.poll() {
             self.plan_done(job, outcome);
         }
@@ -725,6 +752,39 @@ impl<B: Backend> App<B> {
         self.power.screen = Some(id);
     }
 
+    /// Draws the charging mark when the charger connects or disconnects while the sleep
+    /// screen is up. The loop runs at least once per battery poll while the screen is up,
+    /// so a change shows within one poll. Plan completions, including the wake after
+    /// suspend, run after this check, so the wake path draws nothing extra.
+    fn sleep_charger_due(&mut self) {
+        if !self.sleeping() || self.power.off_started || !self.charging_indicator() {
+            return;
+        }
+        let charging = self.services.platform.battery.is_charging().unwrap_or(false);
+        if charging != self.power.sleep_charging {
+            self.redraw_sleep_screen();
+        }
+    }
+
+    /// Draws the sleep screen again with the picture it already has.
+    fn redraw_sleep_screen(&mut self) {
+        let size = self.sleep_picture_size();
+        let ready = self
+            .power
+            .sleep_book
+            .and_then(|book| self.power.picture.ready(book, size));
+        let covered = ready.is_some();
+        let picture = ready.flatten().cloned();
+        if covered {
+            self.power.sleep_covered = true;
+        }
+        if let Some(old) = self.power.screen.take() {
+            self.stack.close(old, None, &mut self.ctx);
+        }
+        let id = self.show_sleep_screen(picture);
+        self.power.screen = Some(id);
+    }
+
     /// Builds the sleep screen and queues it as a full-screen modal window.
     fn show_sleep_screen(&mut self, picture: Option<Pixmap>) -> WindowId {
         let label = if self.power.off_started {
@@ -734,10 +794,34 @@ impl<B: Backend> App<B> {
         } else {
             tr("Kaia, sleeping")
         };
-        let stack = match self.sleep_band() {
-            Some(band) => details_screen(&self.services.theme, self.screen, picture, &band, &label),
-            None => sleep_picture::sleep_screen(&self.services, self.screen, picture, &label),
+        let charging = self.services.platform.battery.is_charging().unwrap_or(false);
+        self.power.sleep_charging = charging;
+        let band = self.sleep_band();
+        let fill = self.sleep_fullscreen();
+        let mut stack = match (band, picture) {
+            // No book, or no cover: the blank sleep screen. Its own background paints one
+            // pixel, so the surface layer under it covers the screen below.
+            (None, None) => Stack::new(vec![
+                surface_layer(self.screen),
+                WidgetPod::new(sleep_picture::sleep_screen(
+                    &self.services,
+                    self.screen,
+                    None,
+                    &label,
+                )),
+            ]),
+            (band, picture) => sleep_screen(
+                &self.services.theme,
+                self.screen,
+                picture,
+                fill,
+                band.as_ref(),
+                &label,
+            ),
         };
+        if charging && !self.power.off_started && self.charging_indicator() {
+            stack = Stack::new(vec![WidgetPod::new(stack), charging_mark(&self.services.theme)]);
+        }
         let window = Window::new(
             stack,
             self.services.theme.clone(),
@@ -854,46 +938,187 @@ fn band_height(theme: &Theme) -> u32 {
     theme.scale.dp(BAND_DP)
 }
 
-/// The details sleep screen. The cover, fitted into the area above the band, sits on
-/// the surface colour. The band at the bottom shows the title, the author, the progress
-/// and the state label. `picture` is the cover at the area's size, or None while it is
-/// not ready or when the book has none.
-fn details_screen(theme: &Theme, screen: Size, picture: Option<Pixmap>, band: &Band, label: &str) -> Stack {
-    let band_h = band_height(theme);
-    let area_h = screen.h.saturating_sub(band_h);
-    // The fixed boxes give the layers the screen size. A frame around a one-pixel
-    // spacer would otherwise paint only that pixel, and the screen below would show.
-    let background = SizedBox::new(Some(WidgetPod::new(
-        Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Surface),
-    )))
-    .width(screen.w)
-    .height(screen.h);
-    let mut layers = vec![WidgetPod::new(background)];
-    if let Some(picture) = picture {
-        let target = picture.size();
-        let insets = Insets {
-            left: screen.w.saturating_sub(target.w) / 2,
-            top: area_h.saturating_sub(target.h) / 2,
-            right: 0,
-            bottom: 0,
-        };
-        // A box of the picture's size keeps the picture from growing into the padding.
-        let cover = SizedBox::new(Some(WidgetPod::new(Image::new(picture, FitMode::Contain))))
-            .width(target.w)
-            .height(target.h);
-        layers.push(WidgetPod::new(Padding::new(WidgetPod::new(cover), insets)));
-    }
-    let band_box = WidgetPod::new(
-        SizedBox::new(Some(band_text(theme, band, label)))
-            .width(screen.w)
-            .height(band_h),
+/// Scales `picture` to cover `screen` and crops the overflow from the sides and the
+/// bottom only, so the title at the top of a cover stays whole. The bottom is the
+/// part the details band hides anyway.
+fn fill_from_top(picture: &Pixmap, screen: Size) -> Pixmap {
+    let scaled = kaia_gfx::image::scale_pixmap(
+        picture,
+        kaia_gfx::image::fit_size(picture.size(), screen, FitMode::Cover),
     );
-    layers.push(WidgetPod::new(Align::new(
-        band_box,
-        Alignment::Center,
-        Alignment::End,
-    )));
+    let (w, h) = (screen.w.min(scaled.width()), screen.h.min(scaled.height()));
+    let bpp = scaled.format().bytes_per_pixel();
+    let x0 = (scaled.width() - w) as usize / 2;
+    let mut data = Vec::with_capacity(w as usize * h as usize * bpp);
+    for row in scaled.data().chunks_exact(scaled.stride()).take(h as usize) {
+        data.extend_from_slice(&row[x0 * bpp..(x0 + w as usize) * bpp]);
+    }
+    Pixmap::from_data(w, h, scaled.format(), data).expect("cropped buffer matches its size")
+}
+
+/// The sleep screen with `picture` as its background. `picture` is None while it is
+/// not ready or when the book has none. Then the background is the surface colour.
+///
+/// With `fill`, the picture covers the whole screen, cropped at the sides and bottom. Without it,
+/// the picture is fitted whole: into the area above the band when there is one, and
+/// into the screen otherwise. With `band`, the band sits at the bottom of the screen and
+/// shows the title, the author, the progress and the state label. Without it, the label
+/// sits at the bottom.
+fn sleep_screen(
+    theme: &Theme,
+    screen: Size,
+    picture: Option<Pixmap>,
+    fill: bool,
+    band: Option<&Band>,
+    label: &str,
+) -> Stack {
+    let band_h = band.map_or(0, |_| band_height(theme));
+    let area_h = screen.h.saturating_sub(band_h);
+    let mut layers = vec![surface_layer(screen)];
+    if let Some(picture) = picture {
+        if fill {
+            let cover = SizedBox::new(Some(WidgetPod::new(Image::new(
+                fill_from_top(&picture, screen),
+                FitMode::Contain,
+            ))))
+            .width(screen.w)
+            .height(screen.h);
+            layers.push(WidgetPod::new(cover));
+        } else {
+            let target = picture.size();
+            let insets = Insets {
+                left: screen.w.saturating_sub(target.w) / 2,
+                top: area_h.saturating_sub(target.h) / 2,
+                right: 0,
+                bottom: 0,
+            };
+            // A box of the picture's size keeps the picture from growing into the padding.
+            let cover = SizedBox::new(Some(WidgetPod::new(Image::new(picture, FitMode::Contain))))
+                .width(target.w)
+                .height(target.h);
+            layers.push(WidgetPod::new(Padding::new(WidgetPod::new(cover), insets)));
+        }
+    }
+    let bottom = match band {
+        Some(band) => {
+            let band_box = WidgetPod::new(
+                SizedBox::new(Some(band_text(theme, band, label)))
+                    .width(screen.w)
+                    .height(band_h),
+            );
+            Align::new(band_box, Alignment::Center, Alignment::End)
+        }
+        None => {
+            let text = WidgetPod::new(Padding::new(
+                WidgetPod::new(Label::new(label, theme.font.caption.clone(), Tone::InkSecondary)),
+                Insets::all(theme.space.md),
+            ));
+            Align::new(text, Alignment::Center, Alignment::End)
+        }
+    };
+    layers.push(WidgetPod::new(bottom));
     Stack::new(layers)
+}
+
+/// A surface-coloured layer over the whole screen. A frame around a one-pixel spacer
+/// paints only that pixel, so the layer needs a box of the screen size.
+fn surface_layer(screen: Size) -> WidgetPod {
+    WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(
+            Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Surface),
+        )))
+        .width(screen.w)
+        .height(screen.h),
+    )
+}
+
+/// The charging mark, in the top right corner of the sleep screen.
+fn charging_mark(theme: &Theme) -> WidgetPod {
+    let mark = WidgetPod::new(ChargingMark {
+        px: theme.scale.dp(CHARGING_MARK_DP),
+    });
+    WidgetPod::new(Align::new(
+        WidgetPod::new(Padding::new(mark, Insets::all(theme.space.lg))),
+        Alignment::End,
+        Alignment::Start,
+    ))
+}
+
+/// A battery outline with a bolt, on a surface chip so that it reads over a cover.
+/// The shape is in fractions of the chip, so it scales with the chip.
+struct ChargingMark {
+    px: u32,
+}
+
+impl Widget for ChargingMark {
+    kaia_ui::impl_as_any!();
+
+    fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
+        c.constrain(Size::new(self.px, self.px))
+    }
+
+    fn paint(&mut self, cx: &mut PaintCx) {
+        let b = cx.bounds();
+        let ink = cx.color(Tone::Ink);
+        let chip = cx.color(Tone::Surface);
+        cx.fill_rrect(b, b.w / 4, chip);
+        let point = |fx: f32, fy: f32| (b.x as f32 + fx * b.w as f32, b.y as f32 + fy * b.h as f32);
+        let area = |x0: f32, y0: f32, x1: f32, y1: f32| {
+            let (ax, ay) = point(x0, y0);
+            let (bx, by) = point(x1, y1);
+            Rect::new(
+                ax.round() as i32,
+                ay.round() as i32,
+                (bx - ax).round() as u32,
+                (by - ay).round() as u32,
+            )
+        };
+        let stroke = (b.w / 16).max(2);
+        cx.border(area(0.18, 0.30, 0.76, 0.70), 0, stroke, ink);
+        cx.fill_rect(area(0.76, 0.42, 0.82, 0.58), ink);
+        let bolt = [
+            (0.53, 0.36),
+            (0.37, 0.52),
+            (0.47, 0.52),
+            (0.42, 0.64),
+            (0.61, 0.47),
+            (0.51, 0.47),
+            (0.57, 0.36),
+        ];
+        let points: Vec<(f32, f32)> = bolt.iter().map(|&(x, y)| point(x, y)).collect();
+        fill_polygon(cx, &points, ink);
+    }
+}
+
+/// Fills a polygon whose corners are in pixels. Each row is filled between pairs of
+/// edge crossings, so a concave shape such as a bolt keeps its notches.
+fn fill_polygon(cx: &mut PaintCx, points: &[(f32, f32)], color: Color) {
+    let top = points.iter().map(|p| p.1).fold(f32::INFINITY, f32::min).floor() as i32;
+    let bottom = points
+        .iter()
+        .map(|p| p.1)
+        .fold(f32::NEG_INFINITY, f32::max)
+        .ceil() as i32;
+    for row in top..bottom {
+        let y = row as f32 + 0.5;
+        let mut crossings: Vec<f32> = Vec::new();
+        for (i, &(x0, y0)) in points.iter().enumerate() {
+            let (x1, y1) = points[(i + 1) % points.len()];
+            if (y0 <= y) != (y1 <= y) {
+                crossings.push(x0 + (y - y0) * (x1 - x0) / (y1 - y0));
+            }
+        }
+        crossings.sort_by(f32::total_cmp);
+        for pair in crossings.chunks(2) {
+            if let [enter, leave] = *pair {
+                let start = enter.round() as i32;
+                let end = leave.round() as i32;
+                if end > start {
+                    cx.fill_rect(Rect::new(start, row, (end - start) as u32, 1), color);
+                }
+            }
+        }
+    }
 }
 
 /// The band: a hairline, then the title, the author, the progress with its percent,

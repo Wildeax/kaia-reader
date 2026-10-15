@@ -2,9 +2,11 @@
 //!
 //! The surface owns the book session through a shared [`state::Core`]. The page
 //! widget ([`page::PageView`]) paints what the core gives it and sends touches as
-//! commands. Tap zones: the left third goes back a page, the centre square opens
-//! the overlay, the rest goes forward. A tap on a selection clears it. Holding a
-//! word selects it, and releasing opens the selection popover.
+//! commands. Tap zones follow `reading.tap_zones` (see [`navigation::TapLayout`]).
+//! By default the left third goes back a page, the middle third opens the overlay,
+//! and the right third goes forward. `reading.turn_gesture` decides whether taps,
+//! swipes or both turn pages. A tap on a selection clears it. Holding a word selects
+//! it, and releasing opens the selection popover.
 //!
 //! The overlay ([`overlay`]) and the panels ([`panels`]) are pushed above the
 //! reader as surfaces. Their commands that the reader owns come back here, since
@@ -556,6 +558,7 @@ impl Surface for ReaderSurface {
         let color_panel = env.services.theme.color_panel;
         let mut page = PageView::new();
         page.brightness_swipe = keys::bool_or(&env.services.settings, keys::READING_EDGE_LIGHT, true);
+        page.swipe_turns = navigation::turn_gesture(&env.services.settings).swipes_turn();
         let page = WidgetPod::new(page).with_key(PAGE_KEY);
         let mut toolbar = ink::toolbar(env.theme());
         toolbar.set_visible(false);
@@ -1118,26 +1121,15 @@ fn handle(rc: &Rc<RefCell<Core>>, command: Command, env: &mut SurfaceEnv<'_>) ->
                 if x >= w - corner && y < corner {
                     return bookmark(&mut c, env);
                 }
-                let centre = x >= w / 3.0 && x < 2.0 * w / 3.0 && y >= h / 3.0 && y < 2.0 * h / 3.0;
-                let preset = env
-                    .services
-                    .settings
-                    .read("reading.tap_zones")
-                    .as_str()
-                    .unwrap_or("default");
-                if (centre || y < h / 10.0) && preset != "page_only" {
-                    return open_overlay(rc, &mut c, env);
+                let layout = navigation::tap_layout(&env.services.settings);
+                match navigation::tap_zone(layout, x, y, w, h) {
+                    navigation::TapZone::Menu => open_overlay(rc, &mut c, env),
+                    // The turn gesture decides whether a tap turns the page. The zones
+                    // still apply, so a tap in a back or forward zone does nothing here.
+                    _ if !navigation::turn_gesture(&env.services.settings).taps_turn() => Outcome::Handled,
+                    navigation::TapZone::Forward => step(rc, &mut c, env, true),
+                    navigation::TapZone::Back => step(rc, &mut c, env, false),
                 }
-                step(
-                    rc,
-                    &mut c,
-                    env,
-                    if preset == "left_handed" {
-                        x < 2.0 * w / 3.0
-                    } else {
-                        x >= w / 3.0
-                    },
-                )
             }
             Command::Back => {
                 c.back();

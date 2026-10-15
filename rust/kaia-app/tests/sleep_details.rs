@@ -125,3 +125,54 @@ fn details_without_any_opened_book_shows_the_blank_default_screen() {
         "with no book, details falls back to the cover choice's blank screen"
     );
 }
+
+fn set_fullscreen(app: &mut App<HeadlessBackend>, on: bool) {
+    app.services_mut()
+        .settings
+        .save(keys::DEVICE_COVER_FULLSCREEN, Value::Bool(on));
+}
+
+#[test]
+fn fitted_cover_with_band_sleep_screen_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = details_app("sleep-fitted-band", PixelFormat::Rgb24);
+    choose_sleep_screen(&mut app, "details");
+    set_fullscreen(&mut app, false);
+    let juliet = book_id(&app, "juliet.epub");
+    app.services_mut().library.record_open(juliet, 0.42).unwrap();
+    sleep_with_cover(&mut app);
+    assert_matches_golden(app.frame(), &golden("sleep_fitted_band_color.png"), 14);
+}
+
+#[test]
+fn full_screen_cover_without_details_sleep_screen_golden() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = details_app("sleep-fullscreen-cover", PixelFormat::Rgb24);
+    choose_sleep_screen(&mut app, "cover");
+    set_fullscreen(&mut app, true);
+    assert!(!keys::sleep_details(&app.services().settings));
+    open_from_library(&mut app, "juliet.epub");
+    sleep_with_cover(&mut app);
+    assert_matches_golden(app.frame(), &golden("sleep_fullscreen_cover_color.png"), 14);
+}
+
+#[test]
+fn blank_sleep_screen_hides_a_recent_book_even_with_details_on() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, _dir) = details_app("sleep-blank-golden", PixelFormat::Rgb24);
+    // Details stays on while the book is hidden. It is remembered, not shown.
+    app.services_mut()
+        .settings
+        .save(keys::DEVICE_SLEEP_DETAILS, Value::Bool(true));
+    choose_sleep_screen(&mut app, "blank");
+    assert!(
+        keys::sleep_details(&app.services().settings),
+        "details is remembered while the book is hidden"
+    );
+    let juliet = book_id(&app, "juliet.epub");
+    app.services_mut().library.record_open(juliet, 0.42).unwrap();
+    app.key(Key::Power).unwrap();
+    assert!(app.sleeping());
+    app.process(Vec::new()).unwrap();
+    assert_matches_golden(app.frame(), &golden("sleep_blank_color.png"), 14);
+}

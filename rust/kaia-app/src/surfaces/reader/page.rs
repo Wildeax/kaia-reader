@@ -95,6 +95,8 @@ pub struct PageView {
     zoom_pinch: Option<(f32, Point, Point)>,
     light_drag: Option<bool>,
     pub brightness_swipe: bool,
+    /// Whether a swipe turns the page. `reading.turn_gesture` sets it when the reader opens.
+    pub swipe_turns: bool,
     light_start: Point,
     touch_flip: bool,
     held_key: Option<bool>,
@@ -140,6 +142,7 @@ impl PageView {
             zoom_pinch: None,
             light_drag: None,
             brightness_swipe: true,
+            swipe_turns: true,
             light_start: Point::new(0, 0),
             touch_flip: false,
             held_key: None,
@@ -796,13 +799,18 @@ impl Widget for PageView {
                     self.light_drag = None;
                     return Handled::Yes;
                 }
+                // A swipe that does not turn the page is still consumed, as a turn is.
                 match direction {
                     Some(Direction::West) | Some(Direction::NorthWest) | Some(Direction::SouthWest) => {
-                        cx.action(action("reader:next", Vec::new()));
+                        if self.swipe_turns {
+                            cx.action(action("reader:next", Vec::new()));
+                        }
                         Handled::Yes
                     }
                     Some(Direction::East) | Some(Direction::NorthEast) | Some(Direction::SouthEast) => {
-                        cx.action(action("reader:prev", Vec::new()));
+                        if self.swipe_turns {
+                            cx.action(action("reader:prev", Vec::new()));
+                        }
                         Handled::Yes
                     }
                     _ => Handled::No,

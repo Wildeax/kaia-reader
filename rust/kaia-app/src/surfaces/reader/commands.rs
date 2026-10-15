@@ -68,7 +68,7 @@ pub enum PanelName {
 pub enum Command {
     /// A tap on the page, in pixels from the top left of the screen.
     Tap(f64, f64),
-    /// Turn to the next page: page keys, taps on the right, swipes.
+    /// Turn to the next page: page keys, taps in the forward zone, swipes.
     Next,
     /// Turn to the previous page.
     Prev,
