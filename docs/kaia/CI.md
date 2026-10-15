@@ -113,7 +113,7 @@ The job runs these steps in order, for each target:
 3. Runs `make fetchthirdparty`. The `CI` variable makes it fetch the submodules at depth 1, including `test/`, which holds the smoke EPUB.
 4. Checks that `docker`, `unzip`, `zip`, `file` and `tee` exist.
 5. Restores the cargo caches (see below).
-6. Runs `tools/kaia/build-kobo.sh <target>`. This builds the KOReader package in `koreader/kokobo`, pinned by digest in the script. The build runs from source on every run.
+6. Runs `tools/kaia/build-kobo.sh <target>`. This builds the KOReader package in `koreader/kokobo`, pinned by digest in the script. The build compiles from source on every run. It seeds its third-party downloads from the cache described below, and retries network failures.
 7. Runs `tools/kaia/build-libkaia.sh <target>`. This builds `libkaia.so` in `kaia/kobo-rust:1`, the image from `tools/kaia/docker/kobo-rust.Dockerfile`.
 8. Runs `tools/kaia/build-rust-kobo.sh <target> build -p kaia-app --bin kaia --no-default-features --features kobo`.
 9. Runs `tools/kaia/package-kobo.sh` into `dist/packages/<target>/`.
@@ -130,6 +130,15 @@ Cache keys. `<hash>` is the hash of `rust/Cargo.lock` and `tools/kaia/docker/kob
 - The Rust target directory is cached at `$RUNNER_TEMP/kaia-rust-cache/target-<target>` with the key `kaia-kobo-<target>-target-<hash>`. The restore key `kaia-kobo-<target>-target-` falls back to the newest entry for that target.
 
 `build-rust-kobo.sh` reads these directories from `KAIA_RUST_CACHE_DIR`. Without that variable, it uses Docker volumes, as on a developer machine. `actions/cache` saves an entry only when the job succeeds.
+
+#### Third-party downloads
+
+KOReader's CMake files store each thirdparty project's downloads in `base/thirdparty/<name>/build/downloads`. The build runs in the `kaia-build-<target>` Docker volume, so the workspace copy stays empty. `build-kobo.sh` copies these folders in and out through `KAIA_DOWNLOAD_CACHE_DIR`. The job sets it to `$RUNNER_TEMP/kaia-downloads-cache/<target>`.
+
+- The key is `kaia-kobo-<target>-downloads-<base>`. `<base>` is `git rev-parse HEAD:base`, which pins every download URL and git revision. The restore key `kaia-kobo-<target>-downloads-` falls back to the newest entry for that target.
+- The step summary records `hit`, `partial hit` or `miss`.
+- The build retries at most twice, 60 seconds apart. It retries only when the log shows a network failure while sources are fetched, such as a name resolution error, a timeout, a connection reset or a git 5xx. The volume keeps the sources from the earlier attempt, so a retry resumes.
+- Still fetched on every run: `make fetchthirdparty` (the git submodules, all on github.com, including `base`), the image pulls (`koreader/kokobo` and the image that `docker/setup-qemu-action` uses), the rustup install in `kobo-rust.Dockerfile`, and crates.io on a cargo cache miss. Blocking github.com also blocks `make fetchthirdparty`, so this cache alone does not let a run build without that host.
 
 Artifacts:
 

@@ -27,6 +27,7 @@ Rules that apply to every row: no network access unless the user turns the featu
 | B-97 | Experimental features (T3-5) | Put new features there first | Build. Large new features ship behind an experimental switch until their device tests pass. |
 | B-98 | Reading and library gaps | Build all four | Build. In-book search history; per-book statistics; Home controls and double-tap lookup; favorites and tags; extra PDF zoom modes. |
 | B-103 | Design reference (2026-10-14) | Match Nickel one to one | Build, as B-145 and B-147. Nickel's layout, flows, gestures and behavior are the reference for the Rust app. Kaia copies no Kobo code, icons, images, fonts or logos. Features that need Kobo's servers or DRM (store, account sync, OverDrive, cloud links, store books) stay in Nickel. |
+| B-104 | Icons (2026-10-15) | Thin-line icons like Nickel's | Build. Phosphor Icons, Light weight (MIT), replace KOReader's mdlight set in the Rust app; names stay the same, mdlight is the fallback. No Kobo icons are copied. |
 | B-99 | Device gaps | PIN, screenshots, sleep screen and standby | Build. Screen lock PIN; screenshots; sleep screen with book info; standby timeout. Captive portal login stays out. |
 
 ## Later, after device testing

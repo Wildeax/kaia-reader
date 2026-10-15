@@ -41,8 +41,9 @@ jobs:
   package:
     name: kobo ${{ matrix.target }}
     runs-on: ubuntu-24.04
-    # The KOReader build runs from scratch on every run, because its build
-    # volume is too large to cache. Both targets run in parallel.
+    # The KOReader build volume is too large to cache, so the build compiles
+    # from scratch on every run. Its third-party downloads come from a cache.
+    # Both targets run in parallel.
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -54,8 +55,11 @@ jobs:
 
       - name: Set build paths
         run: |
-          echo "RUST_CACHE=${RUNNER_TEMP}/kaia-rust-cache" >> "${GITHUB_ENV}"
-          echo "SMOKE_ROOT=${RUNNER_TEMP}/kaia-smoke" >> "${GITHUB_ENV}"
+          {
+            echo "RUST_CACHE=${RUNNER_TEMP}/kaia-rust-cache"
+            echo "SMOKE_ROOT=${RUNNER_TEMP}/kaia-smoke"
+            echo "DOWNLOAD_CACHE=${RUNNER_TEMP}/kaia-downloads-cache/${{ matrix.target }}"
+          } >> "${GITHUB_ENV}"
 
       # The KOReader build and the Docker images may need more space than the
       # runner image leaves free. This step removes preinstalled toolchains that
@@ -108,10 +112,69 @@ jobs:
           key: kaia-kobo-${{ matrix.target }}-target-${{ hashFiles('rust/Cargo.lock', 'tools/kaia/docker/kobo-rust.Dockerfile') }}
           restore-keys: kaia-kobo-${{ matrix.target }}-target-
 
-      - name: Build KOReader package
+      # The KOReader build fetches its third-party sources (archives and git
+      # clones) from upstream hosts. build-kobo.sh seeds the build from this
+      # folder and copies the fetched files back after a successful build. The
+      # base submodule commit pins every URL and revision, so it keys the cache.
+      # actions/cache saves an entry only when the job succeeds.
+      - name: Read the base submodule commit
+        id: base
         run: |
           set -euo pipefail
-          tools/kaia/build-kobo.sh "${{ matrix.target }}" 2>&1 | tee -a "${LOG_DIR}/build-kobo-${{ matrix.target }}.log"
+          echo "sha=$(git rev-parse HEAD:base)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore third-party downloads cache
+        id: downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DOWNLOAD_CACHE }}
+          key: kaia-kobo-${{ matrix.target }}-downloads-${{ steps.base.outputs.sha }}
+          restore-keys: kaia-kobo-${{ matrix.target }}-downloads-
+
+      - name: Record the downloads cache result
+        env:
+          CACHE_HIT: ${{ steps.downloads.outputs.cache-hit }}
+          MATCHED_KEY: ${{ steps.downloads.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+          if [ "${CACHE_HIT}" = "true" ]; then
+            result="hit"
+          elif [ -n "${MATCHED_KEY}" ]; then
+            result="partial hit, restored from ${MATCHED_KEY}"
+          else
+            result="miss"
+          fi
+          echo "- Third-party downloads cache for ${{ matrix.target }}: ${result}" >> "${GITHUB_STEP_SUMMARY}"
+
+      # Retries at most twice, and only when the log shows a network failure
+      # while sources are fetched. The volume keeps the sources and build stamps
+      # from the earlier attempt, so a retry resumes where the failure stopped.
+      - name: Build KOReader package
+        env:
+          TARGET: ${{ matrix.target }}
+          KAIA_DOWNLOAD_CACHE_DIR: ${{ env.DOWNLOAD_CACHE }}
+        run: |
+          set -euo pipefail
+          max_attempts=3
+          attempt=1
+          while true; do
+            attempt_log="${LOG_DIR}/build-kobo-${TARGET}-attempt-${attempt}.log"
+            status=0
+            tools/kaia/build-kobo.sh "${TARGET}" 2>&1 |
+              tee -a "${LOG_DIR}/build-kobo-${TARGET}.log" "${attempt_log}" || status=$?
+            if [ "${status}" -eq 0 ]; then
+              break
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ] ||
+              ! grep -Eiq 'failed to clone repository|could not resolve host|unable to resolve host|temporary failure in name resolution|name or service not known|timed out|i/o timeout|failed to connect|connection reset by peer|connection refused|returned error: 5[0-9][0-9]' "${attempt_log}"; then
+              echo "KOReader build failed on attempt ${attempt} with status ${status}." >&2
+              exit "${status}"
+            fi
+            echo "Network failure while fetching sources on attempt ${attempt}. Retrying in 60 seconds." |
+              tee -a "${LOG_DIR}/build-kobo-${TARGET}.log"
+            attempt=$((attempt + 1))
+            sleep 60
+          done
 
       # Also builds kaia/kobo-rust:1 from tools/kaia/docker/kobo-rust.Dockerfile,
       # which the Rust build below reuses.
