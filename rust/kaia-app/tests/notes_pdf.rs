@@ -9,11 +9,18 @@ use kaia_app::surfaces::notes::{
 use kaia_doc::{Document, Format, MupdfDocument};
 use kaia_gfx::{golden::assert_matches_golden, PixelFormat};
 
+/// The bundled fonts directory. MuPDF also loads its fallback faces from
+/// FONTDIR, which defaults to `./fonts` and is missing in the test directory,
+/// so point it here unless the caller set it.
 fn fonts() -> PathBuf {
-    std::env::var_os("KAIA_RESOURCES")
+    let fonts = std::env::var_os("KAIA_RESOURCES")
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources"))
-        .join("fonts")
+        .join("fonts");
+    if std::env::var_os("FONTDIR").is_none() {
+        std::env::set_var("FONTDIR", &fonts);
+    }
+    fonts
 }
 
 fn fixture(id: &str, title: &str, chapter: &str, quote: &str, note: &str) -> BookNotes {

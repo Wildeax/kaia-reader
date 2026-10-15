@@ -834,6 +834,8 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
 /// The details of one book: cover and facts, the rating, the description, and the
 /// actions. `remove` is the action that takes the book out of the collection being
 /// viewed. None when the book is not in that collection.
+/// The details sheet. `statistics` adds the reading statistics button after the
+/// rating, for a book that has a row in the statistics database.
 pub fn details_panel(
     t: &Theme,
     book: &Book,
@@ -841,6 +843,7 @@ pub fn details_panel(
     close: &str,
     remove: Option<String>,
     rating: Rating,
+    statistics: bool,
 ) -> WidgetPod {
     let title = crate::surfaces::common::display_title(book);
     let mut facts = vec![WidgetPod::new(Label::new(
@@ -915,11 +918,17 @@ pub fn details_panel(
             Paragraph::new(desc.to_string(), t.font.body.clone(), Tone::InkSecondary).max_lines(4),
         ));
     }
-    children.push(pair(
-        t,
-        button(ButtonStyle::Primary, &tr("Open"), &format!("library:open:{id}")),
-        rating_button(rating, id),
-    ));
+    let open = button(ButtonStyle::Primary, &tr("Open"), &format!("library:open:{id}"));
+    children.push(if statistics {
+        let stats = button(
+            ButtonStyle::Secondary,
+            &tr("Statistics"),
+            &format!("library:stats:open:{id}"),
+        );
+        trio(t, open, rating_button(rating, id), stats)
+    } else {
+        pair(t, open, rating_button(rating, id))
+    });
     children.push(pair(
         t,
         button(
@@ -1071,6 +1080,18 @@ pub fn select_bar(t: &Theme, label: String, checked: usize) -> WidgetPod {
 }
 
 /// Two buttons side by side, each taking half the row.
+/// Three buttons in one row, each the same width.
+fn trio(t: &Theme, first: WidgetPod, second: WidgetPod, third: WidgetPod) -> WidgetPod {
+    WidgetPod::new(
+        Row::new(vec![
+            WidgetPod::new(Expanded::new(first, 1)),
+            WidgetPod::new(Expanded::new(second, 1)),
+            WidgetPod::new(Expanded::new(third, 1)),
+        ])
+        .gap(t.space.sm),
+    )
+}
+
 fn pair(t: &Theme, left: WidgetPod, right: WidgetPod) -> WidgetPod {
     WidgetPod::new(
         Row::new(vec![

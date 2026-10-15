@@ -78,6 +78,11 @@ pub fn make_app_with(data: &Path, roots: Vec<PathBuf>, input: ScriptInput) -> Ap
         ..Env::default()
     };
     let platform = Platform::detect_in(&root, &env).unwrap();
+    // MuPDF loads its fallback faces from FONTDIR, which defaults to ./fonts.
+    // The device launcher starts in the install folder that has it; tests do not.
+    if std::env::var_os("FONTDIR").is_none() {
+        std::env::set_var("FONTDIR", repo_root().join("resources/fonts"));
+    }
     pin_english(&data.join("data"));
     let services = Services::open(platform, panel(), Some(data.join("data"))).unwrap();
     let backend = HeadlessBackend::new(panel(), input);

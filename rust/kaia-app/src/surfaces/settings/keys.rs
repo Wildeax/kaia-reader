@@ -10,6 +10,7 @@
 //! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
 //! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
 //! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
+//! | `reading.double_tap_lookup` | bool | false | A double tap on a word looks it up. When on, a single tap turns the page after the double tap window (300 ms). See [`double_tap_lookup`]. |
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
 //! | `reading.page_turn_waveform` | string | `cleaner` | E Ink waveform of a page turn: `cleaner` (gray with ghost reduction) or `faster` (fast black and white). Full refreshes keep their waveform. See [`page_turn`]. |
 //! | `reading.highlight_shade` | number | 0.2 | Shade of a box highlight, from 0 to 1 in steps of 0.1, as KOReader's "Gray highlight opacity". A higher value is darker. The reader's More sheet shows it as a percent. See [`highlight_shade`]. |
@@ -46,9 +47,10 @@
 //! | `sync.userkey` | string | empty | MD5 hex of the progress sync password, the key KOReader stores. The password itself is never stored. |
 //! | `sync.password` | string | unset | Old plain password. The startup migration replaces it with `sync.userkey` and removes it. |
 //! | `opds.catalogs` | array of tables | empty | User OPDS catalogs: `{ title = ..., url = ... }`. |
+//! | `device.standby_minutes` | number | 0 | Minutes of no input before the device stands by: the app idles without suspending, and any input wakes it at once. `0` is off. Choices are in `STANDBY_MINUTES`. |
 //! | `device.sleep_minutes` | number | 15 | Minutes of no input before the device sleeps. |
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
-//! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
+//! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book), `details` (the current book with its title, author and progress, or the last book opened) or `blank`. |
 //! | `device.time_zone` | string | unset (system zone) | IANA name of the zone for Kaia's clock, such as `America/Bogota`. Set from the Time zone page. Kaia sets `TZ` at startup, so the footer clock, natural light and statistics dates follow it. An unknown name counts as unset. See `kaia_platform::timezone`. |
 //! | `device.network_time` | bool | false | Sets the clock from pool.ntp.org while Wi-Fi is connected and airplane mode is off, at most every six hours. Off sends no packet. Set from the Device page. On a Kobo, BusyBox `ntpd` sets the clock. On the desktop, Kaia reports the offset and does not change the clock. See `kaia_platform::ntp`. |
 //! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
@@ -76,6 +78,8 @@ pub const READING_FONT_WEIGHT_PREFIX: &str = "reading.font_weight.";
 /// The family segment of the text weight key for the book's own font.
 pub const FONT_WEIGHT_BOOK_FONT: &str = "(book)";
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
+/// A double tap on a word looks it up. See [`double_tap_lookup`].
+pub const READING_DOUBLE_TAP_LOOKUP: &str = "reading.double_tap_lookup";
 pub const READING_FULL_REFRESH_PAGES: &str = "reading.full_refresh_pages";
 /// Waveform of a reader page turn. See [`page_turn`].
 pub const READING_PAGE_TURN_WAVEFORM: &str = "reading.page_turn_waveform";
@@ -132,6 +136,8 @@ pub const SYNC_PASSWORD: &str = "sync.password";
 pub const SYNC_USERKEY: &str = "sync.userkey";
 pub const OPDS_CATALOGS: &str = "opds.catalogs";
 pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
+/// Minutes of no input before the standby state. Zero is off. Off by default.
+pub const DEVICE_STANDBY_MINUTES: &str = "device.standby_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
 /// IANA name of the zone for Kaia's clock. Unset means the system zone.
 pub const DEVICE_TIME_ZONE: &str = "device.time_zone";
@@ -166,11 +172,23 @@ pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
 pub const PAGE_TURN_WAVEFORMS: [(&str, &str); 2] =
     [("cleaner", "Cleaner page turns"), ("faster", "Faster page turns")];
 
-/// The sleep screen choices, in the order the Device section lists them.
-pub const SLEEP_SCREENS: [(&str, &str); 2] = [("cover", "Book cover"), ("blank", "Blank")];
+/// The sleep screen choices, in the order the Device section lists them. The
+/// first is the default.
+pub const SLEEP_SCREENS: [(&str, &str); 3] = [
+    ("cover", "Book cover"),
+    ("details", "Book cover with details"),
+    ("blank", "Blank"),
+];
+
+/// The stored value of the sleep screen that shows the book cover with its title,
+/// author and progress. See `app::power`.
+pub const SLEEP_SCREEN_DETAILS: &str = "details";
 
 /// Idle timeout choices. Zero means never.
 pub const IDLE_MINUTES: [u32; 7] = [0, 5, 10, 15, 30, 45, 60];
+
+/// Standby timeout choices in minutes. Zero means off, and it is the default.
+pub const STANDBY_MINUTES: [u32; 4] = [0, 1, 2, 5];
 
 pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
     settings.read(key).as_bool().unwrap_or(default)
@@ -184,6 +202,11 @@ pub fn airplane_mode(settings: &Settings) -> bool {
 /// Whether the clock follows pool.ntp.org. Off unless the user turns it on.
 pub fn network_time(settings: &Settings) -> bool {
     bool_or(settings, DEVICE_NETWORK_TIME, false)
+}
+
+/// Whether a double tap on a word looks it up. Off unless the user turns it on.
+pub fn double_tap_lookup(settings: &Settings) -> bool {
+    bool_or(settings, READING_DOUBLE_TAP_LOOKUP, false)
 }
 
 pub fn number_or(settings: &Settings, key: &str, default: f64) -> f64 {
@@ -288,6 +311,17 @@ mod tests {
         assert_eq!(cadence(Some(25.0)), 10, "a saved value above 10 reads as 10");
         assert_eq!(cadence(Some(2.7)), 2);
         assert_eq!(cadence(Some(-3.0)), 0, "a negative value reads as each chapter");
+    }
+
+    #[test]
+    fn double_tap_lookup_is_off_unless_turned_on() {
+        let mut settings = Settings::open(std::path::Path::new("/nonexistent/kaia-keys-test/settings.json"));
+        assert!(
+            !double_tap_lookup(&settings),
+            "unset is off, so single taps stay immediate"
+        );
+        settings.save(READING_DOUBLE_TAP_LOOKUP, Value::from(true));
+        assert!(double_tap_lookup(&settings));
     }
 
     #[test]

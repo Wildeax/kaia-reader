@@ -35,6 +35,7 @@ mod work;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use kaia_book::{Drawer, Margins, OpenOptions, Point, TextLayout, ZoomMode};
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, Value};
@@ -53,6 +54,7 @@ use state::{font_face, read_field, schedule_if_pending, Core, Layer, LookupState
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common::{self, display_title, window};
+use crate::surfaces::settings::keys;
 use crate::surfaces::Route;
 
 /// KOReader's `scaleBySize` for `units` of its font sizes and margins, in pixels on
@@ -118,6 +120,24 @@ pub(crate) fn koreader_default_layout(
     }
 }
 
+/// A single tap that waits to see whether a second tap follows it. `x` and `y` are in
+/// the page's coordinates, as the page sends them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct PendingTap {
+    x: f64,
+    y: f64,
+    at: Duration,
+}
+
+/// The double tap window and distance: the recognizer's defaults, 300 ms and 50 dp.
+fn double_tap_window() -> (Duration, u32) {
+    let config = kaia_input::GestureConfig::default();
+    (
+        Duration::from_millis(config.double_tap_interval_ms),
+        config.double_tap_distance_dp,
+    )
+}
+
 /// The reader screen for one book.
 pub struct ReaderSurface {
     book: i64,
@@ -145,6 +165,11 @@ pub struct ReaderSurface {
     plugin_rerender: bool,
     persistence: persistence::Persistence,
     remote: Option<kaia_book::Location>,
+    /// A single tap waiting for a possible second tap. Set only while double tap lookup is on.
+    pending_tap: Option<PendingTap>,
+    /// The point of a double tap whose word lookup waits for its selection. The point is
+    /// in content coordinates, below the header, as the selection's rects are.
+    lookup: Option<Point>,
     core: Rc<RefCell<Core>>,
 }
 
@@ -176,6 +201,8 @@ impl ReaderSurface {
             plugin_rerender: false,
             persistence: persistence::Persistence::default(),
             remote: None,
+            pending_tap: None,
+            lookup: None,
             core: Rc::new(RefCell::new(Core::new(book))),
         }
     }
@@ -570,6 +597,9 @@ impl Surface for ReaderSurface {
             #[cfg(feature = "lua")]
             self.plugin_tick(env);
             self.persistence.tick(&mut self.core.borrow_mut(), env);
+            if let Some(outcome) = self.tap_tick(env) {
+                return outcome;
+            }
             if self.core.borrow().job.is_none() {
                 let event = self.core.borrow_mut().events.pop_front();
                 if let Some(event) = event {
@@ -688,6 +718,9 @@ impl Surface for ReaderSurface {
             schedule_if_pending(&self.core, env.ctx);
             return outcome;
         }
+        if cmd == "reader:tap" && keys::double_tap_lookup(&env.services.settings) {
+            return self.tap_waiting(args, env);
+        }
         if cmd == "reader:dictionary-word" {
             if let Some(word) = args.first().and_then(Value::as_str) {
                 let mut c = self.core.borrow_mut();
@@ -781,6 +814,8 @@ impl Surface for ReaderSurface {
 
     fn on_hide(&mut self, env: &mut SurfaceEnv<'_>) {
         navigation::interrupt(&self.core, "Close", env.ctx);
+        self.pending_tap = None;
+        self.lookup = None;
         #[cfg(feature = "lua")]
         if self.plugin_attached {
             env.services.plugins.event("CloseDocument", vec![]);
@@ -823,6 +858,111 @@ impl Surface for ReaderSurface {
     fn content_dither(&self, mode: RefreshMode) -> bool {
         mode == RefreshMode::Full
             || self.core.borrow().ink_color_content && matches!(mode, RefreshMode::Partial | RefreshMode::Ui)
+    }
+}
+
+impl ReaderSurface {
+    /// A tap while double tap lookup is on. The tap waits for the double tap window
+    /// before it acts. A second tap in the window is a double tap, and the first tap
+    /// does nothing.
+    fn tap_waiting(&mut self, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        let Some(Command::Tap(x, y)) = commands::parse("reader:tap", args) else {
+            return Outcome::Handled;
+        };
+        let now = env.ctx.scheduler.now();
+        let (window, distance) = double_tap_window();
+        let distance = f64::from(env.theme().scale.dp(distance));
+        let Some(prev) = self.pending_tap.take() else {
+            self.hold_tap(PendingTap { x, y, at: now }, window, env);
+            return Outcome::Handled;
+        };
+        let close = (x - prev.x).abs() < distance && (y - prev.y).abs() < distance;
+        if close && now.saturating_sub(prev.at) < window {
+            return self.double_tap(x, y, env);
+        }
+        // Not a double tap. The earlier tap is a single tap now, and this one waits.
+        let outcome = self.run_tap(prev, env);
+        self.hold_tap(PendingTap { x, y, at: now }, window, env);
+        outcome
+    }
+
+    /// Keeps `tap` until its window closes. The scheduled task wakes the loop at the
+    /// close, and [`ReaderSurface::tap_tick`] runs the tap.
+    fn hold_tap(&mut self, tap: PendingTap, window: Duration, env: &mut SurfaceEnv<'_>) {
+        self.pending_tap = Some(tap);
+        env.ctx
+            .scheduler
+            .schedule_at(tap.at + window, Box::new(|_: &mut Ctx| {}));
+    }
+
+    /// The second tap of a double tap. It selects the word near the point, as a hold
+    /// does, and [`ReaderSurface::tap_tick`] opens the lookup when the selection is ready.
+    fn double_tap(&mut self, x: f64, y: f64, env: &mut SurfaceEnv<'_>) -> Outcome {
+        {
+            let mut c = self.core.borrow_mut();
+            if c.panel.is_some() || c.overlay.is_some() {
+                return Outcome::Handled;
+            }
+            let content = Point::new(x as i32, y as i32 - c.header_height as i32);
+            c.hold(env.ctx, Point::new(x as i32, y as i32));
+            c.release();
+            self.lookup = Some(content);
+        }
+        schedule_if_pending(&self.core, env.ctx);
+        Outcome::Handled
+    }
+
+    /// Runs one tap as the page would send it now.
+    fn run_tap(&mut self, tap: PendingTap, env: &mut SurfaceEnv<'_>) -> Outcome {
+        {
+            let c = self.core.borrow();
+            if c.panel.is_some() || c.overlay.is_some() || c.closed {
+                return Outcome::Handled;
+            }
+        }
+        let outcome = handle(&self.core, Command::Tap(tap.x, tap.y), env);
+        schedule_if_pending(&self.core, env.ctx);
+        outcome
+    }
+
+    /// Runs the work that waits on a tick: a single tap whose window has closed, and the
+    /// dictionary sheet of a double tap. None when nothing ran.
+    fn tap_tick(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Outcome> {
+        if self.core.borrow().job.is_some() {
+            return None;
+        }
+        if let Some(at) = self.lookup.take() {
+            // The engine picks the nearest word, even when the point is off the text. The
+            // point must be inside the word's box, or the tap is off text.
+            let word = self
+                .core
+                .borrow()
+                .selection
+                .as_ref()
+                .filter(|s| s.screen_rects.iter().any(|r| r.contains(at)))
+                .map(|s| kaia_dict::clean_selection(&s.text))
+                .unwrap_or_default();
+            if word.is_empty() {
+                // Off text. Drop the selection the lookup made, so nothing stays marked.
+                let mut c = self.core.borrow_mut();
+                if c.selection.is_some() {
+                    c.clear_selection(env.ctx);
+                }
+                return None;
+            }
+            // The selection is the word, so the dictionary action looks it up as it
+            // does from the selection popover.
+            let outcome = handle(&self.core, Command::SelDict, env);
+            schedule_if_pending(&self.core, env.ctx);
+            return Some(outcome);
+        }
+        let (window, _) = double_tap_window();
+        let pending = self.pending_tap?;
+        if env.ctx.scheduler.now().saturating_sub(pending.at) < window {
+            return None;
+        }
+        self.pending_tap = None;
+        Some(self.run_tap(pending, env))
     }
 }
 

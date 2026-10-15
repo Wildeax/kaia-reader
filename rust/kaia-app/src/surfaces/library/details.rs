@@ -11,16 +11,18 @@ use kaia_ui::{WidgetPod, Window};
 
 use crate::surface::{Outcome, Surface, SurfaceEnv};
 use crate::surfaces::common::root_window as window;
+use crate::surfaces::library::book_stats;
 use crate::surfaces::library::commands::{parse, Command};
 use crate::surfaces::library::{data, views};
 use crate::surfaces::Route;
 
 /// The details of the book with row id `book`. A book that is gone shows a
-/// notice and no screen. The rating sheet of the page is this surface's own, so
-/// its rating commands stop here.
+/// notice and no screen. The rating and statistics sheets of the page are this
+/// surface's own, so their commands stop here.
 pub struct BookDetailsSurface {
     book: i64,
     rating_open: bool,
+    stats_open: bool,
 }
 
 impl BookDetailsSurface {
@@ -28,6 +30,7 @@ impl BookDetailsSurface {
         Self {
             book,
             rating_open: false,
+            stats_open: false,
         }
     }
 }
@@ -43,10 +46,17 @@ impl Surface for BookDetailsSurface {
             Ok(Some(book)) => {
                 let cover = data::cover(&env.services.library, book.id, CoverSize::Large);
                 let rating = data::rating(env.services, &book);
-                let content = if self.rating_open {
+                let stats = book_stats::load(env.services, &book);
+                let content = if self.stats_open {
+                    let back = format!("library:stats:back:{}", book.id);
+                    let title = crate::surfaces::common::display_title(&book);
+                    let now = crate::sync::now_unix();
+                    book_stats::page(&t, &title, stats.as_ref(), now, &back)
+                } else if self.rating_open {
                     views::rating_panel(&t, book.id, rating)
                 } else {
-                    views::details_panel(&t, &book, cover, "back", None, rating)
+                    let has_stats = stats.is_some();
+                    views::details_panel(&t, &book, cover, "back", None, rating, has_stats)
                 };
                 let page = Padding::new(
                     WidgetPod::new(Column::new(vec![content]).gap(t.space.md)),
@@ -69,6 +79,14 @@ impl Surface for BookDetailsSurface {
             }
             Some(Command::BackRating(id)) if id == self.book => {
                 self.rating_open = false;
+                Outcome::Rebuild
+            }
+            Some(Command::OpenStats(id)) if id == self.book => {
+                self.stats_open = true;
+                Outcome::Rebuild
+            }
+            Some(Command::BackStats(id)) if id == self.book => {
+                self.stats_open = false;
                 Outcome::Rebuild
             }
             Some(Command::SetRating { book, rating }) if book == self.book => {

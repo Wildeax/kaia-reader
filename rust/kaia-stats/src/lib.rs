@@ -22,7 +22,9 @@ mod schema;
 
 pub use error::{Error, Result};
 pub use import::ImportReport;
-pub use query::{BookEstimate, BookSummary, BookTotals, DayTotal, Streaks, TimeLeft, Totals, Weekday};
+pub use query::{
+    BookEstimate, BookStats, BookSummary, BookTotals, DayTotal, Streaks, TimeLeft, Totals, Weekday,
+};
 pub use record::Stats;
 pub use record::{BookInfo, StatsOptions};
 

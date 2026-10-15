@@ -125,6 +125,14 @@ fn reading(services: &Services) -> Vec<Entry> {
             options: labels(keys::READING_TAP_ZONES),
             selected: keys::preset_index(&keys::TAP_ZONE_PRESETS, &zones),
         },
+        Entry::Toggle {
+            key: keys::READING_DOUBLE_TAP_LOOKUP,
+            label: tr("Double tap a word to look it up"),
+            on: keys::double_tap_lookup(s),
+        },
+        Entry::Text(tr(
+            "When this is on, a single tap turns the page 0.3 seconds after the tap, so the reader can tell it from a double tap.",
+        )),
         Entry::Stepper {
             key: keys::READING_FULL_REFRESH_PAGES,
             label: tr("Full refresh every"),
@@ -608,23 +616,31 @@ fn day_bar(day: &DayTotal, longest: i64) -> Entry {
 }
 
 fn idle_choices(s: &kaia_events::Settings, key: &'static str, default: f64) -> Entry {
+    minutes_choices(s, key, default, &keys::IDLE_MINUTES, tr("Never"))
+}
+
+/// A radio of minute choices. The zero choice shows `zero`, and the others show minutes.
+fn minutes_choices(
+    s: &kaia_events::Settings,
+    key: &'static str,
+    default: f64,
+    choices: &[u32],
+    zero: String,
+) -> Entry {
     let value = keys::number_or(s, key, default);
     Entry::Radio {
         key,
-        options: keys::IDLE_MINUTES
+        options: choices
             .iter()
             .map(|n| {
                 if *n == 0 {
-                    tr("Never")
+                    zero.clone()
                 } else {
                     tr_format(&tr("%1 min"), &[&n.to_string()])
                 }
             })
             .collect(),
-        selected: keys::IDLE_MINUTES
-            .iter()
-            .position(|n| f64::from(*n) == value)
-            .unwrap_or(0),
+        selected: choices.iter().position(|n| f64::from(*n) == value).unwrap_or(0),
     }
 }
 
@@ -672,6 +688,11 @@ fn device(services: &Services) -> Vec<Entry> {
             label: tr("Storage"),
             action: "settings:storage".into(),
         },
+        Entry::Heading(tr("Standby after")),
+        minutes_choices(s, keys::DEVICE_STANDBY_MINUTES, 0.0, &keys::STANDBY_MINUTES, tr("Off")),
+        Entry::Text(tr(
+            "Standby keeps Kaia awake and idle, so any input wakes it at once. The device still sleeps after the time under Sleep after.",
+        )),
         Entry::Heading(tr("Sleep after")),
         idle_choices(s, keys::DEVICE_SLEEP_MINUTES, keys::DEFAULT_SLEEP_MINUTES),
         Entry::Heading(tr("Power off after")),
@@ -697,7 +718,9 @@ fn device(services: &Services) -> Vec<Entry> {
                 &keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover"),
             ),
         },
-        Entry::Text(tr("The cover of the book you are reading, or a blank screen.")),
+        Entry::Text(tr(
+            "Book cover shows the book you are reading. Book cover with details also shows its title, author and progress, and uses the last book you opened when no book is open.",
+        )),
     ];
     out.extend(screen_lock(services));
     out.extend([
@@ -924,6 +947,7 @@ fn option_label(label: &str) -> String {
         "Cleaner page turns" => tr("Cleaner page turns"),
         "Faster page turns" => tr("Faster page turns"),
         "Book cover" => tr("Book cover"),
+        "Book cover with details" => tr("Book cover with details"),
         "Blank" => tr("Blank"),
         other => other.to_string(),
     }

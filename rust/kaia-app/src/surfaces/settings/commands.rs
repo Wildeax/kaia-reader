@@ -226,6 +226,11 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
             .get(index)
             .map(|n| Value::Number(f64::from(*n)));
     }
+    if key == keys::DEVICE_STANDBY_MINUTES {
+        return keys::STANDBY_MINUTES
+            .get(index)
+            .map(|n| Value::Number(f64::from(*n)));
+    }
     if key == keys::READING_FONT_FAMILY {
         return font_options()
             .get(index)
@@ -275,6 +280,7 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::DEVICE_SLEEP_MINUTES
                 | keys::READING_FONT_FAMILY
                 | keys::READING_TAP_ZONES
+                | keys::READING_DOUBLE_TAP_LOOKUP
                 | keys::READING_PAGE_TURN_WAVEFORM
                 | keys::READING_FOOTER_PAGE
                 | keys::READING_FOOTER_PERCENT
@@ -283,6 +289,7 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::READING_FOOTER_CLOCK
                 | keys::READING_FOOTER_BATTERY
                 | keys::DEVICE_SLEEP_SCREEN
+                | keys::DEVICE_STANDBY_MINUTES
                 | keys::DEVICE_NETWORK_TIME
         )
 }

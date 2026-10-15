@@ -198,7 +198,7 @@ impl Stats {
         self.clock = now;
         self.session_start = Some(now);
 
-        let existing = find_book(&self.conn, &info)?;
+        let existing = find_book(&self.conn, info.md5, info.display_title, info.authors)?;
         let (id, highlights, notes) = match existing {
             Some((id, highlights, notes)) => (
                 id,
@@ -435,19 +435,26 @@ impl Stats {
     }
 }
 
-fn find_book(conn: &Connection, info: &BookInfo<'_>) -> Result<Option<ExistingBook>> {
+/// The book row KOReader keys by `md5`, `title` and `authors`. A legacy row with a
+/// trailing NUL in the title or the authors also matches.
+pub(crate) fn find_book(
+    conn: &Connection,
+    md5: &str,
+    title: &str,
+    authors: &str,
+) -> Result<Option<ExistingBook>> {
     let mut stmt = conn
         .prepare("SELECT id, highlights, notes FROM book WHERE title = ?1 AND authors = ?2 AND md5 = ?3")?;
-    let title_nul = format!("{}\0", info.display_title);
-    let authors_nul = format!("{}\0", info.authors);
+    let title_nul = format!("{title}\0");
+    let authors_nul = format!("{authors}\0");
     for (title, authors) in [
-        (info.display_title, info.authors),
-        (title_nul.as_str(), info.authors),
+        (title, authors),
+        (title_nul.as_str(), authors),
         (title_nul.as_str(), authors_nul.as_str()),
-        (info.display_title, authors_nul.as_str()),
+        (title, authors_nul.as_str()),
     ] {
         let found = stmt
-            .query_row(params![title, authors, info.md5], |row| {
+            .query_row(params![title, authors, md5], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })
             .optional()?;

@@ -10,18 +10,24 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use kaia_events::{Ctx, Event, Refresh, RefreshMode, ShowOpts, TaskId, WindowId};
-use kaia_gfx::Pixmap;
+use kaia_gfx::image::FitMode;
+use kaia_gfx::{Pixmap, Size};
+use kaia_library::Library;
 use kaia_platform::frontlight::RampStep;
 use kaia_platform::plan::Outcome;
 use kaia_platform::power::{PowerContext, ResumeContext};
 use kaia_platform::suspend::{Effect, PrepareResult, SuspendFlow, Timer, WakeupCause, SUSPEND_WAIT_TIMEOUT};
 use kaia_platform::sysfs::SystemIo;
-use kaia_ui::Window;
+use kaia_ui::components::{
+    Align, Column, CrossAlign, Divider, Frame, Image, Label, Padding, ProgressBar, SizedBox, Spacer, Stack,
+};
+use kaia_ui::geometry::Insets;
+use kaia_ui::{Alignment, Theme, Tone, WidgetPod, Window};
 
 use super::sleep_picture::{self, SleepPicture};
 use super::App;
 use crate::backend::Backend;
-use crate::surfaces::{settings, Route};
+use crate::surfaces::{common, settings, Route};
 
 /// Jobs on the plan worker. Prepare jobs count up from 1, so these never collide with them.
 const WIFI_JOB: u64 = 0;
@@ -31,6 +37,16 @@ const POWER_OFF_JOB: u64 = u64::MAX - 2;
 
 /// How often the loop polls a worker while one of its jobs runs.
 const POLL: Duration = Duration::from_millis(50);
+
+/// How often the battery is read while the device is awake.
+const BATTERY_POLL: Duration = Duration::from_secs(60);
+/// How often the battery is read in standby. A low charge still sleeps the device,
+/// up to this long after it passes the threshold.
+const STANDBY_BATTERY_POLL: Duration = Duration::from_secs(300);
+
+/// The height of the book band on the details sleep screen, in dp. It holds the
+/// title, the author, the progress bar and the state label.
+const BAND_DP: u32 = 150;
 
 pub(super) struct State {
     flow: SuspendFlow,
@@ -45,6 +61,8 @@ pub(super) struct State {
     /// A Power press or Resume came while `finishing`. The resume runs when the finish plan returns.
     resume_queued: bool,
     last_activity: Duration,
+    /// Idle past the standby time, and not suspended. Input clears it.
+    standby: bool,
     suspended_time: Duration,
     suspend_started: Option<(Duration, std::time::SystemTime)>,
     power_press: Option<(Duration, u64, bool)>,
@@ -84,6 +102,7 @@ impl State {
             finishing: false,
             resume_queued: false,
             last_activity: Duration::ZERO,
+            standby: false,
             suspended_time: Duration::ZERO,
             suspend_started: None,
             power_press: None,
@@ -110,17 +129,76 @@ impl<B: Backend> App<B> {
         self.power.screen.is_some()
     }
 
-    /// Whether the sleep picture of the book being read is ready. Tests wait for it.
+    /// Whether the device is in standby: idle past the standby time and not asleep.
+    /// Any input ends it. Tests read it.
+    pub fn standby(&self) -> bool {
+        self.power.standby
+    }
+
+    /// Whether the sleep picture of the book the sleep screen shows is ready. Tests wait for it.
     pub fn sleep_picture_ready(&self) -> bool {
-        self.reader_book()
-            .is_some_and(|book| self.power.picture.ready(book, self.screen).is_some())
+        self.sleep_subject().is_some_and(|book| {
+            self.power
+                .picture
+                .ready(book, self.sleep_picture_size())
+                .is_some()
+        })
     }
 
     /// Starts the sleep picture of `book` on the worker, so that Power can draw it at once.
     pub(super) fn prepare_sleep_picture(&mut self, book: i64) {
         if settings::sleep::shows_cover(&self.services) {
-            self.power.picture.request(book, self.screen);
+            let size = self.sleep_picture_size();
+            self.power.picture.request(book, size);
         }
+    }
+
+    /// The book the sleep screen shows: the book of the reader when one is open. With the
+    /// details choice, the book opened last otherwise. None when the screen shows no book.
+    fn sleep_subject(&self) -> Option<i64> {
+        if let Some(book) = self.reader_book() {
+            return Some(book);
+        }
+        if !self.details_sleep_screen() {
+            return None;
+        }
+        self.services.library.recent(1).ok()?.first().map(|book| book.id)
+    }
+
+    /// The size of the cover picture. With the details choice the cover fills the
+    /// screen above the book band, so the picture is that area.
+    fn sleep_picture_size(&self) -> Size {
+        if self.details_sleep_screen() {
+            Size::new(
+                self.screen.w,
+                self.screen.h.saturating_sub(band_height(&self.services.theme)),
+            )
+        } else {
+            self.screen
+        }
+    }
+
+    fn details_sleep_screen(&self) -> bool {
+        settings::keys::text_or(
+            &self.services.settings,
+            settings::keys::DEVICE_SLEEP_SCREEN,
+            "cover",
+        ) == settings::keys::SLEEP_SCREEN_DETAILS
+    }
+
+    /// The text of the book band. None when the sleep screen shows no band: the
+    /// choice is not details, the power-off screen is up, or no book is shown.
+    fn sleep_band(&self) -> Option<Band> {
+        if self.power.off_started || !self.details_sleep_screen() {
+            return None;
+        }
+        let book = self.services.library.book(self.power.sleep_book?).ok()??;
+        let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
+        Some(Band {
+            title: common::display_title(&book),
+            author: authors,
+            percent: book.percent as f32,
+        })
     }
 
     pub(super) fn sleep(&mut self) {
@@ -131,15 +209,16 @@ impl<B: Backend> App<B> {
         if let Err(e) = self.services.settings.flush(&self.services.settings_path()) {
             self.notices.push(format!("Cannot save settings: {e}"));
         }
-        let book = self.reader_book();
+        let book = self.sleep_subject();
+        let size = self.sleep_picture_size();
         // None: the picture is not ready yet, so the screen shows the label on a blank page.
         // Some(None): the screen has no cover, because the book has none or the setting is blank.
         let picture = match book {
             Some(book) if settings::sleep::shows_cover(&self.services) => {
-                self.power.picture.request(book, self.screen);
+                self.power.picture.request(book, size);
                 self.power
                     .picture
-                    .ready(book, self.screen)
+                    .ready(book, size)
                     .map(|picture| picture.cloned())
             }
             _ => Some(None),
@@ -268,6 +347,7 @@ impl<B: Backend> App<B> {
 
     pub(super) fn note_activity(&mut self) {
         self.power.last_activity = self.idle_now();
+        self.power.standby = false;
     }
 
     fn idle_now(&self) -> Duration {
@@ -299,6 +379,11 @@ impl<B: Backend> App<B> {
             return wait;
         }
         for (key, default, enabled) in [
+            (
+                settings::keys::DEVICE_STANDBY_MINUTES,
+                0.0,
+                !self.sleeping() && !self.power.standby,
+            ),
             (settings::keys::DEVICE_SLEEP_MINUTES, 15.0, !self.sleeping()),
             (settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0, true),
         ] {
@@ -319,7 +404,12 @@ impl<B: Backend> App<B> {
     fn check_idle_power(&mut self) {
         let now = self.ctx.scheduler.now();
         if now >= self.power.battery_due {
-            self.power.battery_due = now + Duration::from_secs(60);
+            let poll = if self.power.standby {
+                STANDBY_BATTERY_POLL
+            } else {
+                BATTERY_POLL
+            };
+            self.power.battery_due = now + poll;
             let level = self.services.platform.battery.capacity();
             let charging = self.services.platform.battery.is_charging().unwrap_or(false);
             if charging || level.is_some_and(|n| n > 10) {
@@ -364,6 +454,15 @@ impl<B: Backend> App<B> {
                 .is_some_and(|timeout| idle >= timeout)
         {
             self.sleep();
+        } else if !self.sleeping()
+            && !self.power.standby
+            && self
+                .idle_timeout(settings::keys::DEVICE_STANDBY_MINUTES, 0.0)
+                .is_some_and(|timeout| idle >= timeout)
+        {
+            // Standby keeps the device awake and does not suspend. The battery is then
+            // read every `STANDBY_BATTERY_POLL`, not every `BATTERY_POLL`.
+            self.power.standby = true;
         }
     }
 
@@ -556,7 +655,7 @@ impl<B: Backend> App<B> {
         let Some(book) = self.power.sleep_book else {
             return;
         };
-        let Some(ready) = self.power.picture.ready(book, self.screen) else {
+        let Some(ready) = self.power.picture.ready(book, self.sleep_picture_size()) else {
             return;
         };
         let picture = ready.cloned();
@@ -581,7 +680,10 @@ impl<B: Backend> App<B> {
         } else {
             tr("Kaia, sleeping")
         };
-        let stack = sleep_picture::sleep_screen(&self.services, self.screen, picture, &label);
+        let stack = match self.sleep_band() {
+            Some(band) => details_screen(&self.services.theme, self.screen, picture, &band, &label),
+            None => sleep_picture::sleep_screen(&self.services, self.screen, picture, &label),
+        };
         let window = Window::new(
             stack,
             self.services.theme.clone(),
@@ -670,6 +772,100 @@ impl<B: Backend> App<B> {
             }
         }
     }
+}
+
+/// What the book band of the details sleep screen shows.
+struct Band {
+    title: String,
+    author: String,
+    /// Reading progress from 0.0 to 1.0.
+    percent: f32,
+}
+
+/// The height of the book band at `theme`'s scale.
+fn band_height(theme: &Theme) -> u32 {
+    theme.scale.dp(BAND_DP)
+}
+
+/// The details sleep screen. The cover, fitted into the area above the band, sits on
+/// the surface colour. The band at the bottom shows the title, the author, the progress
+/// and the state label. `picture` is the cover at the area's size, or None while it is
+/// not ready or when the book has none.
+fn details_screen(theme: &Theme, screen: Size, picture: Option<Pixmap>, band: &Band, label: &str) -> Stack {
+    let band_h = band_height(theme);
+    let area_h = screen.h.saturating_sub(band_h);
+    // The fixed boxes give the layers the screen size. A frame around a one-pixel
+    // spacer would otherwise paint only that pixel, and the screen below would show.
+    let background = SizedBox::new(Some(WidgetPod::new(
+        Frame::new(WidgetPod::new(Spacer::new(1))).fill(Tone::Surface),
+    )))
+    .width(screen.w)
+    .height(screen.h);
+    let mut layers = vec![WidgetPod::new(background)];
+    if let Some(picture) = picture {
+        let target = picture.size();
+        let insets = Insets {
+            left: screen.w.saturating_sub(target.w) / 2,
+            top: area_h.saturating_sub(target.h) / 2,
+            right: 0,
+            bottom: 0,
+        };
+        // A box of the picture's size keeps the picture from growing into the padding.
+        let cover = SizedBox::new(Some(WidgetPod::new(Image::new(picture, FitMode::Contain))))
+            .width(target.w)
+            .height(target.h);
+        layers.push(WidgetPod::new(Padding::new(WidgetPod::new(cover), insets)));
+    }
+    let band_box = WidgetPod::new(
+        SizedBox::new(Some(band_text(theme, band, label)))
+            .width(screen.w)
+            .height(band_h),
+    );
+    layers.push(WidgetPod::new(Align::new(
+        band_box,
+        Alignment::Center,
+        Alignment::End,
+    )));
+    Stack::new(layers)
+}
+
+/// The band: a hairline, then the title, the author, the progress with its percent,
+/// and the state label. The page margin sides keep the text off the screen edges.
+fn band_text(theme: &Theme, band: &Band, label: &str) -> WidgetPod {
+    let t = theme;
+    let mut rows = vec![WidgetPod::new(Label::new(
+        band.title.clone(),
+        t.font.book_title.clone(),
+        Tone::Ink,
+    ))];
+    if !band.author.is_empty() {
+        rows.push(WidgetPod::new(Label::new(
+            band.author.clone(),
+            t.font.caption.clone(),
+            Tone::InkSecondary,
+        )));
+    }
+    rows.push(WidgetPod::new(ProgressBar::new(band.percent)));
+    rows.push(WidgetPod::new(Label::new(
+        label,
+        t.font.caption.clone(),
+        Tone::InkSecondary,
+    )));
+    let text = Padding::new(
+        WidgetPod::new(Column::new(rows).gap(t.space.sm).cross_align(CrossAlign::Stretch)),
+        Insets {
+            left: t.space.lg,
+            top: t.space.md,
+            right: t.space.lg,
+            bottom: t.space.md,
+        },
+    );
+    let body = Column::new(vec![
+        WidgetPod::new(Divider::new(Tone::Divider)),
+        WidgetPod::new(text),
+    ])
+    .cross_align(CrossAlign::Stretch);
+    WidgetPod::new(Frame::new(WidgetPod::new(body)).fill(Tone::Surface))
 }
 
 #[cfg(test)]
@@ -1012,6 +1208,86 @@ mod idle_tests {
         app.plan_done(generation, Outcome::Completed);
         assert!(app.power.timers.is_empty());
         assert!(!app.power.flow.finish_pending());
+    }
+
+    fn advance(app: &mut App<HeadlessBackend>, clock: &ManualClock, secs: u64) {
+        clock.advance(Duration::from_secs(secs));
+        app.process(Vec::new()).unwrap();
+    }
+
+    #[test]
+    fn standby_starts_after_its_period_and_sleep_comes_later() {
+        let (_dir, mut app, clock) = app();
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_STANDBY_MINUTES, Value::Number(1.0));
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_SLEEP_MINUTES, Value::Number(5.0));
+        advance(&mut app, &clock, 59);
+        assert!(!app.standby());
+        advance(&mut app, &clock, 1);
+        assert!(app.standby());
+        assert!(!app.sleeping(), "standby does not suspend");
+        advance(&mut app, &clock, 239);
+        assert!(app.standby() && !app.sleeping());
+        advance(&mut app, &clock, 1);
+        assert!(app.sleeping(), "the sleep time still suspends");
+    }
+
+    #[test]
+    fn input_ends_standby_at_once_and_restarts_the_idle_count() {
+        let (_dir, mut app, clock) = app();
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_STANDBY_MINUTES, Value::Number(1.0));
+        advance(&mut app, &clock, 61);
+        assert!(app.standby());
+        app.key(kaia_input::Key::RPgFwd).unwrap();
+        assert!(!app.standby(), "a key press wakes the device at once");
+        advance(&mut app, &clock, 59);
+        assert!(!app.standby(), "the idle count starts again at the press");
+        advance(&mut app, &clock, 1);
+        assert!(app.standby());
+    }
+
+    #[test]
+    fn standby_is_off_by_default_and_while_usb_storage_runs() {
+        let (_dir, mut app, clock) = app();
+        advance(&mut app, &clock, 600);
+        assert!(!app.standby(), "standby is off by default");
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_STANDBY_MINUTES, Value::Number(1.0));
+        app.usb_mass_storage = true;
+        advance(&mut app, &clock, 600);
+        assert!(!app.standby(), "USB storage mode keeps the idle timers off");
+    }
+
+    #[test]
+    fn standby_reads_the_battery_every_five_minutes() {
+        let (_dir, mut app, clock) = app();
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_STANDBY_MINUTES, Value::Number(1.0));
+        // The battery read at 60 s still uses the awake interval, and the one at 120 s
+        // runs in standby.
+        advance(&mut app, &clock, 60);
+        assert!(app.standby());
+        assert_eq!(app.power.battery_due, Duration::from_secs(120));
+        advance(&mut app, &clock, 60);
+        assert_eq!(app.power.battery_due, Duration::from_secs(420));
+    }
+
+    #[test]
+    fn the_standby_time_is_a_wake_point_of_the_loop() {
+        let (_dir, mut app, clock) = app();
+        app.services_mut()
+            .settings
+            .save(settings::keys::DEVICE_STANDBY_MINUTES, Value::Number(2.0));
+        advance(&mut app, &clock, 30);
+        let budget = app.wait_budget(None).unwrap();
+        assert!(budget <= Duration::from_secs(90), "{budget:?}");
     }
 
     #[test]

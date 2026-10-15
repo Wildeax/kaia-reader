@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use rusqlite::{params, Connection, OptionalExtension};
 
+use crate::record::find_book;
 use crate::{Error, Result, Stats};
 
 /// Seconds and distinct (book, page) pairs in a period.
@@ -70,6 +71,13 @@ pub struct BookEstimate {
     pub avg_page_seconds: f64,
     /// Seconds read per day that the book was read. `None` without reading time.
     pub seconds_per_day: Option<f64>,
+}
+
+/// One book's totals and time-left rates, from [`Stats::book`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct BookStats {
+    pub totals: BookTotals,
+    pub estimate: BookEstimate,
 }
 
 /// Time left to read a span of pages, from [`BookEstimate::time_left`].
@@ -437,6 +445,21 @@ impl Stats {
             avg_page_seconds: average_or_default(read_pages, read_seconds, self.max_sec),
             seconds_per_day,
         })
+    }
+
+    /// Statistics of the book KOReader keys by `md5`, `title` and `authors`, the key the
+    /// recorder writes. `None` when the database has no row for the book. A row with no
+    /// reading returns zero totals.
+    pub fn book(&mut self, md5: &str, title: &str, authors: &str) -> Result<Option<BookStats>> {
+        self.flush()?;
+        let Some((id, _, _)) = find_book(&self.conn, md5, title, authors)? else {
+            return Ok(None);
+        };
+        let Some(totals) = self.book_totals(id)? else {
+            return Ok(None);
+        };
+        let estimate = self.book_estimate(id)?;
+        Ok(Some(BookStats { totals, estimate }))
     }
 
     /// Longest run of consecutive reading days, and the run that ends today or yesterday.

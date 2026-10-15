@@ -75,6 +75,10 @@ pub enum Command {
     OpenRating(i64),
     /// `library:rating:back:<book>`: leave the rating sheet for the details.
     BackRating(i64),
+    /// `library:stats:open:<book>`: show the reading statistics of a book.
+    OpenStats(i64),
+    /// `library:stats:back:<book>`: leave the statistics for the details.
+    BackStats(i64),
     /// `library:rating:<book>:<stars>`: set the rating of a book from 1 to 5, or
     /// clear it with 0.
     SetRating {
@@ -249,6 +253,11 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
                 }
             }
         },
+        ("stats", Some(t)) => match t.split_once(':')? {
+            ("open", book) => Command::OpenStats(book.parse().ok()?),
+            ("back", book) => Command::BackStats(book.parse().ok()?),
+            _ => return None,
+        },
         ("collection", Some("none")) => Command::PickCollection(None),
         ("collection", _) => Command::PickCollection(Some(tail_id.or(arg_id)?)),
         ("search", Some("open")) => Command::SearchOpen,
@@ -395,6 +404,20 @@ mod tests {
             parse("library:rating:back:42", &none()),
             Some(Command::BackRating(42))
         );
+    }
+
+    #[test]
+    fn parses_the_statistics_actions() {
+        assert_eq!(
+            parse("library:stats:open:42", &none()),
+            Some(Command::OpenStats(42))
+        );
+        assert_eq!(
+            parse("library:stats:back:42", &none()),
+            Some(Command::BackStats(42))
+        );
+        assert_eq!(parse("library:stats:open:x", &none()), None);
+        assert_eq!(parse("library:stats:close:42", &none()), None);
     }
 
     #[test]

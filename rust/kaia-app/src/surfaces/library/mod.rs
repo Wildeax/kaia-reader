@@ -4,6 +4,7 @@
 //! buttons are part of this surface and its commands. A hold on a book opens its
 //! details.
 
+pub mod book_stats;
 pub mod commands;
 pub mod data;
 pub mod details;
@@ -85,6 +86,10 @@ pub enum Panel {
     },
     /// The rating sheet of `book`.
     Rating {
+        book: i64,
+    },
+    /// The reading statistics of `book`.
+    Stats {
         book: i64,
     },
 }
@@ -370,6 +375,14 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::BackRating(id) => {
+                self.panel = Some(Panel::Details { book: id });
+                Outcome::Rebuild
+            }
+            Command::OpenStats(id) => {
+                self.panel = Some(Panel::Stats { book: id });
+                Outcome::Rebuild
+            }
+            Command::BackStats(id) => {
                 self.panel = Some(Panel::Details { book: id });
                 Outcome::Rebuild
             }
@@ -953,7 +966,17 @@ impl LibrarySurface {
                         .filter(|&cid| data::in_collection(lib, book, cid))
                         .map(|cid| format!("library:remove:{book}:{cid}"));
                     let rating = data::rating(env.services, &row);
-                    views::details_panel(t, &row, cover, "library:panel:close", remove, rating)
+                    let statistics = book_stats::load(env.services, &row).is_some();
+                    views::details_panel(t, &row, cover, "library:panel:close", remove, rating, statistics)
+                }
+                None => gone(t),
+            },
+            Panel::Stats { book } => match lib.book(book).ok().flatten() {
+                Some(row) => {
+                    let stats = book_stats::load(env.services, &row);
+                    let title = common::display_title(&row);
+                    let back = format!("library:stats:back:{book}");
+                    book_stats::page(t, &title, stats.as_ref(), crate::sync::now_unix(), &back)
                 }
                 None => gone(t),
             },
