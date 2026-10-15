@@ -194,13 +194,15 @@ fn build_window(env: &mut SurfaceEnv<'_>, progress: Option<(usize, usize)>) -> W
     } else {
         WidgetPod::new(SizedBox::new(None))
     };
-    sections.push(WidgetPod::new(
-        Row::new(vec![
-            WidgetPod::new(Expanded::new(library_card, 1)),
-            WidgetPod::new(Expanded::new(shelf, 1)),
-        ])
-        .gap(t.scale.dp(12)),
-    ));
+    if hero.is_some() {
+        sections.push(WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(Expanded::new(library_card, 1)),
+                WidgetPod::new(Expanded::new(shelf, 1)),
+            ])
+            .gap(t.scale.dp(12)),
+        ));
+    }
 
     let next = if shown.next_in_series {
         next_in_series(lib, &recent, hero.as_ref(), on_page)
@@ -405,18 +407,24 @@ fn newest_added(lib: &Library) -> Option<Book> {
 
 /// The empty library: the heading and the steps, then a button to the Library.
 fn empty_section(t: &Theme) -> WidgetPod {
-    let mut children = common::empty_library(t);
-    children.push(button(
-        ButtonStyle::Primary,
-        &tr("Open Library"),
-        "nav:library",
-        "empty-library",
-    ));
     WidgetPod::new(
-        Column::new(children)
-            .gap(t.space.md)
-            .cross_align(CrossAlign::Stretch)
-            .shrink(),
+        Column::new(vec![
+            super::library::views::local_empty(
+                t,
+                &tr("No books yet"),
+                &tr("Copy books into the Books folder over USB."),
+                85,
+            ),
+            button(
+                ButtonStyle::Secondary,
+                &tr("My books"),
+                "nav:library",
+                "empty-library",
+            ),
+        ])
+        .gap(t.scale.dp(24))
+        .cross_align(CrossAlign::Center)
+        .shrink(),
     )
 }
 

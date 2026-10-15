@@ -11,8 +11,10 @@ pub mod more;
 pub mod notes;
 pub mod pin;
 pub mod reader;
+pub mod search;
 pub mod settings;
 pub mod status;
+pub mod wifi;
 
 use crate::surface::Surface;
 
@@ -26,6 +28,10 @@ pub enum Route {
     },
     Notes,
     More,
+    Search,
+    Wifi,
+    Notebooks,
+    Experiments,
     Settings,
     Catalogs,
     CatalogBook,
@@ -62,6 +68,10 @@ pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
         Route::Calibre => Box::new(catalogs::CatalogSurface::calibre()),
         Route::Home => Box::new(home::HomeSurface::default()),
         Route::Library { page } => Box::new(library::LibrarySurface::new(*page)),
+        Route::Wifi => Box::new(wifi::WifiSurface::default()),
+        Route::Search => Box::new(search::SearchSurface::default()),
+        Route::Notebooks => Box::new(more::LocalPage::notebooks()),
+        Route::Experiments => Box::new(more::LocalPage::experiments()),
         Route::More => Box::new(more::MoreSurface),
         Route::Notes => Box::new(notes::NotesSurface),
         Route::Settings => Box::new(settings::SettingsSurface),

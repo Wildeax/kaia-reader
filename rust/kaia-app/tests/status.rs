@@ -51,7 +51,14 @@ fn status_actions_keep_their_caller() {
         ] {
             tap_key(&mut app, key);
             assert!(app.find_rect(popup).is_some());
-            assert_eq!(app.top_route(), caller.as_ref());
+            assert_eq!(
+                app.top_route(),
+                if key == "status-wifi" {
+                    Some(&Route::Wifi)
+                } else {
+                    caller.as_ref()
+                }
+            );
             app.key(Key::Back).unwrap();
             assert!(app.find_rect(popup).is_none());
             tap_key(&mut app, key);

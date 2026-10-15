@@ -67,7 +67,8 @@ fn hold_key(app: &mut App<HeadlessBackend>, key: &str, done: impl Fn(&App<Headle
 
 /// Taps the search action at the trailing edge of the header.
 fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    tap_key(app, "status-search");
+    app.command("library:search:open", &[]);
+    app.process(Vec::new()).unwrap();
 }
 
 /// Opens the Library from Home, after the scan.

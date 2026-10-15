@@ -13,18 +13,31 @@ pub struct Overlay {
     rect: Rect,
     bounds: Rect,
     blocker: WidgetPod,
+    close: String,
 }
 
 impl Overlay {
     /// Coordinates are logical pixels. The panel stays within the window.
     pub fn new(base: Option<WidgetPod>, panel: WidgetPod, rect: Rect, close: &str) -> Self {
         Self {
+            close: close.into(),
             base,
             panel: WidgetPod::new(Shield(panel)),
             rect,
             bounds: Rect::default(),
-            blocker: WidgetPod::new(Dismiss(close.into())),
+            blocker: WidgetPod::new(Dismiss {
+                action: close.into(),
+                backdrop: false,
+            }),
         }
+    }
+    /// Covers the caller with the same gray surround as the inset dialogs.
+    pub fn dialog(mut self) -> Self {
+        self.blocker = WidgetPod::new(Dismiss {
+            action: self.close.clone(),
+            backdrop: true,
+        });
+        self
     }
 }
 
@@ -62,15 +75,23 @@ impl Widget for Overlay {
     }
 }
 
-struct Dismiss(String);
+struct Dismiss {
+    action: String,
+    backdrop: bool,
+}
 impl Widget for Dismiss {
     kaia_ui::impl_as_any!();
+    fn paint(&mut self, cx: &mut PaintCx) {
+        if self.backdrop {
+            cx.fill_rect(cx.bounds(), kaia_gfx::Color::gray(77));
+        }
+    }
     fn layout(&mut self, _cx: &mut LayoutCx, c: Constraints) -> Size {
         c.max
     }
     fn event(&mut self, cx: &mut EventCx, ev: &UiEvent) -> Handled {
         if matches!(ev, UiEvent::Gesture(Gesture::Tap { .. })) {
-            cx.action(AppAction::new(&self.0));
+            cx.action(AppAction::new(&self.action));
         }
         if matches!(ev, UiEvent::Gesture(_)) {
             Handled::Yes

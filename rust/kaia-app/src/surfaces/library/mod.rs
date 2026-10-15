@@ -200,6 +200,12 @@ impl LibrarySurface {
         }
     }
 
+    pub fn details(book: i64) -> Self {
+        let mut view = Self::new(0);
+        view.panel = Some(Panel::Details { book });
+        view
+    }
+
     /// Local favorites, independent of the last library filter.
     pub fn favorites() -> Self {
         let mut view = Self::new(0);
@@ -227,6 +233,9 @@ impl LibrarySurface {
     /// Writes the prefs to settings and flushes the file, so a choice survives a
     /// restart that skips the normal exit. A failed write stays a notice.
     fn save_prefs(&self, env: &mut SurfaceEnv<'_>) {
+        if self.favorites_entry {
+            return;
+        }
         self.prefs.save(&mut env.services.settings);
         let path = env.services.settings_path();
         if let Err(e) = env.services.settings.flush(&path) {
@@ -413,7 +422,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::FavoriteFilter => {
-                self.prefs.favorite = !self.prefs.favorite;
+                self.prefs.favorite = self.favorites_entry || !self.prefs.favorite;
                 self.panel = None;
                 self.save_prefs(env);
                 Outcome::Rebuild
@@ -1064,6 +1073,14 @@ impl LibrarySurface {
             View::Covers | View::List => {
                 let books = data::list_in(env.services, &self.prefs);
                 if books.is_empty() {
+                    if self.favorites_entry {
+                        return vec![views::local_empty(
+                            &t,
+                            &tr("No favorites yet"),
+                            &tr("Use the star in book details to save a favorite."),
+                            22,
+                        )];
+                    }
                     return common::empty_library(&t);
                 }
                 let infos: Vec<BookInfo> = books.iter().map(data::info_without_cover).collect();
@@ -1094,7 +1111,16 @@ impl LibrarySurface {
         match *panel {
             Panel::Sort => views::sort_panel(t, self.prefs.sort),
             Panel::Options => views::options_panel(t, self.prefs.layout),
-            Panel::BookMenu { book } => views::book_menu(t, book, self.menu_from_details),
+            Panel::BookMenu { book } => views::book_menu_with(
+                t,
+                book,
+                self.menu_from_details,
+                self.prefs
+                    .collection
+                    .filter(|&id| data::in_collection(lib, book, id))
+                    .map(|id| format!("library:remove:{book}:{id}")),
+                data::marks(lib, book).0,
+            ),
             Panel::Filter => views::primary_filter(t, env.services, &self.prefs),
             Panel::MoreFilters => {
                 let collection = collection_name(lib, self.prefs.collection);
@@ -1171,7 +1197,7 @@ impl LibrarySurface {
         let t = env.services.theme.clone();
         let mut head = Vec::new();
         if self.favorites_entry {
-            head.push(views::compact(&t, &tr("Back to More"), "back", "favorites-back"));
+            head.push(views::compact(&t, &tr("‹  Favorites"), "back", "favorites-back"));
         }
         if self.selecting {
             head.push(views::select_bar(&t, self.select_label(), self.selected.len()));
@@ -1183,7 +1209,7 @@ impl LibrarySurface {
                     "library:author:up",
                     "author-up",
                 ));
-            } else {
+            } else if !self.favorites_entry {
                 head.push(views::view_tabs(&t, self.prefs.view));
             }
             if matches!(self.prefs.view, View::Covers | View::List) || self.author.is_some() {
@@ -1275,20 +1301,28 @@ impl LibrarySurface {
             let mut background = WidgetPod::new(base);
             if let Panel::BookMenu { book } = panel {
                 if self.menu_from_details {
-                    background = WidgetPod::new(widgets::Overlay::new(
-                        Some(background),
-                        self.panel_widget(env, &t, &Panel::Details { book }),
-                        kaia_gfx::Rect::new(12, 12, 608, 816),
-                        "library:panel:close",
-                    ));
+                    background = WidgetPod::new(
+                        widgets::Overlay::new(
+                            Some(background),
+                            self.panel_widget(env, &t, &Panel::Details { book }),
+                            kaia_gfx::Rect::new(12, 12, 608, 816),
+                            "library:panel:close",
+                        )
+                        .dialog(),
+                    );
                 }
             }
-            WidgetPod::new(widgets::Overlay::new(
+            let dialog = !matches!(
+                panel,
+                Panel::Filter | Panel::Sort | Panel::Options | Panel::BookMenu { .. }
+            );
+            let overlay = widgets::Overlay::new(
                 Some(background),
                 self.panel_widget(env, &t, &panel),
                 rect,
                 "library:popup:close",
-            ))
+            );
+            WidgetPod::new(if dialog { overlay.dialog() } else { overlay })
         } else {
             WidgetPod::new(base)
         };
@@ -1537,6 +1571,18 @@ impl Surface for LibrarySurface {
             }
             return Outcome::NotMine;
         }
+        if let Some(book) = cmd
+            .strip_prefix("library:favorite:toggle:")
+            .and_then(|id| id.parse::<i64>().ok())
+        {
+            let (favorite, _) = data::marks(&env.services.library, book);
+            self.panel = Some(Panel::Details { book });
+            return self.on_command(
+                &format!("library:favorite:{book}:{}", if favorite { "off" } else { "on" }),
+                &[],
+                env,
+            );
+        }
         if cmd == "library:search:open" {
             self.panel = None;
         }
@@ -1575,7 +1621,7 @@ impl Surface for LibrarySurface {
         {
             self.menu_from_details = matches!(self.panel, Some(Panel::Details { .. }));
             self.menu_anchor = if self.menu_from_details {
-                kaia_gfx::Rect::new(228, 185, 230, 194)
+                kaia_gfx::Rect::new(228, 185, 270, 378)
             } else {
                 let rect = self
                     .window

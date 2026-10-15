@@ -146,27 +146,25 @@ fn figure_values(app: &App<HeadlessBackend>, book: &Book) -> Vec<(&'static str, 
 }
 
 #[test]
-fn the_statistics_button_needs_a_row_in_the_statistics_database() {
+fn statistics_are_reached_from_the_details_menu() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, _dir) = indexed("book-stats-button");
     let juliet = book_id(&app, "juliet.epub");
     open_library(&mut app);
 
     hold_for_details(&mut app, &format!("book-{juliet}"));
-    assert!(
-        app.find_rect(&key(&format!("library:stats:open:{juliet}")))
-            .is_none(),
-        "a book that was never opened has no statistics button"
-    );
+    assert!(app.find_rect(&format!("library-stats-open-{juliet}")).is_none());
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
+    assert!(app.find_rect(&format!("library-stats-open-{juliet}")).is_some());
+    app.key(kaia_input::Key::Back).unwrap();
     tap_key(&mut app, &key("library:panel:close"));
 
     let book = library_db(&app).book(juliet).unwrap().unwrap();
     write_statistics(&app, &book, &sessions());
     hold_for_details(&mut app, &format!("book-{juliet}"));
     assert!(
-        app.find_rect(&key(&format!("library:stats:open:{juliet}")))
-            .is_some(),
-        "a book with a statistics row has the button next to the rating"
+        app.find_rect("book-details-dialog").is_some(),
+        "the details still open for a book with recorded statistics"
     );
 }
 
@@ -184,6 +182,7 @@ fn the_page_shows_the_totals_of_the_statistics_database() {
     freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details_statistics.png"), 14);
 
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
     tap_key(&mut app, &key(&format!("library:stats:open:{juliet}")));
     for row in [
         "book-stats-time",
@@ -219,8 +218,7 @@ fn the_page_shows_the_totals_of_the_statistics_database() {
 
     tap_key(&mut app, &key("book-stats-back"));
     assert!(
-        app.find_rect(&key(&format!("library:stats:open:{juliet}")))
-            .is_some(),
+        app.find_rect("book-details-dialog").is_some(),
         "Back returns to the details"
     );
 }
@@ -235,6 +233,7 @@ fn a_book_with_no_reading_says_so() {
     open_library(&mut app);
 
     hold_for_details(&mut app, &format!("book-{leaves}"));
+    tap_key(&mut app, &format!("details-menu-{leaves}"));
     tap_key(&mut app, &key(&format!("library:stats:open:{leaves}")));
     assert!(
         app.find_rect("book-stats-empty").is_some(),

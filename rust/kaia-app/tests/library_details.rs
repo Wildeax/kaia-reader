@@ -144,6 +144,7 @@ fn a_book_with_no_series_shows_no_series_line() {
 
 /// Opens the rating sheet of a book from its details, then taps `action`.
 fn rate(app: &mut App<HeadlessBackend>, book: i64, stars: u8) {
+    tap_key(app, &format!("details-menu-{book}"));
     tap_key(app, &key(&format!("library:rating:open:{book}")));
     tap_key(app, &key(&format!("library:rating:{book}:{stars}")));
 }
@@ -156,6 +157,7 @@ fn the_rating_needs_the_book_opened_once_and_then_is_set_changed_and_cleared() {
     open_library(&mut app);
 
     hold_for_details(&mut app, &format!("book-{leaves}"));
+    tap_key(&mut app, &format!("details-menu-{leaves}"));
     tap_key(&mut app, &key(&format!("library:rating:open:{leaves}")));
     assert!(
         app.find_rect(&key(&format!("library:rating:{leaves}:4")))
@@ -177,8 +179,7 @@ fn the_rating_needs_the_book_opened_once_and_then_is_set_changed_and_cleared() {
     rate(&mut app, leaves, 4);
     assert_eq!(read_rating(&path).unwrap(), Some(4), "a tap sets four stars");
     assert!(
-        app.find_rect(&key(&format!("library:rating:open:{leaves}")))
-            .is_some(),
+        app.find_rect("book-details-dialog").is_some(),
         "the sheet returns to the details with the new rating"
     );
 
@@ -199,6 +200,7 @@ fn the_rating_needs_the_book_opened_once_and_then_is_set_changed_and_cleared() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{leaves}"));
     assert_eq!(read_rating(&path).unwrap(), Some(5), "the rating is kept on disk");
+    tap_key(&mut app, &format!("details-menu-{leaves}"));
     tap_key(&mut app, &key(&format!("library:rating:open:{leaves}")));
     assert!(app
         .find_rect(&key(&format!("library:rating:{leaves}:5")))
@@ -217,6 +219,7 @@ fn a_rating_written_by_an_import_shows_in_the_details() {
 
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
     tap_key(&mut app, &key(&format!("library:rating:open:{juliet}")));
     assert!(
         app.find_rect(&key(&format!("library:rating:{juliet}:3")))

@@ -1409,11 +1409,10 @@ pub fn search(
     clear_history: bool,
 ) -> Window {
     let t = &services.theme;
-    let field = WidgetPod::new(
-        TextField::new()
-            .with_text(text.to_string())
-            .placeholder(tr("Search this book")),
-    )
+    let field = WidgetPod::new(crate::surfaces::search::query_field(
+        text,
+        &tr("Search this book"),
+    ))
     .with_key("search-field")
     .focusable(true);
     let go = button(
@@ -1464,7 +1463,7 @@ pub fn search(
         entry,
         status_line,
         WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("search-results"), 1)),
-        WidgetPod::new(OnScreenKeyboard::new(&ENGLISH)),
+        crate::surfaces::search::keyboard(),
     ];
     sheet(
         services,

@@ -568,7 +568,7 @@ pub fn empty_group(t: &Theme, collections: bool) -> WidgetPod {
     )
 }
 
-struct EmptyBooks;
+pub struct EmptyBooks;
 impl kaia_ui::Widget for EmptyBooks {
     kaia_ui::impl_as_any!();
     fn layout(&mut self, _cx: &mut kaia_ui::LayoutCx, c: kaia_ui::geometry::Constraints) -> Size {
@@ -579,7 +579,7 @@ impl kaia_ui::Widget for EmptyBooks {
         let center = kaia_gfx::Point::new(b.x + b.w as i32 / 2, b.y + b.h as i32 / 2);
         cx.fill_circle(center, b.w.min(b.h) as f32 / 2.0, cx.color(Tone::Accent));
         let ink = cx.color(Tone::Surface);
-        let dp = |v| cx.theme.scale.dp(v);
+        let dp = |v: u32| b.w.min(b.h) * v / 252;
         for n in 0..3 {
             let r = kaia_gfx::Rect::new(
                 center.x - dp(62) as i32 + n * dp(42) as i32,
@@ -795,7 +795,7 @@ fn framed(t: &Theme, column: WidgetPod) -> WidgetPod {
         Frame::new(padded)
             .fill(Tone::Surface)
             .border(Tone::Ink, t.line.hairline)
-            .radius(t.radius.card),
+            .radius(0),
     )
 }
 
@@ -855,7 +855,18 @@ pub fn menu_row(
     } else {
         label.into()
     };
-    let mut row = vec![WidgetPod::new(Expanded::new(compact(t, &text, action, key), 1))];
+    let mut font = t.font.body.clone();
+    font.size = t.scale.dp(17) as f32 * t.text_scale;
+    let control = WidgetPod::new(
+        Pressable::new(WidgetPod::new(kaia_ui::components::Padding::new(
+            WidgetPod::new(Label::new(text, font, Tone::Ink)),
+            Insets::symmetric(t.scale.dp(8), t.scale.dp(8)),
+        )))
+        .tap(action, vec![]),
+    )
+    .with_key(key)
+    .focusable(true);
+    let mut row = vec![WidgetPod::new(Expanded::new(control, 1))];
     if let Some(count) = count {
         row.push(WidgetPod::new(Label::new(
             count.to_string(),
@@ -866,8 +877,18 @@ pub fn menu_row(
     WidgetPod::new(
         SizedBox::new(Some(WidgetPod::new(
             Column::new(vec![
-                WidgetPod::new(Row::new(row).cross_align(CrossAlign::Center)),
-                WidgetPod::new(kaia_ui::components::Divider::new(Tone::Divider)),
+                WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(
+                        Row::new(row).cross_align(CrossAlign::Center),
+                    )))
+                    .height(t.scale.dp(46) - 1),
+                ),
+                WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(kaia_ui::components::Divider::new(
+                        Tone::Divider,
+                    ))))
+                    .height(1),
+                ),
             ])
             .cross_align(CrossAlign::Stretch)
             .shrink(),
@@ -934,6 +955,16 @@ pub fn options_panel(t: &Theme, layout: View) -> WidgetPod {
 }
 
 pub fn book_menu(t: &Theme, book: i64, details: bool) -> WidgetPod {
+    book_menu_with(t, book, details, None, false)
+}
+
+pub fn book_menu_with(
+    t: &Theme,
+    book: i64,
+    details: bool,
+    remove: Option<String>,
+    favorite: bool,
+) -> WidgetPod {
     let mut rows = Vec::new();
     if !details {
         for (label, action) in [(tr("Read"), "open"), (tr("Details"), "details")] {
@@ -947,8 +978,30 @@ pub fn book_menu(t: &Theme, book: i64, details: bool) -> WidgetPod {
         (tr("Mark finished"), "finished"),
         (tr("Remove"), "delete"),
     ] {
-        let id = format!("library:book:{action}:{book}");
+        let (label, id) = if action == "collection" && remove.is_some() {
+            (tr("Remove from collection"), remove.clone().unwrap())
+        } else {
+            (label, format!("library:book:{action}:{book}"))
+        };
         rows.push(menu_row(t, &label, &id, &id.replace(':', "-"), false, None));
+    }
+    if details {
+        for (label, action) in [
+            (tr("Rating"), "rating:open"),
+            (tr("Tags"), "tags:open"),
+            (tr("Statistics"), "stats:open"),
+            (
+                if favorite {
+                    tr("Remove favorite")
+                } else {
+                    tr("Favorite")
+                },
+                "favorite:toggle",
+            ),
+        ] {
+            let id = format!("library:{action}:{book}");
+            rows.push(menu_row(t, &label, &id, &id.replace(':', "-"), false, None));
+        }
     }
     menu(t, rows)
 }
@@ -1369,12 +1422,12 @@ pub fn details_panel(
     book: &Book,
     cover: Option<Pixmap>,
     close: &str,
-    remove: Option<String>,
+    _remove: Option<String>,
     info: DetailsInfo<'_>,
 ) -> WidgetPod {
     let DetailsInfo {
-        rating,
-        statistics,
+        rating: _,
+        statistics: _,
         favorite,
         tags,
         metadata,
@@ -1538,27 +1591,12 @@ pub fn details_panel(
         .measure_single_row(),
     )
     .with_key("details-text");
-    let mut footer = vec![
-        rating_button(rating, id),
-        button(ButtonStyle::Text, &tr("Tags"), &format!("library:tags:open:{id}")),
-    ];
-    if statistics {
-        footer.push(button(
-            ButtonStyle::Text,
-            &tr("Statistics"),
-            &format!("library:stats:open:{id}"),
-        ));
-    }
-    if let Some(action) = remove {
-        footer.push(button(ButtonStyle::Text, &tr("Remove from collection"), &action));
-    }
     let body = Column::new(vec![
         WidgetPod::new(SizedBox::new(Some(header)).height(t.scale.dp(36))),
         upper,
         tabs,
         WidgetPod::new(kaia_ui::components::Divider::new(Tone::Divider)),
         WidgetPod::new(Expanded::new(content, 1)),
-        WidgetPod::new(Row::new(footer).gap(t.space.sm)),
     ])
     .gap(t.space.sm)
     .cross_align(CrossAlign::Stretch);
@@ -1571,21 +1609,6 @@ pub fn details_panel(
         .border(Tone::Ink, 2),
     )
     .with_key("book-details-dialog")
-}
-
-/// The rating button of the details: the current value. It opens the rating sheet.
-/// A book with no state file shows the same button, and the sheet explains why.
-fn rating_button(rating: Rating, book: i64) -> WidgetPod {
-    let label = match rating {
-        Rating::Stars(Some(n)) => tr_format(&tr("Rating: %1 of 5"), &[&n.to_string()]),
-        Rating::Stars(None) => tr("Not rated"),
-        Rating::Unopened | Rating::Unreadable => tr("Rating"),
-    };
-    button(
-        ButtonStyle::Secondary,
-        &label,
-        &format!("library:rating:open:{book}"),
-    )
 }
 
 /// The rating sheet: the current value, one button for each star count and
@@ -1691,5 +1714,24 @@ fn pair(t: &Theme, left: WidgetPod, right: WidgetPod) -> WidgetPod {
             WidgetPod::new(Expanded::new(right, 1)),
         ])
         .gap(t.space.sm),
+    )
+}
+
+/// Shared local empty state with Kaia's own book illustration.
+pub fn local_empty(t: &Theme, title: &str, detail: &str, top: u32) -> WidgetPod {
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(SizedBox::new(None).height(t.scale.dp(top))),
+            WidgetPod::new(
+                SizedBox::new(Some(WidgetPod::new(EmptyBooks)))
+                    .width(t.scale.dp(252))
+                    .height(t.scale.dp(252)),
+            ),
+            WidgetPod::new(Label::new(title, t.font.title.clone(), Tone::Ink)),
+            body_text(t, detail),
+        ])
+        .gap(t.scale.dp(22))
+        .cross_align(CrossAlign::Center)
+        .shrink(),
     )
 }

@@ -28,8 +28,8 @@ fn empty_library_shows_the_usb_instructions() {
 
     assert_eq!(app.top_route(), Some(&Route::Home));
     assert!(
-        app.find_rect("library").is_some(),
-        "Home shows the library counts"
+        app.find_rect("empty-library").is_some(),
+        "Home offers the local library without empty shelf cards"
     );
     assert!(
         app.find_rect("continue").is_none(),

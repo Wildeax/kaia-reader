@@ -41,6 +41,7 @@ impl Surface for MoreSurface {
         for (id, label, icon) in [
             ("favorites", tr("Favorites"), "star.empty"),
             ("notes", tr("Notes"), "bookmark"),
+            ("notebooks", tr("Notebooks"), "edit"),
             ("statistics", tr("Activity"), "book.opened"),
             ("experimental", tr("Experiments"), "appbar.tools"),
             ("settings", tr("Settings"), "appbar.settings"),
@@ -102,9 +103,8 @@ impl Surface for MoreSurface {
             "more:statistics" => Box::new(settings::section::SettingsSectionSurface::new(
                 "statistics".into(),
             )),
-            "more:experimental" => Box::new(settings::section::SettingsSectionSurface::new(
-                "experimental".into(),
-            )),
+            "more:notebooks" => Box::new(LocalPage::notebooks()),
+            "more:experimental" => Box::new(LocalPage::experiments()),
             "more:help" => {
                 env.dialog(Dialog::new(
                     env.theme(),
@@ -122,4 +122,213 @@ impl Surface for MoreSurface {
 
 fn rule() -> WidgetPod {
     WidgetPod::new(SizedBox::new(Some(WidgetPod::new(Divider::new(Tone::Ink)))).height(1))
+}
+
+/// Separate informational notebooks and the supported local experiments.
+pub struct LocalPage {
+    notebooks: bool,
+    intro: bool,
+}
+impl LocalPage {
+    pub fn notebooks() -> Self {
+        Self {
+            notebooks: true,
+            intro: true,
+        }
+    }
+    pub fn experiments() -> Self {
+        Self {
+            notebooks: false,
+            intro: false,
+        }
+    }
+}
+impl Surface for LocalPage {
+    fn route(&self) -> Route {
+        if self.notebooks {
+            Route::Notebooks
+        } else {
+            Route::Experiments
+        }
+    }
+    fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        use kaia_gfx::Rect;
+        use kaia_ui::components::{Frame, Paragraph};
+        use kaia_ui::controls::{Checkbox, IconButton};
+        use library::{views, widgets::Overlay};
+        let t = &env.services.theme;
+        let title = if self.notebooks {
+            tr("Notebooks")
+        } else {
+            tr("Experiments")
+        };
+        let head = WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(IconButton::new("chevron.left").on_action("back")).with_key("local-back"),
+                WidgetPod::new(Expanded::new(
+                    WidgetPod::new(Label::new(&title, t.font.title.clone(), Tone::Ink)),
+                    1,
+                )),
+            ])
+            .cross_align(CrossAlign::Center),
+        );
+        let root = if self.notebooks {
+            let page = Padding::new(
+                WidgetPod::new(
+                    Column::new(vec![
+                        head,
+                        rule(),
+                        views::local_empty(
+                            t,
+                            &tr("No notebooks"),
+                            &tr("Notebook creation is not available in this build."),
+                            45,
+                        ),
+                        views::compact(t, &tr("Book notes"), "local:notes", "notebooks-notes"),
+                        views::compact(t, &tr("About notebooks"), "local:intro", "notebooks-info"),
+                    ])
+                    .gap(t.space.md)
+                    .cross_align(CrossAlign::Stretch),
+                ),
+                Insets::symmetric(t.scale.dp(40), 0),
+            );
+            let base = WidgetPod::new(common::tabbed_page(env.services, page, NavItem::More));
+            if self.intro {
+                let close = WidgetPod::new(Row::new(vec![
+                    WidgetPod::new(Expanded::new(WidgetPod::new(SizedBox::new(None)), 1)),
+                    WidgetPod::new(IconButton::new("close").on_action("local:intro-close"))
+                        .with_key("notebooks-intro-close"),
+                ]));
+                let panel = views::sheet_with(
+                    t,
+                    close,
+                    vec![
+                        WidgetPod::new(
+                            SizedBox::new(Some(WidgetPod::new(Align::new(
+                                WidgetPod::new(
+                                    SizedBox::new(Some(WidgetPod::new(views::EmptyBooks)))
+                                        .width(t.scale.dp(155))
+                                        .height(t.scale.dp(155)),
+                                ),
+                                Alignment::Center,
+                                Alignment::Center,
+                            ))))
+                            .height(t.scale.dp(155)),
+                        ),
+                        WidgetPod::new(Paragraph::new(
+                            tr("A space for writing"),
+                            t.font.title.clone(),
+                            Tone::Ink,
+                        )),
+                        WidgetPod::new(Paragraph::new(
+                            tr("Freeform notebooks are not available in this build."),
+                            t.font.body.clone(),
+                            Tone::Ink,
+                        )),
+                        WidgetPod::new(Paragraph::new(
+                            tr("Your highlights and book notes are available in Notes."),
+                            t.font.body.clone(),
+                            Tone::Ink,
+                        )),
+                        views::compact(t, &tr("Book notes"), "local:notes", "notebooks-intro-notes"),
+                    ],
+                    t.scale.dp(16),
+                );
+                WidgetPod::new(
+                    Overlay::new(
+                        Some(base),
+                        panel,
+                        Rect::new(116, 145, 400, 550),
+                        "local:intro-close",
+                    )
+                    .dialog(),
+                )
+            } else {
+                base
+            }
+        } else {
+            let strip = |label: &str| {
+                WidgetPod::new(
+                    Frame::new(WidgetPod::new(Padding::new(
+                        WidgetPod::new(Label::new(label, t.font.caption.clone(), Tone::Ink)),
+                        Insets::symmetric(t.space.sm, t.space.xs),
+                    )))
+                    .fill(Tone::SurfaceAlt),
+                )
+            };
+            let flag = |label: &str, key: &str| {
+                WidgetPod::new(
+                    Checkbox::new(settings::keys::bool_or(&env.services.settings, key, false))
+                        .label(label)
+                        .on_action(format!("local:set:{key}")),
+                )
+                .with_key(key)
+            };
+            let mut rows = vec![
+                WidgetPod::new(Label::new(&title, t.font.title.clone(), Tone::Ink)),
+                views::body_text(t, &tr("Optional features for this device.")),
+                strip(&tr("Accessibility")),
+                views::compact(
+                    t,
+                    &tr("Large print settings"),
+                    "local:display",
+                    "experiments-large-print",
+                ),
+                strip(&tr("Experimental features")),
+                flag(&tr("Enable experiments"), settings::keys::EXPERIMENTAL_ENABLED),
+            ];
+            if settings::experiments::FLAGS.is_empty() {
+                rows.push(views::body_text(
+                    t,
+                    &tr("No experimental features in this build."),
+                ));
+            }
+            for flag_info in settings::experiments::FLAGS {
+                rows.push(flag(&settings::experiments::title(flag_info.id), flag_info.key));
+            }
+            let panel = views::sheet_with(
+                t,
+                WidgetPod::new(Row::new(vec![
+                    WidgetPod::new(Expanded::new(WidgetPod::new(SizedBox::new(None)), 1)),
+                    WidgetPod::new(IconButton::new("close").on_action("back")).with_key("experiments-close"),
+                ])),
+                rows,
+                t.scale.dp(20),
+            );
+            WidgetPod::new(Overlay::new(None, panel, Rect::new(12, 12, 608, 816), "back").dialog())
+        };
+        Some(common::root_window(
+            env.services,
+            env.screen,
+            SizedBox::new(Some(root)),
+        ))
+    }
+    fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        match cmd {
+            "local:intro" => self.intro = true,
+            "local:intro-close" => self.intro = false,
+            "surface:back" if self.intro => self.intro = false,
+            "local:notes" => return Outcome::Navigate(Nav::Push(Box::new(notes::NotesSurface))),
+            "local:display" => {
+                return Outcome::Navigate(Nav::Push(Box::new(
+                    settings::section::SettingsSectionSurface::new("display".into()),
+                )))
+            }
+            _ => {
+                let Some(key) = cmd.strip_prefix("local:set:") else {
+                    return Outcome::NotMine;
+                };
+                if key != settings::keys::EXPERIMENTAL_ENABLED
+                    && !settings::experiments::is_flag_key(settings::experiments::FLAGS, key)
+                {
+                    return Outcome::NotMine;
+                }
+                if let Some(on) = args.first().and_then(Value::as_bool) {
+                    env.services.settings.save(key, Value::Bool(on));
+                    settings::save(env);
+                }
+            }
+        }
+        Outcome::Rebuild
+    }
 }

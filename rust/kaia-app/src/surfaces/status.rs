@@ -236,7 +236,8 @@ impl Widget for DeviceIcon {
 
 pub(crate) fn command(id: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
     let section = match id {
-        "status:light" | "status:wifi" => {
+        "status:wifi" => return Outcome::Navigate(Nav::Push(Box::new(super::wifi::WifiSurface::default()))),
+        "status:light" => {
             let light = id == "status:light";
             let panel = if light {
                 light_panel(env.services)
@@ -274,7 +275,9 @@ pub(crate) fn command(id: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Out
             return Outcome::Handled;
         }
         "status:power" => "device",
-        "status:search" => return Outcome::Navigate(Nav::Push(Box::new(library::LibrarySurface::search()))),
+        "status:search" => {
+            return Outcome::Navigate(Nav::Push(Box::new(super::search::SearchSurface::default())))
+        }
         "status:battery" => {
             let popup = BatteryPopup::new(env.services);
             let window = common::window(env.services, env.screen, popup);

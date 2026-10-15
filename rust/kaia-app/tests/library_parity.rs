@@ -43,17 +43,14 @@ fn details_golden(app: &App<HeadlessBackend>, id: i64, menu: bool, name: &str) {
         None,
         info,
     );
-    let base = WidgetPod::new(Overlay::new(
-        None,
-        details,
-        Rect::new(12, 12, 608, 816),
-        "library:popup:close",
-    ));
+    let base = WidgetPod::new(
+        Overlay::new(None, details, Rect::new(12, 12, 608, 816), "library:popup:close").dialog(),
+    );
     let root = if menu {
         WidgetPod::new(Overlay::new(
             Some(base),
             views::book_menu(&services.theme, id, true),
-            Rect::new(228, 185, 230, 194),
+            Rect::new(228, 185, 270, 378),
             "library:popup:close",
         ))
     } else {
@@ -93,10 +90,10 @@ fn book_menu_and_details_keep_the_caller_and_metadata_tab() {
     tap_key(&mut app, &format!("details-menu-{id}"));
     tap_key(&mut app, &format!("library-book-unread-{id}"));
     assert_eq!(library_db(&app).book(id).unwrap().unwrap().status, Status::New);
-    assert!(
-        app.find_rect("library-rating-open-1").is_some()
-            || app.find_rect(&format!("library-rating-open-{id}")).is_some()
-    );
+    assert!(app.find_rect(&format!("library-rating-open-{id}")).is_none());
+    tap_key(&mut app, &format!("details-menu-{id}"));
+    assert!(app.find_rect(&format!("library-rating-open-{id}")).is_some());
+    app.key(Key::Back).unwrap();
     app.key(Key::Back).unwrap();
     assert!(app.find_rect("book-details-dialog").is_none());
     assert_eq!(app.top_route(), Some(&Route::Library { page: 0 }));

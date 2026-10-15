@@ -1021,10 +1021,6 @@ impl<B: Backend> App<B> {
             }
             _ => {}
         }
-        if id == "status:search" && matches!(self.top_route(), Some(Route::Library { .. })) {
-            self.route_command(self.router.depth() - 1, "library:search:open", &[]);
-            return;
-        }
         if id.starts_with("status:") {
             if matches!(
                 id,
