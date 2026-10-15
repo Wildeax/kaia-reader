@@ -71,7 +71,7 @@ fn turn_to_text(app: &mut App<HeadlessBackend>) {
 
 /// A point on a word of the text page that `turn_to_text` shows.
 fn word_point() -> Point {
-    Point::new(200, 120)
+    Point::new(200, 250)
 }
 
 /// Centre of the screen, for a tap that opens the overlay.
@@ -264,7 +264,7 @@ fn a_new_highlight_uses_the_remembered_choice_and_koreader_defaults_without_one(
     app.services_mut()
         .settings
         .save("reading.highlight_drawer", Value::from("strikeout"));
-    hold_at(&mut app, Point::new(200, 260));
+    hold_at(&mut app, Point::new(200, 400));
     tap_key(&mut app, "color-blue");
     wait_reader(&mut app);
     let all = highlights(&dir);

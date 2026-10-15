@@ -304,11 +304,11 @@ fn plugin_font_size_round_trip_keeps_the_native_default() {
     });
     wait_reader(&mut app);
     works(&app, "fontprobe");
-    assert_eq!(value(&app, "fontprobe", "read_size").as_f64(), Some(22.0));
-    assert_eq!(value(&app, "fontprobe", "configurable_size").as_f64(), Some(22.0));
+    assert_eq!(value(&app, "fontprobe", "read_size").as_f64(), Some(36.0));
+    assert_eq!(value(&app, "fontprobe", "configurable_size").as_f64(), Some(36.0));
     let font = state_layout_font(&mut app, id);
-    assert_eq!(font, px(&app, 22.0));
-    assert_eq!(font, 47.0, "the Libra Colour default");
+    assert_eq!(font, px(&app, 36.0));
+    assert_eq!(font, 76.0, "the Libra Colour default");
     app.shutdown();
 }
 
@@ -366,6 +366,6 @@ fn directory_defaults_apply_only_to_a_new_book() {
     app.process(vec![]).unwrap();
     wait_reader(&mut app);
     works(&app, "docsettingtweak");
-    assert_eq!(state_layout_font(&mut app, read), px(&app, 22.0));
+    assert_eq!(state_layout_font(&mut app, read), px(&app, 36.0));
     app.shutdown();
 }

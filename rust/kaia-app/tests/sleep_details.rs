@@ -81,7 +81,7 @@ fn details_is_a_sleep_screen_choice_after_the_cover() {
             "Blank".to_string()
         ]
     );
-    assert_eq!(selected, 0, "the cover is the default");
+    assert_eq!(selected, 1, "the cover with details is the default");
 }
 
 #[test]

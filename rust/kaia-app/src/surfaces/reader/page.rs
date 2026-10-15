@@ -419,7 +419,7 @@ impl Widget for PageView {
                 self.footer_height,
             );
             cx.fill_rect(rect, surface);
-            let style = cx.theme.style(&cx.theme.font.caption, Tone::InkSecondary);
+            let style = super::footer::strip_style(cx.theme);
             let margin = cx.theme.space.lg;
             let text = cx.fonts.layout(
                 &self.footer,
@@ -444,7 +444,7 @@ impl Widget for PageView {
             }
             let rect = Rect::new(bounds.x, bounds.y, bounds.w, self.header_height);
             cx.fill_rect(rect, surface);
-            let style = cx.theme.style(&cx.theme.font.caption, Tone::InkSecondary);
+            let style = super::footer::strip_style(cx.theme);
             let margin = cx.theme.space.lg;
             let available = bounds.w.saturating_sub(2 * margin);
             let width = if !self.header.0.is_empty() && !self.header.1.is_empty() {
@@ -454,7 +454,9 @@ impl Widget for PageView {
             };
             for (value, right) in [(&self.header.0, false), (&self.header.1, true)] {
                 let text = cx.fonts.layout(value, &style, width, Some(1), true);
-                let x = if right {
+                let x = if self.header.0.is_empty() || self.header.1.is_empty() {
+                    bounds.x + bounds.w.saturating_sub(text.width) as i32 / 2
+                } else if right {
                     bounds.x + bounds.w.saturating_sub(margin + text.width) as i32
                 } else {
                     bounds.x + margin as i32

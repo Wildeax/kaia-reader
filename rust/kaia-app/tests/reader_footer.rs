@@ -172,10 +172,8 @@ fn the_persistent_footer_reserves_space_and_updates_after_a_page_turn() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     let (before, strip, page) = page_state(&mut app);
-    let theme = &app.services().theme;
-    let caption = theme.style(&theme.font.caption, kaia_ui::Tone::InkSecondary);
-    assert_eq!(strip, caption.line_height.ceil() as u32 + theme.space.sm);
-    assert_eq!(page.height(), app.screen().h - strip);
+    assert_eq!(strip, 120, "the capture centres the footer in a 120 px strip");
+    assert_eq!(page.height(), app.screen().h - strip - header_state(&mut app).1);
     assert!(before.starts_with("Page 9 of "), "{before}");
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
@@ -186,7 +184,7 @@ fn the_persistent_footer_reserves_space_and_updates_after_a_page_turn() {
 }
 
 #[test]
-fn changing_items_keeps_the_layout_and_all_off_restores_full_height() {
+fn changing_footer_items_keeps_the_layout_and_all_off_keeps_the_header() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("footer-layout-toggle");
     let mut app = open_reader("juliet.epub", &dir);
@@ -205,11 +203,14 @@ fn changing_items_keeps_the_layout_and_all_off_restores_full_height() {
     let (text, no_strip, full_page) = page_state(&mut app);
     assert_eq!(no_strip, 0);
     assert!(text.is_empty());
-    assert_eq!(full_page.height(), app.screen().h);
+    assert_eq!(full_page.height(), app.screen().h - header_state(&mut app).1);
     set_item(&mut app, "page", true);
     let (_, restored_strip, reduced_page) = page_state(&mut app);
     assert_eq!(restored_strip, strip);
-    assert_eq!(reduced_page.height(), app.screen().h - strip);
+    assert_eq!(
+        reduced_page.height(),
+        app.screen().h - strip - header_state(&mut app).1
+    );
 }
 
 #[test]
@@ -312,6 +313,8 @@ fn header_and_footer_reserve_both_strips_and_restore_height() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("header-height");
     let mut app = open_reader("juliet.epub", &dir);
+    assert!(header_state(&mut app).1 > 0, "the chapter header defaults on");
+    set_header(&mut app, "chapter", false);
     assert_eq!(header_state(&mut app), ((String::new(), String::new()), 0));
     let (_, footer, _) = page_state(&mut app);
     set_header(&mut app, "title", true);
@@ -394,6 +397,13 @@ fn header_switches_save_and_reopen_with_both_groups_visible() {
     }
     for item in ["title", "chapter", "clock", "battery"] {
         tap_key(&mut app, &format!("header-{item}"));
+        if item == "chapter" {
+            assert_eq!(
+                saved_settings(&dir).read("reading.header_chapter").as_bool(),
+                Some(false)
+            );
+            tap_key(&mut app, "header-chapter");
+        }
         assert_eq!(
             saved_settings(&dir)
                 .read(format!("reading.header_{item}"))
@@ -419,6 +429,7 @@ fn header_fixed_pages_fit_between_both_strips() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("header-pdf");
     let mut app = open_reader("2col.pdf", &dir);
+    set_header(&mut app, "chapter", false);
     let (_, footer, before) = page_state(&mut app);
     set_header(&mut app, "title", true);
     let header = header_state(&mut app).1;

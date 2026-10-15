@@ -940,6 +940,15 @@ mod tests {
     }
 
     #[test]
+    fn panel_scaled_fonts_above_72_pixels_are_not_silently_clamped() {
+        let counts: Vec<_> = [72.0, 76.0, 84.0]
+            .into_iter()
+            .map(|size| open_at(&juliet(), 1264.0, 1680.0, size).page_count())
+            .collect();
+        assert!(counts.windows(2).all(|p| p[0] < p[1]), "page counts: {counts:?}");
+    }
+
+    #[test]
     fn set_layout_rejects_bad_values() {
         let mut doc = CreDocument::open(&juliet()).unwrap();
         assert!(matches!(
@@ -1023,6 +1032,24 @@ mod tests {
             let full = doc.char_boxes(page, &xp, None).expect("full walk");
             let first = doc.first_char_box(page, &xp).expect("first box");
             assert_eq!(first, full.first().copied(), "page {page} xpointer {xp}");
+        }
+    }
+
+    #[test]
+    fn large_text_page_bookmarks_round_trip() {
+        let mut doc = CreDocument::open(&juliet()).unwrap();
+        let mut layout = Layout::new(1264.0, 1568.0, 76.0);
+        layout.margins = Some(crate::Margins {
+            left: 64.0,
+            right: 64.0,
+            top: 32.0,
+            bottom: 32.0,
+        });
+        layout.line_height = Some(1.35);
+        doc.set_layout(&layout).unwrap();
+        for page in 0..8 {
+            let xp = doc.page_xpointer(page).unwrap();
+            assert_eq!(doc.xpointer_page(&xp).unwrap(), Some(page), "page {page}, {xp}");
         }
     }
 

@@ -66,17 +66,42 @@ pub(crate) fn koreader_px(screen: kaia_gfx::Size, units: f64) -> f32 {
     (units * f64::from(screen.w.min(screen.h)) / 600.0).ceil() as f32
 }
 
-/// The text layout for a book with no saved layout: KOReader's defaults, scaled
-/// the way KOReader scales them. The font is 22 units, the side margins 10 units
-/// and the top and bottom margins 15 units. Line spacing (100 %) and the other
-/// options keep the defaults of `kaia_book`. A book with a saved layout keeps it.
+/// The layout for a book without saved state, calibrated against the Nickel
+/// EPUB capture. EPUB and KEPUB share the same open-font fallback.
+/// Global user values take precedence; BookSession preserves saved book layouts.
+pub(crate) fn nickel_default_layout(screen: kaia_gfx::Size, settings: &kaia_events::Settings) -> TextLayout {
+    let mut layout = layout_with_defaults(
+        screen,
+        settings,
+        keys::DEFAULT_FONT_SIZE,
+        keys::DEFAULT_LINE_SPACING,
+        keys::DEFAULT_SIDE_MARGIN,
+        keys::DEFAULT_VERTICAL_MARGIN,
+    );
+    // Alignment remains publisher-controlled. Do not inject automatic hyphenation.
+    layout.hyphenation = false;
+    layout
+}
+
+/// Preserve the source application's fallbacks when importing Lua book state.
 pub(crate) fn koreader_default_layout(
     screen: kaia_gfx::Size,
     settings: &kaia_events::Settings,
 ) -> TextLayout {
+    layout_with_defaults(screen, settings, 22.0, 1.0, 10.0, 15.0)
+}
+
+fn layout_with_defaults(
+    screen: kaia_gfx::Size,
+    settings: &kaia_events::Settings,
+    default_font_size: f64,
+    default_line_spacing: f64,
+    default_side_margin: f64,
+    default_vertical_margin: f64,
+) -> TextLayout {
     let base = TextLayout::default();
     let font_family = settings
-        .read("reading.font_family")
+        .read(keys::READING_FONT_FAMILY)
         .as_str()
         .filter(|s| !s.is_empty())
         .map(str::to_owned);
@@ -95,27 +120,27 @@ pub(crate) fn koreader_default_layout(
     };
     TextLayout {
         line_spacing: settings
-            .read("reading.line_spacing")
+            .read(keys::READING_LINE_SPACING)
             .as_f64()
             .filter(|n| n.is_finite())
-            .unwrap_or(1.0)
+            .unwrap_or(default_line_spacing)
             .clamp(0.5, 3.0) as f32,
         font_size: koreader_px(
             screen,
             settings
-                .read("reading.font_size")
+                .read(keys::READING_FONT_SIZE)
                 .as_f64()
                 .filter(|n| n.is_finite())
-                .unwrap_or(22.0)
+                .unwrap_or(default_font_size)
                 .clamp(12.0, 40.0),
         ),
         font_family,
         font_weight,
         margins: Margins {
-            top: margin("reading.margin_top", 15.0),
-            right: margin("reading.margin_right", 10.0),
-            bottom: margin("reading.margin_bottom", 15.0),
-            left: margin("reading.margin_left", 10.0),
+            top: margin(keys::READING_MARGIN_TOP, default_vertical_margin),
+            right: margin(keys::READING_MARGIN_RIGHT, default_side_margin),
+            bottom: margin(keys::READING_MARGIN_BOTTOM, default_vertical_margin),
+            left: margin(keys::READING_MARGIN_LEFT, default_side_margin),
         },
         ..base
     }
@@ -518,7 +543,7 @@ impl Surface for ReaderSurface {
         let footer = footer::Footer::from_settings(&env.services.settings);
         let header = header::Header::from_settings(&env.services.settings);
         opts.viewport = header.viewport(&footer, screen, env.theme());
-        opts.default_layout = koreader_default_layout(screen, &env.services.settings);
+        opts.default_layout = nickel_default_layout(screen, &env.services.settings);
         opts.pixel_format = env.services.theme.pixel_format();
         opts.ui_language = Some(env.services.language.clone());
         let color_panel = env.services.theme.color_panel;

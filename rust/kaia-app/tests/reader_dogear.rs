@@ -58,10 +58,14 @@ fn hold_at(app: &mut App<HeadlessBackend>, p: Point) {
     wait_reader(app);
 }
 
-/// The number of dark pixels in the `size` square at the top right corner of the frame.
-fn dark_in_corner(app: &App<HeadlessBackend>, size: i32) -> usize {
+/// The number of dark pixels in the `size` square at the top right corner of the page, below the header.
+fn dark_in_corner(app: &mut App<HeadlessBackend>, size: i32) -> usize {
+    let mut top = 0;
+    app.update_top::<kaia_app::surfaces::reader::page::PageView, _>("reader-page", |view, _| {
+        top = view.header_height as i32;
+    });
     let w = app.screen().w as i32;
-    dark_in(app, w - size, 0, size, size)
+    dark_in(app, w - size, top, size, size)
 }
 
 /// The number of dark pixels in a rectangle of the frame.
@@ -107,7 +111,7 @@ fn a_tap_in_the_top_right_corner_bookmarks_the_page_and_draws_the_dog_ear() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     let (w, _) = (app.screen().w as i32, app.screen().h as i32);
-    let before = dark_in_corner(&app, 20);
+    let before = dark_in_corner(&mut app, 20);
     assert_eq!(bookmark_count(&mut app), 0, "no bookmark yet");
 
     app.tap(Point::new(w - 10, 10)).unwrap();
@@ -116,7 +120,7 @@ fn a_tap_in_the_top_right_corner_bookmarks_the_page_and_draws_the_dog_ear() {
         matches!(app.top_route(), Some(Route::Reader { .. })),
         "the corner does not open the overlay"
     );
-    let marked = dark_in_corner(&app, 20);
+    let marked = dark_in_corner(&mut app, 20);
     assert!(
         marked > before + 100,
         "the dog-ear is drawn: {before} dark pixels before, {marked} after"
@@ -126,7 +130,7 @@ fn a_tap_in_the_top_right_corner_bookmarks_the_page_and_draws_the_dog_ear() {
     // A second tap in the corner removes the bookmark and the dog-ear.
     app.tap(Point::new(w - 10, 10)).unwrap();
     wait_reader(&mut app);
-    assert_eq!(dark_in_corner(&app, 20), before, "the corner is plain again");
+    assert_eq!(dark_in_corner(&mut app, 20), before, "the corner is plain again");
     assert_eq!(bookmark_count(&mut app), 0, "the bookmark is removed");
 }
 
@@ -154,7 +158,7 @@ fn the_bookmark_button_also_draws_the_dog_ear() {
     let mut app = open_reader("juliet.epub", &dir);
     turn_to_text(&mut app);
     let w = app.screen().w as i32;
-    let before = dark_in_corner(&app, 20);
+    let before = dark_in_corner(&mut app, 20);
 
     open_overlay(&mut app);
     tap_key(&mut app, "overlay-bookmark");
@@ -162,7 +166,7 @@ fn the_bookmark_button_also_draws_the_dog_ear() {
     app.tap(Point::new(w / 2, app.screen().h as i32 / 2)).unwrap();
     wait_reader(&mut app);
     assert!(
-        dark_in_corner(&app, 20) > before + 100,
+        dark_in_corner(&mut app, 20) > before + 100,
         "the page shows the dog-ear after the bookmark button"
     );
 }

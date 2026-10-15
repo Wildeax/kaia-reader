@@ -279,7 +279,7 @@ fn both_idle_pickers_offer_the_same_numeric_values() {
         row,
         Entry::Radio {
             key: keys::DEVICE_SLEEP_MINUTES,
-            selected: 3,
+            selected: 1,
             ..
         }
     )));
@@ -439,10 +439,13 @@ fn rotation_lays_out_an_open_book_for_the_new_screen() {
     };
     let portrait = app.screen();
     let (size, (_, pages)) = shown(&mut app);
-    // The page fills the screen above the footer strip.
+    // The page fills the screen between the chapter header and footer.
     assert_eq!(size.w, portrait.w);
     let strip = portrait.h - size.h;
-    assert!(strip > 0 && strip < 100, "footer strip {strip} px");
+    app.update_top::<PageView, _>("reader-page", |view, _| {
+        assert!(view.header_height > 0 && view.footer_height > 0);
+        assert_eq!(strip, view.header_height + view.footer_height);
+    });
     // The settings picker rotates without closing a sheet, so the reader stays on top.
     app.command("settings:pick:display.rotation", &[Value::Number(1.0)]);
     app.process(vec![]).unwrap();

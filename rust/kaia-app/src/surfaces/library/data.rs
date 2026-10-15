@@ -43,7 +43,7 @@ impl Default for Prefs {
         Prefs {
             view: View::Covers,
             layout: View::Covers,
-            sort: SortChoice::Title,
+            sort: SortChoice::Read,
             chip: None,
             collection: None,
             source: None,
@@ -74,12 +74,13 @@ impl Prefs {
             _ => View::Covers,
         };
         let sort = match text("library.sort").as_deref() {
+            Some("title") => SortChoice::Title,
             Some("author") => SortChoice::Author,
             Some("read") => SortChoice::Read,
             Some("added") => SortChoice::Added,
             Some("progress") => SortChoice::Progress,
             Some("series") => SortChoice::Series,
-            _ => SortChoice::Title,
+            _ => SortChoice::Read,
         };
         let chip = match text("library.chip").as_deref() {
             Some("reading") => Some(Chip::Reading),

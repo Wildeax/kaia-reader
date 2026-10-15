@@ -182,7 +182,7 @@ impl<B: Backend> App<B> {
         settings::keys::text_or(
             &self.services.settings,
             settings::keys::DEVICE_SLEEP_SCREEN,
-            "cover",
+            settings::keys::DEFAULT_SLEEP_SCREEN,
         ) == settings::keys::SLEEP_SCREEN_DETAILS
     }
 
@@ -384,7 +384,11 @@ impl<B: Backend> App<B> {
                 0.0,
                 !self.sleeping() && !self.power.standby,
             ),
-            (settings::keys::DEVICE_SLEEP_MINUTES, 15.0, !self.sleeping()),
+            (
+                settings::keys::DEVICE_SLEEP_MINUTES,
+                settings::keys::DEFAULT_SLEEP_MINUTES,
+                !self.sleeping(),
+            ),
             (settings::keys::DEVICE_POWER_OFF_MINUTES, 0.0, true),
         ] {
             if enabled {
@@ -450,7 +454,10 @@ impl<B: Backend> App<B> {
             self.request_power_off();
         } else if !self.sleeping()
             && self
-                .idle_timeout(settings::keys::DEVICE_SLEEP_MINUTES, 15.0)
+                .idle_timeout(
+                    settings::keys::DEVICE_SLEEP_MINUTES,
+                    settings::keys::DEFAULT_SLEEP_MINUTES,
+                )
                 .is_some_and(|timeout| idle >= timeout)
         {
             self.sleep();
@@ -1213,6 +1220,22 @@ mod idle_tests {
     fn advance(app: &mut App<HeadlessBackend>, clock: &ManualClock, secs: u64) {
         clock.advance(Duration::from_secs(secs));
         app.process(Vec::new()).unwrap();
+    }
+
+    #[test]
+    fn fresh_app_sleeps_after_five_idle_minutes() {
+        let (_dir, mut app, clock) = app();
+        assert!(app
+            .services
+            .settings
+            .read(settings::keys::DEVICE_SLEEP_MINUTES)
+            .as_f64()
+            .is_none());
+        advance(&mut app, &clock, 299);
+        assert!(!app.sleeping());
+        assert_eq!(app.idle_wait(), Duration::from_secs(1));
+        advance(&mut app, &clock, 1);
+        assert!(app.sleeping());
     }
 
     #[test]

@@ -177,18 +177,18 @@ fn spread(app: &mut App<HeadlessBackend>, clock: &ManualClock) {
 fn pinch_shrinks_and_spread_grows_the_text_in_two_unit_steps() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, clock) = reader("pinch-steps");
-    // The default is 22 units, which the app stores as 47 px on this panel.
-    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(22.0));
+    // The default is 36 units, which the app stores as 76 px on this panel.
+    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(36.0));
 
     pinch(&mut app, &clock);
-    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(20.0));
+    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(34.0));
     pinch(&mut app, &clock);
-    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(18.0));
+    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(32.0));
 
     spread(&mut app, &clock);
-    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(20.0));
+    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(34.0));
     spread(&mut app, &clock);
-    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(22.0));
+    assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(36.0));
     assert!(app.unknown_commands().is_empty());
 }
 
@@ -197,8 +197,8 @@ fn pinch_stops_at_twelve_units_and_spread_stops_at_forty() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, clock) = reader("pinch-limits");
 
-    // 22 to 12 is five steps of two. Further pinches leave the size at 12.
-    for _ in 0..7 {
+    // 36 to 12 is twelve steps of two. Further pinches leave the size at 12.
+    for _ in 0..14 {
         pinch(&mut app, &clock);
     }
     assert_eq!(saved_px(&mut app, "juliet.epub"), px_for(12.0));
