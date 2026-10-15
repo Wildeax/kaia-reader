@@ -50,6 +50,7 @@
 //! | `ui.language` | string | unset (system language, else English) | Language tag of the screens, such as `fr`. Set from the language page. |
 //! | `device.sleep_screen` | string | `cover` | Sleep screen: `cover` (the current book) or `blank`. |
 //! | `device.time_zone` | string | unset (system zone) | IANA name of the zone for Kaia's clock, such as `America/Bogota`. Set from the Time zone page. Kaia sets `TZ` at startup, so the footer clock, natural light and statistics dates follow it. An unknown name counts as unset. See `kaia_platform::timezone`. |
+//! | `device.network_time` | bool | false | Sets the clock from pool.ntp.org while Wi-Fi is connected and airplane mode is off, at most every six hours. Off sends no packet. Set from the Device page. On a Kobo, BusyBox `ntpd` sets the clock. On the desktop, Kaia reports the offset and does not change the clock. See `kaia_platform::ntp`. |
 //! | `display.large_print` | bool | false | Large print: every font size times `theme::LARGE_PRINT_SCALE`. |
 //! | `dictionary.allow_downloads` | bool | false | Shows the dictionary download catalog and permits explicitly requested downloads. |
 //! | `network.airplane_mode` | bool | false | Airplane mode: Wi-Fi stays off and Kaia does not turn it on. Set from quick settings. |
@@ -134,6 +135,8 @@ pub const DEVICE_SLEEP_MINUTES: &str = "device.sleep_minutes";
 pub const DEVICE_SLEEP_SCREEN: &str = "device.sleep_screen";
 /// IANA name of the zone for Kaia's clock. Unset means the system zone.
 pub const DEVICE_TIME_ZONE: &str = "device.time_zone";
+/// Sets the clock from pool.ntp.org while Wi-Fi is on. Off by default. See `clock`.
+pub const DEVICE_NETWORK_TIME: &str = "device.network_time";
 pub const UI_LANGUAGE: &str = crate::i18n::SETTING;
 pub const DISPLAY_LARGE_PRINT: &str = "display.large_print";
 pub const NETWORK_AIRPLANE_MODE: &str = "network.airplane_mode";
@@ -176,6 +179,11 @@ pub fn bool_or(settings: &Settings, key: &str, default: bool) -> bool {
 /// Whether airplane mode is on. Kaia must not turn Wi-Fi on while it is.
 pub fn airplane_mode(settings: &Settings) -> bool {
     bool_or(settings, NETWORK_AIRPLANE_MODE, false)
+}
+
+/// Whether the clock follows pool.ntp.org. Off unless the user turns it on.
+pub fn network_time(settings: &Settings) -> bool {
+    bool_or(settings, DEVICE_NETWORK_TIME, false)
 }
 
 pub fn number_or(settings: &Settings, key: &str, default: f64) -> f64 {

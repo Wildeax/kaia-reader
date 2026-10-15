@@ -29,6 +29,8 @@ The rating is `summary.rating`, 1 to 5, or absent. The Library's book details wr
 | Word list | `kaia-storage` | `<data dir>/kaia/kaia.sqlite3`, table `words`, see schema versions 3 and 4 |
 | Reading statistics and imported Kobo sessions | `kaia-stats` | `<data dir>/statistics.sqlite3`, including `nickel_sessions` |
 | App settings | `kaia-app` | `<data dir>/settings.json` |
+| Screen lock PIN (salt and hash) | `kaia-app` | `<data dir>/pin`, see "Screen lock PIN" |
+| Screen lock wrong tries and wait | `kaia-app` | `<data dir>/pin-attempts` |
 
 KOReader sidecars (`.sdr/metadata.*.lua`, docsettings folders, `history.lua`, collections) are import sources only. Kaia reads them once when it has no state for a book and never writes them. Annotations keep KOReader's field names so the Lua plugin layer (R7) can present them to plugins.
 
@@ -261,6 +263,58 @@ CREngine positions and annotation anchors from real Lua sidecars, font availabil
 frontlight and warmth values, page key inversion, dictionary order, and plugin
 settings after restart. The preview copies assets and uses temporary databases;
 measure free-space needs and import time on a device-sized library.
+
+## Screen lock PIN
+
+`<data dir>/pin` holds the lock. On the Kobo the data dir is `/mnt/onboard/.kaia`, so the file is `.kaia/pin`. It is plain text:
+
+```text
+# Kaia screen lock. Delete this file to remove the lock.
+device.pin_kdf=pbkdf2-sha256
+device.pin_rounds=100000
+device.pin_salt=<32 hex digits, 16 random bytes>
+device.pin_hash=<64 hex digits, PBKDF2-HMAC-SHA256 of the digits with the salt>
+```
+
+The digits are never written. Each save makes a new salt. The file is the only copy of the hash, so `settings.json` holds no PIN key. Deleting `pin` removes the lock. That is the recovery path that the lock pad and Settings describe.
+
+`<data dir>/pin-attempts` holds `wrong=<count>` and `until=<Unix seconds>`. It counts the wrong tries since the last right PIN. Deleting it resets the count. A file that does not parse counts as no tries.
+
+Rules: 4 to 8 digits. The lock starts at a wake and at app start. Five wrong tries start a 30-second wait. Each later five wrong tries double the wait, up to 15 minutes. A wrong try during a wait does not count. A file that exists but does not parse keeps the lock on until someone deletes it.
+
+## Reset and erase
+
+Settings, Advanced has two actions. Each opens a page with a text field. The
+destructive button stays disabled until the typed word matches: RESET or ERASE,
+in the language in use. Case and spaces at either end do not count. Both actions
+touch only Kaia's data folder, which is `.kaia` on the Kobo and the platform
+folder on the desktop (`rust/kaia-platform/src/paths.rs`). Book files, `.kobo`,
+`.adds/koreader` and the Lua app's `.adds/kaia` are never touched.
+
+| Action | Deletes | Keeps |
+|---|---|---|
+| Reset settings | `settings.json` and `settings.json.old`. Before they go, a copy is written to `settings.json.before-reset`. The next reset replaces that copy. | Reading state, the library index, statistics, ink, words, fonts, dictionaries and the cache. |
+| Erase all Kaia data | Everything in the data folder. | Everything outside it. |
+
+Reset settings writes the copy first, removes `settings.json.old`, and removes
+`settings.json` last. A stop before the last removal leaves the settings in
+effect. The settings hold the sync device id and the sync login key, so after a
+reset the device gets a new sync id and the login must be typed again.
+
+Erase moves the data folder aside to `.kaia.erasing-<seconds>-<nanoseconds>` in
+the same parent folder, creates an empty data folder, and deletes the moved
+folder. Startup finishes any moved folder it finds. It runs after the data folder
+lock is taken and before the folder is read. Startup deletes only folders whose
+names are the data folder's name followed by `.erasing-`. Files with that name
+are left alone.
+
+Deletion opens each entry through a handle on its parent folder with
+`O_NOFOLLOW`. A symbolic link in the data folder is removed as a link, and its
+target stays. Erase refuses when the data folder is itself a link or a file.
+
+After either action the app keeps running on empty settings and the library
+index is reopened in the new folder. Pending sync updates are dropped, not sent,
+when erase runs. The app asks for a restart. Device checks are still pending.
 
 ## Location
 

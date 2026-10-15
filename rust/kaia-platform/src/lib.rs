@@ -13,6 +13,7 @@
 //! - [`plan`]: step lists for sequences (suspend, standby, Wi-Fi, USB handover).
 //! - [`battery`], [`frontlight`], [`network`], [`power`], [`usb`], [`events`]:
 //!   the device services.
+//! - [`ntp`]: network time, the SNTP client and the Kobo clock steps.
 //! - [`device`], [`paths`]: identity and locations.
 //! - [`platform`]: the bundle and [`platform::Platform::detect`].
 //!
@@ -30,8 +31,10 @@ pub mod events;
 pub mod frontlight;
 pub mod ioctl;
 pub mod network;
+pub mod ntp;
 pub mod paths;
 pub mod plan;
+pub mod reset;
 pub mod platform;
 pub mod power;
 pub mod storage;

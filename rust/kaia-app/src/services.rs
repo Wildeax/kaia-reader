@@ -102,6 +102,15 @@ impl Services {
                 "Kaia is already using this data folder, or its lock cannot be opened: {source}"
             )),
         })?;
+        // An erase that stopped after its first step is finished before the folder is read.
+        // The lease above keeps a second run from erasing at the same time.
+        let mut cleanup_notices = Vec::new();
+        if let Err(error) = kaia_platform::reset::finish_leftover_erases(&data_dir) {
+            cleanup_notices.push(tr_format(
+                &tr("Cannot finish an erase that stopped: %1"),
+                &[&error.to_string()],
+            ));
+        }
         let settings_path = data_dir.join("settings.json");
         let mut kept = Vec::new();
         for path in [settings_path.clone(), data_dir.join("settings.json.old")] {
@@ -128,15 +137,13 @@ impl Services {
         let on_offer = crate::i18n::available(&catalog_root);
         let language = crate::i18n::resolve(settings.read(crate::i18n::SETTING).as_str(), &on_offer);
         crate::i18n::activate(&catalog_root, &language);
-        let mut startup_notices: Vec<String> = kept
-            .iter()
-            .map(|name| {
-                tr_format(
-                    &tr("Settings were unreadable. Kept %1 in the data folder."),
-                    &[name.as_str()],
-                )
-            })
-            .collect();
+        let mut startup_notices: Vec<String> = cleanup_notices;
+        startup_notices.extend(kept.iter().map(|name| {
+            tr_format(
+                &tr("Settings were unreadable. Kept %1 in the data folder."),
+                &[name.as_str()],
+            )
+        }));
         if let Some(intensity) = settings.read("display.frontlight").as_i64() {
             let _ = platform.frontlight.set_intensity(intensity.clamp(0, 100) as u8);
         }

@@ -15,6 +15,7 @@ pub mod experiments;
 pub mod facts;
 pub mod keys;
 pub mod quick;
+pub mod reset;
 pub mod section;
 pub mod sections;
 pub mod sleep;
@@ -147,6 +148,7 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("device", "Storage"),
     ("device", "Sleep after"),
     ("device", "Sleep screen"),
+    ("device", "Screen lock"),
     ("extensions", "KOReader plugins"),
     ("extensions", "Safe mode"),
     ("data", "Import from KOReader"),
@@ -159,6 +161,8 @@ pub const ITEMS: &[(&str, &str)] = &[
     ("advanced", "Backup and safe mode"),
     ("advanced", "Date and time"),
     ("advanced", "Experimental features"),
+    ("advanced", "Reset settings"),
+    ("advanced", "Erase all Kaia data"),
 ];
 
 /// The items whose title, in the language in use, contains `query` (case-insensitive),
@@ -208,6 +212,7 @@ fn item_title(english: &str) -> String {
         "Storage" => tr("Storage"),
         "Sleep after" => tr("Sleep after"),
         "Sleep screen" => tr("Sleep screen"),
+        "Screen lock" => tr("Screen lock"),
         "KOReader plugins" => tr("KOReader plugins"),
         "Safe mode" => tr("Safe mode"),
         "Import from KOReader" => tr("Import from KOReader"),
@@ -220,6 +225,8 @@ fn item_title(english: &str) -> String {
         "Backup and safe mode" => tr("Backup and safe mode"),
         "Date and time" => tr("Date and time"),
         "Experimental features" => tr("Experimental features"),
+        "Reset settings" => tr("Reset settings"),
+        "Erase all Kaia data" => tr("Erase all Kaia data"),
         other => other.to_string(),
     }
 }

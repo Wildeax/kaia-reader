@@ -31,6 +31,8 @@ pub struct SettingsSectionSurface {
     kobo_plan: Option<crate::nickel::Plan>,
     kobo_report: Option<crate::nickel::Report>,
     kobo_dialog: Option<kaia_events::WindowId>,
+    /// A screen lock flow (set, change or turn off). It replaces the rows while it runs.
+    pin: Option<crate::surfaces::pin::session::Session>,
 }
 
 impl SettingsSectionSurface {
@@ -43,7 +45,30 @@ impl SettingsSectionSurface {
             kobo_plan: None,
             kobo_report: None,
             kobo_dialog: None,
+            pin: None,
         }
+    }
+}
+
+/// The screen lock actions of the device section. `settings:pin:*` opens a flow.
+/// The pad's own actions go to the flow while it runs.
+fn pin_flow_start(cmd: &str) -> Option<crate::surfaces::pin::session::Purpose> {
+    use crate::surfaces::pin::session::Purpose;
+    match cmd {
+        "settings:pin:set" => Some(Purpose::Set),
+        "settings:pin:change" => Some(Purpose::Change),
+        "settings:pin:off" => Some(Purpose::Off),
+        _ => None,
+    }
+}
+
+fn pin_done_message(done: crate::surfaces::pin::session::Done) -> String {
+    use crate::surfaces::pin::session::Done;
+    match done {
+        Done::Set => tr("Screen lock is on."),
+        Done::Changed => tr("PIN changed."),
+        Done::Cleared => tr("Screen lock is off."),
+        Done::Unlocked => String::new(),
     }
 }
 
@@ -55,6 +80,14 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn build(&mut self, env: &mut SurfaceEnv<'_>) -> Option<Window> {
+        if let Some(session) = &self.pin {
+            return Some(crate::surfaces::pin::view(
+                env.services,
+                env.screen,
+                session,
+                true,
+            ));
+        }
         if self.lua_plan.is_some() || self.lua_report.is_some() {
             return Some(super::lua_import::build(
                 env.services,
@@ -84,6 +117,39 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if self.name == "device" {
+            if let Some(purpose) = pin_flow_start(cmd) {
+                let now = crate::surfaces::pin::session::unix_now();
+                self.pin = Some(crate::surfaces::pin::session::Session::new(
+                    &env.services.paths.data_dir,
+                    purpose,
+                    now,
+                ));
+                return Outcome::Rebuild;
+            }
+        }
+        if self.pin.is_some() {
+            if cmd == "back" {
+                self.pin = None;
+                return Outcome::Rebuild;
+            }
+            let result = self.pin.as_mut().and_then(|session| {
+                crate::surfaces::pin::act(session, cmd, crate::surfaces::pin::session::unix_now())
+            });
+            match result {
+                Some(Ok(None)) => return Outcome::Rebuild,
+                Some(Ok(Some(done))) => {
+                    self.pin = None;
+                    env.toast(pin_done_message(done), 4.0);
+                    return Outcome::Rebuild;
+                }
+                Some(Err(error)) => {
+                    env.notice(tr_format(&tr("Cannot save the PIN: %1"), &[&error.to_string()]));
+                    return Outcome::Rebuild;
+                }
+                None => {}
+            }
+        }
         match cmd {
             "settings:data:lua" => {
                 if let Some(source) = crate::lua_import::find(&env.services.paths) {
@@ -126,6 +192,16 @@ impl Surface for SettingsSectionSurface {
             }
             "settings:storage" => {
                 return Outcome::Navigate(Nav::Push(Box::new(super::storage::StorageSurface::default())));
+            }
+            "settings:reset:settings" => {
+                return Outcome::Navigate(Nav::Push(Box::new(super::reset::ResetSurface::new(
+                    super::reset::Scope::Settings,
+                ))));
+            }
+            "settings:reset:erase" => {
+                return Outcome::Navigate(Nav::Push(Box::new(super::reset::ResetSurface::new(
+                    super::reset::Scope::Everything,
+                ))));
             }
             "settings:data:kobo" => {
                 match crate::nickel::Plan::prepare(&env.services.paths.books_dir, &env.services.library) {
@@ -191,6 +267,7 @@ impl Surface for SettingsSectionSurface {
                     kobo_plan: None,
                     kobo_report: None,
                     kobo_dialog: None,
+                    pin: self.pin.take(),
                 })))
             }
             Some(Command::Set(key)) => set(&key, args, env),

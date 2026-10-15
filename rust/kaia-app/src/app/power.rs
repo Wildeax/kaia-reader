@@ -156,6 +156,20 @@ impl<B: Backend> App<B> {
         self.power_effects(effects);
     }
 
+    /// Shows the PIN pad when a PIN is set and the pad is not already on top. The pad
+    /// covers the screens below it. Navigation that was waiting for the reader is dropped.
+    pub(super) fn lock_screen(&mut self) {
+        if !crate::surfaces::pin::store::is_on(&self.services.paths.data_dir) {
+            return;
+        }
+        if self.top_route().is_some_and(crate::surfaces::pin::is_lock_route) {
+            return;
+        }
+        self.pending_navigation = None;
+        let dir = self.services.paths.data_dir.clone();
+        self.push(Box::new(crate::surfaces::pin::LockSurface::new(&dir)));
+    }
+
     pub(super) fn resume(&mut self) {
         if self.power.finishing {
             // KOReader handles a Power press after the suspend write returns. This one waits too.
@@ -173,6 +187,7 @@ impl<B: Backend> App<B> {
         };
         self.stack
             .close(id, Some(Refresh::new(RefreshMode::Full)), &mut self.ctx);
+        self.lock_screen();
         let plan = self
             .services
             .platform
@@ -520,6 +535,7 @@ impl<B: Backend> App<B> {
                 }
             }
             RESUME_JOB => {}
+            super::clock::CLOCK_JOB => self.clock_done(outcome),
             generation if generation == self.power.prepare_generation && self.sleeping() => {
                 let effects = self
                     .power

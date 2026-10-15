@@ -628,9 +628,45 @@ fn idle_choices(s: &kaia_events::Settings, key: &'static str, default: f64) -> E
     }
 }
 
+/// The screen lock rows: set a PIN when none is set, or change and turn off the PIN.
+/// The PIN file is `.kaia/pin`, and the text says how to remove a lost PIN.
+fn screen_lock(services: &Services) -> Vec<Entry> {
+    if crate::surfaces::pin::store::is_on(&services.paths.data_dir) {
+        vec![
+            Entry::Heading(tr("Screen lock")),
+            Entry::Text(tr(
+                "On. Kaia asks for the PIN when the device wakes and when Kaia starts.",
+            )),
+            Entry::Button {
+                key: "settings-pin-change",
+                label: tr("Change PIN"),
+                action: "settings:pin:change".into(),
+            },
+            Entry::Button {
+                key: "settings-pin-off",
+                label: tr("Turn off"),
+                action: "settings:pin:off".into(),
+            },
+            Entry::Text(tr(
+                "To reset a forgotten PIN, connect the Kobo to a computer and delete the file .kaia/pin.",
+            )),
+        ]
+    } else {
+        vec![
+            Entry::Heading(tr("Screen lock")),
+            Entry::Text(tr("Off. Set a PIN to ask for it when the device wakes.")),
+            Entry::Button {
+                key: "settings-pin-set",
+                label: tr("Set PIN"),
+                action: "settings:pin:set".into(),
+            },
+        ]
+    }
+}
+
 fn device(services: &Services) -> Vec<Entry> {
     let s = &services.settings;
-    vec![
+    let mut out = vec![
         Entry::Button {
             key: "settings-storage",
             label: tr("Storage"),
@@ -662,6 +698,9 @@ fn device(services: &Services) -> Vec<Entry> {
             ),
         },
         Entry::Text(tr("The cover of the book you are reading, or a blank screen.")),
+    ];
+    out.extend(screen_lock(services));
+    out.extend([
         Entry::Heading(tr("Time zone")),
         Entry::Row {
             primary: keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string()),
@@ -669,7 +708,17 @@ fn device(services: &Services) -> Vec<Entry> {
             value: None,
             action: Some("settings:timezone".into()),
         },
-    ]
+        Entry::Heading(tr("Network time")),
+        Entry::Toggle {
+            key: keys::DEVICE_NETWORK_TIME,
+            label: tr("Set the clock from pool.ntp.org"),
+            on: keys::network_time(s),
+        },
+        Entry::Text(tr(
+            "Needs Wi-Fi on. Syncs at most every six hours. Off by default. Kaia contacts pool.ntp.org only when this is on.",
+        )),
+    ]);
+    out
 }
 
 fn data(services: &Services) -> Vec<Entry> {
@@ -829,6 +878,19 @@ fn advanced() -> Vec<Entry> {
             action: None,
         });
     }
+    out.push(Entry::Heading(tr("Reset")));
+    out.push(Entry::Text(tr("Reset settings sets every setting back to its default. Reading data, books, fonts and dictionaries stay.")));
+    out.push(Entry::Button {
+        key: "settings-reset-settings",
+        label: tr("Reset settings"),
+        action: "settings:reset:settings".into(),
+    });
+    out.push(Entry::Text(tr("Erase all Kaia data deletes everything Kaia keeps in the .kaia folder. Book files, the Kobo and KOReader folders and the Lua app are not touched.")));
+    out.push(Entry::Button {
+        key: "settings-erase-data",
+        label: tr("Erase all Kaia data"),
+        action: "settings:reset:erase".into(),
+    });
     out
 }
 

@@ -13,6 +13,7 @@
 //! This file knows no surface. It asks the surfaces in [`crate::surfaces`] for
 //! their windows and applies the [`Outcome`]s they return.
 
+mod clock;
 mod natural_light;
 mod network;
 #[cfg(feature = "lua")]
@@ -66,6 +67,7 @@ macro_rules! env {
 }
 
 mod device_input;
+mod screenshot;
 
 /// Counters for tests and for the desktop run.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -104,6 +106,7 @@ pub struct App<B: Backend> {
     backend: B,
     power: power::State,
     natural_light: natural_light::State,
+    clock: clock::State,
     services: Services,
     ctx: Ctx,
     stack: WindowStack,
@@ -142,6 +145,8 @@ pub struct App<B: Backend> {
     /// The user chose to exit without the queued sync update.
     sync_drop_confirmed: bool,
     pending_navigation: Option<(String, Vec<Value>)>,
+    /// Screenshot saves that are still running.
+    screenshots: screenshot::Saves,
     /// Set by `KAIA_TRACE_INPUT`. Logs every gesture and the top route to stderr.
     trace_input: bool,
 }
@@ -176,6 +181,7 @@ impl<B: Backend> App<B> {
             backend,
             power: power::State::new(services.platform.io_handle(), services.library_path()),
             natural_light: natural_light::State::new(services.platform.frontlight.warmth_revision()),
+            clock: clock::State::new(),
             services,
             ctx,
             stack: WindowStack::new(),
@@ -206,6 +212,7 @@ impl<B: Backend> App<B> {
             sync_prompt: None,
             sync_drop_confirmed: false,
             pending_navigation: None,
+            screenshots: screenshot::Saves::default(),
             trace_input: std::env::var_os("KAIA_TRACE_INPUT").is_some(),
         }
     }
@@ -221,6 +228,8 @@ impl<B: Backend> App<B> {
             self.rotate(device_input::rotation(degrees))?;
         }
         self.switch_root_to(Route::Home, RefreshMode::Full);
+        // A PIN set in the data folder locks the app before any book shows.
+        self.lock_screen();
         for notice in std::mem::take(&mut self.services.startup_notices) {
             env!(self).notice(notice);
         }
@@ -497,6 +506,7 @@ impl<B: Backend> App<B> {
             }
             self.broadcast_app(Event::new("DictionariesChanged"));
         }
+        self.poll_screenshots();
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
         }
@@ -583,6 +593,7 @@ impl<B: Backend> App<B> {
         self.ctx.run_due(now);
         self.power_due();
         self.natural_light_due();
+        self.clock_due();
         self.stack.apply_requests(&mut self.ctx);
         self.settle();
         self.repaint()?;
@@ -657,11 +668,17 @@ impl<B: Backend> App<B> {
         if self.sleeping() {
             return;
         }
+        if screenshot::is_gesture(&gesture, self.screen, &self.services.theme.scale) {
+            self.save_screenshot();
+            return;
+        }
         let edge = self.services.theme.scale.dp(40) as i32;
         let quick = matches!(&gesture, Gesture::Swipe { pos, direction: Some(Direction::South), .. } if pos.y < edge)
             || matches!(&gesture, Gesture::Tap { pos, .. } if pos.y < edge && self.router.top_route().is_some_and(Route::is_top_level));
         #[cfg(feature = "lua")]
         let quick = quick && self.services.plugins.foreign_window_count() == 0;
+        // The PIN pad takes no quick settings sheet, so input cannot reach the settings under it.
+        let quick = quick && !self.top_route().is_some_and(surfaces::pin::is_lock_route);
         if quick {
             // The page has already seen the pan. Let it finish a claimed
             // brightness swipe before opening a sheet over its release.
@@ -1171,6 +1188,11 @@ impl<B: Backend> App<B> {
     /// `back`: closes the top pushed screen (the reader saves its progress on the
     /// way out). From a root that is not Home, it goes to Home.
     fn back(&mut self) {
+        // Back does not close the PIN pad. Only the right PIN does. Power off still
+        // closes the app, since the exit check does not go through this path.
+        if self.top_route().is_some_and(surfaces::pin::is_lock_route) {
+            return;
+        }
         if self.reader_busy() && matches!(self.top_route(), Some(Route::Reader { .. })) {
             self.pending_navigation = Some(("back".to_string(), Vec::new()));
             return;

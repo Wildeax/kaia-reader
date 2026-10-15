@@ -224,6 +224,16 @@
     },
     {
       "covered_by_license_file_in_directory_or_parent": false,
+      "directory": "resources/hyph",
+      "image_files": 0,
+      "license_files": [],
+      "license_files_not_classified": [],
+      "needs_review": false,
+      "other_files": 1,
+      "review_reason": null
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": false,
       "directory": "resources/icons",
       "image_files": 1,
       "license_files": [],
@@ -259,6 +269,16 @@
       "license_files_not_classified": [],
       "needs_review": false,
       "other_files": 20,
+      "review_reason": null
+    },
+    {
+      "covered_by_license_file_in_directory_or_parent": false,
+      "directory": "resources/kaia-dict",
+      "image_files": 0,
+      "license_files": [],
+      "license_files_not_classified": [],
+      "needs_review": false,
+      "other_files": 1,
       "review_reason": null
     },
     {
@@ -325,7 +345,7 @@
         "text": "text = T(_(\"%1\\n\\nAn offline-first reader for E Ink devices, based on KOReader.\\n\\nLicensed under Affero GPL v3. All dependencies are free software.\\n\\nSource: %2\\nKOReader: http://koreader.rocks\"), B"
       },
       {
-        "line": 553,
+        "line": 806,
         "path": "rust/kaia-app/src/surfaces/settings/sections.rs",
         "text": "secondary: Some(tr(\"GNU Affero General Public License v3.0 (AGPL-3.0)\")),"
       },
@@ -343,7 +363,7 @@
     },
     "per_file_notices": {
       "files_naming_affero_gpl": 4,
-      "files_scanned": 1398,
+      "files_scanned": 1487,
       "files_with_any_later_version_clause": 1,
       "files_with_either_version_3_clause": 1
     },
@@ -649,6 +669,14 @@
       "hint": "SIL OFL 1.1 text",
       "path": "resources/kaia-fonts/opendyslexic/OFL.txt",
       "sha256": "caafcccfb70fc72458fcbda812ec8f0a06cb300cbabb87eabbb30b946124394b"
+    },
+    {
+      "headers": [
+        "BSD-2-Clause text"
+      ],
+      "hint": "BSD-2-Clause text",
+      "path": "rust/kaia-archive-sys/COPYING.libarchive",
+      "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229"
     },
     {
       "headers": [
@@ -1119,12 +1147,6 @@
       "area": "thirdparty",
       "id": "thirdparty:leptonica",
       "path": "base/thirdparty/leptonica",
-      "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
-    },
-    {
-      "area": "thirdparty",
-      "id": "thirdparty:libarchive",
-      "path": "base/thirdparty/libarchive",
       "reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo"
     },
     {
@@ -1761,11 +1783,11 @@
     "asset_flags": 0,
     "font_families": 7,
     "font_files": 43,
-    "image_directories": 6,
+    "image_directories": 8,
     "image_files": 141,
-    "license_files_in_repo": 46,
+    "license_files_in_repo": 47,
     "lua_directories_outside_frontend": 14,
-    "needs_review": 86,
+    "needs_review": 85,
     "plugins": 39,
     "submodules": 6,
     "test_rocks": 11,
@@ -2905,12 +2927,21 @@
         }
       ],
       "group": "thirdparty",
-      "license": "unknown, needs review",
-      "license_files": [],
+      "license": "BSD-2-Clause; COPYING also lists BSD-3-Clause, public-domain and CC0/OpenSSL/Apache-2.0 files",
+      "license_files": [
+        {
+          "headers": [
+            "BSD-2-Clause text"
+          ],
+          "hint": "BSD-2-Clause text",
+          "path": "rust/kaia-archive-sys/COPYING.libarchive",
+          "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229"
+        }
+      ],
       "license_files_in_subtree": 0,
-      "license_status": "unknown, needs review",
+      "license_status": "pinned source COPYING copied to rust/kaia-archive-sys/COPYING.libarchive",
       "name": "libarchive",
-      "needs_review": true,
+      "needs_review": false,
       "patch_files_in_directory": [
         "android.patch",
         "avoid_mode_t.patch",
@@ -2923,7 +2954,7 @@
         "ignore_locale_and_use_utf8.patch"
       ],
       "path": "base/thirdparty/libarchive",
-      "review_reason": "no license file or license declaration in the tree; the upstream archive is not stored in the repo",
+      "review_reason": null,
       "source": "download (URL)",
       "upstream_license_to_verify": "BSD-2-Clause (unverified)",
       "version": "3.8.8"

@@ -8,6 +8,7 @@ pub mod common;
 pub mod home;
 pub mod library;
 pub mod notes;
+pub mod pin;
 pub mod reader;
 pub mod settings;
 

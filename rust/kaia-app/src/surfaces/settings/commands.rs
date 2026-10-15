@@ -20,6 +20,12 @@
 //! - `settings:dictionaries` opens the Dictionary settings page.
 //! - `settings:timezone` opens the Time zone page. `settings:timezone:<name>`
 //!   stores the zone `name`. An empty name stores the system zone.
+//! - `settings:pin:<set|change|off>` starts a screen lock flow in the device
+//!   section. The pad then sends `pin:digit:<n>`, `pin:delete`, `pin:submit` and `back`.
+//!   See [`crate::surfaces::pin`].
+//! - `settings:reset:settings` and `settings:reset:erase` open the confirmation pages
+//!   of Advanced (see [`super::reset`]). Those pages send `settings:reset:type`,
+//!   `settings:reset:run` and `settings:reset:cancel`.
 //! - `settings:dicts:<toggle|up|down>:<index>` changes one dictionary. `index` is
 //!   its place in the lookup order. The change is `reader::dict::Change`.
 
@@ -277,6 +283,7 @@ pub fn is_known_key(key: &str) -> bool {
                 | keys::READING_FOOTER_CLOCK
                 | keys::READING_FOOTER_BATTERY
                 | keys::DEVICE_SLEEP_SCREEN
+                | keys::DEVICE_NETWORK_TIME
         )
 }
 

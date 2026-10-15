@@ -30,6 +30,11 @@ kaia-calibre = { path = "../kaia-calibre" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tempfile = "3"
 fs2 = "0.4"
+# Screen lock PIN: PBKDF2-HMAC-SHA256 for the hash, and the OS random source for the salt.
+# See surfaces/pin/store.rs.
+pbkdf2 = "0.13"
+sha2 = "0.11"
+getrandom = "0.4"
 url = "2"
 kaia-lua = { path = "../kaia-lua", optional = true }
 kaia-book = { path = "../kaia-book" }

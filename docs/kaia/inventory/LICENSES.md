@@ -28,7 +28,7 @@ Rules used:
 | submodules | 6 |
 | font families | 7 |
 | font files | 43 |
-| image directories | 6 |
+| image directories | 8 |
 | image files | 141 |
 | license files in repo | 47 |
 | lua directories outside frontend | 14 |
@@ -55,11 +55,11 @@ The needs-review list is at the end of this file.
   - line 24: `[![AGPL Licence][badge-license]](COPYING)`
   - line 106: `[badge-license]:https://img.shields.io/github/license/koreader/koreader`
 - Version numbers in the README license lines: v3. The README links to `COPYING`.
-- Per-file notices in 1398 scanned source files: 4 name the Affero GPL, 1 carry the 'either version 3 ... or any later version' clause, 1 contain 'any later version'.
+- Per-file notices in 1487 scanned source files: 4 name the Affero GPL, 1 carry the 'either version 3 ... or any later version' clause, 1 contain 'any later version'.
 - Kaia UI statements that name the license:
   - `README.md` line 16: `Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.`
   - `frontend/ui/elements/common_info_menu_table.lua` line 134: `text = T(_("%1\n\nAn offline-first reader for E Ink devices, based on KOReader.\n\nLicensed under Affero GPL v3. All dependencies are free software.\n\nSource: %2\nKOReader: http://koreader.rocks"), B`
-  - `rust/kaia-app/src/surfaces/settings/sections.rs` line 553: `secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),`
+  - `rust/kaia-app/src/surfaces/settings/sections.rs` line 806: `secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),`
   - `rust/kaia-lua/tests/community/footcream.koplugin/README.md` line 153: `Licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later); full text in [LICENSE](LICENSE). Copyright (C) 2026 Erik Fanki.`
 
 **Open question (not resolved here):** whether KOReader is AGPL-3.0-only or AGPL-3.0-or-later. `docs/kaia/ENGINEERING_PLAN.md` section 11 asks for an exact SPDX expression checked against upstream and per-file notices. Discussion: https://github.com/koreader/koreader/discussions/11652. This inventory asserts no `-only` or `-or-later` suffix.
@@ -163,18 +163,19 @@ Scope:
 
 | Item | Count |
 |---|---|
-| Crate versions | 247 |
-| Used by kaia (desktop) | 247 |
-| Used by kaia (kobo) | 205 |
+| Crate versions | 262 |
+| Used by kaia (desktop) | 262 |
+| Used by kaia (kobo) | 220 |
 | Used by libkaia.so | 45 |
 | Not in the macOS, Linux or Kobo builds | 56 |
-| Needs attention | 14 |
+| Needs attention | 15 |
 
 A row needs attention when `rust/deny.toml` does not allow a term in its license expression, when the crate package has no license file at its top level, or when the crate has a NOTICE file. Rows outside the release builds count too. The Note column says what to do. Notes about native code do not count.
 
 | Name | Version | License | Used by | Note |
 |---|---|---|---|---|
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | The expression offers 0BSD, which rust/deny.toml does not allow. Use MIT or Apache-2.0. |
+| aho-corasick | 1.1.5 | Unlicense OR MIT | kaia (desktop), kaia (kobo) | The expression offers Unlicense, which rust/deny.toml does not allow. Use MIT. |
 | android_system_properties | 0.1.6 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | arrayref | 0.3.9 | BSD-2-Clause | kaia (desktop), kaia (kobo) |  |
 | arrayvec | 0.7.8 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
@@ -192,6 +193,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | bytes | 1.12.1 | MIT | kaia (desktop), kaia (kobo) |  |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | chrono | 0.4.45 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| cmov | 0.5.4 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | console_error_panic_hook | 0.1.7 | Apache-2.0/MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | const-oid | 0.10.2 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo), libkaia.so |  |
 | core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
@@ -202,6 +204,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | crc32fast | 1.5.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | crypto-common | 0.1.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | crypto-common | 0.2.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
+| ctutils | 0.4.3 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | data-url | 0.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | digest | 0.10.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | digest | 0.11.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
@@ -215,6 +218,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | fastrand | 2.5.0 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| filetime | 0.2.29 | MIT/Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | flate2 | 1.1.10 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | float-cmp | 0.9.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | foldhash | 0.2.0 | Zlib | kaia (desktop), kaia (kobo), libkaia.so |  |
@@ -238,6 +242,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | hashbrown | 0.16.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Not in the macOS, Linux or Kobo builds. |
 | hashbrown | 0.17.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | hashlink | 0.12.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
+| hmac | 0.13.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | http | 1.5.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | httparse | 1.10.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | hybrid-array | 0.4.15 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
@@ -284,6 +289,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | orbclient | 0.3.55 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | parking_lot | 0.12.5 | MIT OR Apache-2.0 | kaia (desktop) |  |
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | kaia (desktop) |  |
+| pbkdf2 | 0.13.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | pico-args | 0.5.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | pin-project-lite | 0.2.17 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
@@ -301,6 +307,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | read-fonts | 0.37.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | redox_syscall | 0.5.18 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
 | redox_syscall | 0.9.4 | MIT | kaia (desktop) | Not in the macOS, Linux or Kobo builds. |
+| regex | 1.13.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| regex-automata | 0.4.18 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| regex-syntax | 0.8.11 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | resvg | 0.45.1 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | rgb | 0.8.53 | MIT | kaia (desktop), kaia (kobo) |  |
 | ring | 0.17.14 | Apache-2.0 AND ISC | kaia (desktop), kaia (kobo) | Compiles BoringSSL-derived C and assembly. The LICENSE, LICENSE-BoringSSL and LICENSE-other-bits files cover it. |
@@ -310,7 +319,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | rusqlite | 0.40.2 | MIT | kaia (desktop), kaia (kobo), libkaia.so |  |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
 | rustix | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) | The expression offers Apache-2.0 WITH LLVM-exception, which rust/deny.toml does not allow. Use Apache-2.0 or MIT. |
-| rustls | 0.23.45 | Apache-2.0 OR ISC OR MIT | kaia (desktop), kaia (kobo) |  |
+| rustls | 0.23.46 | Apache-2.0 OR ISC OR MIT | kaia (desktop), kaia (kobo) |  |
 | rustls-pki-types | 1.15.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | rustls-webpki | 0.103.15 | ISC | kaia (desktop), kaia (kobo) |  |
 | rustversion | 1.0.23 | MIT OR Apache-2.0 | kaia (desktop) | Proc macro. The compiler runs it, and it does not link into the product. |
@@ -343,6 +352,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | syn | 3.0.9 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | synstructure | 0.14.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | sys-locale | 0.3.2 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| tar | 0.4.46 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | thiserror | 2.0.21 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo), libkaia.so | Proc macro. The compiler runs it, and it does not link into the product. |
@@ -357,6 +367,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | unicode-bidi | 0.3.18 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | unicode-ident | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 | kaia (desktop), kaia (kobo), libkaia.so |  |
 | unicode-linebreak | 0.1.5 | Apache-2.0 | kaia (desktop), kaia (kobo) |  |
+| unicode-normalization | 0.1.25 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | unicode-script | 0.5.8 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | untrusted | 0.9.0 | ISC | kaia (desktop), kaia (kobo) |  |
@@ -404,6 +415,7 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) | Not in the macOS, Linux or Kobo builds. |
 | writeable | 0.6.4 | Unicode-3.0 | kaia (desktop), kaia (kobo) |  |
 | x11-dl | 2.21.0 | MIT | kaia (desktop) |  |
+| xattr | 1.6.1 | MIT OR Apache-2.0 | kaia (desktop), kaia (kobo) |  |
 | xcursor | 0.3.11 | MIT | kaia (desktop) |  |
 | xmlwriter | 0.1.0 | MIT | kaia (desktop), kaia (kobo) |  |
 | yazi | 0.2.1 | Apache-2.0 OR MIT | kaia (desktop), kaia (kobo) |  |
@@ -419,6 +431,9 @@ A row needs attention when `rust/deny.toml` does not allow a term in its license
 | zip | 9.0.2 | MIT | kaia (desktop), kaia (kobo) |  |
 | zlib-rs | 0.6.8 | Zlib | kaia (desktop), kaia (kobo) |  |
 | zmij | 1.0.23 | MIT | kaia (desktop), kaia (kobo), libkaia.so |  |
+| zstd | 0.13.3 | MIT | kaia (desktop), kaia (kobo) |  |
+| zstd-safe | 7.3.0 | BSD-3-Clause | kaia (desktop), kaia (kobo) |  |
+| zstd-sys | 2.1.1+zstd.1.5.7 | BSD-3-Clause | kaia (desktop), kaia (kobo) | Its build script compiles native code that links into the product. |
 | zune-core | 0.5.3 | MIT OR Apache-2.0 OR Zlib | kaia (desktop), kaia (kobo) |  |
 | zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib | kaia (desktop), kaia (kobo) |  |
 
@@ -485,9 +500,11 @@ Loose files in `resources/kaia-fonts`: `resources/kaia-fonts/README.md`
 | Directory | Image files | Other files | License or attribution files | Covered by a license file | Needs review |
 |---|---|---|---|---|---|
 | resources | 2 | 0 | - | no | yes |
+| resources/hyph | 0 | 1 | - | no | no |
 | resources/icons | 1 | 0 | - | no | yes |
 | resources/icons/mdlight | 102 | 3 | resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt, resources/icons/mdlight/license.txt | yes | yes |
 | resources/icons/src | 26 | 20 | resources/icons/src/license.txt, resources/icons/src/menu-icon-license.txt | yes | no |
+| resources/kaia-dict | 0 | 1 | - | no | no |
 | resources/kaia/stickers | 4 | 0 | - | no | yes |
 | resources/quickstart | 6 | 0 | - | no | yes |
 
@@ -671,6 +688,7 @@ No flagged paths outside `test/`, fonts and `base/thirdparty`.
 83. `thirdparty:zlib`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 84. `thirdparty:zstd`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
 85. `thirdparty:zsync2`: no license file or license declaration in the tree; the upstream archive is not stored in the repo
+
 
 ## Community plugin fixtures
 
