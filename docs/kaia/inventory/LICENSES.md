@@ -28,9 +28,9 @@ Rules used:
 | submodules | 6 |
 | font families | 7 |
 | font files | 43 |
-| image directories | 8 |
-| image files | 141 |
-| license files in repo | 47 |
+| image directories | 9 |
+| image files | 157 |
+| license files in repo | 48 |
 | lua directories outside frontend | 14 |
 | plugins | 39 |
 | asset flags | 0 |
@@ -55,11 +55,11 @@ The needs-review list is at the end of this file.
   - line 24: `[![AGPL Licence][badge-license]](COPYING)`
   - line 106: `[badge-license]:https://img.shields.io/github/license/koreader/koreader`
 - Version numbers in the README license lines: v3. The README links to `COPYING`.
-- Per-file notices in 1487 scanned source files: 4 name the Affero GPL, 1 carry the 'either version 3 ... or any later version' clause, 1 contain 'any later version'.
+- Per-file notices in 1531 scanned source files: 4 name the Affero GPL, 1 carry the 'either version 3 ... or any later version' clause, 1 contain 'any later version'.
 - Kaia UI statements that name the license:
   - `README.md` line 16: `Kaia Reader is licensed under the GNU Affero General Public License v3, like KOReader. Everything below this section is KOReader's own README, kept for attribution.`
   - `frontend/ui/elements/common_info_menu_table.lua` line 134: `text = T(_("%1\n\nAn offline-first reader for E Ink devices, based on KOReader.\n\nLicensed under Affero GPL v3. All dependencies are free software.\n\nSource: %2\nKOReader: http://koreader.rocks"), B`
-  - `rust/kaia-app/src/surfaces/settings/sections.rs` line 806: `secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),`
+  - `rust/kaia-app/src/surfaces/settings/sections.rs` line 840: `secondary: Some(tr("GNU Affero General Public License v3.0 (AGPL-3.0)")),`
   - `rust/kaia-lua/tests/community/footcream.koplugin/README.md` line 153: `Licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later); full text in [LICENSE](LICENSE). Copyright (C) 2026 Erik Fanki.`
 
 **Open question (not resolved here):** whether KOReader is AGPL-3.0-only or AGPL-3.0-or-later. `docs/kaia/ENGINEERING_PLAN.md` section 11 asks for an exact SPDX expression checked against upstream and per-file notices. Discussion: https://github.com/koreader/koreader/discussions/11652. This inventory asserts no `-only` or `-or-later` suffix.
@@ -505,6 +505,7 @@ Loose files in `resources/kaia-fonts`: `resources/kaia-fonts/README.md`
 | resources/icons/mdlight | 102 | 3 | resources/icons/mdlight/LICENSE-SIL-OFL-1.1.md, resources/icons/mdlight/icons-license.txt, resources/icons/mdlight/license.txt | yes | yes |
 | resources/icons/src | 26 | 20 | resources/icons/src/license.txt, resources/icons/src/menu-icon-license.txt | yes | no |
 | resources/kaia-dict | 0 | 1 | - | no | no |
+| resources/kaia-icons/phosphor-light | 16 | 2 | resources/kaia-icons/phosphor-light/LICENSE | yes | no |
 | resources/kaia/stickers | 4 | 0 | - | no | yes |
 | resources/quickstart | 6 | 0 | - | no | yes |
 
@@ -581,6 +582,7 @@ Excludes `build` directories and `.git`. Code-like files such as `license.lua` a
 | resources/icons/src/menu-icon-license.txt | bd550b1e172e6894 | CC0-1.0 text |
 | resources/kaia-fonts/atkinson-hyperlegible/OFL.txt | f32d22b3908fcad2 | SIL OFL 1.1 text |
 | resources/kaia-fonts/opendyslexic/OFL.txt | caafcccfb70fc724 | SIL OFL 1.1 text |
+| resources/kaia-icons/phosphor-light/LICENSE | ddbe6082ec3cf979 | MIT text |
 | rust/kaia-archive-sys/COPYING.libarchive | 30e556b3959e3985 | BSD-2-Clause text |
 | rust/kaia-lua/tests/community/anki.koplugin/LICENSE | 8486a10c4393cee1 | AGPL-3.0 text (-only or -or-later not determined) |
 | rust/kaia-lua/tests/community/bookends.koplugin/LICENSE | 0d96a4ff68ad6d4b | AGPL-3.0 text (-only or -or-later not determined) |

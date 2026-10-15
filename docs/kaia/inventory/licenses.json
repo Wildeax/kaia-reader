@@ -282,6 +282,18 @@
       "review_reason": null
     },
     {
+      "covered_by_license_file_in_directory_or_parent": true,
+      "directory": "resources/kaia-icons/phosphor-light",
+      "image_files": 16,
+      "license_files": [
+        "resources/kaia-icons/phosphor-light/LICENSE"
+      ],
+      "license_files_not_classified": [],
+      "needs_review": false,
+      "other_files": 2,
+      "review_reason": null
+    },
+    {
       "covered_by_license_file_in_directory_or_parent": false,
       "directory": "resources/kaia/stickers",
       "image_files": 4,
@@ -345,7 +357,7 @@
         "text": "text = T(_(\"%1\\n\\nAn offline-first reader for E Ink devices, based on KOReader.\\n\\nLicensed under Affero GPL v3. All dependencies are free software.\\n\\nSource: %2\\nKOReader: http://koreader.rocks\"), B"
       },
       {
-        "line": 806,
+        "line": 840,
         "path": "rust/kaia-app/src/surfaces/settings/sections.rs",
         "text": "secondary: Some(tr(\"GNU Affero General Public License v3.0 (AGPL-3.0)\")),"
       },
@@ -363,7 +375,7 @@
     },
     "per_file_notices": {
       "files_naming_affero_gpl": 4,
-      "files_scanned": 1487,
+      "files_scanned": 1531,
       "files_with_any_later_version_clause": 1,
       "files_with_either_version_3_clause": 1
     },
@@ -669,6 +681,14 @@
       "hint": "SIL OFL 1.1 text",
       "path": "resources/kaia-fonts/opendyslexic/OFL.txt",
       "sha256": "caafcccfb70fc72458fcbda812ec8f0a06cb300cbabb87eabbb30b946124394b"
+    },
+    {
+      "headers": [
+        "MIT text"
+      ],
+      "hint": "MIT text",
+      "path": "resources/kaia-icons/phosphor-light/LICENSE",
+      "sha256": "ddbe6082ec3cf979db47e5af549d2849c5d6182b3e005ef91ce1dbb9eb122f11"
     },
     {
       "headers": [
@@ -1783,9 +1803,9 @@
     "asset_flags": 0,
     "font_families": 7,
     "font_files": 43,
-    "image_directories": 8,
-    "image_files": 141,
-    "license_files_in_repo": 47,
+    "image_directories": 9,
+    "image_files": 157,
+    "license_files_in_repo": 48,
     "lua_directories_outside_frontend": 14,
     "needs_review": 85,
     "plugins": 39,
