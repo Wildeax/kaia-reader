@@ -45,7 +45,7 @@ use crate::state::{
     read_state, write_state, BookState, DocumentId, ReadingTime, StateLoad, MAX_READING_ENTRIES,
 };
 use crate::time::now_datetime;
-use crate::view::{PageTransform, ZoomMode};
+use crate::view::{FixedView, PageTransform, ZoomMode};
 use kaia_id::partial_md5;
 
 /// A visit to a page longer than this is not counted. The device may have slept.
@@ -712,6 +712,9 @@ impl BookSession {
             let normalized = w.normalize(page, &target)?;
             Ok((page, normalized))
         })?;
+        if page != self.page {
+            self.state.zoom_pan = Point::new(0, 0);
+        }
         self.arrive(page, normalized);
         Ok(())
     }
@@ -767,7 +770,7 @@ impl BookSession {
     /// The link under a screen point, in a viewport.
     pub fn link_at(&mut self, point: Point, viewport: Size) -> Result<Option<Link>> {
         self.ensure_idle()?;
-        let (page, zoom) = (self.page, self.state.zoom);
+        let (page, zoom) = (self.page, self.fixed_view());
         self.engine.call(move |w| {
             let t = w.transform(page, viewport, zoom)?;
             let p = t.to_page(point);
@@ -873,22 +876,197 @@ impl BookSession {
 
     /// Sets the zoom of a fixed-layout book. Reflowable books ignore it.
     pub fn set_zoom(&mut self, zoom: ZoomMode) -> Result<()> {
+        if self.is_reflowable() {
+            return Ok(());
+        }
         if let ZoomMode::Manual { percent } = zoom {
-            if !(10..=800).contains(&percent) {
+            if !(100..=400).contains(&percent) {
                 return Err(BookError::Invalid(format!(
-                    "zoom {percent}% is outside 10 to 800"
+                    "zoom {percent}% is outside 100 to 400"
                 )));
             }
         }
         self.state.zoom = zoom;
+        self.state.zoom_scale = None;
+        self.state.zoom_pan = Point::new(0, 0);
+        if zoom == ZoomMode::FitColumns {
+            let page = self.page;
+            let columns = self.engine.call(move |w| {
+                let doc = w.doc.doc();
+                let blocks = doc.text_blocks(page)?;
+                let columns = crate::view::text_columns(&blocks);
+                if !columns.is_empty() || !blocks.is_empty() {
+                    return Ok(columns);
+                }
+                let size = doc.page_size(page)?;
+                let scale = (600.0 / size.width).min(1200.0 / size.height);
+                let image = doc.render(page, scale, PixelFormat::Gray8)?;
+                Ok(crate::view::image_columns(&image, scale))
+            })?;
+            if let Some(column) = columns.first() {
+                let t = self.page_transform(self.viewport)?;
+                let scale = (self.viewport.w as f32 / column.width()).clamp(t.scale, t.scale * 4.0);
+                self.state.zoom_scale = Some(scale / t.scale);
+                self.state.zoom_pan = Point::new(
+                    (column.x0 * scale).round() as i32,
+                    (column.y0 * scale).round() as i32,
+                );
+                self.clamp_pan(self.viewport)?;
+            } else {
+                self.state.zoom = ZoomMode::FitWidth;
+            }
+        }
         self.dirty = true;
         Ok(())
+    }
+
+    fn fixed_view(&self) -> FixedView {
+        FixedView {
+            mode: self.state.zoom,
+            scale: self.state.zoom_scale,
+            pan: self.state.zoom_pan,
+        }
+    }
+
+    fn clamp_pan(&mut self, viewport: Size) -> Result<()> {
+        self.state.zoom_pan = self.page_transform(viewport)?.offset;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Zooms around the two-finger midpoint. Points are relative to the viewport.
+    pub fn pinch_zoom(&mut self, ratio: f32, start: Point, end: Point, viewport: Size) -> Result<()> {
+        if self.is_reflowable() {
+            return Ok(());
+        }
+        if !ratio.is_finite() || ratio <= 0.0 {
+            return Err(BookError::Invalid("invalid pinch scale".into()));
+        }
+        let old = self.page_transform(viewport)?;
+        let centered = Point::new(
+            start.x - (viewport.w - old.image.w) as i32 / 2,
+            start.y - (viewport.h - old.image.h) as i32 / 2,
+        );
+        let anchor = old.to_page(centered);
+        let fit = ZoomMode::FitPage.scale(old.page, viewport);
+        let factor = (old.scale / fit * ratio).clamp(1.0, 4.0);
+        self.state.zoom = if factor == 1.0 {
+            ZoomMode::FitPage
+        } else {
+            ZoomMode::Manual {
+                percent: (factor * 100.0).round() as u32,
+            }
+        };
+        self.state.zoom_scale = Some(factor);
+        let next = self.page_transform(viewport)?;
+        self.state.zoom_pan = Point::new(
+            (anchor.x * next.scale - end.x as f32 + (viewport.w - next.image.w) as f32 / 2.0).round() as i32,
+            (anchor.y * next.scale - end.y as f32 + (viewport.h - next.image.h) as f32 / 2.0).round() as i32,
+        );
+        self.clamp_pan(viewport)
+    }
+
+    /// Moves the page with the finger, clamped to its edges.
+    pub fn pan_by(&mut self, delta: Point, viewport: Size) -> Result<()> {
+        if self.is_reflowable() {
+            return Ok(());
+        }
+        let old = self.page_transform(viewport)?;
+        self.state.zoom_pan = Point::new(
+            old.offset.x.saturating_sub(delta.x),
+            old.offset.y.saturating_sub(delta.y),
+        );
+        self.clamp_pan(viewport)
+    }
+
+    /// Fits a viewport rectangle and keeps its center under the viewport center.
+    pub fn zoom_to_area(&mut self, start: Point, end: Point, viewport: Size) -> Result<()> {
+        let width = start.x.abs_diff(end.x);
+        let height = start.y.abs_diff(end.y);
+        if width < 8 || height < 8 || self.is_reflowable() {
+            return Ok(());
+        }
+        let ratio = (viewport.w as f32 / width as f32).min(viewport.h as f32 / height as f32);
+        self.pinch_zoom(
+            ratio,
+            Point::new((start.x + end.x) / 2, (start.y + end.y) / 2),
+            Point::new(viewport.w as i32 / 2, viewport.h as i32 / 2),
+            viewport,
+        )?;
+        self.state.zoom = ZoomMode::Region;
+        Ok(())
+    }
+
+    /// Moves right, then down, before turning the physical page. Back reverses that order.
+    pub fn turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
+        if self.is_reflowable() {
+            return if forward {
+                self.next_page()
+            } else {
+                self.prev_page()
+            };
+        }
+        let t = self.page_transform(viewport)?;
+        let max_x = t.full_image.w.saturating_sub(viewport.w) as i32;
+        let max_y = t.full_image.h.saturating_sub(viewport.h) as i32;
+        let step_x = viewport.w.max(1) as i32;
+        let step_y = viewport.h.max(1) as i32;
+        let p = t.offset;
+        let target = if forward && p.x < max_x {
+            Some(Point::new((p.x + step_x).min(max_x), p.y))
+        } else if forward && p.y < max_y {
+            Some(Point::new(0, (p.y + step_y).min(max_y)))
+        } else if !forward && p.x > 0 {
+            Some(Point::new(((p.x - 1) / step_x) * step_x, p.y))
+        } else if !forward && p.y > 0 {
+            Some(Point::new(max_x, ((p.y - 1) / step_y) * step_y))
+        } else {
+            None
+        };
+        if let Some(target) = target {
+            self.state.zoom_pan = target;
+            self.dirty = true;
+            return Ok(true);
+        }
+        let moved = if forward {
+            self.next_page()?
+        } else {
+            self.prev_page()?
+        };
+        if moved && !forward {
+            let t = self.page_transform(viewport)?;
+            self.state.zoom_pan = Point::new(
+                t.full_image.w.saturating_sub(viewport.w) as i32,
+                t.full_image.h.saturating_sub(viewport.h) as i32,
+            );
+        }
+        Ok(moved)
+    }
+
+    /// Whether a page-turn action can move within this page or to another page.
+    pub fn can_turn_view(&mut self, forward: bool, viewport: Size) -> Result<bool> {
+        let another_page = if forward {
+            self.page as usize + 1 < self.page_count
+        } else {
+            self.page > 0
+        };
+        if another_page || self.is_reflowable() {
+            return Ok(another_page);
+        }
+        let t = self.page_transform(viewport)?;
+        Ok(if forward {
+            self.page as usize + 1 < self.page_count
+                || t.offset.x < t.full_image.w.saturating_sub(viewport.w) as i32
+                || t.offset.y < t.full_image.h.saturating_sub(viewport.h) as i32
+        } else {
+            self.page > 0 || t.offset.x > 0 || t.offset.y > 0
+        })
     }
 
     /// The transform between the current page and a viewport.
     pub fn page_transform(&mut self, viewport: Size) -> Result<PageTransform> {
         self.ensure_idle()?;
-        let (page, zoom) = (self.page, self.state.zoom);
+        let (page, zoom) = (self.page, self.fixed_view());
         self.engine.call(move |w| w.transform(page, viewport, zoom))
     }
 
@@ -935,7 +1113,7 @@ impl BookSession {
         if let Some(hit) = self.lock_cache().get(&key) {
             return Ok(hit);
         }
-        let (page, zoom, format) = (self.page, self.state.zoom, self.format);
+        let (page, zoom, format) = (self.page, self.fixed_view(), self.format);
         self.engine
             .call(move |w| w.render_and_prefetch(page, viewport, zoom, format))
     }
@@ -978,7 +1156,7 @@ impl BookSession {
     /// [`BookEvent::PageRendered`] follows, and the page is then cached.
     pub fn request_render(&mut self, viewport: Size) -> Result<()> {
         self.ensure_idle()?;
-        let (page, zoom, format) = (self.page, self.state.zoom, self.format);
+        let (page, zoom, format) = (self.page, self.fixed_view(), self.format);
         self.engine.post(move |w| {
             let _ = w.render_and_prefetch(page, viewport, zoom, format);
             w.send(Event::Rendered { page });
@@ -1010,7 +1188,7 @@ impl BookSession {
     /// not on a word. Starts a new selection, and replaces the old one.
     pub fn select_word_at(&mut self, point: Point, viewport: Size) -> Result<Option<Selection>> {
         self.ensure_idle()?;
-        let (page, zoom) = (self.page, self.state.zoom);
+        let (page, zoom) = (self.page, self.fixed_view());
         let raw = self
             .engine
             .call(move |w| w.select(page, viewport, zoom, point, None))?;
@@ -1026,7 +1204,7 @@ impl BookSession {
             return self.select_word_at(point, viewport);
         };
         let anchor = current.anchor;
-        let (page, zoom) = (self.page, self.state.zoom);
+        let (page, zoom) = (self.page, self.fixed_view());
         let raw = self
             .engine
             .call(move |w| w.select(page, viewport, zoom, point, Some(anchor)))?;
@@ -1238,7 +1416,7 @@ impl BookSession {
     pub fn annotations_on_page(&mut self, viewport: Size) -> Result<Vec<PageAnnotation>> {
         let all = self.annotations()?;
         let page = self.page;
-        let zoom = self.state.zoom;
+        let zoom = self.fixed_view();
         let spans: Vec<(AnnotationId, Option<(Pos, Pos)>)> = all
             .iter()
             .map(|a| {
@@ -1669,6 +1847,7 @@ impl BookSession {
             page: self.page,
             viewport,
             zoom: self.state.zoom,
+            view: self.fixed_view().key(),
             format: self.format,
         }
     }

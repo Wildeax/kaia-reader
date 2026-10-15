@@ -409,13 +409,13 @@ pub(super) fn frame(
                     );
                     (
                         Rect::new(
-                            origin.x + (*x * transform.image.w as f32) as i32,
-                            origin.y + (*y * transform.image.h as f32) as i32,
+                            origin.x + (*x * transform.full_image.w as f32) as i32 - transform.offset.x,
+                            origin.y + (*y * transform.full_image.h as f32) as i32 - transform.offset.y,
                             1,
                             1,
                         ),
                         0.0,
-                        transform.image,
+                        transform.full_image,
                     )
                 }
                 Anchor::Fixed { page, .. } if *page > session.page_count() as u32 => {

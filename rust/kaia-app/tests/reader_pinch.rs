@@ -7,7 +7,7 @@ use common::*;
 use kaia_app::surfaces::reader::page::PageView;
 use kaia_app::{App, HeadlessBackend, ScriptInput, Services};
 use kaia_display::InputEvent;
-use kaia_events::{Clock, Event, ManualClock, Settings};
+use kaia_events::{Clock, Event, ManualClock, Settings, Value};
 use kaia_gfx::Point;
 use kaia_input::{Phase, TouchEvent};
 use kaia_platform::{Env, Platform};
@@ -23,8 +23,12 @@ fn px_for(units: f64) -> f64 {
 }
 
 fn reader(name: &str) -> (App<HeadlessBackend>, ManualClock) {
+    if std::env::var_os("FONTDIR").is_none() {
+        std::env::set_var("FONTDIR", repo_root().join("resources/fonts"));
+    }
     let dir = scratch(name);
     let books = library_with_books(&dir);
+    std::fs::copy(repo_root().join("test/sample.pdf"), books.join("sample.pdf")).unwrap();
     let platform = Platform::detect_in(
         &dir,
         &Env {
@@ -107,10 +111,25 @@ fn frame(phase: Phase, points: [Point; 2], clock: &ManualClock) -> InputEvent {
 /// Two fingers land, move in equal steps and lift. `from` and `to` hold the
 /// start and end point of each finger, for slot 0 and slot 1.
 fn two_finger(app: &mut App<HeadlessBackend>, clock: &ManualClock, from: [Point; 2], to: [Point; 2]) {
+    two_finger_timed(app, clock, from, to, 20);
+}
+
+fn two_finger_timed(
+    app: &mut App<HeadlessBackend>,
+    clock: &ManualClock,
+    from: [Point; 2],
+    to: [Point; 2],
+    step_ms: u64,
+) {
+    let mut fixed = false;
+    app.update_top::<PageView, _>(kaia_app::surfaces::reader::page::PAGE_KEY, |view, _| {
+        fixed = view.fixed_layout
+    });
+    let before = app.frame().data().to_vec();
     const STEPS: i32 = 10;
     app.process(vec![frame(Phase::Down, from, clock)]).unwrap();
     for i in 1..=STEPS {
-        clock.advance(Duration::from_millis(20));
+        clock.advance(Duration::from_millis(step_ms));
         let at =
             |a: Point, b: Point| Point::new(a.x + (b.x - a.x) * i / STEPS, a.y + (b.y - a.y) * i / STEPS);
         app.process(vec![frame(
@@ -119,6 +138,12 @@ fn two_finger(app: &mut App<HeadlessBackend>, clock: &ManualClock, from: [Point;
             clock,
         )])
         .unwrap();
+        if fixed {
+            assert!(
+                app.frame().data() == before,
+                "pinch should render only on release"
+            );
+        }
     }
     clock.advance(Duration::from_millis(20));
     app.process(vec![frame(Phase::Up, to, clock)]).unwrap();
@@ -191,7 +216,7 @@ fn pinch_stops_at_twelve_units_and_spread_stops_at_forty() {
 }
 
 #[test]
-fn pinch_on_a_fixed_layout_book_changes_nothing() {
+fn pdf_pinch_changes_zoom_without_turning_the_page() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let (mut app, clock) = reader("pinch-pdf");
     let id = book_id(&app, "2col.pdf");
@@ -208,5 +233,139 @@ fn pinch_on_a_fixed_layout_book_changes_nothing() {
         after = view.position
     });
     assert_eq!(before, after);
+    let saved = saved_state(&mut app, "2col.pdf");
+    assert!(saved.read("zoom_scale").as_f64().unwrap() > 1.4);
+    let before_frame = app.frame().data().to_vec();
+    pinch(&mut app, &clock);
+    assert!(before_frame != app.frame().data());
     assert!(matches!(app.top_route(), Some(kaia_app::Route::Reader { .. })));
+}
+
+fn saved_state(app: &mut App<HeadlessBackend>, name: &str) -> Settings {
+    app.broadcast_app(Event::new("SaveState"));
+    Settings::open(&state_path(app, name))
+}
+
+fn single_drag(app: &mut App<HeadlessBackend>, clock: &ManualClock, from: Point, to: Point, slow: bool) {
+    for (phase, pos, ms) in [
+        (Phase::Down, from, 10),
+        (Phase::Move, to, 100),
+        (Phase::Up, to, if slow { 1000 } else { 20 }),
+    ] {
+        clock.advance(Duration::from_millis(ms));
+        app.process(vec![InputEvent::Touch(TouchEvent {
+            slot: 0,
+            phase,
+            pos,
+            time_us: clock.now().as_micros() as u64,
+        })])
+        .unwrap();
+    }
+    settle(app, clock);
+}
+
+#[test]
+fn sample_pdf_pinch_pan_reset_and_reopen_with_lookup_enabled() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, clock) = reader("zoom-sample");
+    let id = book_id(&app, "sample.pdf");
+    app.command(&format!("open_book:{id}"), &[]);
+    settle(&mut app, &clock);
+    app.command("reader:slider", &[Value::Number(2.0)]);
+    settle(&mut app, &clock);
+    app.services_mut()
+        .settings
+        .save("reading.double_tap_lookup", Value::Bool(true));
+    app.command("reader:tap", &[Value::Number(1100.0), Value::Number(800.0)]);
+    let before = app.frame().data().to_vec();
+    two_finger(
+        &mut app,
+        &clock,
+        [Point::new(400, 600), Point::new(800, 1000)],
+        [Point::new(200, 400), Point::new(1000, 1200)],
+    );
+    let state = saved_state(&mut app, "sample.pdf");
+    assert!((state.read("zoom_scale").as_f64().unwrap() - 2.0).abs() < 0.001);
+    assert_eq!(state.read("last_page").as_i64(), Some(2));
+    assert!(
+        before != app.frame().data(),
+        "zoom must change the visible region"
+    );
+    two_finger_timed(
+        &mut app,
+        &clock,
+        [Point::new(200, 400), Point::new(1000, 1200)],
+        [Point::new(400, 600), Point::new(800, 1000)],
+        100,
+    );
+    let smaller = saved_state(&mut app, "sample.pdf");
+    assert!((smaller.read("zoom_scale").as_f64().unwrap() - 1.0).abs() < 0.001);
+    two_finger(
+        &mut app,
+        &clock,
+        [Point::new(400, 600), Point::new(800, 1000)],
+        [Point::new(200, 400), Point::new(1000, 1200)],
+    );
+    let state = saved_state(&mut app, "sample.pdf");
+    let pan = state.read("zoom_pan_x").as_i64().unwrap();
+    single_drag(&mut app, &clock, Point::new(800, 900), Point::new(600, 800), true);
+    let state = saved_state(&mut app, "sample.pdf");
+    assert_eq!(state.read("zoom_pan_x").as_i64(), Some(pan + 200));
+    app.command("nav:home", &[]);
+    app.command(&format!("open_book:{id}"), &[]);
+    settle(&mut app, &clock);
+    let reopened = saved_state(&mut app, "sample.pdf");
+    for key in ["zoom_scale", "zoom_pan_x", "zoom_pan_y"] {
+        assert_eq!(reopened.read(key), state.read(key));
+    }
+    app.command("reader:zoom:reset", &[]);
+    settle(&mut app, &clock);
+    let reset = saved_state(&mut app, "sample.pdf");
+    assert_eq!(reset.read("zoom").get("mode").as_str(), Some("fit_page"));
+    assert_eq!(reset.read("zoom_pan_x").as_i64(), Some(0));
+    assert!(app.unknown_commands().is_empty());
+}
+
+#[test]
+fn zoom_sheet_area_drag_and_page_keys() {
+    let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut app, clock) = reader("zoom-area");
+    let id = book_id(&app, "2col.pdf");
+    app.command(&format!("open_book:{id}"), &[]);
+    settle(&mut app, &clock);
+    app.command("reader:overlay", &[]);
+    app.command("reader:panel:layout", &[]);
+    assert_eq!(app.top_route(), Some(&kaia_app::Route::ReaderPanel));
+    app.command("reader:zoom:area", &[]);
+    assert!(matches!(app.top_route(), Some(kaia_app::Route::Reader { .. })));
+    single_drag(
+        &mut app,
+        &clock,
+        Point::new(200, 300),
+        Point::new(650, 900),
+        false,
+    );
+    let state = saved_state(&mut app, "2col.pdf");
+    assert_eq!(state.read("zoom").get("mode").as_str(), Some("region"));
+    assert!(state.read("zoom_scale").as_f64().unwrap() > 1.9);
+    let x = state.read("zoom_pan_x").as_i64().unwrap();
+    app.key(kaia_input::Key::RPgFwd).unwrap();
+    settle(&mut app, &clock);
+    let next = saved_state(&mut app, "2col.pdf");
+    assert_eq!(next.read("last_page").as_i64(), Some(1));
+    assert!(next.read("zoom_pan_x").as_i64().unwrap() > x);
+    app.command("reader:tap", &[Value::Number(1100.0), Value::Number(800.0)]);
+    settle(&mut app, &clock);
+    let mut down = saved_state(&mut app, "2col.pdf");
+    for _ in 0..3 {
+        if down.read("zoom_pan_x").as_i64() == Some(0) {
+            break;
+        }
+        app.command("reader:tap", &[Value::Number(1100.0), Value::Number(800.0)]);
+        settle(&mut app, &clock);
+        down = saved_state(&mut app, "2col.pdf");
+    }
+    assert_eq!(down.read("last_page").as_i64(), Some(1));
+    assert_eq!(down.read("zoom_pan_x").as_i64(), Some(0));
+    assert!(down.read("zoom_pan_y").as_i64() > next.read("zoom_pan_y").as_i64());
 }

@@ -321,8 +321,17 @@ impl Core {
         let footer = self.footer.clone();
         let pace = self.seconds_per_page;
         let footer_height = self.footer_height;
+        let fixed_layout = self.session.as_ref().is_some_and(|s| !s.is_reflowable());
+        let zoomed = fixed_layout
+            && self
+                .session
+                .as_mut()
+                .and_then(|s| s.page_transform(self.viewport).ok())
+                .is_some_and(|t| t.full_image.w > self.viewport.w || t.full_image.h > self.viewport.h);
         let ink_color_content = &mut self.ink_color_content;
         window.update::<PageView, _>(ctx, PAGE_KEY, move |view, cx| {
+            view.fixed_layout = fixed_layout;
+            view.zoomed = zoomed;
             if frame.page.is_some() {
                 view.page = frame.page;
             }
@@ -438,18 +447,18 @@ impl Core {
             return Turn::Blocked;
         };
         let current = session.current();
-        if forward && current.page as usize + 1 >= current.page_count {
+        if forward && !session.can_turn_view(true, self.viewport).unwrap_or(false) {
             self.session = Some(session);
             return Turn::AtEnd;
         }
-        if !forward && current.page == 0 {
+        if !forward && !session.can_turn_view(false, self.viewport).unwrap_or(false) {
             self.session = Some(session);
             return Turn::Blocked;
         }
         let page = if forward {
             current.page + 1
         } else {
-            current.page - 1
+            current.page.saturating_sub(1)
         };
         let chapter_start = session.toc().iter().any(|t| t.page == Some(page));
         // A fixed-layout page is a picture, and stock clears the screen for it.
@@ -468,9 +477,10 @@ impl Core {
         self.selection = None;
         self.sticker_anchor = None;
         self.selecting = false;
-        self.job = Some(super::work::spawn(self.viewport, move || {
+        let viewport = self.viewport;
+        self.job = Some(super::work::spawn(viewport, move || {
             let error = session
-                .go_to(kaia_book::Location::Page(page))
+                .turn_view(forward, viewport)
                 .err()
                 .map(|e| WorkError::Turn(e.to_string()));
             Ok((session, None, error))
@@ -604,6 +614,7 @@ impl Core {
     /// Sets the fixed-layout zoom. The page is repainted at once.
     pub fn set_zoom(&mut self, ctx: &mut Ctx, zoom: ZoomMode) -> Result<(), String> {
         let session = self.session.as_mut().ok_or_else(|| tr("No book is open."))?;
+        session.set_viewport(self.viewport).map_err(|e| e.to_string())?;
         session.set_zoom(zoom).map_err(|e| e.to_string())?;
         self.repaint_page(ctx, PaintHint::Full);
         Ok(())

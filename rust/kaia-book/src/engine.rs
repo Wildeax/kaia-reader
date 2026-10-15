@@ -23,7 +23,7 @@ use crate::layout::TextLayout;
 use crate::pos::Pos;
 use crate::session::SearchResult;
 use crate::text::{nearest_char, page_text_from_boxes, span_rects, span_selected_text, word_span, Flat};
-use crate::view::{PageTransform, ZoomMode};
+use crate::view::{FixedView, PageTransform};
 
 /// Pages of text kept for selection and links.
 const TEXT_CACHE_PAGES: usize = 6;
@@ -173,7 +173,7 @@ impl Worker {
             #[cfg(feature = "cre")]
             EngineDoc::Cre(d) => d.image_share(page),
             EngineDoc::Mupdf(_) if self.doc.doc().is_reflowable() => Ok(None),
-            EngineDoc::Mupdf(_) => Ok(Some(1.0)),
+            EngineDoc::Mupdf(_) | EngineDoc::Fixed(_) => Ok(Some(1.0)),
         }
     }
 
@@ -220,23 +220,23 @@ impl Worker {
         &self,
         page: u32,
         viewport: Size,
-        zoom: ZoomMode,
+        zoom: FixedView,
     ) -> std::result::Result<PageTransform, DocError> {
         let size = self.doc.doc().page_size(page)?;
-        let zoom = if self.doc.doc().is_reflowable() {
-            None
+        Ok(if self.doc.doc().is_reflowable() {
+            PageTransform::new(size, viewport, None)
         } else {
-            Some(zoom)
-        };
-        Ok(PageTransform::new(size, viewport, zoom))
+            zoom.transform(size, viewport)
+        })
     }
 
-    pub fn render_key(&self, page: u32, viewport: Size, zoom: ZoomMode, format: PixelFormat) -> RenderKey {
+    pub fn render_key(&self, page: u32, viewport: Size, zoom: FixedView, format: PixelFormat) -> RenderKey {
         RenderKey {
             layout: self.layout,
             page,
             viewport,
-            zoom,
+            zoom: zoom.mode,
+            view: zoom.key(),
             format,
         }
     }
@@ -247,7 +247,7 @@ impl Worker {
         &mut self,
         page: u32,
         viewport: Size,
-        zoom: ZoomMode,
+        zoom: FixedView,
         format: PixelFormat,
     ) -> std::result::Result<Arc<Pixmap>, DocError> {
         let key = self.render_key(page, viewport, zoom, format);
@@ -255,7 +255,16 @@ impl Worker {
             return Ok(hit);
         }
         let t = self.transform(page, viewport, zoom)?;
-        let pixmap = self.doc.doc().render(page, t.scale, format)?;
+        let pixmap = if self.doc.doc().is_reflowable() || t.image == t.full_image {
+            self.doc.doc().render(page, t.scale, format)?
+        } else {
+            self.doc.doc().render_clip(
+                page,
+                t.scale,
+                format,
+                kaia_gfx::Rect::new(t.offset.x, t.offset.y, t.image.w, t.image.h),
+            )?
+        };
         Ok(self.lock_cache().insert(key, pixmap))
     }
 
@@ -264,11 +273,11 @@ impl Worker {
         &mut self,
         page: u32,
         viewport: Size,
-        zoom: ZoomMode,
+        zoom: FixedView,
         format: PixelFormat,
     ) -> std::result::Result<Arc<Pixmap>, DocError> {
         let pixmap = self.render_into_cache(page, viewport, zoom, format)?;
-        if (page as usize + 1) < self.page_count() {
+        if (page as usize + 1) < self.page_count() && zoom.mode == crate::view::ZoomMode::FitPage {
             self.schedule_prerender(page + 1, viewport, zoom, format);
         }
         Ok(pixmap)
@@ -276,7 +285,7 @@ impl Worker {
 
     /// Queues a background render of `page`. It runs before any other background
     /// task. A newer prerender request makes an older one stop without rendering.
-    fn schedule_prerender(&mut self, page: u32, viewport: Size, zoom: ZoomMode, format: PixelFormat) {
+    fn schedule_prerender(&mut self, page: u32, viewport: Size, zoom: FixedView, format: PixelFormat) {
         self.prerender += 1;
         let token = self.prerender;
         let layout = self.layout;
@@ -494,7 +503,7 @@ impl Worker {
         &mut self,
         page: u32,
         viewport: Size,
-        zoom: ZoomMode,
+        zoom: FixedView,
         point: kaia_gfx::Point,
         anchor: Option<(usize, usize)>,
     ) -> std::result::Result<Option<RawSelection>, DocError> {

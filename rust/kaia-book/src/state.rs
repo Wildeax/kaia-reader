@@ -59,6 +59,8 @@ pub(crate) struct BookState {
     pub percent: f64,
     pub layout: TextLayout,
     pub zoom: ZoomMode,
+    pub zoom_scale: Option<f32>,
+    pub zoom_pan: kaia_gfx::Point,
     pub annotations: Vec<Annotation>,
     /// The id the next annotation receives.
     pub next_id: u64,
@@ -92,6 +94,8 @@ impl BookState {
             percent: 0.0,
             layout,
             zoom: ZoomMode::default(),
+            zoom_scale: None,
+            zoom_pan: kaia_gfx::Point::new(0, 0),
             annotations: Vec::new(),
             next_id: 1,
             status: None,
@@ -145,6 +149,11 @@ impl BookState {
         t.insert("percent_finished".into(), Value::from(self.percent));
         t.insert("layout".into(), layout_value(&self.layout));
         t.insert("zoom".into(), zoom_value(self.zoom));
+        if let Some(scale) = self.zoom_scale {
+            t.insert("zoom_scale".into(), Value::from(f64::from(scale)));
+        }
+        t.insert("zoom_pan_x".into(), Value::from(self.zoom_pan.x as i64));
+        t.insert("zoom_pan_y".into(), Value::from(self.zoom_pan.y as i64));
         t.insert(
             "annotations".into(),
             Value::array(self.annotations.iter().map(Annotation::to_value)),
@@ -233,6 +242,13 @@ impl BookState {
             .unwrap_or(0.0)
             .clamp(0.0, 1.0);
         state.zoom = zoom_from_value(root.get("zoom"));
+        state.zoom_scale = root
+            .get("zoom_scale")
+            .as_f64()
+            .filter(|n| n.is_finite() && (1.0..=4.0).contains(n))
+            .map(|n| n as f32);
+        let pan = |key| root.get(key).as_i64().unwrap_or(0).clamp(0, i32::MAX as i64) as i32;
+        state.zoom_pan = kaia_gfx::Point::new(pan("zoom_pan_x"), pan("zoom_pan_y"));
         if let Value::Table(list) = root.get("annotations") {
             state.annotations = list.values().filter_map(Annotation::from_value).collect();
         }
@@ -349,6 +365,8 @@ fn zoom_value(z: ZoomMode) -> Value {
     let (mode, percent) = match z {
         ZoomMode::FitPage => ("fit_page", 100),
         ZoomMode::FitWidth => ("fit_width", 100),
+        ZoomMode::FitColumns => ("fit_columns", 100),
+        ZoomMode::Region => ("region", 100),
         ZoomMode::Manual { percent } => ("manual", percent),
     };
     t.insert("mode".into(), Value::from(mode));
@@ -364,6 +382,8 @@ fn zoom_from_value(v: &Value) -> ZoomMode {
         .unwrap_or(100) as u32;
     match v.get("mode").as_str() {
         Some("fit_width") => ZoomMode::FitWidth,
+        Some("fit_columns") => ZoomMode::FitColumns,
+        Some("region") => ZoomMode::Region,
         Some("manual") => ZoomMode::Manual { percent },
         _ => ZoomMode::FitPage,
     }
@@ -534,6 +554,8 @@ mod tests {
         s.position = Some(Location::Engine("/body/DocFragment[5]/body/div/p[12].0".into()));
         s.percent = 0.25;
         s.zoom = ZoomMode::Manual { percent: 150 };
+        s.zoom_scale = Some(1.501);
+        s.zoom_pan = kaia_gfx::Point::new(42, 83);
         s.status = Some("reading".into());
         s.rating = Some(4);
         let id = s.assign_id();
@@ -566,6 +588,22 @@ mod tests {
     }
 
     #[test]
+    fn old_state_defaults_zoom_fields_and_rejects_invalid_values() {
+        let mut table = state().to_table();
+        for key in ["zoom_scale", "zoom_pan_x", "zoom_pan_y"] {
+            table.remove(&Key::from(key));
+        }
+        let old = BookState::from_table(&table).unwrap();
+        assert_eq!(old.zoom_scale, None);
+        assert_eq!(old.zoom_pan, kaia_gfx::Point::new(0, 0));
+        table.insert("zoom_scale".into(), Value::Number(f64::NAN));
+        table.insert("zoom_pan_x".into(), Value::Number(-1.0));
+        let invalid = BookState::from_table(&table).unwrap();
+        assert_eq!(invalid.zoom_scale, None);
+        assert_eq!(invalid.zoom_pan, kaia_gfx::Point::new(0, 0));
+    }
+
+    #[test]
     fn table_round_trip() {
         let s = state();
         let back = BookState::from_table(&s.to_table()).expect("state");
@@ -575,6 +613,8 @@ mod tests {
         assert_eq!(back.percent, s.percent);
         assert_eq!(back.layout, s.layout);
         assert_eq!(back.zoom, s.zoom);
+        assert_eq!(back.zoom_scale, s.zoom_scale);
+        assert_eq!(back.zoom_pan, s.zoom_pan);
         assert_eq!(back.annotations, s.annotations);
         assert_eq!(back.status, s.status);
         assert_eq!(back.rating, s.rating);

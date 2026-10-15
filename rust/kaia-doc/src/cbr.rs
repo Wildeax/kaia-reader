@@ -87,8 +87,7 @@ impl CbrDocument {
         let pixels = self.pixels(page)?;
         let width = (pixels.width() as f64 * scale as f64).round().max(1.0);
         let height = (pixels.height() as f64 * scale as f64).round().max(1.0);
-        // Bound the intermediate resize too, even when the requested clip is small.
-        if width > 16384.0 || height > 16384.0 || width * height > 16_777_216.0 {
+        if width > 16384.0 || height > 16384.0 || (clip.is_none() && width * height > 16_777_216.0) {
             return Err(DocError::InvalidArgument(
                 "CBR render exceeds 16 megapixels or 16384 pixels per side".into(),
             ));
@@ -99,10 +98,14 @@ impl CbrDocument {
             || clip.y < 0
             || clip.w == 0
             || clip.h == 0
+            || u64::from(clip.w) * u64::from(clip.h) > 16_777_216
             || clip.x as u64 + clip.w as u64 > size.w as u64
             || clip.y as u64 + clip.h as u64 > size.h as u64
         {
             return Err(DocError::InvalidArgument("clip is outside the page".into()));
+        }
+        if clip != Rect::from_size(size) {
+            return Ok(render_region(&pixels, size, clip, format));
         }
         let scaled = scale_pixmap(&pixels, size);
         let mut result = Pixmap::new(clip.w, clip.h, format);
@@ -122,6 +125,38 @@ impl CbrDocument {
         }
         Ok(result)
     }
+}
+
+/// Samples only the visible rectangle, with bilinear filtering.
+fn render_region(source: &Pixmap, size: Size, clip: Rect, format: PixelFormat) -> Pixmap {
+    let mut out = Pixmap::new(clip.w, clip.h, format);
+    let channels = if format == PixelFormat::Gray8 { 1 } else { 3 };
+    for y in 0..clip.h as usize {
+        let sy = ((clip.y as f64 + y as f64 + 0.5) * source.height() as f64 / size.h as f64 - 0.5)
+            .clamp(0.0, (source.height() - 1) as f64);
+        let y0 = sy.floor() as usize;
+        let y1 = (y0 + 1).min(source.height() as usize - 1);
+        for x in 0..clip.w as usize {
+            let sx = ((clip.x as f64 + x as f64 + 0.5) * source.width() as f64 / size.w as f64 - 0.5)
+                .clamp(0.0, (source.width() - 1) as f64);
+            let x0 = sx.floor() as usize;
+            let x1 = (x0 + 1).min(source.width() as usize - 1);
+            let sample =
+                |row, col, channel| f64::from(source.data()[row * source.stride() + col * 3 + channel]);
+            let rgb: [u8; 3] = std::array::from_fn(|c| {
+                let top = sample(y0, x0, c) * (1.0 - sx.fract()) + sample(y0, x1, c) * sx.fract();
+                let bottom = sample(y1, x0, c) * (1.0 - sx.fract()) + sample(y1, x1, c) * sx.fract();
+                (top * (1.0 - sy.fract()) + bottom * sy.fract()).round() as u8
+            });
+            let dst = y * out.stride() + x * channels;
+            if channels == 1 {
+                out.data_mut()[dst] = Color::rgb(rgb[0], rgb[1], rgb[2]).luma();
+            } else {
+                out.data_mut()[dst..dst + 3].copy_from_slice(&rgb);
+            }
+        }
+    }
+    out
 }
 
 impl Document for CbrDocument {

@@ -131,6 +131,18 @@ impl Document for MupdfDocument {
         Ok(page_text_from(&stext))
     }
 
+    fn text_blocks(&self, page: u32) -> Result<Vec<RectF>> {
+        self.check_page(page)?;
+        Ok(self
+            .raw
+            .stext(page)?
+            .blocks
+            .into_iter()
+            .filter(|block| block.kind == 0)
+            .map(|block| rect(block.bbox))
+            .collect())
+    }
+
     fn search(&self, page: u32, needle: &str) -> Result<Vec<Quad>> {
         self.check_page(page)?;
         if needle.is_empty() {

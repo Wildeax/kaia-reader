@@ -17,7 +17,7 @@ unsafe_code = "forbid"
 
 [dependencies]
 kaia-id = { path = "../kaia-id" }
-kaia-doc = { path = "../kaia-doc", default-features = false }
+kaia-doc = { path = "../kaia-doc", default-features = false, features = ["djvu"] }
 kaia-gfx = { path = "../kaia-gfx" }
 kaia-events = { path = "../kaia-events" }
 kaia-luadata = { path = "../kaia-luadata" }
@@ -28,6 +28,7 @@ thiserror = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
+crc32fast = "1"
 # Checks that the local partial MD5 matches the library crate's digest.
 kaia-library = { path = "../kaia-library" }
 tempfile = "3"
