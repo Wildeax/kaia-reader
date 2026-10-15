@@ -1,14 +1,12 @@
-//! The optional top line. The book title sits at the left. The chapter, clock
-//! and battery sit at the right, separated by vertical bars. Each side gets
-//! half the line when both have text, or the whole line when the other is empty.
-//! A single group is centred. Both groups use one caption line with an ellipsis
-//! when the text does not fit.
+//! The chapter caption is centred by default. Optional title and device status
+//! retain the two-group layout chosen in reading settings.
 
 use kaia_book::{PageInfo, Size};
 use kaia_events::Settings;
 use kaia_i18n::{format as tr_format, tr};
 use kaia_ui::Theme;
 
+use super::caption::{Caption, ChapterProgress};
 use super::footer::{Footer, Status};
 use crate::surfaces::settings::keys;
 
@@ -102,14 +100,29 @@ impl Header {
         )
     }
 
+    pub(super) fn chapter_only(&self) -> bool {
+        self.on == [false, true, false, false]
+    }
+
+    pub(super) fn chapter_caption(info: &PageInfo, progress: Option<ChapterProgress>) -> Caption {
+        Caption::new(
+            info.chapter.clone().unwrap_or_default(),
+            progress.map(ChapterProgress::text).unwrap_or_default(),
+        )
+    }
+
     /// `PageInfo::chapter` is the session's TOC entry for the current page.
-    pub fn text(&self, title: &str, info: &PageInfo, status: &Status) -> (String, String) {
+    pub(super) fn text(
+        &self,
+        title: &str,
+        info: &PageInfo,
+        status: &Status,
+        progress: Option<ChapterProgress>,
+    ) -> (String, String) {
         let left = if self.is_on(Item::Title) { title } else { "" }.to_string();
         let mut right = Vec::new();
-        if self.is_on(Item::Chapter) {
-            if let Some(chapter) = info.chapter.as_ref().filter(|s| !s.is_empty()) {
-                right.push(chapter.clone());
-            }
+        if self.is_on(Item::Chapter) && info.chapter.as_ref().is_some_and(|s| !s.is_empty()) {
+            right.push(Self::chapter_caption(info, progress).text());
         }
         if self.is_on(Item::Clock) && !status.clock.is_empty() {
             right.push(status.clock.clone());
@@ -143,7 +156,7 @@ mod tests {
             battery: Some(64),
         };
         assert_eq!(
-            header.text("Book", &info, &status),
+            header.text("Book", &info, &status, None),
             (String::new(), "First chapter".into())
         );
         for item in Item::ALL {
@@ -151,12 +164,12 @@ mod tests {
             header.set(item, true);
         }
         assert_eq!(
-            header.text("Book", &info, &status),
+            header.text("Book", &info, &status, None),
             ("Book".into(), "First chapter | 09:41 | Battery 64%".into())
         );
         info.chapter = None;
         assert_eq!(
-            header.text("Book", &info, &Status::default()),
+            header.text("Book", &info, &Status::default(), None),
             ("Book".into(), String::new())
         );
         assert_eq!(Item::from_id("unknown"), None);

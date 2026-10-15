@@ -14,6 +14,7 @@
 //! start is a full refresh. So is a page of a fixed-layout book. With a page count
 //! in `reading.full_refresh_pages`, every Nth turn is one too.
 
+mod caption;
 mod commands;
 pub(crate) mod dict;
 mod footer;

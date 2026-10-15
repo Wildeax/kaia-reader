@@ -76,6 +76,8 @@ pub struct PageView {
     /// The title at the left and the chapter or device status at the right.
     pub header: (String, String),
     header_content: Option<(super::header::Header, String, kaia_book::PageInfo)>,
+    chapter_progress: Option<super::caption::ChapterProgress>,
+    book_title: String,
     pub header_height: u32,
     footer_content: Option<(super::footer::Footer, kaia_book::PageInfo, f64)>,
     pub(crate) footer_battery: Option<u8>,
@@ -119,6 +121,8 @@ impl PageView {
             footer: String::new(),
             header: (String::new(), String::new()),
             header_content: None,
+            chapter_progress: None,
+            book_title: String::new(),
             header_height: 0,
             footer_content: None,
             footer_battery: None,
@@ -164,8 +168,11 @@ impl PageView {
         header: super::header::Header,
         title: String,
         info: kaia_book::PageInfo,
+        progress: Option<super::caption::ChapterProgress>,
     ) {
-        self.header = header.text(&title, &info, &super::footer::Status::default());
+        self.chapter_progress = progress;
+        self.book_title = title.clone();
+        self.header = header.text(&title, &info, &super::footer::Status::default(), progress);
         self.header_content = Some((header, title, info));
     }
 
@@ -404,14 +411,18 @@ impl Widget for PageView {
         // Kaia's header and footer go under stickers and plugin overlays, so a plugin can draw
         // in the footer strip as it does in KOReader.
         if self.footer_height > 0 {
-            if let Some((footer, info, pace)) = &self.footer_content {
-                self.footer = super::footer::page_line(
+            let caption = if let Some((footer, info, pace)) = &self.footer_content {
+                let status = super::footer::page_line(
                     footer,
                     info,
                     *pace,
                     &super::footer::Status::now(self.footer_battery),
                 );
-            }
+                super::caption::Caption::new(&self.book_title, status)
+            } else {
+                super::caption::Caption::new("", &self.footer)
+            };
+            self.footer = caption.text();
             let rect = Rect::new(
                 bounds.x,
                 content.y + content.h as i32,
@@ -419,31 +430,28 @@ impl Widget for PageView {
                 self.footer_height,
             );
             cx.fill_rect(rect, surface);
-            let style = super::footer::strip_style(cx.theme);
-            let margin = cx.theme.space.lg;
-            let text = cx.fonts.layout(
-                &self.footer,
-                &style,
-                bounds.w.saturating_sub(2 * margin),
-                Some(1),
-                true,
-            );
-            cx.clipped(rect, |cx| {
-                cx.text(
-                    &text,
-                    Point::new(
-                        bounds.x + bounds.w.saturating_sub(text.width) as i32 / 2,
-                        rect.y + rect.h.saturating_sub(text.height) as i32 / 2,
-                    ),
-                );
-            });
+            caption.paint(cx, rect);
         }
         if self.header_height > 0 {
             if let Some((header, title, info)) = &self.header_content {
-                self.header = header.text(title, info, &super::footer::Status::now(self.footer_battery));
+                self.header = header.text(
+                    title,
+                    info,
+                    &super::footer::Status::now(self.footer_battery),
+                    self.chapter_progress,
+                );
             }
             let rect = Rect::new(bounds.x, bounds.y, bounds.w, self.header_height);
             cx.fill_rect(rect, surface);
+            if let Some((header, _, info)) = &self.header_content {
+                if header.chapter_only() {
+                    super::header::Header::chapter_caption(info, self.chapter_progress).paint(cx, rect);
+                }
+            }
+            let chapter_only = self
+                .header_content
+                .as_ref()
+                .is_some_and(|(header, _, _)| header.chapter_only());
             let style = super::footer::strip_style(cx.theme);
             let margin = cx.theme.space.lg;
             let available = bounds.w.saturating_sub(2 * margin);
@@ -452,7 +460,10 @@ impl Widget for PageView {
             } else {
                 available
             };
-            for (value, right) in [(&self.header.0, false), (&self.header.1, true)] {
+            for (value, right) in [(&self.header.0, false), (&self.header.1, true)]
+                .into_iter()
+                .filter(|_| !chapter_only)
+            {
                 let text = cx.fonts.layout(value, &style, width, Some(1), true);
                 let x = if self.header.0.is_empty() || self.header.1.is_empty() {
                     bounds.x + bounds.w.saturating_sub(text.width) as i32 / 2

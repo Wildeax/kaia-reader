@@ -174,11 +174,11 @@ fn the_persistent_footer_reserves_space_and_updates_after_a_page_turn() {
     let (before, strip, page) = page_state(&mut app);
     assert_eq!(strip, 120, "the capture centres the footer in a 120 px strip");
     assert_eq!(page.height(), app.screen().h - strip - header_state(&mut app).1);
-    assert!(before.starts_with("Page 9 of "), "{before}");
+    assert!(before.starts_with("Romeo and Juliet · Page 9 of "), "{before}");
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
     let (after, next_strip, _) = page_state(&mut app);
-    assert!(after.starts_with("Page 10 of "), "{after}");
+    assert!(after.starts_with("Romeo and Juliet · Page 10 of "), "{after}");
     assert_ne!(before, after);
     assert_eq!(strip, next_strip);
 }
@@ -368,10 +368,23 @@ fn header_chapter_changes_at_the_toc_boundary() {
     let (after, page) = &boundary[1];
     app.command("reader:location", &[Value::Number(f64::from(page - 1))]);
     wait_reader(&mut app);
-    assert_eq!(header_state(&mut app).0 .1, *before);
+    let before_total = page - boundary[0].1;
+    assert_eq!(
+        header_state(&mut app).0 .1,
+        format!("{before} · {before_total} of {before_total}")
+    );
     app.key(Key::RPgFwd).unwrap();
     wait_reader(&mut app);
-    assert_eq!(header_state(&mut app).0 .1, *after);
+    let next = chapters
+        .iter()
+        .filter(|(_, p)| p > page)
+        .map(|(_, p)| *p)
+        .min()
+        .unwrap();
+    assert_eq!(
+        header_state(&mut app).0 .1,
+        format!("{after} · 1 of {}", next - page)
+    );
 }
 
 #[test]

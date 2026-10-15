@@ -315,6 +315,10 @@ impl Core {
             .unwrap_or_default();
         let hint = self.pending_hint;
         let error = self.error.clone();
+        let chapter_progress = self
+            .session
+            .as_ref()
+            .and_then(|session| super::caption::ChapterProgress::from_toc(&info, session.toc()));
         let header = self.header.clone();
         let title = self.title.clone();
         let header_height = self.header_height;
@@ -336,7 +340,7 @@ impl Core {
                 view.page = frame.page;
             }
             view.message = error;
-            view.set_header(header, title, info.clone());
+            view.set_header(header, title, info.clone(), chapter_progress);
             view.header_height = header_height;
             view.set_footer(footer, info.clone(), pace);
             view.footer_height = footer_height;

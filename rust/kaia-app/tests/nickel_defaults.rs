@@ -58,6 +58,8 @@ fn check_capture_page(app: &mut App<HeadlessBackend>, name: &str) {
         assert_eq!(page.header_height, 120);
         assert_eq!(page.footer_height, 120);
         assert_eq!(page.position, Some((5, 1090)));
+        assert_eq!(page.header, (String::new(), "About · 3 of 15".into()));
+        assert_eq!(page.footer, "Romeo and Juliet · Page 6 of 1090");
     });
 
     // Extract visual lines from the same document layout used by the headless app.
