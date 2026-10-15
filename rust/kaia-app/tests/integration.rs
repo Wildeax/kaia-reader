@@ -190,12 +190,12 @@ fn collections_create_rename_reorder_and_delete_through_commands() {
 }
 
 #[test]
-fn status_line_opens_quick_settings() {
+fn status_battery_opens_its_compact_popup() {
     let (mut app, _) = manual("status-tap");
-    let r = app.find_rect("status-line").unwrap();
+    let r = app.find_rect("status-battery").unwrap();
     app.tap(Point::new(r.x + r.w as i32 / 2, r.y + r.h as i32 / 2))
         .unwrap();
-    assert!(app.find_rect("quick-sleep").is_some());
+    assert!(app.find_rect("battery-popup").is_some());
 }
 
 #[test]

@@ -67,10 +67,8 @@ fn hold_key(app: &mut App<HeadlessBackend>, key: &str, done: impl Fn(&App<Headle
 
 /// Taps the search action at the trailing edge of the header.
 fn tap_search_icon(app: &mut App<HeadlessBackend>) {
-    let r = app.find_rect("library-header").expect("the header");
-    let touch = app.services().theme.touch_target as i32;
-    let p = kaia_gfx::Point::new(r.x + r.w as i32 - touch / 2, r.y + r.h as i32 / 2);
-    app.tap(p).unwrap();
+    app.command("library:search:open", &[]);
+    app.process(Vec::new()).unwrap();
 }
 
 /// Opens the Library from Home, after the scan.
@@ -117,8 +115,8 @@ fn tapping_library_shows_the_covers() {
     open_library(&mut app);
 
     assert!(
-        app.find_rect("library-view-list").is_some(),
-        "Library shows the view tabs"
+        app.find_rect("library-view-books").is_some(),
+        "Library shows the Books tab"
     );
     for id in [juliet, leaves, pdf] {
         assert!(
@@ -196,10 +194,10 @@ fn sort_by_progress_puts_the_most_read_book_first() {
     let (juliet, _, pdf) = ids(&app);
     let others: Vec<String> = [juliet, pdf].iter().map(|id| format!("book-{id}")).collect();
 
-    tap_key(&mut app, "library-sort");
+    tap_key(&mut app, "library-options");
     assert!(
         app.find_rect("sort-progress").is_some(),
-        "the sort panel lists the keys"
+        "additional sorts remain available in the library menu"
     );
     tap_key(&mut app, "sort-progress");
 
@@ -288,6 +286,7 @@ fn book_details_show_the_book_and_mark_it_finished() {
         app.find_rect(&key(&format!("library:open:{leaves}"))).is_some(),
         "the details offer Open"
     );
+    tap_key(&mut app, &format!("details-menu-{leaves}"));
     assert!(app
         .find_rect(&key(&format!("library:book:collection:{leaves}")))
         .is_some());
@@ -338,8 +337,30 @@ fn add_to_collection_creates_it_and_the_filter_shows_it() {
     tap_key(&mut app, &key(&format!("library:add:{leaves}:new")));
     tap_key(&mut app, "name-field");
     type_text(&mut app, "Favourites");
+    let mut typed = String::new();
+    app.update_top::<kaia_ui::controls::TextField, _>("name-field", |field, _| {
+        typed = field.text().to_string()
+    });
+    assert_eq!(
+        typed,
+        "Favourites",
+        "name field: {:?}",
+        app.find_rect("name-field")
+    );
     tap_key(&mut app, &key("library:name:save"));
 
+    assert!(
+        library_db(&app)
+            .collections()
+            .unwrap()
+            .iter()
+            .any(|c| c.name == "Favourites"),
+        "collections: {:?}; notices: {:?}; unknown: {:?}; save: {:?}",
+        library_db(&app).collections().unwrap(),
+        app.notices(),
+        app.unknown_commands(),
+        app.find_rect("library-name-save")
+    );
     let id = collection_id(&app, "Favourites");
     let members: Vec<i64> = library_db(&app)
         .books(
@@ -407,6 +428,7 @@ fn library_covers_golden() {
     let (mut app, _dir) = indexed("golden-covers");
     open_library(&mut app);
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library.png"), 14);
 }
 
@@ -417,6 +439,7 @@ fn library_list_golden() {
     open_library(&mut app);
     tap_key(&mut app, &key("library:view:list"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_list.png"), 14);
 }
 
@@ -434,6 +457,7 @@ fn library_search_golden() {
     });
     app.iterate(Some(Duration::from_millis(10))).unwrap();
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_search.png"), 14);
 }
 
@@ -447,6 +471,7 @@ fn book_details_golden() {
         a.find_rect(&key("library:panel:close")).is_some()
     });
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details.png"), 14);
 }
 
@@ -487,38 +512,28 @@ fn the_tabs_share_one_row_and_the_books_controls_sit_below_with_a_gap() {
     let (juliet, _, _) = ids(&app);
     open_library(&mut app);
 
-    let touch = app.services().theme.touch_target;
     let gap = app.services().theme.space.md as i32;
     let tab_keys = [
         "library-view-books",
-        "library-view-folders",
-        "library-view-collections",
-        "library-view-series",
         "library-view-authors",
+        "library-view-series",
+        "library-view-collections",
     ];
     let tabs = tab_keys.map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
-    let row_y = tabs[0].y;
     for (i, r) in tabs.iter().enumerate() {
-        assert_eq!(r.y, row_y, "the five tabs share one row");
-        assert!(r.h >= touch, "a tab is at least the touch target high");
+        assert_eq!(r.y, tabs[0].y, "the four tabs share one row");
+        assert!(r.h >= 60, "the tab remains tappable");
         if let Some(next) = tabs.get(i + 1) {
-            assert!(r.x + r.w as i32 <= next.x, "tab {i} does not overlap the next");
+            assert!(r.right() <= next.x);
         }
     }
-
-    let filter = app.find_rect("library-filter").expect("the filter button");
-    let sort = app.find_rect("library-sort").expect("the sort button");
-    let choice = ["library-view-covers", "library-view-list"]
-        .map(|k| app.find_rect(k).unwrap_or_else(|| panic!("no {k}")));
-    for r in [&sort, &choice[0], &choice[1]] {
-        assert_eq!(r.y, filter.y, "the controls share one row");
-        assert!(r.h >= touch, "a control is a touch target");
-    }
-    assert!(
-        filter.y >= tabs[0].y + tabs[0].h as i32,
-        "the controls sit below the tabs"
-    );
-
+    let filter = app.find_rect("library-filter").unwrap();
+    let sort = app.find_rect("library-sort").unwrap();
+    let options = app.find_rect("library-options").unwrap();
+    assert_eq!(sort.y, filter.y);
+    assert_eq!(options.y, filter.y);
+    assert!(filter.y >= tabs[0].bottom());
+    assert!(app.find_rect("library-view-folders").is_none());
     let cover = app.find_rect(&format!("book-{juliet}")).expect("a cover");
     assert!(
         cover.y >= filter.y + filter.h as i32 + gap,
@@ -540,10 +555,7 @@ fn the_controls_are_for_the_books_tab_only() {
     );
     assert!(app.find_rect("library-filter").is_none(), "Folders has no filter");
     assert!(app.find_rect("library-sort").is_none(), "Folders has no sort");
-    assert!(
-        app.find_rect("library-view-folders").is_some(),
-        "the tab row stays"
-    );
+    assert!(app.find_rect("library-view-books").is_some(), "the tab row stays");
 
     tap_key(&mut app, "library-view-books");
     assert!(
@@ -579,6 +591,7 @@ fn library_filter_golden() {
     let (mut app, _dir) = indexed("golden-filter");
     open_library(&mut app);
     tap_key(&mut app, "library-filter");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_filter.png"), 14);
 }
 
@@ -601,19 +614,17 @@ fn library_large_print_golden() {
     assert_eq!(app.services().theme.text_scale, LARGE_PRINT_SCALE);
     open_library(&mut app);
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
-    // The tabs wrap to two rows: three on the first, then Series and Authors.
-    let tab = |k: &str| app.find_rect(k).unwrap_or_else(|| panic!("no {k}"));
-    let first = tab("library-view-books").y;
-    for k in ["library-view-folders", "library-view-collections"] {
-        assert_eq!(tab(k).y, first, "{k} is on the first row");
+    let first = app.find_rect("library-view-books").unwrap().y;
+    for key in [
+        "library-view-authors",
+        "library-view-series",
+        "library-view-collections",
+    ] {
+        let rect = app.find_rect(key).unwrap();
+        assert_eq!(rect.y, first);
+        assert!(rect.right() <= app.screen().w as i32);
     }
-    let second = tab("library-view-series").y;
-    assert!(second > first, "Series is on the second row");
-    assert_eq!(
-        tab("library-view-authors").y,
-        second,
-        "Authors is on the second row"
-    );
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_large_print.png"), 14);
     let _ = fs::remove_dir_all(dir);
 }

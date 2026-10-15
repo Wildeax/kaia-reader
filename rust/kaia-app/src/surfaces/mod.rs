@@ -7,15 +7,19 @@ pub mod catalogs;
 pub mod common;
 pub mod home;
 pub mod library;
+pub mod more;
 pub mod notes;
 pub mod pin;
 pub mod reader;
+pub mod search;
 pub mod settings;
+pub mod status;
+pub mod wifi;
 
 use crate::surface::Surface;
 
-/// A screen the app can show. Home, Library, Notes and Settings are roots. The
-/// others are pushed above a root.
+/// A screen the app can show. Home, Library and More are the main roots.
+/// Notes and Settings also support direct routes. Other screens open above a root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Route {
     Home,
@@ -23,6 +27,11 @@ pub enum Route {
         page: usize,
     },
     Notes,
+    More,
+    Search,
+    Wifi,
+    Notebooks,
+    Experiments,
     Settings,
     Catalogs,
     CatalogBook,
@@ -42,11 +51,11 @@ pub enum Route {
 }
 
 impl Route {
-    /// Home, Library, Notes and Settings.
+    /// The main tabs and the direct Notes and Settings routes.
     pub fn is_top_level(&self) -> bool {
         matches!(
             self,
-            Route::Home | Route::Library { .. } | Route::Notes | Route::Settings
+            Route::Home | Route::Library { .. } | Route::Notes | Route::Settings | Route::More
         )
     }
 }
@@ -59,6 +68,11 @@ pub fn create(route: &Route) -> Option<Box<dyn Surface>> {
         Route::Calibre => Box::new(catalogs::CatalogSurface::calibre()),
         Route::Home => Box::new(home::HomeSurface::default()),
         Route::Library { page } => Box::new(library::LibrarySurface::new(*page)),
+        Route::Wifi => Box::new(wifi::WifiSurface::default()),
+        Route::Search => Box::new(search::SearchSurface::default()),
+        Route::Notebooks => Box::new(more::LocalPage::notebooks()),
+        Route::Experiments => Box::new(more::LocalPage::experiments()),
+        Route::More => Box::new(more::MoreSurface),
         Route::Notes => Box::new(notes::NotesSurface),
         Route::Settings => Box::new(settings::SettingsSurface),
         Route::Reader { book } => Box::new(reader::ReaderSurface::new(*book)),

@@ -3,16 +3,13 @@
 //! details. Each builder takes the theme and the data it shows, and returns
 //! widgets. The surface decides which one is on screen.
 
-use kaia_events::Value;
 use kaia_gfx::{Pixmap, Size};
 use kaia_i18n::{format as tr_format, tr, tr_n};
 use kaia_library::storage::Source;
 use kaia_library::{Book, Collection, Library, Tag, FAVORITES, MAX_TAG_CHARS};
-use kaia_ui::components::{
-    Column, CrossAlign, Expanded, Frame, Label, Paragraph, ProgressBar, Row, SizedBox, Spacer,
-};
+use kaia_ui::components::{Column, CrossAlign, Expanded, Frame, Label, Paragraph, Row, SizedBox, Spacer};
 use kaia_ui::composite::Header;
-use kaia_ui::composite::{BookInfo, BookTile, CoverImage, Grid, ListRow, PagedList};
+use kaia_ui::composite::{BookInfo, CoverImage, ListRow, PagedList};
 use kaia_ui::controls::{Button, ButtonStyle, IconButton, OnScreenKeyboard, TextField, ENGLISH};
 use kaia_ui::geometry::Insets;
 use kaia_ui::{Theme, Tone, WidgetPod};
@@ -96,8 +93,11 @@ pub fn button(style: ButtonStyle, label: &str, action: &str) -> WidgetPod {
 
 /// The page header: the title, the status line and the icon actions. Select mode
 /// has none: its bar holds the way out.
-pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: bool) -> WidgetPod {
+pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: bool, back: bool) -> WidgetPod {
     let mut h = Header::new(theme, title);
+    if back {
+        h = h.back("back");
+    }
     if !selecting {
         h = h
             .action("check", "library:select:on")
@@ -109,16 +109,25 @@ pub fn header(theme: &Theme, title: &str, status: Option<String>, selecting: boo
     crate::surfaces::common::status_header(h).with_key("library-header")
 }
 
-/// The tab row: the five text tabs. Large print wraps them to two rows. The
-/// selected tab has an accent underline, as the nav bar marks its item. A tab
-/// takes a share of the row that fits its label, and a label that is too wide
-/// ends with an ellipsis. The Covers and List choice is in [`books_controls`],
-/// because it only changes the Books tab.
+/// Four primary tabs. Folders and display modes live in the library menu.
 pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
     let books = matches!(active, View::Covers | View::List);
     let tab = |weight: u32, selected: bool, label: &str, action: &str| {
-        let button = WidgetPod::new(Button::new(ButtonStyle::Text).text(label).on_action(action))
-            .with_key(action.replace(':', "-"));
+        let mut font = t.font.body.clone();
+        font.size = t.scale.dp(16) as f32 * t.text_scale;
+        font.weight = if selected { 700 } else { 400 };
+        let button = WidgetPod::new(
+            Pressable::new(WidgetPod::new(kaia_ui::components::Padding::new(
+                WidgetPod::new(Label::new(
+                    label,
+                    font,
+                    if selected { Tone::Accent } else { Tone::Ink },
+                )),
+                Insets::symmetric(t.scale.dp(6), t.scale.dp(8)),
+            )))
+            .tap(action, Vec::new()),
+        )
+        .with_key(action.replace(':', "-"));
         let mark = if selected {
             WidgetPod::new(
                 Frame::new(WidgetPod::new(SizedBox::new(None).height(t.line.focus))).fill(Tone::Accent),
@@ -136,65 +145,73 @@ pub fn view_tabs(t: &Theme, active: View) -> WidgetPod {
         ))
     };
     let mut tabs = vec![
-        tab(9, books, &tr("Books"), "library:view:books"),
-        tab(9, active == View::Folders, &tr("Folders"), "library:view:folders"),
+        tab(7, books, &tr("Books"), "library:view:books"),
+        tab(8, active == View::Authors, &tr("Authors"), "library:view:authors"),
+        tab(7, active == View::Series, &tr("Series"), "library:view:series"),
         tab(
-            13,
+            12,
             active == View::Collections,
             &tr("Collections"),
             "library:view:collections",
         ),
-        tab(8, active == View::Series, &tr("Series"), "library:view:series"),
-        tab(8, active == View::Authors, &tr("Authors"), "library:view:authors"),
+        WidgetPod::new(Spacer::new(22)),
     ];
-    if t.text_scale <= 1.0 {
-        return WidgetPod::new(Row::new(tabs).gap(t.space.sm));
+    if t.text_scale > 1.0 {
+        tabs.pop();
     }
-    // Large print: at 1.25 the five labels do not fit one row, so the tabs wrap
-    // to two rows, three and then two. Normal text keeps one row.
-    let second = tabs.split_off(3);
+    WidgetPod::new(Row::new(tabs))
+}
+
+pub fn books_controls(t: &Theme, filter: &str, sort: &str, active: Option<&str>) -> WidgetPod {
     WidgetPod::new(
-        Column::new(vec![
-            WidgetPod::new(Row::new(tabs).gap(t.space.sm)),
-            WidgetPod::new(Row::new(second).gap(t.space.sm)),
+        Row::new(vec![
+            compact_state(
+                t,
+                &tr_format(&tr("Filter: %1"), &[filter]),
+                "library:filter",
+                "library-filter",
+                active == Some("filter"),
+            ),
+            compact_state(
+                t,
+                &tr_format(&tr("Sort: %1"), &[sort]),
+                "library:sort",
+                "library-sort",
+                active == Some("sort"),
+            ),
+            WidgetPod::new(Spacer::new(1)),
+            compact_state(
+                t,
+                "...",
+                "library:options",
+                "library-options",
+                active == Some("options"),
+            ),
         ])
-        .gap(t.space.sm)
-        .cross_align(CrossAlign::Stretch)
-        .shrink(),
+        .gap(t.scale.dp(18)),
     )
 }
 
-/// The controls of the Books tab, in one row: the filter and the sort, each a
-/// button that names the current choice and opens its panel, then the Covers and
-/// List choice of the layout. `layout` is the layout on show, which is primary.
-pub fn books_controls(t: &Theme, filter: &str, sort: &str, layout: View) -> WidgetPod {
-    let choice = |weight: u32, view: View, label: &str, action: &str| {
-        let style = if layout == view {
-            ButtonStyle::Primary
-        } else {
-            ButtonStyle::Secondary
-        };
-        WidgetPod::new(Expanded::new(button(style, label, action), weight))
-    };
-    WidgetPod::new(
-        Row::new(vec![
-            WidgetPod::new(Expanded::new(
-                button(ButtonStyle::Secondary, filter, "library:filter"),
-                3,
-            )),
-            WidgetPod::new(Expanded::new(
-                button(
-                    ButtonStyle::Secondary,
-                    &tr_format(&tr("Sort: %1"), &[sort]),
-                    "library:sort",
-                ),
-                3,
-            )),
-            choice(2, View::Covers, &tr("Covers"), "library:view:covers"),
-            choice(2, View::List, &tr("List"), "library:view:list"),
-        ])
-        .gap(t.space.sm),
-    )
+/// Compact text controls keep a separate touch target around the label.
+pub fn compact(t: &Theme, label: &str, action: &str, key: &str) -> WidgetPod {
+    compact_state(t, label, action, key, false)
+}
+
+fn compact_state(t: &Theme, label: &str, action: &str, key: &str, active: bool) -> WidgetPod {
+    let mut font = t.font.body.clone();
+    font.size = t.scale.dp(18) as f32 * t.text_scale;
+    let label = WidgetPod::new(kaia_ui::components::Padding::new(
+        WidgetPod::new(Label::new(
+            label,
+            font,
+            if active { Tone::Surface } else { Tone::Ink },
+        )),
+        Insets::symmetric(t.scale.dp(8), t.scale.dp(12)),
+    ));
+    let label = WidgetPod::new(Frame::new(label).fill(if active { Tone::Ink } else { Tone::Surface }));
+    WidgetPod::new(Pressable::new(label).tap(action, Vec::new()))
+        .with_key(key)
+        .focusable(true)
 }
 
 /// The name of the filter in force: each active filter, joined with a comma.
@@ -253,36 +270,141 @@ pub fn format_name(format: &str) -> String {
     }
 }
 
-/// The covers view: a grid of tiles, three columns in portrait and four in landscape.
-/// A tile is 100 dp wide and centred in its cell, so two rows of covers fit on a
-/// portrait page next to the header, the chips and the page strip.
-pub fn covers(t: &Theme, screen: Size, infos: Vec<BookInfo>, loader: crate::covers::Shared) -> WidgetPod {
-    let portrait = screen.h >= screen.w;
-    let columns = if portrait { 3 } else { 4 };
-    let grid = Grid::new(infos, columns, move |info: &BookInfo, t: &Theme| {
-        let tile_w = t.scale.dp(100);
-        let info = info.clone();
-        let theme = t.clone();
-        let id = info.id.parse().unwrap_or_default();
-        let held_id = info.id.clone();
-        let tile = WidgetPod::new(crate::covers::Cell::new(id, loader.clone(), move |cover| {
-            let mut info = info.clone();
-            info.cover = cover;
-            WidgetPod::new(BookTile::new(&theme, &info).on_action("library:open"))
-        }));
-        let sized = WidgetPod::new(SizedBox::new(Some(tile)).width(tile_w));
-        let centred = WidgetPod::new(Row::new(vec![
-            WidgetPod::new(Spacer::new(1)),
-            sized,
-            WidgetPod::new(Spacer::new(1)),
-        ]));
-        let hold = Pressable::new(centred).hold("library:details", vec![Value::Str(held_id.clone())]);
-        WidgetPod::new(hold).with_key(format!("book-{held_id}"))
-    })
-    .gap(t.space.sm);
-    WidgetPod::new(grid)
+/// Four independent covers per row, with status and an overflow action.
+pub fn covers(
+    _t: &Theme,
+    _screen: Size,
+    infos: Vec<BookInfo>,
+    loader: crate::covers::Shared,
+    position: std::rc::Rc<std::cell::Cell<i32>>,
+) -> WidgetPod {
+    WidgetPod::new(
+        super::widgets::Scroll::new(infos, 4, 286, move |info: &BookInfo, t: &Theme| {
+            let id = info.id.parse().unwrap_or_default();
+            let info = info.clone();
+            let key = format!("book-{}", info.id);
+            let theme = t.clone();
+            WidgetPod::new(crate::covers::Cell::new(id, loader.clone(), move |cover| {
+                let t = &theme;
+                let cover = WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(super::widgets::FittedCover::new(
+                        info.title.clone(),
+                        cover,
+                    ))))
+                    .height(t.scale.dp(190)),
+                );
+                let cover = WidgetPod::new(
+                    Pressable::new(cover)
+                        .tap(format!("library:open:{}", info.id), Vec::new())
+                        .hold(format!("library:details:{}", info.id), Vec::new()),
+                );
+                let status = if info.progress >= 1.0 {
+                    tr("Finished")
+                } else if info.progress == 0.0 {
+                    tr("Unread")
+                } else {
+                    tr_format(
+                        &tr("%1% read"),
+                        &[&((info.progress * 100.0).round() as u32).to_string()],
+                    )
+                };
+                WidgetPod::new(
+                    Column::new(vec![
+                        cover,
+                        WidgetPod::new(Label::new(status, t.font.body.clone(), Tone::Ink)),
+                        compact(
+                            t,
+                            "...",
+                            &format!("library:menu:{}", info.id),
+                            &format!("book-menu-{}", info.id),
+                        ),
+                    ])
+                    .gap(t.space.xs)
+                    .cross_align(CrossAlign::Stretch)
+                    .shrink(),
+                )
+            }))
+            .with_key(key)
+        })
+        .position(position),
+    )
+    .with_key("book-scroll")
 }
 
+pub fn book_list(
+    books: Vec<Book>,
+    loader: crate::covers::Shared,
+    position: std::rc::Rc<std::cell::Cell<i32>>,
+) -> WidgetPod {
+    WidgetPod::new(
+        super::widgets::Scroll::new(books, 1, 122, move |book: &Book, t: &Theme| {
+            let book = book.clone();
+            let key = format!("book-{}", book.id);
+            let theme = t.clone();
+            WidgetPod::new(crate::covers::Cell::new(book.id, loader.clone(), move |cover| {
+                let t = &theme;
+                let image = WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(super::widgets::FittedCover::new(
+                        data::title(&book),
+                        cover,
+                    ))))
+                    .width(t.scale.dp(62))
+                    .height(t.scale.dp(82)),
+                );
+                let title = WidgetPod::new(
+                    Column::new(vec![
+                        WidgetPod::new(Label::new(
+                            data::title(&book),
+                            t.font.book_title.clone(),
+                            Tone::Ink,
+                        )),
+                        WidgetPod::new(Label::new(
+                            Library::display_authors(book.authors.as_deref().unwrap_or("")),
+                            t.font.caption.clone(),
+                            Tone::InkSecondary,
+                        )),
+                    ])
+                    .gap(t.space.xs)
+                    .shrink(),
+                );
+                let open = WidgetPod::new(
+                    Pressable::new(WidgetPod::new(
+                        Row::new(vec![image, WidgetPod::new(Expanded::new(title, 1))]).gap(t.scale.dp(16)),
+                    ))
+                    .tap(format!("library:open:{}", book.id), Vec::new())
+                    .hold(format!("library:details:{}", book.id), Vec::new()),
+                );
+                WidgetPod::new(
+                    Column::new(vec![
+                        WidgetPod::new(
+                            Row::new(vec![
+                                WidgetPod::new(Expanded::new(open, 1)),
+                                WidgetPod::new(Label::new(
+                                    data::status_label(&book),
+                                    t.font.caption.clone(),
+                                    Tone::Ink,
+                                )),
+                                compact(
+                                    t,
+                                    "...",
+                                    &format!("library:menu:{}", book.id),
+                                    &format!("book-menu-{}", book.id),
+                                ),
+                            ])
+                            .gap(t.space.sm),
+                        ),
+                        WidgetPod::new(kaia_ui::components::Divider::new(Tone::Divider)),
+                    ])
+                    .gap(t.scale.dp(16))
+                    .shrink(),
+                )
+            }))
+            .with_key(key)
+        })
+        .position(position),
+    )
+    .with_key("list")
+}
 /// The list view and the search results: rows of cover, title and detail, paged.
 pub fn list(lines: Vec<Line>) -> PagedList<Line> {
     PagedList::new(lines, |line: &Line, _t: &Theme| line_row(line))
@@ -324,7 +446,7 @@ pub fn folder_rows(t: &Theme, heading: String, rows: Vec<Line>) -> WidgetPod {
 /// series. The index of a row is the index `library:series:<n>` names.
 pub fn series_list(groups: &[SeriesGroup]) -> WidgetPod {
     let items: Vec<(usize, SeriesGroup)> = groups.iter().cloned().enumerate().collect();
-    let list = PagedList::new(items, |(n, group): &(usize, SeriesGroup), _t: &Theme| {
+    let list = super::widgets::Scroll::new(items, 1, 90, |(n, group): &(usize, SeriesGroup), _t: &Theme| {
         let row = ListRow::new(group.name.clone())
             .secondary(tr_format(
                 &tr_n("%1 book", "%1 books", group.books as i64),
@@ -339,7 +461,7 @@ pub fn series_list(groups: &[SeriesGroup]) -> WidgetPod {
 
 /// The books of an open series, in series order: the name, a row to go back to
 /// the list of series, then the books with their covers.
-pub fn series_books(t: &Theme, name: &str, books: Vec<Line>, loader: crate::covers::Shared) -> WidgetPod {
+pub fn series_books(t: &Theme, name: &str, books: Vec<Book>, loader: crate::covers::Shared) -> WidgetPod {
     WidgetPod::new(
         Column::new(vec![
             WidgetPod::new(Label::new(
@@ -349,7 +471,7 @@ pub fn series_books(t: &Theme, name: &str, books: Vec<Line>, loader: crate::cove
             )),
             WidgetPod::new(ListRow::new(tr("Up")).on_action("library:series:up")).with_key("series-up"),
             WidgetPod::new(Expanded::new(
-                WidgetPod::new(list_covers(books, loader)).with_key("series-books"),
+                book_list(books, loader, std::rc::Rc::new(std::cell::Cell::new(0))).with_key("series-books"),
                 1,
             )),
         ])
@@ -360,19 +482,118 @@ pub fn series_books(t: &Theme, name: &str, books: Vec<Line>, loader: crate::cove
 
 /// The Authors view: one row per author, with the number of books. A tap opens the
 /// author. The index of a row is the index `library:author:<n>` names.
-pub fn author_list(groups: &[AuthorGroup]) -> WidgetPod {
-    let items: Vec<(usize, AuthorGroup)> = groups.iter().cloned().enumerate().collect();
-    let list = PagedList::new(items, |(n, group): &(usize, AuthorGroup), _t: &Theme| {
-        let row = ListRow::new(group.name.clone())
-            .secondary(tr_format(
-                &tr_n("%1 book", "%1 books", group.books as i64),
-                &[&group.books.to_string()],
-            ))
-            .chevron()
-            .on_action(format!("library:author:{n}"));
-        WidgetPod::new(row).with_key(format!("author-{n}"))
-    });
-    WidgetPod::new(Expanded::new(WidgetPod::new(list).with_key("author-list"), 1))
+pub fn author_list(groups: &[AuthorGroup], position: std::rc::Rc<std::cell::Cell<i32>>) -> WidgetPod {
+    let items: Vec<_> = groups.iter().cloned().enumerate().collect();
+    WidgetPod::new(Expanded::new(
+        WidgetPod::new(
+            super::widgets::Scroll::new(items, 1, 60, |(n, group): &(usize, AuthorGroup), t: &Theme| {
+                let row = Row::new(vec![
+                    WidgetPod::new(Expanded::new(
+                        compact(
+                            t,
+                            &group.name,
+                            &format!("library:author:{n}"),
+                            &format!("author-{n}"),
+                        ),
+                        1,
+                    )),
+                    WidgetPod::new(Label::new(
+                        tr_format(
+                            &tr_n("%1 book", "%1 books", group.books as i64),
+                            &[&group.books.to_string()],
+                        ),
+                        t.font.caption.clone(),
+                        Tone::Ink,
+                    )),
+                ])
+                .cross_align(CrossAlign::Center);
+                WidgetPod::new(
+                    Column::new(vec![
+                        WidgetPod::new(row),
+                        WidgetPod::new(kaia_ui::components::Divider::new(Tone::Divider)),
+                    ])
+                    .shrink(),
+                )
+            })
+            .position(position),
+        )
+        .with_key("author-list"),
+        1,
+    ))
+}
+
+pub fn empty_group(t: &Theme, collections: bool) -> WidgetPod {
+    let circle = WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(EmptyBooks)))
+            .width(t.scale.dp(252))
+            .height(t.scale.dp(252)),
+    );
+    let illustration = WidgetPod::new(Row::new(vec![
+        WidgetPod::new(Spacer::new(1)),
+        circle,
+        WidgetPod::new(Spacer::new(1)),
+    ]));
+    let mut rows = vec![
+        WidgetPod::new(SizedBox::new(None).height(t.scale.dp(if collections { 48 } else { 82 }))),
+        illustration,
+        WidgetPod::new(Label::new(
+            if collections {
+                tr("Your collections")
+            } else {
+                tr("No series yet")
+            },
+            t.font.title.clone(),
+            Tone::Ink,
+        )),
+        body_text(
+            t,
+            &if collections {
+                tr("Group your books into collections.")
+            } else {
+                tr("Books with series information appear here.")
+            },
+        ),
+    ];
+    if collections {
+        rows.push(button(
+            ButtonStyle::Secondary,
+            &tr("Create collection"),
+            "library:collections:new",
+        ));
+    }
+    WidgetPod::new(
+        Column::new(rows)
+            .gap(t.scale.dp(22))
+            .cross_align(CrossAlign::Center),
+    )
+}
+
+pub struct EmptyBooks;
+impl kaia_ui::Widget for EmptyBooks {
+    kaia_ui::impl_as_any!();
+    fn layout(&mut self, _cx: &mut kaia_ui::LayoutCx, c: kaia_ui::geometry::Constraints) -> Size {
+        c.max
+    }
+    fn paint(&mut self, cx: &mut kaia_ui::PaintCx) {
+        let b = cx.bounds();
+        let center = kaia_gfx::Point::new(b.x + b.w as i32 / 2, b.y + b.h as i32 / 2);
+        cx.fill_circle(center, b.w.min(b.h) as f32 / 2.0, cx.color(Tone::Accent));
+        let ink = cx.color(Tone::Surface);
+        let dp = |v: u32| b.w.min(b.h) * v / 252;
+        for n in 0..3 {
+            let r = kaia_gfx::Rect::new(
+                center.x - dp(62) as i32 + n * dp(42) as i32,
+                center.y - dp(66) as i32,
+                dp(36),
+                dp(132),
+            );
+            cx.border(r, dp(2), dp(3), ink);
+            cx.fill_rect(
+                kaia_gfx::Rect::new(r.x + dp(6) as i32, r.y + dp(18) as i32, dp(24), dp(3)),
+                ink,
+            );
+        }
+    }
 }
 
 /// The books of an open author: the name, a row to go back to the list of
@@ -395,53 +616,57 @@ pub fn author_books(t: &Theme, name: &str, books: WidgetPod) -> WidgetPod {
 
 /// The collections tab: one row per collection, which filters the covers by it.
 pub fn collections(t: &Theme, collections: &[Collection]) -> WidgetPod {
+    if collections.is_empty() {
+        return empty_group(t, true);
+    }
     let items: Vec<_> = collections
         .iter()
         .enumerate()
         .map(|(position, c)| (c.clone(), position))
         .collect();
-    let list = PagedList::new(items, |(c, position): &(Collection, usize), t: &Theme| {
-        let id = c.id;
-        // The favorites collection keeps its name and its members: no rename or delete.
-        let mut actions = Vec::new();
-        if !c.name.eq_ignore_ascii_case(FAVORITES) {
+    let list =
+        super::widgets::Scroll::new(items, 1, 150, |(c, position): &(Collection, usize), t: &Theme| {
+            let id = c.id;
+            // The favorites collection keeps its name and its members: no rename or delete.
+            let mut actions = Vec::new();
+            if !c.name.eq_ignore_ascii_case(FAVORITES) {
+                actions.push(button(
+                    ButtonStyle::Secondary,
+                    &tr("Rename"),
+                    &format!("library:collections:rename:{id}"),
+                ));
+                actions.push(button(
+                    ButtonStyle::Secondary,
+                    &tr("Delete"),
+                    &format!("library:collections:delete:{id}"),
+                ));
+            }
             actions.push(button(
                 ButtonStyle::Secondary,
-                &tr("Rename"),
-                &format!("library:collections:rename:{id}"),
+                &tr("Move up"),
+                &format!("library:collections:move:{id}:{}", position.saturating_sub(1)),
             ));
             actions.push(button(
                 ButtonStyle::Secondary,
-                &tr("Delete"),
-                &format!("library:collections:delete:{id}"),
+                &tr("Move down"),
+                &format!("library:collections:move:{id}:{}", position + 1),
             ));
-        }
-        actions.push(button(
-            ButtonStyle::Secondary,
-            &tr("Move up"),
-            &format!("library:collections:move:{id}:{}", position.saturating_sub(1)),
-        ));
-        actions.push(button(
-            ButtonStyle::Secondary,
-            &tr("Move down"),
-            &format!("library:collections:move:{id}:{}", position + 1),
-        ));
-        WidgetPod::new(
-            Column::new(vec![
-                WidgetPod::new(
-                    ListRow::new(c.name.clone())
-                        .secondary(tr_format(
-                            &tr_n("%1 book", "%1 books", c.books as i64),
-                            &[&c.books.to_string()],
-                        ))
-                        .on_action(format!("library:collection:{id}")),
-                )
-                .with_key(format!("collection-{id}")),
-                WidgetPod::new(Row::new(actions).gap(t.space.sm)),
-            ])
-            .shrink(),
-        )
-    });
+            WidgetPod::new(
+                Column::new(vec![
+                    WidgetPod::new(
+                        ListRow::new(c.name.clone())
+                            .secondary(tr_format(
+                                &tr_n("%1 book", "%1 books", c.books as i64),
+                                &[&c.books.to_string()],
+                            ))
+                            .on_action(format!("library:collection:{id}")),
+                    )
+                    .with_key(format!("collection-{id}")),
+                    WidgetPod::new(Row::new(actions).gap(t.space.sm)),
+                ])
+                .shrink(),
+            )
+        });
     WidgetPod::new(Expanded::new(
         WidgetPod::new(
             Column::new(vec![
@@ -570,7 +795,7 @@ fn framed(t: &Theme, column: WidgetPod) -> WidgetPod {
         Frame::new(padded)
             .fill(Tone::Surface)
             .border(Tone::Ink, t.line.hairline)
-            .radius(t.radius.card),
+            .radius(0),
     )
 }
 
@@ -579,51 +804,261 @@ pub fn sort_name(choice: SortChoice) -> String {
     match choice {
         SortChoice::Title => tr("Title"),
         SortChoice::Author => tr("Author"),
-        SortChoice::Read => tr("Recently read"),
-        SortChoice::Added => tr("Recently added"),
+        SortChoice::Read => tr("Recent"),
+        SortChoice::Added => tr("Added"),
         SortChoice::Progress => tr("Progress"),
         SortChoice::Series => tr("Series"),
+        SortChoice::Size => tr("File size"),
+        SortChoice::Type => tr("File type"),
     }
 }
 
 /// The sort panel: one row per choice. The current one shows a value.
 pub fn sort_panel(t: &Theme, current: SortChoice) -> WidgetPod {
     let options = [
-        (SortChoice::Title, "title", true),
-        (SortChoice::Author, "author", true),
-        (SortChoice::Read, "read", true),
-        (SortChoice::Added, "added", true),
-        (SortChoice::Progress, "progress", true),
-        (SortChoice::Series, "series", true),
+        (SortChoice::Read, "read"),
+        (SortChoice::Added, "added"),
+        (SortChoice::Title, "title"),
+        (SortChoice::Author, "author"),
+        (SortChoice::Series, "series"),
+        (SortChoice::Size, "size"),
+        (SortChoice::Type, "type"),
     ];
-    let rows: Vec<WidgetPod> = options
-        .into_iter()
-        .map(|(choice, key, enabled)| {
-            let mut row = ListRow::new(sort_name(choice))
-                .enabled(enabled)
-                .on_action(format!("library:sort:{key}"));
-            if !enabled {
-                row = row.secondary(tr("Needs series data from the book files"));
-            } else if choice == current {
-                row = row.value(tr("Current"));
-            }
-            WidgetPod::new(row).with_key(format!("sort-{key}"))
-        })
-        .collect();
-    sheet(
+    menu(
         t,
-        &tr("Sort by"),
-        vec![
+        options
+            .into_iter()
+            .map(|(choice, key)| {
+                menu_row(
+                    t,
+                    &sort_name(choice),
+                    &format!("library:sort:{key}"),
+                    &format!("sort-{key}"),
+                    current == choice,
+                    None,
+                )
+            })
+            .collect(),
+    )
+}
+
+pub fn menu_row(
+    t: &Theme,
+    label: &str,
+    action: &str,
+    key: &str,
+    checked: bool,
+    count: Option<usize>,
+) -> WidgetPod {
+    let text = if checked {
+        format!("✓ {label}")
+    } else {
+        label.into()
+    };
+    let mut font = t.font.body.clone();
+    font.size = t.scale.dp(17) as f32 * t.text_scale;
+    let control = WidgetPod::new(
+        Pressable::new(WidgetPod::new(kaia_ui::components::Padding::new(
+            WidgetPod::new(Label::new(text, font, Tone::Ink)),
+            Insets::symmetric(t.scale.dp(8), t.scale.dp(8)),
+        )))
+        .tap(action, vec![]),
+    )
+    .with_key(key)
+    .focusable(true);
+    let mut row = vec![WidgetPod::new(Expanded::new(control, 1))];
+    if let Some(count) = count {
+        row.push(WidgetPod::new(Label::new(
+            count.to_string(),
+            t.font.caption.clone(),
+            Tone::Ink,
+        )));
+    }
+    WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(
+            Column::new(vec![
+                WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(
+                        Row::new(row).cross_align(CrossAlign::Center),
+                    )))
+                    .height(t.scale.dp(46) - 1),
+                ),
+                WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(kaia_ui::components::Divider::new(
+                        Tone::Divider,
+                    ))))
+                    .height(1),
+                ),
+            ])
+            .cross_align(CrossAlign::Stretch)
+            .shrink(),
+        )))
+        .height(t.scale.dp(46)),
+    )
+}
+
+pub fn menu(t: &Theme, rows: Vec<WidgetPod>) -> WidgetPod {
+    WidgetPod::new(
+        Frame::new(WidgetPod::new(kaia_ui::components::Padding::new(
             WidgetPod::new(Column::new(rows).cross_align(CrossAlign::Stretch).shrink()),
-            button(ButtonStyle::Secondary, &tr("Cancel"), "library:panel:close"),
+            Insets::all(t.scale.dp(5)),
+        )))
+        .fill(Tone::Surface)
+        .border(Tone::Ink, 2),
+    )
+}
+
+pub fn options_panel(t: &Theme, layout: View) -> WidgetPod {
+    let (label, action) = if layout == View::List {
+        (tr("Show covers"), "library:view:covers")
+    } else {
+        (tr("Show list"), "library:view:list")
+    };
+    menu(
+        t,
+        vec![
+            menu_row(t, &label, action, &action.replace(':', "-"), false, None),
+            menu_row(
+                t,
+                &tr("Select books"),
+                "library:select:on",
+                "library-select-on",
+                false,
+                None,
+            ),
+            menu_row(
+                t,
+                &tr("Folders"),
+                "library:view:folders",
+                "library-view-folders",
+                false,
+                None,
+            ),
+            menu_row(
+                t,
+                &tr("More filters"),
+                "library:filters:more",
+                "library-filters-more",
+                false,
+                None,
+            ),
+            menu_row(
+                t,
+                &tr("Sort by progress"),
+                "library:sort:progress",
+                "sort-progress",
+                false,
+                None,
+            ),
         ],
     )
+}
+
+pub fn book_menu(t: &Theme, book: i64, details: bool) -> WidgetPod {
+    book_menu_with(t, book, details, None, false)
+}
+
+pub fn book_menu_with(
+    t: &Theme,
+    book: i64,
+    details: bool,
+    remove: Option<String>,
+    favorite: bool,
+) -> WidgetPod {
+    let mut rows = Vec::new();
+    if !details {
+        for (label, action) in [(tr("Read"), "open"), (tr("Details"), "details")] {
+            let id = format!("library:{action}:{book}");
+            rows.push(menu_row(t, &label, &id, &id.replace(':', "-"), false, None));
+        }
+    }
+    for (label, action) in [
+        (tr("Add to collection"), "collection"),
+        (tr("Mark unread"), "unread"),
+        (tr("Mark finished"), "finished"),
+        (tr("Remove"), "delete"),
+    ] {
+        let (label, id) = if action == "collection" && remove.is_some() {
+            (tr("Remove from collection"), remove.clone().unwrap())
+        } else {
+            (label, format!("library:book:{action}:{book}"))
+        };
+        rows.push(menu_row(t, &label, &id, &id.replace(':', "-"), false, None));
+    }
+    if details {
+        for (label, action) in [
+            (tr("Rating"), "rating:open"),
+            (tr("Tags"), "tags:open"),
+            (tr("Statistics"), "stats:open"),
+            (
+                if favorite {
+                    tr("Remove favorite")
+                } else {
+                    tr("Favorite")
+                },
+                "favorite:toggle",
+            ),
+        ] {
+            let id = format!("library:{action}:{book}");
+            rows.push(menu_row(t, &label, &id, &id.replace(':', "-"), false, None));
+        }
+    }
+    menu(t, rows)
+}
+
+pub fn primary_filter(t: &Theme, services: &crate::services::Services, prefs: &Prefs) -> WidgetPod {
+    let choices = [
+        (tr("All books"), "all", None),
+        (tr("Unread"), "not-started", Some(Chip::NotStarted)),
+        (tr("Reading"), "reading", Some(Chip::Reading)),
+        (tr("Finished"), "finished", Some(Chip::Finished)),
+    ];
+    let mut rows: Vec<_> = choices
+        .into_iter()
+        .map(|(label, action, chip)| {
+            let mut counted = prefs.clone();
+            counted.chip = chip;
+            menu_row(
+                t,
+                &label,
+                &format!("library:filter:{action}"),
+                &format!("library-filter-{action}"),
+                prefs.chip == chip,
+                Some(data::list_in(services, &counted).len()),
+            )
+        })
+        .collect();
+    for (source, label, key) in [
+        (Source::Other, tr("Imported"), "other"),
+        (Source::Opds, tr("Downloaded"), "opds"),
+    ] {
+        let mut counted = prefs.clone();
+        counted.source = Some(source);
+        rows.push(menu_row(
+            t,
+            &label,
+            &format!("library:filter:source:{key}"),
+            &format!("library-filter-source-{key}"),
+            prefs.source == Some(source),
+            Some(data::list_in(services, &counted).len()),
+        ));
+    }
+    menu(t, rows).with_key("primary-filter")
 }
 
 /// The filter panel: the statuses and the collection as buttons, the choice in
 /// force filled. A button fits the page where a row list would not, so the panel
 /// keeps its Cancel on screen.
 pub fn filter_panel(t: &Theme, prefs: &Prefs, collection: Option<&str>) -> WidgetPod {
+    let button = |style: ButtonStyle, label: &str, action: &str| {
+        WidgetPod::new(
+            Button::new(style)
+                .accent(style == ButtonStyle::Primary)
+                .text(label)
+                .on_action(action),
+        )
+        .with_key(action.replace(':', "-"))
+    };
     let chip = prefs.chip;
     let source = prefs.source;
     let format = prefs.format.as_deref();
@@ -970,6 +1405,7 @@ pub fn confirm_panel(t: &Theme, book: &Book) -> WidgetPod {
 /// What the details sheet shows about a book, beside its row.
 pub struct DetailsInfo<'a> {
     pub rating: Rating,
+    pub metadata: bool,
     /// True when the book has a row in the statistics database, which adds the
     /// reading statistics button after the rating.
     pub statistics: bool,
@@ -986,184 +1422,193 @@ pub fn details_panel(
     book: &Book,
     cover: Option<Pixmap>,
     close: &str,
-    remove: Option<String>,
+    _remove: Option<String>,
     info: DetailsInfo<'_>,
 ) -> WidgetPod {
     let DetailsInfo {
-        rating,
-        statistics,
+        rating: _,
+        statistics: _,
         favorite,
         tags,
+        metadata,
     } = info;
-    let title = crate::surfaces::common::display_title(book);
-    let mut facts = vec![WidgetPod::new(Label::new(
-        title.clone(),
-        t.font.book_title.clone(),
-        Tone::Ink,
-    ))];
-    // The authors and the series share a row, so the sheet keeps its height.
-    let authors = Library::display_authors(book.authors.as_deref().unwrap_or(""));
-    let mut author_row = Vec::new();
-    if !authors.is_empty() {
-        author_row.push(WidgetPod::new(Expanded::new(
-            WidgetPod::new(Label::new(authors, t.font.body.clone(), Tone::InkSecondary)),
+    let id = book.id;
+    let title = data::title(book);
+    let next = if favorite { "off" } else { "on" };
+    let star = WidgetPod::new(
+        IconButton::new(if favorite { "star.full" } else { "star.empty" })
+            .on_action(format!("library:favorite:{id}:{next}")),
+    )
+    .with_key(format!("library-favorite-{id}-{next}"));
+    let header = WidgetPod::new(Row::new(vec![
+        WidgetPod::new(Expanded::new(
+            WidgetPod::new(Label::new(tr("My books"), t.font.caption.clone(), Tone::Ink)),
             1,
-        )));
-    }
-    if let Some(series) = book.series.as_deref().filter(|s| !s.trim().is_empty()) {
-        let line = match book.series_index {
-            Some(number) => tr_format(&tr("Series: %1, book %2"), &[series, &number.to_string()]),
-            None => tr_format(&tr("Series: %1"), &[series]),
-        };
-        author_row.push(
-            WidgetPod::new(Label::new(line, t.font.caption.clone(), Tone::InkSecondary))
+        )),
+        star,
+        WidgetPod::new(IconButton::new("close").on_action(close)).with_key(close.replace(':', "-")),
+    ]));
+    let mut facts = vec![
+        WidgetPod::new(Paragraph::new(title.clone(), t.font.book_title.clone(), Tone::Ink).max_lines(3)),
+        WidgetPod::new(Label::new(
+            Library::display_authors(book.authors.as_deref().unwrap_or("")),
+            t.font.body.clone(),
+            Tone::Ink,
+        )),
+        WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(
+                    Pressable::new(WidgetPod::new(
+                        Frame::new(WidgetPod::new(
+                            SizedBox::new(Some(WidgetPod::new(kaia_ui::components::Align::new(
+                                WidgetPod::new(Label::new(tr("Read"), t.font.body.clone(), Tone::Ink)),
+                                kaia_ui::geometry::Alignment::Center,
+                                kaia_ui::geometry::Alignment::Center,
+                            ))))
+                            .width(t.scale.dp(125))
+                            .height(t.scale.dp(40)),
+                        ))
+                        .fill(Tone::SurfaceAlt),
+                    ))
+                    .tap(format!("library:open:{id}"), Vec::new()),
+                )
+                .with_key(format!("library-open-{id}")),
+                compact(
+                    t,
+                    "...",
+                    &format!("library:menu:{id}"),
+                    &format!("details-menu-{id}"),
+                ),
+            ])
+            .gap(t.space.sm),
+        ),
+    ];
+    if let Some(series) = book.series.as_deref() {
+        facts.push(
+            WidgetPod::new(Label::new(series, t.font.caption.clone(), Tone::InkSecondary))
                 .with_key("details-series"),
         );
     }
-    if !author_row.is_empty() {
-        facts.push(WidgetPod::new(Row::new(author_row).gap(t.space.sm)));
-    }
-    facts.push(WidgetPod::new(ProgressBar::new(book.percent as f32)));
-    facts.push(body_text(t, &data::status_label(book)));
-    let mut file_info = tr_format(
-        &tr("%1 file, %2"),
-        &[&book.format.to_uppercase(), &data::size_text(book.size)],
-    );
-    if let Some(pages) = book.pages {
-        file_info.push_str(&tr_format(
-            &tr_n(", %1 page", ", %1 pages", pages as i64),
-            &[&pages.to_string()],
-        ));
-    }
-    facts.push(WidgetPod::new(Label::new(
-        file_info,
-        t.font.caption.clone(),
-        Tone::InkSecondary,
-    )));
-    if let Some(name) = book.path.file_name() {
-        facts.push(WidgetPod::new(Label::new(
-            name.to_string_lossy().into_owned(),
-            t.font.caption.clone(),
-            Tone::InkSecondary,
-        )));
-    }
     if !tags.is_empty() {
-        let names: Vec<&str> = tags.iter().map(|t| t.name.as_str()).collect();
         facts.push(
             WidgetPod::new(Label::new(
-                tr_format(&tr("Tags: %1"), &[&names.join(", ")]),
+                tags.iter()
+                    .map(|tag| tag.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 t.font.caption.clone(),
                 Tone::InkSecondary,
             ))
             .with_key("details-tags"),
         );
     }
-    let cover_box = WidgetPod::new(
-        SizedBox::new(Some(WidgetPod::new(CoverImage::new(title.clone(), cover))))
-            .width(t.scale.dp(110))
-            .height(t.scale.dp(165)),
+    let upper = WidgetPod::new(
+        SizedBox::new(Some(WidgetPod::new(
+            Row::new(vec![
+                WidgetPod::new(
+                    SizedBox::new(Some(WidgetPod::new(super::widgets::FittedCover::new(
+                        title, cover,
+                    ))))
+                    .width(t.scale.dp(143))
+                    .height(t.scale.dp(189)),
+                ),
+                WidgetPod::new(Expanded::new(
+                    WidgetPod::new(Column::new(facts).gap(t.space.sm).shrink()),
+                    1,
+                )),
+            ])
+            .gap(t.scale.dp(13)),
+        )))
+        .height(t.scale.dp(320)),
     );
-    let mut children = vec![WidgetPod::new(
+    let tab = |label: &str, action: &str, active| {
+        let mut font = t.font.body.clone();
+        font.size = t.scale.dp(16) as f32 * t.text_scale;
+        font.weight = if active { 700 } else { 400 };
+        WidgetPod::new(
+            SizedBox::new(Some(WidgetPod::new(
+                Column::new(vec![
+                    WidgetPod::new(
+                        Pressable::new(WidgetPod::new(kaia_ui::components::Padding::new(
+                            WidgetPod::new(Label::new(
+                                label,
+                                font,
+                                if active { Tone::Accent } else { Tone::Ink },
+                            )),
+                            Insets::symmetric(t.scale.dp(8), t.scale.dp(4)),
+                        )))
+                        .tap(action, Vec::new()),
+                    )
+                    .with_key(action.replace(':', "-")),
+                    WidgetPod::new(
+                        Frame::new(WidgetPod::new(SizedBox::new(None).height(t.scale.dp(3))))
+                            .fill(if active { Tone::Accent } else { Tone::Surface }),
+                    ),
+                ])
+                .cross_align(CrossAlign::Stretch)
+                .shrink(),
+            )))
+            .width((t.scale.dp(110) as f32 * t.text_scale) as u32),
+        )
+    };
+    let tabs = WidgetPod::new(
         Row::new(vec![
-            cover_box,
-            WidgetPod::new(Expanded::new(
-                WidgetPod::new(Column::new(facts).gap(t.space.xs).shrink()),
-                1,
-            )),
+            tab(&tr("Synopsis"), "library:details-tab:synopsis", !metadata),
+            tab(&tr("Details"), "library:details-tab:metadata", metadata),
         ])
         .gap(t.space.md),
-    )];
-    let id = book.id;
-    if let Some(desc) = book.description.as_deref().filter(|d| !d.trim().is_empty()) {
-        children.push(WidgetPod::new(
-            Paragraph::new(desc.to_string(), t.font.body.clone(), Tone::InkSecondary).max_lines(4),
-        ));
-    }
-    let open = button(ButtonStyle::Primary, &tr("Open"), &format!("library:open:{id}"));
-    children.push(if statistics {
-        let stats = button(
-            ButtonStyle::Secondary,
-            &tr("Statistics"),
-            &format!("library:stats:open:{id}"),
-        );
-        trio(t, open, rating_button(rating, id), stats)
-    } else {
-        pair(t, open, rating_button(rating, id))
-    });
-    // The second row holds the tags and the collection action. Inside a collection
-    // that action removes the book, so the sheet does not also offer to add it.
-    let tags_button = button(
-        ButtonStyle::Secondary,
-        &tr("Tags"),
-        &format!("library:tags:open:{id}"),
     );
-    let collection = match remove {
-        Some(action) => button(ButtonStyle::Secondary, &tr("Remove from collection"), &action),
-        None => button(
-            ButtonStyle::Secondary,
-            &tr("Add to collection"),
-            &format!("library:book:collection:{id}"),
-        ),
-    };
-    children.push(pair(t, tags_button, collection));
-    // The rows keep to four, so the sheet fits the page.
-    children.push(pair(
-        t,
-        button(
-            ButtonStyle::Secondary,
-            &tr("Mark as finished"),
-            &format!("library:book:finished:{id}"),
-        ),
-        button(
-            ButtonStyle::Secondary,
-            &tr("Remove from history"),
-            &format!("library:book:history:{id}"),
-        ),
-    ));
-    children.push(pair(
-        t,
-        button(
-            ButtonStyle::Secondary,
-            &tr("Delete file"),
-            &format!("library:book:delete:{id}"),
-        ),
-        button(ButtonStyle::Secondary, &tr("Close"), close),
-    ));
-    // The star sits in the head row. It names the state it sets, and its shape
-    // shows the state too, so the value does not depend on colour.
-    let (icon, next) = if favorite {
-        ("star.full", "off")
+    let text = if metadata {
+        [
+            tr_format(&tr("Identifier: %1"), &[&book.partial_md5]),
+            tr_format(&tr("Language: %1"), &[book.language.as_deref().unwrap_or("-")]),
+            tr_format(
+                &tr("File: %1"),
+                &[&book.path.file_name().unwrap_or_default().to_string_lossy()],
+            ),
+            tr_format(
+                &tr("Folder: %1"),
+                &[&book
+                    .path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new(""))
+                    .to_string_lossy()],
+            ),
+            tr_format(&tr("Size: %1"), &[&data::size_text(book.size)]),
+            tr_format(&tr("Format: %1"), &[&book.format.to_uppercase()]),
+        ]
+        .join("\n")
     } else {
-        ("star.empty", "on")
+        book.description
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| tr("No synopsis available."))
     };
-    let star = WidgetPod::new(IconButton::new(icon).on_action(format!("library:favorite:{id}:{next}")))
-        .with_key(format!("library-favorite-{id}-{next}"));
-    let head = WidgetPod::new(
-        Row::new(vec![
-            WidgetPod::new(Expanded::new(
-                WidgetPod::new(Label::new(tr("Book details"), t.font.title.clone(), Tone::Ink)),
-                1,
-            )),
-            star,
-        ])
-        .gap(t.space.sm),
-    );
-    sheet_with(t, head, children, t.space.sm)
-}
-
-/// The rating button of the details: the current value. It opens the rating sheet.
-/// A book with no state file shows the same button, and the sheet explains why.
-fn rating_button(rating: Rating, book: i64) -> WidgetPod {
-    let label = match rating {
-        Rating::Stars(Some(n)) => tr_format(&tr("Rating: %1 of 5"), &[&n.to_string()]),
-        Rating::Stars(None) => tr("Not rated"),
-        Rating::Unopened | Rating::Unreadable => tr("Rating"),
-    };
-    button(
-        ButtonStyle::Secondary,
-        &label,
-        &format!("library:rating:open:{book}"),
+    let content = WidgetPod::new(
+        super::widgets::Scroll::new(vec![text], 1, 1, |text: &String, t: &Theme| {
+            WidgetPod::new(Paragraph::new(text.clone(), t.font.body.clone(), Tone::Ink))
+        })
+        .measure_single_row(),
     )
+    .with_key("details-text");
+    let body = Column::new(vec![
+        WidgetPod::new(SizedBox::new(Some(header)).height(t.scale.dp(36))),
+        upper,
+        tabs,
+        WidgetPod::new(kaia_ui::components::Divider::new(Tone::Divider)),
+        WidgetPod::new(Expanded::new(content, 1)),
+    ])
+    .gap(t.space.sm)
+    .cross_align(CrossAlign::Stretch);
+    WidgetPod::new(
+        Frame::new(WidgetPod::new(kaia_ui::components::Padding::new(
+            WidgetPod::new(body),
+            Insets::symmetric(t.scale.dp(28), t.scale.dp(12)),
+        )))
+        .fill(Tone::Surface)
+        .border(Tone::Ink, 2),
+    )
+    .with_key("book-details-dialog")
 }
 
 /// The rating sheet: the current value, one button for each star count and
@@ -1262,18 +1707,6 @@ pub fn select_bar(t: &Theme, label: String, checked: usize) -> WidgetPod {
 }
 
 /// Two buttons side by side, each taking half the row.
-/// Three buttons in one row, each the same width.
-fn trio(t: &Theme, first: WidgetPod, second: WidgetPod, third: WidgetPod) -> WidgetPod {
-    WidgetPod::new(
-        Row::new(vec![
-            WidgetPod::new(Expanded::new(first, 1)),
-            WidgetPod::new(Expanded::new(second, 1)),
-            WidgetPod::new(Expanded::new(third, 1)),
-        ])
-        .gap(t.space.sm),
-    )
-}
-
 fn pair(t: &Theme, left: WidgetPod, right: WidgetPod) -> WidgetPod {
     WidgetPod::new(
         Row::new(vec![
@@ -1281,5 +1714,24 @@ fn pair(t: &Theme, left: WidgetPod, right: WidgetPod) -> WidgetPod {
             WidgetPod::new(Expanded::new(right, 1)),
         ])
         .gap(t.space.sm),
+    )
+}
+
+/// Shared local empty state with Kaia's own book illustration.
+pub fn local_empty(t: &Theme, title: &str, detail: &str, top: u32) -> WidgetPod {
+    WidgetPod::new(
+        Column::new(vec![
+            WidgetPod::new(SizedBox::new(None).height(t.scale.dp(top))),
+            WidgetPod::new(
+                SizedBox::new(Some(WidgetPod::new(EmptyBooks)))
+                    .width(t.scale.dp(252))
+                    .height(t.scale.dp(252)),
+            ),
+            WidgetPod::new(Label::new(title, t.font.title.clone(), Tone::Ink)),
+            body_text(t, detail),
+        ])
+        .gap(t.scale.dp(22))
+        .cross_align(CrossAlign::Center)
+        .shrink(),
     )
 }

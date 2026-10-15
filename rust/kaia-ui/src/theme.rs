@@ -151,7 +151,7 @@ pub struct Theme {
     pub touch_target: u32,
     /// Icon size for controls: `scaleBySize(32)`.
     pub icon_size: u32,
-    /// Height of the bottom nav bar: `scaleBySize(60)` from DESIGN.md.
+    /// Height of the bottom nav bar: 126 px on the Libra Colour.
     pub nav_bar: u32,
     /// Minimum height of a list row: about 14 mm at 300 PPI, from APP_UX.md.
     pub row_height: u32,
@@ -205,7 +205,7 @@ impl Theme {
             },
             touch_target: touch_target(&scale),
             icon_size: dp(32),
-            nav_bar: dp(60),
+            nav_bar: dp(63).max(touch_target(&scale)),
             row_height: dp(83),
             rtl: false,
             text_scale: 1.0,

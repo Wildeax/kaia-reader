@@ -109,12 +109,12 @@ pub fn wait_for(app: &mut App<HeadlessBackend>, what: &str, done: impl Fn(&App<H
 
 /// The centre of the widget with `key` on the top window.
 pub fn centre_of(app: &App<HeadlessBackend>, key: &str) -> Point {
-    if let Some(slot) = ["nav-home", "nav-library", "nav-notes", "nav-settings"]
+    if let Some(slot) = ["nav-home", "nav-library", "nav-more"]
         .iter()
         .position(|k| *k == key)
     {
         let r = app.find_rect("nav-bar").expect("navigation bar");
-        return Point::new(r.x + r.w as i32 * (2 * slot as i32 + 1) / 8, r.y + r.h as i32 / 2);
+        return Point::new(r.x + r.w as i32 * (2 * slot as i32 + 1) / 6, r.y + r.h as i32 / 2);
     }
     let r: Rect = app
         .find_rect(key)
@@ -128,11 +128,84 @@ pub fn wait_reader(app: &mut App<HeadlessBackend>) {
 }
 
 pub fn tap_key(app: &mut App<HeadlessBackend>, key: &str) {
+    if app.find_rect("status-clock").is_some() {
+        freeze_status_clock(app);
+    }
+    // Notes and Settings now open through More. Keep callers exercising taps.
+    if matches!(key, "nav-notes" | "nav-settings") {
+        tap_key(app, "nav-more");
+        tap_key(
+            app,
+            if key == "nav-notes" {
+                "more-notes"
+            } else {
+                "more-settings"
+            },
+        );
+        return;
+    }
+    if key.starts_with("settings-")
+        && app.top_route() == Some(&Route::Settings)
+        && app.find_rect(key).is_none()
+    {
+        let nav = app.find_rect("nav-bar").unwrap();
+        let t = &app.services().theme;
+        let y = nav.y - t.space.lg as i32 - t.space.sm as i32 - t.touch_target as i32 / 2;
+        let left = t.space.lg as i32 + t.touch_target as i32;
+        let right = app.screen().w as i32 - left;
+        for _ in 0..4 {
+            app.tap(Point::new(left, y)).unwrap();
+        }
+        for _ in 0..5 {
+            if app.find_rect(key).is_some() {
+                break;
+            }
+            app.tap(Point::new(right, y)).unwrap();
+        }
+    }
+    if key == "library-view-books" && app.find_rect(key).is_none() && app.find_rect("author-up").is_some() {
+        tap_key(app, "author-up");
+    }
+    if app.find_rect(key).is_none() {
+        if matches!(
+            key,
+            "library-view-list" | "library-view-covers" | "library-view-folders" | "library-select-on"
+        ) {
+            if app.find_rect("library-options").is_none() {
+                tap_key(app, "library-view-books");
+            }
+            tap_key(app, "library-options");
+            if matches!(key, "library-view-covers" | "library-view-list") && app.find_rect(key).is_none() {
+                app.key(kaia_input::Key::Back).unwrap();
+                return;
+            }
+        } else if (key.starts_with("library-filter-") && app.find_rect("primary-filter").is_some())
+            || key == "sort-progress"
+        {
+            app.key(kaia_input::Key::Back).unwrap();
+            tap_key(app, "library-options");
+            if key != "sort-progress" {
+                tap_key(app, "library-filters-more");
+            }
+        } else if key.starts_with("library-filter-") && app.find_rect("library-filters-more").is_some() {
+            tap_key(app, "library-filters-more");
+        } else if key.starts_with("library-book-") {
+            if let Some(book) = key.rsplit('-').next() {
+                let menu = format!("details-menu-{book}");
+                if app.find_rect(&menu).is_some() {
+                    tap_key(app, &menu);
+                }
+            }
+        }
+    }
     wait_reader(app);
     let p = centre_of(app, key);
     app.tap(p).unwrap();
     wait_reader(app);
     wait_for(app, "visible covers", |_| !kaia_app::covers::busy());
+    if app.find_rect("status-clock").is_some() {
+        freeze_status_clock(app);
+    }
 }
 
 /// The refresh modes sent since the loop started, after the first `skip`.
@@ -162,4 +235,13 @@ pub fn open_from_library(app: &mut App<HeadlessBackend>, name: &str) {
     }
     let id = book_id(app, name);
     tap_key(app, &format!("book-{id}"));
+}
+
+/// Keeps the live status clock stable in golden captures.
+pub fn freeze_status_clock(app: &mut App<HeadlessBackend>) {
+    app.update_top::<kaia_app::surfaces::status::Clock, _>("status-clock", |clock, cx| {
+        clock.set_text("09:41");
+        cx.request_paint();
+    });
+    app.process(Vec::new()).unwrap();
 }

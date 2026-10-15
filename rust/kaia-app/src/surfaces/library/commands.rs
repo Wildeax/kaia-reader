@@ -28,6 +28,8 @@ pub enum SortChoice {
     Added,
     Progress,
     Series,
+    Size,
+    Type,
 }
 
 /// The reading status a filter shows.
@@ -250,6 +252,8 @@ pub fn parse(id: &str, args: &[Value]) -> Option<Command> {
             "added" => SortChoice::Added,
             "progress" => SortChoice::Progress,
             "series" => SortChoice::Series,
+            "size" => SortChoice::Size,
+            "type" => SortChoice::Type,
             _ => return None,
         }),
         ("filter", None) => Command::OpenFilter,

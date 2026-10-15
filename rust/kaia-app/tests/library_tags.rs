@@ -161,6 +161,7 @@ fn tags_are_added_from_the_sheet_once_and_removed() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
 
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
     tap_key(&mut app, &key(&format!("library:tags:open:{juliet}")));
     assert!(
         app.find_rect("tag-field").is_none(),
@@ -193,8 +194,7 @@ fn tags_are_added_from_the_sheet_once_and_removed() {
 
     tap_key(&mut app, &key(&format!("library:tags:back:{juliet}")));
     assert!(
-        app.find_rect(&key(&format!("library:tags:open:{juliet}")))
-            .is_some(),
+        app.find_rect("book-details-dialog").is_some(),
         "Back returns to the details"
     );
     assert!(
@@ -280,6 +280,7 @@ fn the_tag_limit_refuses_the_twenty_first_tag_with_a_message() {
     }
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
     tap_key(&mut app, &key(&format!("library:tags:open:{juliet}")));
     tap_key(&mut app, &key(&format!("library:tags:new:{juliet}")));
     tap_key(&mut app, "tag-field");
@@ -307,6 +308,7 @@ fn details_golden_with_a_favorite_and_tags() {
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
     wait_for(&mut app, "visible covers", |_| !kaia_app::covers::busy());
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_details_tags.png"), 14);
 }
 
@@ -322,6 +324,7 @@ fn tag_filter_golden() {
     open_library(&mut app);
     tap_key(&mut app, "library-filter");
     tap_key(&mut app, "library-filter-tags");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tag_filter.png"), 14);
 }
 
@@ -334,10 +337,13 @@ fn tag_sheet_golden() {
     app.services_mut().library.add_tag(juliet, "classic").unwrap();
     open_library(&mut app);
     hold_for_details(&mut app, &format!("book-{juliet}"));
+    tap_key(&mut app, &format!("details-menu-{juliet}"));
     tap_key(&mut app, &key(&format!("library:tags:open:{juliet}")));
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tags_list.png"), 14);
     tap_key(&mut app, &key(&format!("library:tags:new:{juliet}")));
     tap_key(&mut app, "tag-field");
     type_text(&mut app, "Sci");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("library_tags_sheet.png"), 14);
 }

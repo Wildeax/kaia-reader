@@ -80,6 +80,9 @@ impl Prefs {
             Some("added") => SortChoice::Added,
             Some("progress") => SortChoice::Progress,
             Some("series") => SortChoice::Series,
+            Some("size") => SortChoice::Size,
+            Some("type") => SortChoice::Type,
+            // Recent is the default, as in Nickel; an unknown value falls back to it.
             _ => SortChoice::Read,
         };
         let chip = match text("library.chip").as_deref() {
@@ -125,6 +128,8 @@ impl Prefs {
             SortChoice::Added => "added",
             SortChoice::Progress => "progress",
             SortChoice::Series => "series",
+            SortChoice::Size => "size",
+            SortChoice::Type => "type",
         };
         let chip = match self.chip {
             None => "",
@@ -167,6 +172,7 @@ pub fn sort_for(choice: SortChoice) -> Sort {
         SortChoice::Read => Sort::new(SortKey::LastRead, true),
         SortChoice::Added => Sort::new(SortKey::Added, true),
         SortChoice::Progress => Sort::new(SortKey::Progress, true),
+        SortChoice::Size | SortChoice::Type => Sort::new(SortKey::Title, false),
     }
 }
 
@@ -284,15 +290,35 @@ fn visible_books(library: &Library, prefs: &Prefs) -> Vec<Book> {
 /// The rules for splitting and sorting names are in
 /// [`Library::author_index`](kaia_library::Library::author_index).
 pub fn author_groups(library: &Library, prefs: &Prefs) -> Vec<AuthorGroup> {
-    Library::author_index(&visible_books(library, prefs))
+    let visible = visible_books(library, prefs);
+    let mut groups: Vec<_> = Library::author_index(&visible)
         .into_iter()
         .map(|(name, books)| AuthorGroup { name, books })
-        .collect()
+        .collect();
+    let unknown = visible
+        .iter()
+        .filter(|b| b.authors.as_deref().is_none_or(|a| a.trim().is_empty()))
+        .count();
+    if unknown > 0 {
+        groups.push(AuthorGroup {
+            name: tr("Unknown author"),
+            books: unknown,
+        });
+    }
+    groups
 }
 
 /// The visible books of one author, in series order.
 pub fn author_books(library: &Library, prefs: &Prefs, name: &str) -> Vec<Book> {
-    Library::books_by_author(&visible_books(library, prefs), name)
+    let books = visible_books(library, prefs);
+    if name == tr("Unknown author") {
+        books
+            .into_iter()
+            .filter(|b| b.authors.as_deref().is_none_or(|a| a.trim().is_empty()))
+            .collect()
+    } else {
+        Library::books_by_author(&books, name)
+    }
 }
 
 /// True when the book is in the collection with id `collection`.
@@ -340,7 +366,7 @@ fn filter_listed(
     prefs: &Prefs,
     sources: Option<(Source, std::io::Result<Sources>)>,
 ) -> Vec<Book> {
-    library
+    let mut books: Vec<Book> = library
         .books(sort_for(prefs.sort), &filter_for(prefs), 0, ALL)
         .unwrap_or_default()
         .into_iter()
@@ -350,7 +376,13 @@ fn filter_listed(
             Some((wanted, Ok(sources))) => sources.source(&b.path) == *wanted,
             Some((_, Err(_))) => false,
         })
-        .collect()
+        .collect();
+    match prefs.sort {
+        SortChoice::Size => books.sort_by_key(|b| std::cmp::Reverse(b.size)),
+        SortChoice::Type => books.sort_by(|a, b| a.format.cmp(&b.format)),
+        _ => {}
+    }
+    books
 }
 
 /// The formats of the books in the library, for the file type picker.
@@ -425,7 +457,11 @@ pub fn info_without_cover(book: &Book) -> BookInfo {
         title: crate::surfaces::common::display_title(book),
         author: (!authors.is_empty()).then_some(authors),
         cover: None,
-        progress: book.percent as f32,
+        progress: if book.status == Status::Complete {
+            1.0
+        } else {
+            book.percent as f32
+        },
     }
 }
 

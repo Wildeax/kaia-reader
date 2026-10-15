@@ -680,3 +680,30 @@ fn changed_bounds(before: &kaia_gfx::Pixmap, after: &kaia_gfx::Pixmap) -> Option
     }
     out
 }
+
+#[test]
+fn an_accented_choice_keeps_its_color_after_a_press() {
+    for color_panel in [false, true] {
+        let t = theme(color_panel);
+        let button = Button::new(ButtonStyle::Primary)
+            .accent(true)
+            .text("Reading")
+            .on_action("filter");
+        let mut h = Harness::new(
+            at_top(WidgetPod::new(button).with_key("choice")),
+            SCREEN,
+            &t,
+            &assets(),
+        );
+        h.frame();
+        let r = h.find_rect("choice").unwrap();
+        let probe = Point::new(r.x + 20, r.y + r.h as i32 / 2);
+        assert_eq!(pixel(&h, probe.x, probe.y), t.color(Tone::Accent));
+        h.tap(centre(r));
+        h.frame();
+        assert_eq!(pixel(&h, probe.x, probe.y), t.color(Tone::Surface));
+        h.run_tasks();
+        h.frame();
+        assert_eq!(pixel(&h, probe.x, probe.y), t.color(Tone::Accent));
+    }
+}

@@ -1021,6 +1021,18 @@ impl<B: Backend> App<B> {
             }
             _ => {}
         }
+        if id.starts_with("status:") {
+            if matches!(
+                id,
+                "status:power" | "status:light-settings" | "status:network-settings"
+            ) {
+                self.back();
+            }
+            let outcome = surfaces::status::command(id, args, &mut env!(self));
+            if self.apply(0, outcome) {
+                return;
+            }
+        }
         if id == "dialog:dismiss" {
             self.back();
             return;
@@ -1221,6 +1233,9 @@ impl<B: Backend> App<B> {
                 self.reconcile_windows();
                 return;
             }
+        }
+        if self.router.depth() > 0 && self.route_command(self.router.depth() - 1, "surface:back", &[]) {
+            return;
         }
         match self.router.depth() {
             0 => {}
@@ -1541,6 +1556,10 @@ impl<B: Backend> App<B> {
         }
         let now = self.ctx.scheduler.now();
         let mut budget = min_opt(timeout, self.power_wait());
+        if !self.sleeping() && matches!(self.top_route(), Some(Route::Home | Route::More)) {
+            let until_minute = 60_000 - chrono::Local::now().timestamp_millis().rem_euclid(60_000);
+            budget = min_opt(budget, Duration::from_millis(until_minute as u64));
+        }
         budget = min_opt(budget, self.natural_light.wait(now));
         if let Some(wait) = self.services.webdav.wait(&self.services.settings) {
             budget = min_opt(budget, wait);

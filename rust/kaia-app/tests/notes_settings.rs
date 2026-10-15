@@ -171,7 +171,7 @@ fn paint(app: &App<HeadlessBackend>, root: impl Widget + 'static) -> Pixmap {
 }
 
 #[test]
-fn notes_root_is_a_root_and_the_nav_bar_returns_home() {
+fn notes_opens_from_more_and_the_nav_bar_returns_home() {
     let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = scratch("notes");
     let mut app = make_app(&dir, Vec::new());
@@ -179,7 +179,7 @@ fn notes_root_is_a_root_and_the_nav_bar_returns_home() {
 
     tap_key(&mut app, "nav-notes");
     assert_eq!(app.top_route(), Some(&Route::Notes));
-    assert_eq!(app.router().routes().len(), 1, "Notes replaces the root");
+    assert_eq!(app.router().routes().len(), 2, "Notes opens above More");
 
     tap_key(&mut app, "nav-home");
     assert_eq!(app.top_route(), Some(&Route::Home));
@@ -279,6 +279,7 @@ fn notes_export_pdf_choice_writes_one_file_per_book() {
     let (mut app, _juliet, _leaves) = notes_app(&dir);
     tap_key(&mut app, "nav-notes");
     tap_key(&mut app, "notes-export");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("notes-export-formats.png"), 14);
     tap_key(&mut app, "dialog-button:notes:export:pdf");
     let files: Vec<_> = fs::read_dir(dir.join("data/exports"))
@@ -314,6 +315,7 @@ fn notes_list_golden() {
     let dir = scratch("notes-golden");
     let (mut app, _juliet, _leaves) = notes_app(&dir);
     tap_key(&mut app, "nav-notes");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("notes_list.png"), 14);
 }
 
@@ -324,6 +326,7 @@ fn notes_book_golden() {
     let (mut app, juliet, _leaves) = notes_app(&dir);
     tap_key(&mut app, "nav-notes");
     tap_key(&mut app, &format!("notes-book-{juliet}"));
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("notes_book.png"), 14);
 }
 
@@ -404,6 +407,7 @@ fn network_golden() {
     app.start().unwrap();
     tap_key(&mut app, "nav-settings");
     tap_key(&mut app, "settings-network");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("settings_network.png"), 14);
 }
 
@@ -536,9 +540,11 @@ fn settings_root_and_reading_golden() {
     app.start().unwrap();
 
     tap_key(&mut app, "nav-settings");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("settings_root.png"), 14);
 
     tap_key(&mut app, "settings-reading");
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("settings_reading.png"), 14);
 }
 
@@ -554,6 +560,7 @@ fn about_golden() {
         app.top_route(),
         Some(&Route::SettingsSection { name: "about".into() })
     );
+    freeze_status_clock(&mut app);
     assert_matches_golden(app.frame(), &golden("settings_about.png"), 14);
 }
 

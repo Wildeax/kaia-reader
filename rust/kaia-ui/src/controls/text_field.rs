@@ -28,6 +28,7 @@ pub struct TextField {
     scroll: f32,
     max_len: Option<usize>,
     password: bool,
+    borderless: bool,
     on_change: Reaction,
     on_submit: Reaction,
     /// The shaped text and the caret stops, kept until the text changes.
@@ -60,6 +61,7 @@ impl TextField {
             scroll: 0.0,
             max_len: None,
             password: false,
+            borderless: false,
             on_change: Reaction::None,
             on_submit: Reaction::None,
             shaped: None,
@@ -106,6 +108,12 @@ impl TextField {
     /// Queues a named event when `Press` is pressed. Its argument is the text.
     pub fn on_submit(mut self, name: impl Into<String>) -> Self {
         self.on_submit = Reaction::Event(name.into());
+        self
+    }
+
+    /// For a field inside a shared search outline.
+    pub fn borderless(mut self) -> Self {
+        self.borderless = true;
         self
     }
 
@@ -328,7 +336,9 @@ impl Widget for TextField {
         let radius = t.radius.button;
         let b = cx.bounds();
         let edge = cx.color(Tone::Divider);
-        cx.border(b.inset(ring as i32), radius, t.line.divider, edge);
+        if !self.borderless {
+            cx.border(b.inset(ring as i32), radius, t.line.divider, edge);
+        }
 
         let area = self.area(t, b);
         self.shape(cx.fonts, t);

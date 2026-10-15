@@ -26,17 +26,11 @@ fn a_scripted_session_produces_the_expected_refreshes() {
     app.start().unwrap();
     app.run().unwrap();
 
-    // Start: Home is drawn in full. Tap: button press and focus ring (Ui), then the Library
-    // root (Ui). Back: Home again (Ui). The loop then quits with the script.
+    // Home draws in full. The card opens Library, then Back returns to Home.
     assert_eq!(
         app.refresh_modes(),
-        &[
-            RefreshMode::Full,
-            RefreshMode::Ui,
-            RefreshMode::Ui,
-            RefreshMode::Ui
-        ]
+        &[RefreshMode::Full, RefreshMode::Ui, RefreshMode::Ui]
     );
     assert_eq!(app.top_route(), Some(&Route::Home));
-    assert_eq!(app.stats().refreshes, 4);
+    assert_eq!(app.stats().refreshes, 3);
 }

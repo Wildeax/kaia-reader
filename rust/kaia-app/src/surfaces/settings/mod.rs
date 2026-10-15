@@ -298,13 +298,15 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
             OnScreenKeyboard::new(&ENGLISH).on_hide("settings:search:close"),
         ));
     }
-    children.push(
-        WidgetPod::new(kaia_ui::composite::NavBar::new(
-            kaia_ui::composite::NavItem::Settings,
-        ))
-        .with_key("nav-bar"),
-    );
-    window(services, screen, page(services, children))
+    window(
+        services,
+        screen,
+        crate::surfaces::common::tabbed_page(
+            services,
+            page(services, children),
+            kaia_ui::composite::NavItem::More,
+        ),
+    )
 }
 
 fn list(items: Vec<RootItem>) -> WidgetPod {

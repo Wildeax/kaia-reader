@@ -24,6 +24,7 @@ pub enum ButtonStyle {
 /// A labeled button with an optional icon. The content is text, an icon, or
 /// an icon with text. The button is at least `touch_target` high and wide.
 pub struct Button {
+    accented: bool,
     background: Option<Tone>,
     style: ButtonStyle,
     text: Option<String>,
@@ -36,6 +37,7 @@ pub struct Button {
 impl Button {
     pub fn new(style: ButtonStyle) -> Self {
         Self {
+            accented: false,
             background: None,
             style,
             text: None,
@@ -44,6 +46,12 @@ impl Button {
             pressed: false,
             reaction: Reaction::None,
         }
+    }
+
+    /// Uses the theme accent for this button's ink and filled state.
+    pub fn accent(mut self, selected: bool) -> Self {
+        self.accented = selected;
+        self
     }
 
     /// The tone behind this control, which it clears its bounds to. Without
@@ -125,18 +133,19 @@ impl Button {
             };
             return (None, Tone::InkMuted, outline);
         }
+        let ink = if self.accented { Tone::Accent } else { Tone::Ink };
         // A press inverts the button: filled becomes outlined and outlined
         // or plain becomes filled.
         if self.pressed {
             return match self.style {
-                ButtonStyle::Primary => (None, Tone::Ink, Some(Tone::Ink)),
-                _ => (Some(Tone::Ink), Tone::Surface, None),
+                ButtonStyle::Primary => (None, ink, Some(ink)),
+                _ => (Some(ink), Tone::Surface, None),
             };
         }
         match self.style {
-            ButtonStyle::Primary => (Some(Tone::Ink), Tone::Surface, None),
-            ButtonStyle::Secondary => (None, Tone::Ink, Some(Tone::Ink)),
-            ButtonStyle::Text => (None, Tone::Ink, None),
+            ButtonStyle::Primary => (Some(ink), Tone::Surface, None),
+            ButtonStyle::Secondary => (None, ink, Some(ink)),
+            ButtonStyle::Text => (None, ink, None),
         }
     }
 

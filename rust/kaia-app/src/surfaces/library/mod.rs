@@ -1,8 +1,5 @@
-//! Library: the books in six views (covers, list, folders, collections, series, authors),
-//! the search page, select mode, and the panels for sort, filter, collections,
-//! naming, delete and book details. Panels replace the list in the same window, so their
-//! buttons are part of this surface and its commands. A hold on a book opens its
-//! details.
+//! Library tabs, local search, book menus and inset details dialogs.
+//! Popups retain the underlying list and its scroll position.
 
 pub mod book_stats;
 pub mod commands;
@@ -11,6 +8,7 @@ pub mod details;
 pub mod folders;
 pub mod press;
 pub mod views;
+pub mod widgets;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
@@ -61,6 +59,11 @@ type Live = Rc<RefCell<Option<Window>>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Panel {
     Sort,
+    Options,
+    MoreFilters,
+    BookMenu {
+        book: i64,
+    },
     /// The filter for the Books tab: a status, a collection, a source and a file type.
     Filter,
     /// The file type picker of the filter.
@@ -104,10 +107,19 @@ pub enum Panel {
 pub struct LibrarySurface {
     covers: Option<crate::covers::Shared>,
     page: usize,
+    book_scroll: Rc<Cell<i32>>,
+    author_scroll: Rc<Cell<i32>>,
+    author_surname: bool,
     prefs: Prefs,
     loaded: bool,
+    /// Opened from the local Favorites entry in More.
+    favorites_entry: bool,
     panel: Option<Panel>,
+    details_tab: bool,
+    menu_from_details: bool,
+    menu_anchor: kaia_gfx::Rect,
     search: bool,
+    search_entry: bool,
     query: String,
     name: String,
     /// Bumped by each query. A debounced search runs only for the latest one.
@@ -154,10 +166,18 @@ impl LibrarySurface {
         Self {
             covers: None,
             page,
+            book_scroll: Rc::new(Cell::new(0)),
+            author_scroll: Rc::new(Cell::new(0)),
+            author_surname: true,
             prefs: Prefs::default(),
             loaded: false,
+            favorites_entry: false,
             panel: None,
+            details_tab: false,
+            menu_from_details: false,
+            menu_anchor: kaia_gfx::Rect::new(72, 296, 230, 288),
             search: false,
+            search_entry: false,
             query: String::new(),
             name: String::new(),
             generation: Rc::new(Cell::new(0)),
@@ -180,9 +200,42 @@ impl LibrarySurface {
         }
     }
 
+    pub fn details(book: i64) -> Self {
+        let mut view = Self::new(0);
+        view.panel = Some(Panel::Details { book });
+        view
+    }
+
+    /// Local favorites, independent of the last library filter.
+    pub fn favorites() -> Self {
+        let mut view = Self::new(0);
+        view.prefs.favorite = true;
+        view.favorites_entry = true;
+        view.loaded = true;
+        view
+    }
+
+    pub fn recent() -> Self {
+        let mut view = Self::new(0);
+        view.prefs.sort = commands::SortChoice::Read;
+        view.loaded = true;
+        view
+    }
+
+    /// Opens local search from the application status row.
+    pub fn search() -> Self {
+        let mut view = Self::new(0);
+        view.search = true;
+        view.search_entry = true;
+        view
+    }
+
     /// Writes the prefs to settings and flushes the file, so a choice survives a
     /// restart that skips the normal exit. A failed write stays a notice.
     fn save_prefs(&self, env: &mut SurfaceEnv<'_>) {
+        if self.favorites_entry {
+            return;
+        }
         self.prefs.save(&mut env.services.settings);
         let path = env.services.settings_path();
         if let Err(e) = env.services.settings.flush(&path) {
@@ -193,6 +246,7 @@ impl LibrarySurface {
     /// Shows the tab `view` and closes whatever was open on the others. Covers and
     /// list also become the layout of the Books tab.
     fn set_view(&mut self, view: View, env: &mut SurfaceEnv<'_>) {
+        self.book_scroll.set(0);
         if matches!(view, View::Covers | View::List) {
             self.prefs.layout = view;
         }
@@ -341,6 +395,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::Sort(choice) => {
+                self.book_scroll.set(0);
                 self.prefs.sort = choice;
                 self.panel = None;
                 self.save_prefs(env);
@@ -367,7 +422,7 @@ impl LibrarySurface {
                 Outcome::Rebuild
             }
             Command::FavoriteFilter => {
-                self.prefs.favorite = !self.prefs.favorite;
+                self.prefs.favorite = self.favorites_entry || !self.prefs.favorite;
                 self.panel = None;
                 self.save_prefs(env);
                 Outcome::Rebuild
@@ -506,7 +561,11 @@ impl LibrarySurface {
                 self.search = false;
                 self.generation.set(self.generation.get() + 1);
                 self.suggestions.borrow_mut().clear();
-                Outcome::Rebuild
+                if self.search_entry {
+                    Outcome::Navigate(Nav::Pop)
+                } else {
+                    Outcome::Rebuild
+                }
             }
             Command::SearchChanged(text) => {
                 self.query = text;
@@ -582,6 +641,7 @@ impl LibrarySurface {
             Command::Author(AuthorStep::Into(n)) => {
                 if let Some(name) = self.author_names.get(n) {
                     self.author = Some(name.clone());
+                    self.book_scroll.set(0);
                 }
                 Outcome::Rebuild
             }
@@ -602,7 +662,17 @@ impl LibrarySurface {
                 self.panel = Some(Panel::Details { book: id });
                 Outcome::Rebuild
             }
-            Command::MarkFinished(id) => self.mark_finished_one(env, id),
+            Command::MarkFinished(id) => {
+                let outcome = self.mark_finished_one(env, id);
+                if matches!(self.panel, Some(Panel::BookMenu { .. })) {
+                    self.panel = if self.menu_from_details {
+                        Some(Panel::Details { book: id })
+                    } else {
+                        None
+                    };
+                }
+                outcome
+            }
             Command::AddToCollection(id) => {
                 self.panel = Some(Panel::Collection { book: Some(id) });
                 Outcome::Rebuild
@@ -898,14 +968,10 @@ impl LibrarySurface {
         if let Some(name) = self.series.clone() {
             let books = data::series_books(&env.services.library, &self.prefs, &name);
             if !books.is_empty() {
-                let lines: Vec<Line> = books
-                    .iter()
-                    .map(|b| Line::book(&data::info_without_cover(b)))
-                    .collect();
                 return vec![views::series_books(
                     t,
                     &name,
-                    lines,
+                    books,
                     self.covers.as_ref().unwrap().clone(),
                 )];
             }
@@ -915,7 +981,7 @@ impl LibrarySurface {
         let groups = data::series_groups(&env.services.library, &self.prefs);
         self.series_names = groups.iter().map(|g| g.name.clone()).collect();
         if groups.is_empty() {
-            return vec![views::body_text(t, &tr("No series yet."))];
+            return vec![views::empty_group(t, false)];
         }
         vec![views::series_list(&groups)]
     }
@@ -924,30 +990,38 @@ impl LibrarySurface {
     /// The books use the layout of the Books tab, covers or list.
     fn authors_view(&mut self, env: &SurfaceEnv<'_>, t: &Theme) -> Vec<WidgetPod> {
         if let Some(name) = self.author.clone() {
-            let books = data::author_books(&env.services.library, &self.prefs, &name);
+            let author_books = data::author_books(&env.services.library, &self.prefs, &name);
+            let ids: BTreeSet<_> = author_books.iter().map(|b| b.id).collect();
+            let books: Vec<_> = data::list_in(env.services, &self.prefs)
+                .into_iter()
+                .filter(|b| ids.contains(&b.id))
+                .collect();
             if !books.is_empty() {
                 let loader = self.covers.as_ref().unwrap().clone();
                 let body = if self.prefs.layout == View::List {
-                    let lines: Vec<Line> = books
-                        .iter()
-                        .map(|b| Line::book(&data::info_without_cover(b)))
-                        .collect();
-                    WidgetPod::new(views::list_covers(lines, loader))
+                    views::book_list(books.clone(), loader, self.book_scroll.clone())
                 } else {
                     let infos: Vec<BookInfo> = books.iter().map(data::info_without_cover).collect();
-                    views::covers(t, env.screen, infos, loader)
+                    views::covers(t, env.screen, infos, loader, self.book_scroll.clone())
                 };
-                return vec![views::author_books(t, &name, body)];
+                return vec![WidgetPod::new(Expanded::new(body.with_key("author-books"), 1))];
             }
-            // The author has no books left to show, so the list comes back.
-            self.author = None;
+            return vec![views::body_text(t, &tr("No books match this filter."))];
         }
-        let groups = data::author_groups(&env.services.library, &self.prefs);
+        let mut groups = data::author_groups(&env.services.library, &self.prefs);
+        if self.author_surname {
+            groups.sort_by_key(|g| {
+                (
+                    g.name.split_whitespace().last().unwrap_or("").to_lowercase(),
+                    g.name.to_lowercase(),
+                )
+            });
+        }
         self.author_names = groups.iter().map(|g| g.name.clone()).collect();
         if groups.is_empty() {
             return vec![views::body_text(t, &tr("No authors yet."))];
         }
-        vec![views::author_list(&groups)]
+        vec![views::author_list(&groups, self.author_scroll.clone())]
     }
 
     /// Select mode: the books of the view as rows with check boxes. A tap checks a book.
@@ -985,9 +1059,6 @@ impl LibrarySurface {
                 has_recent,
             );
         }
-        if let Some(panel) = self.panel.clone() {
-            return vec![self.panel_widget(env, &t, &panel)];
-        }
         if self.selecting {
             return self.select_content(env, &t);
         }
@@ -1002,6 +1073,14 @@ impl LibrarySurface {
             View::Covers | View::List => {
                 let books = data::list_in(env.services, &self.prefs);
                 if books.is_empty() {
+                    if self.favorites_entry {
+                        return vec![views::local_empty(
+                            &t,
+                            &tr("No favorites yet"),
+                            &tr("Use the star in book details to save a favorite."),
+                            22,
+                        )];
+                    }
                     return common::empty_library(&t);
                 }
                 let infos: Vec<BookInfo> = books.iter().map(data::info_without_cover).collect();
@@ -1011,12 +1090,15 @@ impl LibrarySurface {
                         env.screen,
                         infos,
                         self.covers.as_ref().unwrap().clone(),
+                        self.book_scroll.clone(),
                     )]
                 } else {
-                    let lines: Vec<Line> = infos.iter().map(Line::book).collect();
                     vec![WidgetPod::new(Expanded::new(
-                        WidgetPod::new(views::list_covers(lines, self.covers.as_ref().unwrap().clone()))
-                            .with_key("list"),
+                        views::book_list(
+                            books,
+                            self.covers.as_ref().unwrap().clone(),
+                            self.book_scroll.clone(),
+                        ),
                         1,
                     ))]
                 }
@@ -1028,7 +1110,19 @@ impl LibrarySurface {
         let lib = &env.services.library;
         match *panel {
             Panel::Sort => views::sort_panel(t, self.prefs.sort),
-            Panel::Filter => {
+            Panel::Options => views::options_panel(t, self.prefs.layout),
+            Panel::BookMenu { book } => views::book_menu_with(
+                t,
+                book,
+                self.menu_from_details,
+                self.prefs
+                    .collection
+                    .filter(|&id| data::in_collection(lib, book, id))
+                    .map(|id| format!("library:remove:{book}:{id}")),
+                data::marks(lib, book).0,
+            ),
+            Panel::Filter => views::primary_filter(t, env.services, &self.prefs),
+            Panel::MoreFilters => {
                 let collection = collection_name(lib, self.prefs.collection);
                 views::filter_panel(t, &self.prefs, collection.as_deref())
             }
@@ -1068,6 +1162,7 @@ impl LibrarySurface {
                         statistics,
                         favorite,
                         tags: &tags,
+                        metadata: self.details_tab,
                     };
                     views::details_panel(t, &row, cover, "library:panel:close", remove, info)
                 }
@@ -1091,21 +1186,60 @@ impl LibrarySurface {
         }
         if !self.loaded {
             self.prefs = Prefs::load(&env.services.settings);
+            self.author_surname = env
+                .services
+                .settings
+                .read("library.author_surname")
+                .as_bool()
+                .unwrap_or(true);
             self.loaded = true;
         }
         let t = env.services.theme.clone();
-        let status = data::status_line(env.services);
-        let mut head = vec![views::header(&t, &tr("Library"), status, self.selecting)];
+        let mut head = Vec::new();
+        if self.favorites_entry {
+            head.push(views::compact(&t, &tr("‹  Favorites"), "back", "favorites-back"));
+        }
         if self.selecting {
             head.push(views::select_bar(&t, self.select_label(), self.selected.len()));
         } else if !self.search {
-            head.push(views::view_tabs(&t, self.prefs.view));
-            if matches!(self.prefs.view, View::Covers | View::List) {
+            if let Some(author) = &self.author {
+                head.push(views::compact(
+                    &t,
+                    &tr_format(&tr("Back · %1"), &[author]),
+                    "library:author:up",
+                    "author-up",
+                ));
+            } else if !self.favorites_entry {
+                head.push(views::view_tabs(&t, self.prefs.view));
+            }
+            if matches!(self.prefs.view, View::Covers | View::List) || self.author.is_some() {
                 let collection = collection_name(&env.services.library, self.prefs.collection);
                 let filter = views::filter_name(&self.prefs, collection.as_deref());
                 let sort = views::sort_name(self.prefs.sort);
-                head.push(views::books_controls(&t, &filter, &sort, self.prefs.view));
+                head.push(views::books_controls(
+                    &t,
+                    &filter,
+                    &sort,
+                    match self.panel {
+                        Some(Panel::Filter) => Some("filter"),
+                        Some(Panel::Sort) => Some("sort"),
+                        Some(Panel::Options) => Some("options"),
+                        _ => None,
+                    },
+                ));
             }
+        }
+        if self.prefs.view == View::Authors && self.author.is_none() && !self.search {
+            head.push(views::compact(
+                &t,
+                &if self.author_surname {
+                    tr("Sort: Surname")
+                } else {
+                    tr("Sort: First name")
+                },
+                "library:author-sort",
+                "author-sort",
+            ));
         }
         // The header rows sit `space.sm` apart. The content starts `space.md` below
         // the last of them, so the first row of covers never touches the controls.
@@ -1117,7 +1251,14 @@ impl LibrarySurface {
                     .cross_align(CrossAlign::Stretch),
             ),
             Insets {
-                top: t.space.md,
+                top: if !self.search
+                    && (matches!(self.prefs.view, View::Covers | View::List) || self.author.is_some())
+                {
+                    t.scale
+                        .dp(if self.prefs.layout == View::Covers { 41 } else { 24 })
+                } else {
+                    t.space.md
+                },
                 bottom: t.space.sm,
                 ..Insets::default()
             },
@@ -1125,21 +1266,71 @@ impl LibrarySurface {
         let children = vec![
             WidgetPod::new(
                 Column::new(head)
-                    .gap(t.space.sm)
+                    .gap(t.scale.dp(4))
                     .cross_align(CrossAlign::Stretch)
                     .shrink(),
             ),
             WidgetPod::new(Expanded::new(WidgetPod::new(body), 1)),
-            WidgetPod::new(kaia_ui::composite::NavBar::new(
-                kaia_ui::composite::NavItem::Library,
-            ))
-            .with_key("nav-bar"),
         ];
         let page = Padding::new(
             WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch)),
-            Insets::all(t.space.lg),
+            Insets {
+                left: t.scale.dp(34),
+                right: t.scale.dp(34),
+                top: 0,
+                bottom: 0,
+            },
         );
-        let win = window(env.services, env.screen, page);
+        let base = super::common::tabbed_page(
+            env.services,
+            page,
+            if self.favorites_entry {
+                kaia_ui::composite::NavItem::More
+            } else {
+                kaia_ui::composite::NavItem::Library
+            },
+        );
+        let root = if let Some(panel) = self.panel.clone() {
+            let rect = match panel {
+                Panel::Filter => kaia_gfx::Rect::new(34, 163, 215, 286),
+                Panel::Sort => kaia_gfx::Rect::new(175, 163, 223, 332),
+                Panel::Options => kaia_gfx::Rect::new(373, 154, 226, 240),
+                Panel::BookMenu { .. } => self.menu_anchor,
+                _ => kaia_gfx::Rect::new(12, 12, 608, 816),
+            };
+            let mut background = WidgetPod::new(base);
+            if let Panel::BookMenu { book } = panel {
+                if self.menu_from_details {
+                    background = WidgetPod::new(
+                        widgets::Overlay::new(
+                            Some(background),
+                            self.panel_widget(env, &t, &Panel::Details { book }),
+                            kaia_gfx::Rect::new(12, 12, 608, 816),
+                            "library:panel:close",
+                        )
+                        .dialog(),
+                    );
+                }
+            }
+            let dialog = !matches!(
+                panel,
+                Panel::Filter | Panel::Sort | Panel::Options | Panel::BookMenu { .. }
+            );
+            let overlay = widgets::Overlay::new(
+                Some(background),
+                self.panel_widget(env, &t, &panel),
+                rect,
+                "library:popup:close",
+            );
+            WidgetPod::new(if dialog { overlay.dialog() } else { overlay })
+        } else {
+            WidgetPod::new(base)
+        };
+        let win = window(
+            env.services,
+            env.screen,
+            kaia_ui::components::SizedBox::new(Some(root)),
+        );
         *self.window.borrow_mut() = Some(win.clone());
         win
     }
@@ -1367,6 +1558,99 @@ impl Surface for LibrarySurface {
                 self.prefs.view = View::Folders;
                 return Outcome::Rebuild;
             }
+        }
+        if cmd == "surface:back" {
+            if self.panel.is_some() {
+                return self.on_command("library:popup:close", &[], env);
+            }
+            if self.search {
+                return self.on_command("library:search:close", &[], env);
+            }
+            if self.author.take().is_some() || self.series.take().is_some() {
+                return Outcome::Rebuild;
+            }
+            return Outcome::NotMine;
+        }
+        if let Some(book) = cmd
+            .strip_prefix("library:favorite:toggle:")
+            .and_then(|id| id.parse::<i64>().ok())
+        {
+            let (favorite, _) = data::marks(&env.services.library, book);
+            self.panel = Some(Panel::Details { book });
+            return self.on_command(
+                &format!("library:favorite:{book}:{}", if favorite { "off" } else { "on" }),
+                &[],
+                env,
+            );
+        }
+        if cmd == "library:search:open" {
+            self.panel = None;
+        }
+        if cmd == "library:author-sort" {
+            self.author_surname = !self.author_surname;
+            self.author_scroll.set(0);
+            env.services
+                .settings
+                .save("library.author_surname", Value::Bool(self.author_surname));
+            self.save_prefs(env);
+            return Outcome::Rebuild;
+        }
+        if cmd == "library:options" {
+            self.panel = Some(Panel::Options);
+            return Outcome::Rebuild;
+        }
+        if cmd == "library:filters:more" {
+            self.panel = Some(Panel::MoreFilters);
+            return Outcome::Rebuild;
+        }
+        if cmd == "library:popup:close" {
+            self.panel = match self.panel {
+                Some(Panel::BookMenu { book }) if self.menu_from_details => Some(Panel::Details { book }),
+                _ => None,
+            };
+            self.menu_from_details = false;
+            return Outcome::Rebuild;
+        }
+        if let Some(tab) = cmd.strip_prefix("library:details-tab:") {
+            self.details_tab = tab == "metadata";
+            return Outcome::Rebuild;
+        }
+        if let Some(book) = cmd
+            .strip_prefix("library:menu:")
+            .and_then(|id| id.parse::<i64>().ok())
+        {
+            self.menu_from_details = matches!(self.panel, Some(Panel::Details { .. }));
+            self.menu_anchor = if self.menu_from_details {
+                kaia_gfx::Rect::new(228, 185, 270, 378)
+            } else {
+                let rect = self
+                    .window
+                    .borrow()
+                    .as_ref()
+                    .and_then(|w| w.find_rect(&format!("book-menu-{book}")));
+                let scale = env.services.theme.scale.dp(100) as f32 / 100.0;
+                let (x, y) = rect.map_or((72, 296), |r| {
+                    ((r.x as f32 / scale) as i32, (r.bottom() as f32 / scale) as i32)
+                });
+                kaia_gfx::Rect::new(x.min(390), y.min(530), 230, 286)
+            };
+            self.panel = Some(Panel::BookMenu { book });
+            return Outcome::Rebuild;
+        }
+        if let Some(book) = cmd
+            .strip_prefix("library:book:unread:")
+            .and_then(|id| id.parse::<i64>().ok())
+        {
+            match book_index::mark_unread(env.services, book) {
+                Ok(()) => {}
+                Err(error) => env.notice(error),
+            }
+            self.panel = if self.menu_from_details {
+                Some(Panel::Details { book })
+            } else {
+                None
+            };
+            return Outcome::Rebuild;
         }
         match parse(cmd, args) {
             Some(command) => self.handle(command, env),

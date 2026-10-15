@@ -146,12 +146,9 @@ fn nav_bar_taps_queue_the_item_actions() {
     let mut h = Harness::new(nav_screen(NavItem::Home), SCREEN, &t, &assets());
     h.frame();
     let r = h.find_rect("nav").expect("nav bar is laid out");
-    assert_eq!(r.h, t.nav_bar, "the bar is the DESIGN.md height");
-    let cell = r.w as i32 / 4;
-    for (slot, id) in ["nav.home", "nav.library", "nav.notes", "nav.settings"]
-        .iter()
-        .enumerate()
-    {
+    assert_eq!(r.h, t.scale.dp(63).max(t.touch_target));
+    let cell = r.w as i32 / 3;
+    for (slot, id) in ["nav.home", "nav.library", "nav.more"].iter().enumerate() {
         let at = Point::new(r.x + slot as i32 * cell + cell / 2, r.y + r.h as i32 / 2);
         assert!(h.tap(at));
         assert_eq!(actions_of(&h), vec![id.to_string()]);
@@ -164,10 +161,10 @@ fn nav_bar_rtl_reverses_the_items() {
     let mut h = Harness::new(nav_screen(NavItem::Home), SCREEN, &t, &assets());
     h.frame();
     let r = h.find_rect("nav").expect("nav bar is laid out");
-    let cell = r.w as i32 / 4;
+    let cell = r.w as i32 / 3;
     let leftmost = Point::new(r.x + cell / 2, r.y + r.h as i32 / 2);
     assert!(h.tap(leftmost));
-    assert_eq!(actions_of(&h), vec!["nav.settings"]);
+    assert_eq!(actions_of(&h), vec!["nav.more"]);
 }
 
 #[test]
@@ -186,4 +183,15 @@ fn nav_bar_golden_matches() {
     let t = theme(false);
     let pm = render(nav_screen(NavItem::Library), SCREEN, &t, &assets());
     assert_matches_golden(&pm, &golden("navbar_gray.png"), 0);
+}
+
+#[test]
+fn nav_bar_uses_the_configured_accent() {
+    let mut t = theme(true);
+    t.palette.accent = kaia_gfx::Color::rgb(23, 82, 139);
+    let pm = render(nav_screen(NavItem::Library), SCREEN, &t, &assets());
+    assert_eq!(
+        pm.get((SCREEN.w / 2) as i32, (SCREEN.h - t.nav_bar) as i32),
+        Some(t.palette.accent)
+    );
 }
