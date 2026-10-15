@@ -30,6 +30,11 @@
 //! to a page and renders or extracts under the same guard. Every operation
 //! applies the settings again, so a document never sees another's.
 //!
+//! Live documents: CREngine's document table holds 16 entries, and a 17th
+//! document corrupts memory. The shim caps open documents below that and makes
+//! [`CreDocument::open`] wait for one to close. The wait happens outside
+//! [`ENGINE`]. It fails only when no document closes for 10 seconds.
+//!
 //! Locations: `Location::Page` and `Location::Engine` (an xpointer) both
 //! resolve. Internal links resolve to pages when the target id exists.
 
@@ -251,12 +256,20 @@ impl CreDocument {
 
     /// Opens a known format with runtime font and data folders.
     pub fn open_as_with_options(path: &Path, kind: Kind, options: &CreOptions) -> Result<Self> {
-        let doc = {
-            // Loading can lay the book out, so it runs under the engine lock
-            // with this document's settings.
+        {
             let _engine = engine_lock();
             engine_ready(options)?;
-            let mut doc = Doc::new(DEFAULT_WIDTH, DEFAULT_HEIGHT).map_err(engine_err)?;
+        }
+        // Admission may wait for another thread to drop a document. Do not
+        // hold ENGINE here: that thread needs it to finish its extraction.
+        // The shim locks construction itself and reserves temporary DOM slots.
+        let mut doc = Doc::new(DEFAULT_WIDTH, DEFAULT_HEIGHT).map_err(engine_err)?;
+        let doc = {
+            // Loading can lay the book out, so it runs under the engine lock
+            // with this document's settings. Restore options after admission,
+            // since another thread may have initialized different resources.
+            let _engine = engine_lock();
+            engine_ready(options)?;
             doc.set_hyphenation(None).map_err(engine_err)?;
             if !doc.load(path).map_err(engine_err)? {
                 return Err(DocError::Engine(format!(

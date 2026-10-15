@@ -9,11 +9,17 @@
  * Threading: a kaia_doc owns one fz_context. Use one kaia_doc from one thread at
  * a time. Different kaia_doc handles may run on different threads at once.
  * They share the process environment (FONTDIR is read when MuPDF loads a
- * fallback font) and one MuPDF global: fz_hb_lock() stores the active context
- * in the static fz_hb_secret. Only MuPDF's HarfBuzz allocator hooks
- * (fz_hb_malloc and friends) read it, and KOReader links the system HarfBuzz,
- * which does not call them, so concurrent handles do not depend on it.
- * MuPDF's color management library (lcms2mt) is thread safe.
+ * fallback font) and three MuPDF globals that no lock protects:
+ * - fz_hb_secret, set by fz_hb_lock() for HTML layout (EPUB, MOBI and HTML
+ *   in MuPDF). Only MuPDF's HarfBuzz allocator hooks read it. KOReader links
+ *   the system HarfBuzz, which does not call those hooks, so nothing reads it.
+ *   Two handles that run HTML layout at once still write it without a lock.
+ * - fz_opj_secret, set by fz_opj_lock() for JPEG 2000 decoding. The same
+ *   pattern as the HarfBuzz hooks. Not checked for this build.
+ * - aes_init_done, a lazy table setup for encrypted PDFs. Two first uses at
+ *   once both write the same values.
+ * These races are not fixed. The fix is a process-wide lock around the MuPDF
+ * calls that reach these paths.
  *
  * Ownership: pointers returned through out parameters are allocated with
  * malloc and must be released with kaia_free() or the matching *_free function.

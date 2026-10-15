@@ -5,6 +5,8 @@
 //! and arrays, and turns return codes into [`Error`]. CREngine keeps global
 //! state, so the shim serializes calls with one lock. [`init`] must run before
 //! any document is opened: [`Doc::new`] returns an error until it has.
+//! The shim also limits live handles to reserve CREngine's temporary DOM slots.
+//! Call serialization alone does not protect its fixed-size document table.
 //!
 //! The shim lock covers one call. CREngine's hyphenation dictionary and
 //! preferred font are process-wide, so a caller that uses documents from
@@ -468,13 +470,19 @@ pub struct Doc {
 
 impl Doc {
     /// Creates a view of the given size. Load a file before using it. Fails
-    /// until [`init`] has succeeded.
+    /// until [`init`] has succeeded. At capacity, waits until another document
+    /// closes. Fails with a capacity error if no document closes for 10 seconds,
+    /// which happens when the calling thread holds every slot itself.
+    /// Do not hold a lock that other document owners need while calling this.
     pub fn new(width: u32, height: u32) -> Result<Doc> {
         let w = c_int::try_from(width).map_err(|_| Error::BadInput("width too large".into()))?;
         let h = c_int::try_from(height).map_err(|_| Error::BadInput("height too large".into()))?;
         let mut out: *mut ffi::kaia_cre_doc = ptr::null_mut();
         // SAFETY: `out` is a valid out pointer. On success the shim stores a
-        // handle that we own until Drop.
+        // handle that we own until Drop. The shim serializes engine access and
+        // reserves a live-document slot before construction, with room left for
+        // temporary DOMs. NonNull keeps Doc neither Send nor Sync, so the handle
+        // stays on the thread that created it, as the shim header requires.
         check(unsafe { ffi::kaia_cre_doc_new(w, h, &mut out) })?;
         let ptr =
             ptr::NonNull::new(out).ok_or_else(|| Error::Engine("shim returned a null handle".into()))?;

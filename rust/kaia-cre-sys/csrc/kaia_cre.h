@@ -4,6 +4,13 @@
  * On KAIA_CRE_ERROR, kaia_cre_last_error() returns the message for the
  * calling thread.
  *
+ * Engine calls are serialized. Live handles are limited to leave room in
+ * CREngine's fixed DOM table for temporary documents. doc_new waits for a
+ * slot. If no handle closes for 10 seconds it returns KAIA_CRE_ERROR with a
+ * capacity message, which is what a thread that holds every slot gets.
+ * Callers must not hold locks needed by other document owners across doc_new.
+ * Keep each handle on its creating thread.
+ *
  * Pages are 0-based. Coordinates are device pixels of the view. Strings are
  * UTF-8 and owned by the caller once returned: free them with kaia_cre_free.
  */
