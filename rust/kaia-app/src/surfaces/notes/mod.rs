@@ -160,6 +160,7 @@ fn replace(view: NotesView) -> Outcome {
 
 /// Writes every note and shows the path in a toast.
 pub fn export_all(env: &mut SurfaceEnv<'_>) {
+    crate::webdav::enqueue_saved(env, None, true);
     let books = load_books(env.services);
     if books.is_empty() {
         env.toast(tr("There are no notes to export."), 3.0);
@@ -185,6 +186,7 @@ pub fn export_all(env: &mut SurfaceEnv<'_>) {
 }
 
 fn export_pdfs(env: &mut SurfaceEnv<'_>) {
+    crate::webdav::enqueue_saved(env, None, true);
     let books = load_books(env.services);
     if books.is_empty() {
         env.toast(tr("There are no notes to export."), 3.0);
@@ -224,6 +226,13 @@ fn now_unix() -> i64 {
 /// The books with notes, read from the state files. The library gives the
 /// titles and the library ids. A library that cannot be read gives no titles.
 pub fn load_books(services: &Services) -> Vec<BookNotes> {
+    load_books_with_empty(services)
+        .into_iter()
+        .filter(|b| !b.notes.is_empty() || !b.ink_counts.is_empty())
+        .collect()
+}
+
+pub(crate) fn load_books_with_empty(services: &Services) -> Vec<BookNotes> {
     let library: HashMap<String, Book> = services
         .library
         .books(
@@ -236,7 +245,7 @@ pub fn load_books(services: &Services) -> Vec<BookNotes> {
         .into_iter()
         .map(|book| (book.partial_md5.clone(), book))
         .collect();
-    data::load(&services.paths.data_dir, &library)
+    data::load_with_empty(&services.paths.data_dir, &library)
 }
 
 /// One line of a list: a book, or an entry of the open book.

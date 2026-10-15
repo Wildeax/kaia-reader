@@ -242,7 +242,15 @@ pub fn value_for_pick(key: &str, index: usize) -> Option<Value> {
 
 /// The keys a `settings:set:` id may write. Other keys are not stored.
 pub fn is_known_key(key: &str) -> bool {
-    if key == crate::dictionary_downloads::ALLOW_KEY {
+    if matches!(
+        key,
+        crate::webdav::ENABLED
+            | crate::webdav::SERVER
+            | crate::webdav::USERNAME
+            | crate::webdav::PASSWORD
+            | crate::webdav::FOLDER
+    ) || key == crate::dictionary_downloads::ALLOW_KEY
+    {
         return true;
     }
     keys::EXPERIMENTAL_ENABLED == key

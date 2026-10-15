@@ -24,6 +24,10 @@ desktop = ["kaia-display/desktop"]
 kobo = ["kaia-display/kobo"]
 
 [dependencies]
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 kaia-luadata = { path = "../kaia-luadata" }
 kaia-calibre = { path = "../kaia-calibre" }
 # Local time of day, for the natural light schedule.
@@ -60,4 +64,3 @@ rusqlite = { version = "0.40", features = ["bundled", "backup", "hooks"] }
 
 [dev-dependencies]
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-serde_json = "1"

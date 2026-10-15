@@ -626,3 +626,20 @@ Each PDF has the title, the author when the library knows it, chapter headings,
 highlights, notes, positions and dates. Ink entries include their stroke counts.
 The pages are A5 with numbered footers. MuPDF embeds the bundled Noto Sans
 fonts and uses Noto Sans CJK when that face is present.
+
+## WebDAV export
+
+The app owns these files in its data directory. See [WebDAV export](WEBDAV.md)
+for consent, requests and the retry contract.
+
+| File | Contents | Writes |
+|---|---|---|
+| `webdav-password` | Real WebDAV password as unencrypted UTF-8 text. Basic authentication needs it; sync's derived user key cannot replace it. | Private temporary file with Unix mode `0600`, fsync, rename and directory fsync. Never stored in settings or logged. |
+| `webdav-queue.json` | Pending per-book Markdown and JSON, sanitized filenames, destination identifiers, content hashes, attempt counts, retry deadlines, failure-notified flags and a refused-login hold. Also completed per-book hashes and filename assignments, scoped to destination. No password. | Atomic staged write, fsync and rename. The prior hash is invalidated before dispatch. The new hash and queue completion save together after both PUTs succeed. |
+
+The queue holds at most 100 books and 8 MiB of export text. The hash uses a
+fixed export timestamp so unchanged notes send nothing. Missing Wi-Fi and
+airplane mode preserve queued work. Exhausted retries stay queued for an
+explicit Export. Erase removes both files and cancels unsent work. Reset
+settings turns WebDAV off and keeps these files. KOReader sidecars and remote
+files are never deleted or imported by this feature.

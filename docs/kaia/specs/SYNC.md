@@ -26,6 +26,8 @@ Sync is off until the user turns it on. Nothing sends a request unless the user 
 - A login the server refuses with 401 holds the requests that use that login. The first refusal shows one message. The hold ends when the user types a password (`ProgressSync::forget_refusal`), or when the account, the address or the key changes (`is_refused`). The hold lives in memory, so a restart sends one request again.
 - No default server exists. The app does not use `DEFAULT_SERVER` (`rust/kaia-sync/src/client.rs`), which only the tests use. With the switch on, `sync.auto` on and no server or username, every book open starts a pull that fails with an error toast (see Failures).
 
+One-way notes export has a separate opt-in and credential file. See [WebDAV export](WEBDAV.md). Progress sync does not enable it.
+
 ## Credentials
 
 What the app stores:

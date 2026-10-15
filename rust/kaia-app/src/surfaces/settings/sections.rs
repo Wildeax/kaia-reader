@@ -517,6 +517,17 @@ fn network(services: &Services) -> Vec<Entry> {
             "Turn on sync to send progress on close and sleep. With automatic sync on, a book also reads progress from other devices when it opens.",
         )),
     ];
+    out.extend([
+        Entry::Heading(tr("WebDAV notes export")),
+        Entry::Toggle { key: crate::webdav::ENABLED, label: tr("Export notes to WebDAV"), on: s.is_true(crate::webdav::ENABLED) },
+        Entry::Text(tr("Sends Markdown and JSON on Export and book close. Nothing is read back. HTTPS is required; HTTP is not allowed. The password is stored as plain text in a separate file that only your user account can read.")),
+        Entry::Field { key: crate::webdav::SERVER, label: tr("WebDAV server URL"), value: keys::text(s, crate::webdav::SERVER), password: false },
+        Entry::Field { key: crate::webdav::USERNAME, label: tr("WebDAV username"), value: keys::text(s, crate::webdav::USERNAME), password: false },
+        Entry::Field { key: crate::webdav::PASSWORD, label: tr("WebDAV password"), value: String::new(), password: true },
+        Entry::Field { key: crate::webdav::FOLDER, label: tr("WebDAV folder path"), value: keys::text(s, crate::webdav::FOLDER), password: false },
+        Entry::Button { key: "settings-webdav-test", label: tr("Test connection"), action: "settings:webdav:test".into() },
+        Entry::Button { key: "settings-webdav-export", label: tr("Export now"), action: "settings:webdav:export".into() },
+    ]);
     out.splice(
         0..0,
         [

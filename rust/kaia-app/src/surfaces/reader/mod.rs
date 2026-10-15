@@ -840,6 +840,9 @@ impl Surface for ReaderSurface {
                 env.ctx.scheduler.now(),
             );
         }
+        if let Some(session) = c.session.as_ref() {
+            crate::webdav::enqueue_saved(env, Some(&session.identity().partial_md5), false);
+        }
         c.closed = true;
         c.overlay = None;
         c.panel = None;
