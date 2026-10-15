@@ -248,31 +248,8 @@ fn back_to_home(app: &mut App<HeadlessBackend>) {
     panic!("Back did not reach Home, on {:?}", app.top_route());
 }
 
-/// Taps the Previous or Next button of the Settings root list. The pager draws the
-/// buttons in a strip above the nav bar, on the two edges, and gives them no widget key.
-fn settings_pager_tap(app: &mut App<HeadlessBackend>, next: bool) {
-    let nav = app.find_rect("nav-bar").expect("the navigation bar");
-    let (touch, side) = {
-        let t = &app.services().theme;
-        (t.touch_target as i32, t.space.sm as i32)
-    };
-    let x = if next {
-        nav.x + nav.w as i32 - touch / 2
-    } else {
-        nav.x + touch / 2
-    };
-    app.tap(Point::new(x, nav.y - side - touch / 2)).unwrap();
-}
-
-/// Opens the row `key` on the Settings root list. The list has two pages on the
-/// screen, so the row is on page 1 or page 2. Previous goes to page 1 first.
+/// All settings categories fit in the portrait index without pager buttons.
 fn settings_open_row(app: &mut App<HeadlessBackend>, key: &str) {
-    for _ in 0..3 {
-        settings_pager_tap(app, false);
-    }
-    if app.find_rect(key).is_none() {
-        settings_pager_tap(app, true);
-    }
     tap_key(app, key);
 }
 

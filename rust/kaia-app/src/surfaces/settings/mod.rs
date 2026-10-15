@@ -24,14 +24,14 @@ pub mod storage;
 use kaia_events::Value;
 use kaia_gfx::Size;
 use kaia_i18n::{format as tr_format, tr};
-use kaia_ui::components::Expanded;
-use kaia_ui::composite::{ListRow, PagedList};
-use kaia_ui::controls::{ButtonStyle, OnScreenKeyboard, TextField, ENGLISH};
+use kaia_ui::components::{Column, CrossAlign, Expanded};
+use kaia_ui::composite::{ScrollList, SettingsDialog, SettingsIndexRow};
+use kaia_ui::controls::{OnScreenKeyboard, TextField, ENGLISH};
 use kaia_ui::{Theme, WidgetPod, Window};
 
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{body, button, page, root_window as window, title};
+use crate::surfaces::common::{body, root_window as window};
 use crate::surfaces::Route;
 use commands::{Command, SECTIONS};
 use section::SettingsSectionSurface;
@@ -243,7 +243,7 @@ enum RootItem {
 }
 
 fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window {
-    let mut children = vec![title(services, tr("Settings"))];
+    let mut children = Vec::new();
     if root.typing {
         children.push(
             WidgetPod::new(
@@ -255,18 +255,6 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
             .focusable(true)
             .with_key("settings-search-field"),
         );
-    } else {
-        let label = if root.query.is_empty() {
-            tr("Search settings")
-        } else {
-            tr_format(&tr("Search: %1"), &[&root.query])
-        };
-        children.push(button(
-            ButtonStyle::Secondary,
-            &label,
-            "settings:search:open",
-            "settings-search",
-        ));
     }
     if root.query.is_empty() {
         let items: Vec<RootItem> = SECTIONS.iter().map(|name| RootItem::Section(name)).collect();
@@ -296,18 +284,15 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
             OnScreenKeyboard::new(&ENGLISH).on_hide("settings:search:close"),
         ));
     }
-    children.push(
-        WidgetPod::new(kaia_ui::composite::NavBar::new(
-            kaia_ui::composite::NavItem::Settings,
-        ))
-        .with_key("nav-bar"),
-    );
-    window(services, screen, page(services, children))
+    let content = WidgetPod::new(Column::new(children).cross_align(CrossAlign::Stretch));
+    let dialog =
+        SettingsDialog::new(tr("Settings"), tr("Settings"), content, "back").search("settings:search:open");
+    window(services, screen, dialog)
 }
 
 fn list(items: Vec<RootItem>) -> WidgetPod {
     WidgetPod::new(Expanded::new(
-        WidgetPod::new(PagedList::new(items, build_item)),
+        WidgetPod::new(ScrollList::new(items, build_item)).with_key("settings-index"),
         1,
     ))
 }
@@ -315,22 +300,24 @@ fn list(items: Vec<RootItem>) -> WidgetPod {
 fn build_item(item: &RootItem, _theme: &Theme) -> WidgetPod {
     match item {
         RootItem::Section(name) => WidgetPod::new(
-            ListRow::new(sections::title(name))
-                .chevron()
-                .on_action(format!("settings:{name}")),
+            SettingsIndexRow::new(sections::title(name), format!("settings:{name}"))
+                .first(*name == SECTIONS[0]),
         )
-        .with_key(format!("settings-{name}")),
+        .with_key(format!("settings-{name}"))
+        .focusable(true),
         RootItem::Hit {
             section,
             title,
             index,
         } => WidgetPod::new(
-            ListRow::new(item_title(title))
-                .secondary(sections::title(section))
-                .chevron()
-                .on_action(format!("settings:{section}")),
+            SettingsIndexRow::new(
+                tr_format(&tr("%1: %2"), &[&sections::title(section), &item_title(title)]),
+                format!("settings:{section}"),
+            )
+            .first(*index == 0),
         )
-        .with_key(format!("settings-hit-{index}")),
+        .with_key(format!("settings-hit-{index}"))
+        .focusable(true),
     }
 }
 

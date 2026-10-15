@@ -45,6 +45,7 @@ fn webdav_settings_store_password_separately_and_book_close_queues_saved_notes()
     assert!(!fs::read_to_string(data.join("settings.json"))
         .unwrap()
         .contains("a private password"));
+    tap_key(&mut app, "settings-close");
     tap_key(&mut app, "nav-library");
     open_from_library(&mut app, "juliet.epub");
     wait_reader(&mut app);

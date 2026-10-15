@@ -133,6 +133,7 @@ fn leave_settings(app: &mut App<HeadlessBackend>) {
     app.key(Key::Back).unwrap();
     app.key(Key::Back).unwrap();
     assert_eq!(app.top_route(), Some(&Route::Settings));
+    tap_key(app, "settings-close");
     tap_key(app, "nav-library");
 }
 
