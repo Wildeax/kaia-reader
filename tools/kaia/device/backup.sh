@@ -143,7 +143,11 @@ for _name in ${KOREADER_SETTINGS}; do
     copy_item ".adds/koreader/${_name}"
 done
 
-find "${MOUNT}" \( -name .kobo -o -name .adds -o -name .kaia \) -prune -o -type d -name '*.sdr' -print >"${SDR_LIST}"
+# macOS keeps .Spotlight-V100, .fseventsd and .Trashes on the volume and
+# refuses to list the first, which would stop the script under set -e.
+find "${MOUNT}" \( -name .kobo -o -name .adds -o -name .kaia \
+    -o -name .Spotlight-V100 -o -name .fseventsd -o -name .Trashes \) -prune \
+    -o -type d -name '*.sdr' -print >"${SDR_LIST}"
 while IFS= read -r _path; do
     copy_item "${_path#"${MOUNT}"/}"
 done <"${SDR_LIST}"

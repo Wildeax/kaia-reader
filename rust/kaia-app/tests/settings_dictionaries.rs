@@ -100,12 +100,24 @@ fn next_page(app: &mut App<HeadlessBackend>, list: &str) {
     wait_reader(app);
 }
 
-/// Opens the Dictionary settings page: Settings, Reading, the second page of
-/// Reading (where the row is), then the row.
+/// Pages `list` forward until `key` is on screen, so the tests do not depend on
+/// how many rows the Reading page has.
+fn page_to(app: &mut App<HeadlessBackend>, list: &str, key: &str) {
+    for _ in 0..5 {
+        if app.find_rect(key).is_some() {
+            return;
+        }
+        next_page(app, list);
+    }
+    panic!("no {key:?} on any page of {list:?}");
+}
+
+/// Opens the Dictionary settings page: Settings, Reading, the page of Reading
+/// that has the row, then the row.
 fn open_dictionary_settings(app: &mut App<HeadlessBackend>) {
     tap_key(app, "nav-settings");
     tap_key(app, "settings-reading");
-    next_page(app, "settings-entries");
+    page_to(app, "settings-entries", "settings:dictionaries");
     tap_key(app, "settings:dictionaries");
     assert_eq!(
         app.top_route(),
@@ -208,7 +220,7 @@ fn without_a_dictionary_the_reading_page_has_no_dictionary_settings_row() {
     let mut app = app_with_books(&dir);
     tap_key(&mut app, "nav-settings");
     tap_key(&mut app, "settings-reading");
-    next_page(&mut app, "settings-entries");
+    page_to(&mut app, "settings-entries", "Dictionary folder");
 
     assert!(
         app.find_rect("Dictionary folder").is_some(),
