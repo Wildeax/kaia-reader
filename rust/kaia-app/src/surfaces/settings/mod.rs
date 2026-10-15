@@ -9,10 +9,12 @@
 //! surface), `quick` (the quick settings sheet), `sleep` (the sleep screen)
 //! and `experiments` (the experimental feature flags).
 
+pub mod clock;
 pub mod commands;
 pub mod entries;
 pub mod experiments;
 pub mod facts;
+pub mod keyboard;
 pub mod keys;
 pub mod light;
 pub mod quick;
@@ -22,6 +24,7 @@ pub mod sections;
 pub mod sleep;
 pub mod storage;
 pub mod widgets;
+pub mod wifi;
 
 use kaia_events::Value;
 use kaia_gfx::Size;

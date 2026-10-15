@@ -521,6 +521,7 @@ impl<B: Backend> App<B> {
         if crate::covers::poll() || crate::covers::busy() {
             self.stack.broadcast(&Event::new("CoversReady"), &mut self.ctx);
         }
+        self.broadcast_app(Event::new("SettingsTick"));
         self.broadcast_app(Event::new("CatalogTick"));
         self.broadcast_app(Event::new("ReaderTick"));
         if !self.reader_busy() {

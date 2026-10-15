@@ -18,6 +18,9 @@ use crate::surfaces::common::button;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Entry {
     PageBreak,
+    TapZones {
+        preset: String,
+    },
     DisabledRow(String),
     DeviceDrawing {
         inverted: bool,
@@ -138,6 +141,9 @@ const BAR_LABEL_ROW_HEIGHTS: u32 = 2;
 /// The widget for one entry of a section.
 pub fn widget(entry: &Entry, t: &Theme) -> WidgetPod {
     match entry {
+        Entry::TapZones { preset } => {
+            WidgetPod::new(super::widgets::TapZones::new(preset)).with_key("settings-tap-zones")
+        }
         Entry::DeviceToggle {
             key,
             label,

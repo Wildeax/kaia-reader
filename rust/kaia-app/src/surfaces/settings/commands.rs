@@ -177,6 +177,7 @@ pub fn options_for(key: &str) -> Option<&'static [(&'static str, &'static str)]>
             ("silent", "Use synced position"),
             ("never", "Never"),
         ]),
+        keys::READING_TURN_GESTURE => Some(&keys::TURN_GESTURES),
         keys::READING_TAP_ZONES => Some(&keys::TAP_ZONE_PRESETS),
         keys::READING_PAGE_TURN_WAVEFORM => Some(&keys::PAGE_TURN_WAVEFORMS),
         keys::DEVICE_SLEEP_SCREEN => Some(&keys::SLEEP_SCREENS),
@@ -283,6 +284,13 @@ pub fn is_known_key(key: &str) -> bool {
         || matches!(
             key,
             keys::DISPLAY_LARGE_PRINT
+                | keys::READING_PROGRESS_BAR
+                | keys::READING_ADOBE_NUMBERS
+                | keys::READING_REDUCE_RAINBOW
+                | keys::READING_TURN_GESTURE
+                | keys::DEVICE_COVER_FULLSCREEN
+                | keys::DEVICE_CHARGING_INDICATOR
+                | keys::DEVICE_CLOCK_24H
                 | keys::READING_PINCH_SIZE
                 | keys::READING_EDGE_LIGHT
                 | keys::DEVICE_SLEEP_DETAILS

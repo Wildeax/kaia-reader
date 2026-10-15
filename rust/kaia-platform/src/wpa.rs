@@ -37,6 +37,13 @@ pub struct ScanResult {
     pub flags: String,
 }
 
+/// A saved supplicant entry. The id, rather than its name, identifies removals.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SavedNetwork {
+    pub id: u32,
+    pub ssid: String,
+}
+
 /// The parts of `STATUS` that Kaia uses.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WpaStatus {
@@ -135,6 +142,25 @@ impl WpaCtrl {
             .recv(&mut buf)
             .map_err(|e| PlatformError::io("wpa recv", e))?;
         Ok(String::from_utf8_lossy(&buf[..n]).trim_end().to_string())
+    }
+
+    pub fn list_networks(&mut self) -> Result<Vec<SavedNetwork>, PlatformError> {
+        let reply = self.request("LIST_NETWORKS")?;
+        Ok(reply
+            .lines()
+            .skip(1)
+            .filter_map(|line| {
+                let mut fields = line.split('\t');
+                Some(SavedNetwork {
+                    id: fields.next()?.parse().ok()?,
+                    ssid: decode_ssid(fields.next()?),
+                })
+            })
+            .collect())
+    }
+
+    pub fn save_config(&mut self) -> Result<(), PlatformError> {
+        self.request("SAVE_CONFIG").map(|_| ())
     }
 
     /// `ATTACH`: receive unsolicited events on this socket.

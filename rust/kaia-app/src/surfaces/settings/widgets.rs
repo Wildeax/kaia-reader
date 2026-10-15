@@ -609,3 +609,140 @@ impl Widget for CompactStepper {
         Handled::Yes
     }
 }
+
+/// Original diagrams of the four touch layouts. These proportions describe the
+/// illustration only; measured reader hit areas belong to the input code.
+pub struct TapZones {
+    selected: Option<usize>,
+}
+impl TapZones {
+    pub fn new(preset: &str) -> Self {
+        Self {
+            selected: super::keys::ILLUSTRATED_TAP_ZONES
+                .iter()
+                .position(|p| *p == preset),
+        }
+    }
+    fn cell(b: Rect, i: usize, t: &Theme) -> Rect {
+        let width = b.w / 4;
+        Rect::new(
+            b.x + (width * i as u32 + width.saturating_sub(px(t, 150)) / 2) as i32,
+            b.y + px(t, 153) as i32,
+            px(t, 150),
+            px(t, 200),
+        )
+    }
+}
+impl Widget for TapZones {
+    kaia_ui::impl_as_any!();
+    fn layout(&mut self, cx: &mut LayoutCx, c: Constraints) -> Size {
+        c.constrain(Size::new(c.max.w, px(cx.theme, 369)))
+    }
+    fn paint(&mut self, cx: &mut PaintCx) {
+        let b = cx.bounds();
+        let t = cx.theme;
+        let ink = cx.color(Tone::Ink);
+        let text = cx.fonts.layout(
+            &tr("Choose areas for previous page, menu and next page."),
+            &style(t, 34),
+            b.w.saturating_sub(px(t, 50)),
+            Some(2),
+            true,
+        );
+        cx.text(&text, Point::new(b.x + px(t, 25) as i32, b.y + px(t, 28) as i32));
+        for i in 0..4 {
+            let r = Self::cell(b, i, t);
+            cx.border(
+                r,
+                0,
+                px(t, 10).max(1),
+                if self.selected == Some(i) {
+                    cx.color(Tone::Accent)
+                } else {
+                    Color::gray(0xd9)
+                },
+            );
+            let r = Rect::new(
+                r.x + px(t, 10) as i32,
+                r.y + px(t, 10) as i32,
+                r.w.saturating_sub(px(t, 20)),
+                r.h.saturating_sub(px(t, 20)),
+            );
+            cx.border(r, 0, px(t, 2).max(1), ink);
+            let mut glyph = |name: &str, x: u32, y: u32| {
+                let at = Point::new(
+                    r.x + (r.w * x / 100) as i32 - px(t, 13) as i32,
+                    r.y + (r.h * y / 100) as i32 - px(t, 13) as i32,
+                );
+                if name == "menu" {
+                    for offset in [5, 12, 19] {
+                        cx.fill_rect(
+                            Rect::new(at.x, at.y + px(t, offset) as i32, px(t, 26), px(t, 2).max(1)),
+                            ink,
+                        );
+                    }
+                } else {
+                    draw_icon_at(cx, name, px(t, 26), ink, at);
+                }
+            };
+            if i == 0 {
+                glyph("chevron.left", 17, 50);
+                glyph("menu", 50, 50);
+                glyph("chevron.right", 83, 50);
+                for x in [33, 67] {
+                    cx.fill_rect(Rect::new(r.x + (r.w * x / 100) as i32, r.y, 1, r.h), ink);
+                }
+            } else if i == 3 {
+                glyph("chevron.left", 50, 20);
+                glyph("menu", 50, 50);
+                glyph("chevron.right", 50, 80);
+                for y in [38, 62] {
+                    cx.fill_rect(Rect::new(r.x, r.y + (r.h * y / 100) as i32, r.w, 1), ink);
+                }
+            } else {
+                glyph(
+                    if i == 1 { "chevron.left" } else { "chevron.right" },
+                    if i == 1 { 15 } else { 35 },
+                    50,
+                );
+                glyph(
+                    if i == 1 { "chevron.right" } else { "chevron.left" },
+                    if i == 1 { 65 } else { 85 },
+                    50,
+                );
+                glyph("menu", 50, 88);
+                let x = if i == 1 { 30 } else { 70 };
+                cx.fill_rect(Rect::new(r.x + (r.w * x / 100) as i32, r.y, 1, r.h), ink);
+                cx.border(
+                    Rect::new(
+                        r.x + (r.w * 30 / 100) as i32,
+                        r.y + (r.h * 76 / 100) as i32,
+                        r.w * 40 / 100,
+                        r.h * 24 / 100,
+                    ),
+                    0,
+                    1,
+                    ink,
+                );
+            }
+        }
+        cx.fill_rect(Rect::new(b.x, b.bottom() - 1, b.w, 1), ink);
+    }
+    fn event(&mut self, cx: &mut EventCx, event: &UiEvent) -> Handled {
+        let UiEvent::Gesture(Gesture::Tap { pos, .. }) = event else {
+            return Handled::No;
+        };
+        for i in 0..4 {
+            if Self::cell(cx.bounds(), i, cx.theme()).contains(*pos) {
+                self.selected = Some(i);
+                cx.request_paint();
+                cx.action(AppAction {
+                    id: format!("settings:set:{}", super::keys::READING_TAP_ZONES),
+                    args: vec![Value::from(super::keys::ILLUSTRATED_TAP_ZONES[i])],
+                });
+                return Handled::Yes;
+            }
+        }
+        Handled::No
+    }
+}

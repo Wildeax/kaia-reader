@@ -101,13 +101,14 @@ fn connect_sets_ssid_psk_enables_and_waits_for_completed() {
             ("ENABLE_NETWORK 0", vec!["OK"]),
             ("STATUS", vec!["wpa_state=ASSOCIATING\nid=0\n"]),
             ("STATUS", vec!["wpa_state=COMPLETED\nid=0\nssid=Home\n"]),
+            ("SAVE_CONFIG", vec!["OK"]),
             ("DETACH", vec!["OK"]),
         ],
     );
     let mut net = network(dir.path());
     net.connect("Home", Some("password1")).unwrap();
     let seen = server.join().unwrap();
-    assert_eq!(seen.len(), 8);
+    assert_eq!(seen.len(), 9);
     assert_eq!(seen.last().map(String::as_str), Some("DETACH"));
 }
 
@@ -123,12 +124,13 @@ fn open_network_sets_key_mgmt_none() {
             ("SET_NETWORK 4 key_mgmt NONE", vec!["OK"]),
             ("ENABLE_NETWORK 4", vec!["OK"]),
             ("STATUS", vec!["wpa_state=COMPLETED\nid=4\n"]),
+            ("SAVE_CONFIG", vec!["OK"]),
             ("DETACH", vec!["OK"]),
         ],
     );
     let mut net = network(dir.path());
     net.connect("Cafe", None).unwrap();
-    assert_eq!(server.join().unwrap().len(), 7);
+    assert_eq!(server.join().unwrap().len(), 8);
 }
 
 #[test]
@@ -203,4 +205,27 @@ fn missing_control_socket_is_an_io_error() {
     let mut net = network(dir.path());
     let err = net.scan().unwrap_err();
     assert!(matches!(err, PlatformError::Io { .. }), "{err}");
+}
+
+#[test]
+fn saved_network_listing_and_removal_use_ids_and_persist() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = serve(
+        socket_path(dir.path()),
+        vec![
+            (
+                "LIST_NETWORKS",
+                vec!["network id / ssid / bssid / flags\n7\tTest connection\tany\t[CURRENT]\n"],
+            ),
+            ("STATUS", vec!["wpa_state=COMPLETED\nid=7\n"]),
+            ("REMOVE_NETWORK 7", vec!["OK"]),
+            ("SAVE_CONFIG", vec!["OK"]),
+        ],
+    );
+    let mut net = network(dir.path());
+    let saved = net.saved_networks().unwrap();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].id, 7);
+    net.forget_network(saved[0].id).unwrap();
+    assert_eq!(server.join().unwrap().len(), 4);
 }

@@ -9,7 +9,14 @@
 //! | `reading.font_family` | string | unset (engine default) | Reading font family name. |
 //! | `reading.font_size` | number | 22 | Default font size in KOReader units. The app scales it to the panel width. |
 //! | `reading.font_weight.<family>` | number | 0 | Text weight of one font family, as a KOReader font weight value: -1, -0.5, 0, 0.5, 1, 1.5 or 3. Zero is regular. `<family>` is the face name, or `(book)` for the book's own font. See [`font_weight_key`]. |
-//! | `reading.tap_zones` | string | `default` | Tap zone preset: `default`, `left_handed` or `page_only`. |
+//! | `reading.tap_zones` | string | `default` | Tap zone preset. Four diagrams use `default`, `forward_right`, `forward_left` and `vertical`; legacy `left_handed` and `page_only` remain available. |
+//! | `reading.progress_bar` | bool | false | Persistent page-edge progress strip preference. |
+//! | `reading.adobe_numbers` | bool | false | Marginal Adobe page-number preference. |
+//! | `reading.reduce_rainbow` | bool | false | Color-artifact reduction preference. |
+//! | `reading.turn_gesture` | string | `tap_swipe` | Page turns by `tap_swipe`, `swipe` or `tap`. |
+//! | `device.cover_fullscreen` | bool | true | Fit the sleep cover to the full screen. |
+//! | `device.charging_indicator` | bool | false | Show charging state on the sleep screen. |
+//! | `device.clock_24h` | bool | true | Show 24-hour time. |
 //! | `reading.double_tap_lookup` | bool | false | A double tap on a word looks it up. When on, a single tap turns the page after the double tap window (300 ms). See [`double_tap_lookup`]. |
 //! | `reading.full_refresh_pages` | number | 0 | E Ink full refresh cadence. `0` means at each chapter. `1` to `10` means every N page turns, and each chapter start is also a full refresh. A value above 10 reads as 10. See [`full_refresh_pages`]. |
 //! | `reading.page_turn_waveform` | string | `cleaner` | E Ink waveform of a page turn: `cleaner` (gray with ghost reduction) or `faster` (fast black and white). Full refreshes keep their waveform. See [`page_turn`]. |
@@ -83,6 +90,21 @@ pub const READING_EDGE_LIGHT: &str = "reading.edge_light";
 /// Details preference retained while the sleep cover is hidden.
 pub const DEVICE_SLEEP_DETAILS: &str = "device.sleep_details";
 pub const DEVICE_SHOW_BOOK: &str = "device.show_book";
+/// Settings-only preferences. Their reader and power consumers are tracked in GAPS-settings-followups.md.
+pub const READING_PROGRESS_BAR: &str = "reading.progress_bar";
+pub const READING_ADOBE_NUMBERS: &str = "reading.adobe_numbers";
+pub const READING_REDUCE_RAINBOW: &str = "reading.reduce_rainbow";
+pub const READING_TURN_GESTURE: &str = "reading.turn_gesture";
+pub const DEVICE_COVER_FULLSCREEN: &str = "device.cover_fullscreen";
+pub const DEVICE_CHARGING_INDICATOR: &str = "device.charging_indicator";
+pub const DEVICE_CLOCK_24H: &str = "device.clock_24h";
+pub const TURN_GESTURES: [(&str, &str); 3] = [
+    ("tap_swipe", "Tap or swipe"),
+    ("swipe", "Swipe only"),
+    ("tap", "Tap only"),
+];
+/// Illustration order. Legacy presets keep their stored values and remain selectable separately.
+pub const ILLUSTRATED_TAP_ZONES: [&str; 4] = ["default", "forward_right", "forward_left", "vertical"];
 pub const READING_TAP_ZONES: &str = "reading.tap_zones";
 /// A double tap on a word looks it up. See [`double_tap_lookup`].
 pub const READING_DOUBLE_TAP_LOOKUP: &str = "reading.double_tap_lookup";
@@ -167,10 +189,13 @@ pub const DEFAULT_SLEEP_MINUTES: f64 = 15.0;
 pub const DEFAULT_HIGHLIGHT_SHADE: f64 = 0.2;
 
 /// The tap zone presets, in the order the Reading section lists them.
-pub const TAP_ZONE_PRESETS: [(&str, &str); 3] = [
+pub const TAP_ZONE_PRESETS: [(&str, &str); 6] = [
     ("default", "Default"),
     ("left_handed", "Left-handed"),
     ("page_only", "Page turn only"),
+    ("forward_right", "Forward on the right"),
+    ("forward_left", "Forward on the left"),
+    ("vertical", "Top and bottom"),
 ];
 
 /// The page turn waveform choices, in the order the Reading section lists them.

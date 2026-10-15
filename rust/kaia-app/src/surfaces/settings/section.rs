@@ -147,6 +147,16 @@ impl Surface for SettingsSectionSurface {
     }
 
     fn on_command(&mut self, cmd: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
+        if matches!(cmd, "settings:wifi:scan" | "settings:wifi:saved") {
+            return Outcome::Navigate(Nav::Push(Box::new(super::wifi::WifiSurface::new(
+                cmd.ends_with(":saved"),
+            ))));
+        }
+        if matches!(cmd, "settings:clock:date" | "settings:clock:time") {
+            return Outcome::Navigate(Nav::Push(Box::new(super::clock::ClockSurface::new(
+                cmd.ends_with(":date"),
+            ))));
+        }
         if let Some(page) = cmd.strip_prefix("settings:page:").and_then(|s| s.parse().ok()) {
             if self.choosing.is_some() {
                 self.choice_page = page;
@@ -592,7 +602,7 @@ fn section_page_at(
     )));
     if has_text_fields(name) && typing {
         children.push(kaia_ui::WidgetPod::new(
-            kaia_ui::controls::OnScreenKeyboard::new(&kaia_ui::controls::ENGLISH)
+            kaia_ui::controls::OnScreenKeyboard::new(super::keyboard::layout(&services.language))
                 .on_hide("settings:fields:close"),
         ));
     }
@@ -713,7 +723,11 @@ fn set(key: &str, args: &[Value], env: &mut SurfaceEnv<'_>) -> Outcome {
         env.services.apply_large_print();
         return Outcome::Navigate(Nav::SwitchRoot(Route::Settings));
     }
-    if key == keys::READING_FONT_SIZE || key == crate::dictionary_downloads::ALLOW_KEY {
+    if matches!(
+        key,
+        keys::READING_FONT_SIZE | keys::READING_TAP_ZONES | keys::DEVICE_CLOCK_24H
+    ) || key == crate::dictionary_downloads::ALLOW_KEY
+    {
         Outcome::Rebuild
     } else {
         Outcome::Handled

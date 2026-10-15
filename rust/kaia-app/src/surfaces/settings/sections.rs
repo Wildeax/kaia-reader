@@ -87,7 +87,14 @@ fn reading(services: &Services) -> Vec<Entry> {
         Entry::Heading(tr("Reading progress")),
         progress_choice(s, true),
         progress_choice(s, false),
-        Entry::Text(tr("Choose what appears above and below the page.")),
+        Entry::Toggle {
+            key: keys::READING_PROGRESS_BAR,
+            label: tr("Book progress bar"),
+            on: keys::bool_or(s, keys::READING_PROGRESS_BAR, false),
+        },
+        Entry::Text(tr(
+            "Choose a header and footer.\nUse the bar to see your place in the book.",
+        )),
         Entry::Heading(tr("Button controls")),
         Entry::DeviceDrawing {
             inverted: keys::bool_or(s, keys::READING_INVERT_PAGE_BUTTONS, false),
@@ -115,9 +122,19 @@ fn reading(services: &Services) -> Vec<Entry> {
             selected: usize::from(keys::bool_or(s, keys::DISPLAY_ROTATION_LOCK, false)),
         },
         Entry::Toggle {
+            key: keys::READING_ADOBE_NUMBERS,
+            label: tr("Adobe page numbers"),
+            on: keys::bool_or(s, keys::READING_ADOBE_NUMBERS, false),
+        },
+        Entry::Toggle {
             key: keys::DISPLAY_NIGHT_MODE,
             label: tr("Dark mode"),
             on: keys::bool_or(s, keys::DISPLAY_NIGHT_MODE, false),
+        },
+        Entry::Toggle {
+            key: keys::READING_REDUCE_RAINBOW,
+            label: tr("Reduce color artifacts"),
+            on: keys::bool_or(s, keys::READING_REDUCE_RAINBOW, false),
         },
         Entry::Select {
             key: keys::READING_PAGE_TURN_WAVEFORM,
@@ -140,14 +157,8 @@ fn reading(services: &Services) -> Vec<Entry> {
         },
         Entry::PageBreak,
         Entry::Heading(tr("Touch controls")),
-        Entry::Select {
-            key: keys::READING_TAP_ZONES,
-            label: tr("Tap areas"),
-            options: labels(keys::READING_TAP_ZONES),
-            selected: keys::preset_index(
-                &keys::TAP_ZONE_PRESETS,
-                &keys::text_or(s, keys::READING_TAP_ZONES, "default"),
-            ),
+        Entry::TapZones {
+            preset: keys::text_or(s, keys::READING_TAP_ZONES, "default"),
         },
         Entry::Toggle {
             key: keys::READING_PINCH_SIZE,
@@ -158,6 +169,24 @@ fn reading(services: &Services) -> Vec<Entry> {
             key: keys::READING_EDGE_LIGHT,
             label: tr("Swipe the left edge for brightness"),
             on: keys::bool_or(s, keys::READING_EDGE_LIGHT, true),
+        },
+        Entry::Select {
+            key: keys::READING_TURN_GESTURE,
+            label: tr("Turn pages"),
+            options: labels(keys::READING_TURN_GESTURE),
+            selected: keys::preset_index(
+                &keys::TURN_GESTURES,
+                &keys::text_or(s, keys::READING_TURN_GESTURE, "tap_swipe"),
+            ),
+        },
+        Entry::Select {
+            key: keys::READING_TAP_ZONES,
+            label: tr("Other tap layouts"),
+            options: labels(keys::READING_TAP_ZONES),
+            selected: keys::preset_index(
+                &keys::TAP_ZONE_PRESETS,
+                &keys::text_or(s, keys::READING_TAP_ZONES, "default"),
+            ),
         },
         Entry::Toggle {
             key: keys::READING_DOUBLE_TAP_LOOKUP,
@@ -583,9 +612,16 @@ fn wifi(services: &Services) -> Vec<Entry> {
             tr("Wi-Fi connects only when you ask it to.")
         }),
         Entry::Heading(tr("Connections")),
-        Entry::DisabledRow(tr("Connect to a network")),
-        Entry::DisabledRow(tr("Remove a saved network")),
-        Entry::Text(tr("Manage connections in the device's Wi-Fi settings.")),
+        Entry::Button {
+            key: "wifi-connect",
+            label: tr("Connect to a network"),
+            action: "settings:wifi:scan".into(),
+        },
+        Entry::Button {
+            key: "wifi-forget",
+            label: tr("Remove a saved network"),
+            action: "settings:wifi:saved".into(),
+        },
         Entry::Row {
             primary: tr("Network and sync"),
             secondary: None,
@@ -857,9 +893,19 @@ fn device(services: &Services) -> Vec<Entry> {
             on: keys::text_or(s, keys::DEVICE_SLEEP_SCREEN, "cover") != "blank",
         },
         Entry::Toggle {
+            key: keys::DEVICE_COVER_FULLSCREEN,
+            label: tr("Full-screen cover"),
+            on: keys::bool_or(s, keys::DEVICE_COVER_FULLSCREEN, true),
+        },
+        Entry::Toggle {
             key: keys::DEVICE_SLEEP_DETAILS,
             label: tr("Show book details"),
             on: keys::sleep_details(s),
+        },
+        Entry::Toggle {
+            key: keys::DEVICE_CHARGING_INDICATOR,
+            label: tr("Charging indicator"),
+            on: keys::bool_or(s, keys::DEVICE_CHARGING_INDICATOR, false),
         },
         Entry::Heading(tr("Sleep cover")),
         Entry::Toggle {
@@ -887,16 +933,16 @@ fn date_time(services: &Services, now: i64) -> Vec<Entry> {
     let local = chrono::DateTime::from_timestamp(now, 0).map(|date| date.with_timezone(&chrono::Local));
     vec![
         Entry::Row { primary: tr("Date"), secondary: None,
-            value: local.map(|d| d.format("%Y-%m-%d").to_string()), action: None },
+            value: local.map(|d| d.format("%Y-%m-%d").to_string()), action: Some("settings:clock:date".into()) },
         Entry::Row { primary: tr("Time"), secondary: None,
-            value: local.map(|d| d.format("%H:%M").to_string()), action: None },
+            value: local.map(|d| d.format(if keys::bool_or(s, keys::DEVICE_CLOCK_24H, true) { "%H:%M" } else { "%I:%M %p" }).to_string()), action: Some("settings:clock:time".into()) },
         Entry::Row {
             primary: tr("Time zone"),
             secondary: None,
             value: Some(keys::time_zone(s).map_or_else(|| tr("System default"), |zone| zone.name.to_string())),
             action: Some("settings:timezone".into()),
         },
-        Entry::Text(tr("Set the date and time in the device settings.")),
+        Entry::Toggle { key: keys::DEVICE_CLOCK_24H, label: tr("24-hour clock"), on: keys::bool_or(s, keys::DEVICE_CLOCK_24H, true) },
         Entry::Heading(tr("Network time")),
         Entry::Toggle {
             key: keys::DEVICE_NETWORK_TIME,
