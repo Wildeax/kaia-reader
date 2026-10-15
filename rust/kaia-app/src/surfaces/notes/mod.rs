@@ -25,7 +25,7 @@ use kaia_ui::{AppAction, Theme, WidgetPod, Window};
 
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{body, button, page, root_window as window};
+use crate::surfaces::common::{body, button, fill, page, root_window as window};
 use crate::surfaces::Route;
 use commands::Command;
 use data::{BookNotes, Filter, Note};
@@ -319,6 +319,8 @@ fn list_page(services: &Services, screen: Size, books: &[BookNotes], filter: Fil
             services,
             tr("No highlights, notes or bookmarks yet. Select text in a book to start."),
         ));
+        // No list to fill the page. The space keeps the nav bar at the bottom.
+        children.push(fill());
     } else {
         let mut items: Vec<Item> = books
             .iter()
@@ -381,6 +383,8 @@ fn book_page(services: &Services, screen: Size, book: &BookNotes, filter: Filter
     let mut children = vec![header, filter_row(services, filter)];
     if items.is_empty() {
         children.push(body(services, tr("Nothing matches this filter.")));
+        // No list to fill the page. The space keeps the nav bar at the bottom.
+        children.push(fill());
     } else {
         children.push(list(items));
     }

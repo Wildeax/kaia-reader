@@ -37,10 +37,9 @@ pub struct Env {
     pub wifi_module: Option<String>,
     /// `PLATFORM`, passed to the Wi-Fi scripts (`koreader.sh:266-282`).
     pub platform: Option<String>,
-    /// The saved warmth, 0 to 100, from the app's settings. A Kobo writes it to the
-    /// mixer at startup. KOReader does the same and does not read the mixer back
-    /// (`powerd.lua:186-191`). `None` leaves the mixer alone and reports warmth 0
-    /// until the app calls `set_warmth`. Not read from the process environment.
+    /// A warmth, 0 to 100, to write to the mixer when the frontlight opens. The app
+    /// passes `None`: it keeps the warmth Nickel left and reads it back from the
+    /// mixer, so `None` leaves the mixer alone. Not read from the process environment.
     pub saved_warmth: Option<u8>,
     /// `HOME`, for desktop paths.
     pub home: Option<PathBuf>,

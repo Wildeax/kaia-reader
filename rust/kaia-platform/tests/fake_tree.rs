@@ -19,6 +19,7 @@ use kaia_platform::{Env, Kind, Model, Paths, Platform};
 
 const BAT: &str = MONZA_BATTERY_DIR;
 const BRIGHTNESS: &str = "/sys/class/backlight/mxc_msp430.0/brightness";
+const ACTUAL: &str = "/sys/class/backlight/mxc_msp430.0/actual_brightness";
 const MIXER: &str = "/sys/class/backlight/lm3630a_led/color";
 
 fn battery_tree(status: &str, capacity: &str) -> tempfile::TempDir {
@@ -92,9 +93,9 @@ fn fast(mut cfg: FrontlightConfig) -> FrontlightConfig {
 }
 
 #[test]
-fn frontlight_reads_brightness_but_not_the_mixer_on_open() {
-    // The mixer file says 5, which would be warmth 50. KOReader does not read it back,
-    // and neither does Kaia: the saved warmth comes from the caller.
+fn frontlight_open_reads_the_level_and_warmth_back_and_writes_nothing() {
+    // Brightness 20 and mixer color 5. On the inverted Monza scale color 5 is
+    // native 5, which is warmth 50. Opening keeps both and writes neither file.
     let dir = frontlight_tree("20\n", "5\n");
     let fl = SysfsFrontlight::open(
         fast(FrontlightConfig::monza()),
@@ -104,8 +105,33 @@ fn frontlight_reads_brightness_but_not_the_mixer_on_open() {
     );
     assert!(fl.is_on());
     assert_eq!(fl.intensity(), 20);
-    assert_eq!(fl.warmth(), 0);
+    assert_eq!(fl.warmth(), 50);
+    assert!(fl.writer().writes.is_empty());
+    assert_eq!(get(dir.path(), BRIGHTNESS), "20\n");
     assert_eq!(get(dir.path(), MIXER), "5\n");
+}
+
+#[test]
+fn detect_kobo_keeps_the_hardware_light_and_writes_nothing() {
+    // Nickel left the light at 26 with brightness reading 0, and color 1.
+    let dir = frontlight_tree("0\n", "1\n");
+    put(dir.path(), ACTUAL, "26\n");
+    put(
+        dir.path(),
+        "/mnt/onboard/.kobo/version",
+        "N3-0-0,4.42.23303,x,y,z,w,v,320\n",
+    );
+    let env = Env {
+        product: Some("monza".to_string()),
+        ..Default::default()
+    };
+    let platform = Platform::detect_in(dir.path(), &env).unwrap();
+    assert_eq!(platform.frontlight.intensity(), 26);
+    assert_eq!(platform.frontlight.warmth(), 90);
+    assert!(platform.frontlight.is_on());
+    assert_eq!(get(dir.path(), BRIGHTNESS), "0\n");
+    assert_eq!(get(dir.path(), MIXER), "1\n");
+    assert_eq!(get(dir.path(), ACTUAL), "26\n");
 }
 
 #[test]

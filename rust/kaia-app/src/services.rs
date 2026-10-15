@@ -7,10 +7,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use kaia_display::PanelSpec;
-use kaia_events::Settings;
+use kaia_events::{Settings, Value};
 use kaia_gfx::PixelFormat;
 use kaia_i18n::{format as tr_format, tr};
 use kaia_library::{Library, LibraryError};
+use kaia_platform::frontlight::Frontlight;
 use kaia_platform::{Paths, Platform};
 use kaia_ui::assets::{AssetError, Assets, SharedAssets};
 use kaia_ui::theme::{Scale, LARGE_PRINT_SCALE};
@@ -145,12 +146,7 @@ impl Services {
                 &[name.as_str()],
             )
         }));
-        if let Some(intensity) = settings.read("display.frontlight").as_i64() {
-            let _ = platform.frontlight.set_intensity(intensity.clamp(0, 100) as u8);
-        }
-        if let Some(warmth) = settings.read("display.warmth").as_i64() {
-            let _ = platform.frontlight.set_warmth(warmth.clamp(0, 100) as u8);
-        }
+        start_light(platform.frontlight.as_mut(), &mut settings);
         // Older versions stored the sync password as typed. Keep only its user key, once.
         crate::sync::migrate_password_file(&mut settings, &settings_path).map_err(|source| {
             ServicesError::Io {
@@ -280,5 +276,123 @@ pub fn resources_dir(platform: &Platform) -> PathBuf {
         kaia_platform::platform::Kind::Desktop => {
             Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../resources")).to_path_buf()
         }
+    }
+}
+
+/// Sets the frontlight at startup. The hardware wins: the light keeps the level
+/// and warmth that Nickel or the last boot left, and nothing is written to the LED
+/// or the mixer. The values the hardware reports replace the stored ones, so the
+/// sliders and the settings show what the light does now. The stored values are
+/// applied only when the hardware cannot be read, as on the desktop.
+pub fn start_light(light: &mut dyn Frontlight, settings: &mut Settings) {
+    match light.hardware_levels() {
+        Some(hw) => {
+            settings.save("display.frontlight", Value::Number(f64::from(hw.intensity)));
+            if let Some(warmth) = hw.warmth {
+                settings.save("display.warmth", Value::Number(f64::from(warmth)));
+            }
+        }
+        None => {
+            if let Some(intensity) = settings.read("display.frontlight").as_i64() {
+                let _ = light.set_intensity(intensity.clamp(0, 100) as u8);
+            }
+            if let Some(warmth) = settings.read("display.warmth").as_i64() {
+                let _ = light.set_warmth(warmth.clamp(0, 100) as u8);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod startup_light_tests {
+    use super::*;
+    use kaia_platform::frontlight::{desktop_frontlight, FrontlightConfig, SysfsFrontlight};
+    use kaia_platform::sysfs::{Root, SystemIo};
+
+    const BRIGHTNESS: &str = "/sys/class/backlight/mxc_msp430.0/brightness";
+    const ACTUAL: &str = "/sys/class/backlight/mxc_msp430.0/actual_brightness";
+    const MIXER: &str = "/sys/class/backlight/lm3630a_led/color";
+
+    /// A Libra Colour light over a fake device tree on disk, opened as at startup.
+    /// `actual` is left out when `None`.
+    fn kobo_light(
+        brightness: &str,
+        actual: Option<&str>,
+        mixer: &str,
+    ) -> (tempfile::TempDir, Box<dyn Frontlight>) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = Root::new(dir.path());
+        for (path, text) in [
+            (BRIGHTNESS, Some(brightness)),
+            (ACTUAL, actual),
+            (MIXER, Some(mixer)),
+        ] {
+            if let Some(text) = text {
+                let full = dir.path().join(path.trim_start_matches('/'));
+                std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+                std::fs::write(full, text).unwrap();
+            }
+        }
+        let light = SysfsFrontlight::open(
+            FrontlightConfig::monza(),
+            SystemIo::new(root.clone()),
+            &root,
+            None,
+        );
+        (dir, Box::new(light))
+    }
+
+    fn file(dir: &tempfile::TempDir, device_path: &str) -> String {
+        std::fs::read_to_string(dir.path().join(device_path.trim_start_matches('/'))).unwrap()
+    }
+
+    #[test]
+    fn a_stored_zero_does_not_turn_off_a_light_that_is_on() {
+        // Nickel left the light at 26. The stored value from the last Kaia session is 0.
+        let (dir, mut light) = kobo_light("0\n", Some("26\n"), "1\n");
+        let mut settings = Settings::new();
+        settings.save("display.frontlight", Value::Number(0.0));
+        start_light(light.as_mut(), &mut settings);
+        assert!(light.is_on());
+        assert_eq!(light.intensity(), 26);
+        assert_eq!(settings.read("display.frontlight").as_i64(), Some(26));
+        assert_eq!(file(&dir, BRIGHTNESS), "0\n", "startup must not write the LED");
+    }
+
+    #[test]
+    fn without_a_stored_warmth_the_slider_shows_the_mixer_warmth() {
+        // Color 1 is warmth 90 on the inverted Libra Colour scale.
+        let (dir, mut light) = kobo_light("0\n", Some("26\n"), "1\n");
+        let mut settings = Settings::new();
+        start_light(light.as_mut(), &mut settings);
+        assert_eq!(light.warmth(), 90);
+        assert_eq!(settings.read("display.warmth").as_i64(), Some(90));
+        assert_eq!(file(&dir, MIXER), "1\n", "startup must not write the mixer");
+    }
+
+    #[test]
+    fn startup_writes_nothing_to_the_led_or_the_mixer_even_with_other_stored_values() {
+        let (dir, mut light) = kobo_light("0\n", Some("26\n"), "1\n");
+        let mut settings = Settings::new();
+        settings.save("display.frontlight", Value::Number(40.0));
+        settings.save("display.warmth", Value::Number(70.0));
+        start_light(light.as_mut(), &mut settings);
+        assert_eq!(light.intensity(), 26);
+        assert_eq!(light.warmth(), 90);
+        assert_eq!(file(&dir, BRIGHTNESS), "0\n");
+        assert_eq!(file(&dir, ACTUAL), "26\n");
+        assert_eq!(file(&dir, MIXER), "1\n");
+    }
+
+    #[test]
+    fn stored_values_apply_when_the_hardware_cannot_be_read() {
+        // The desktop light reports no hardware levels, so the stored values are applied.
+        let mut light: Box<dyn Frontlight> = Box::new(desktop_frontlight());
+        let mut settings = Settings::new();
+        settings.save("display.frontlight", Value::Number(40.0));
+        settings.save("display.warmth", Value::Number(55.0));
+        start_light(light.as_mut(), &mut settings);
+        assert_eq!(light.intensity(), 40);
+        assert_eq!(light.warmth(), 55);
     }
 }

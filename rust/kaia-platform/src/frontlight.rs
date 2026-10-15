@@ -24,6 +24,14 @@
 //! file. Unverified on hardware: whether ioctl 241 behaves the same on the
 //! Libra Colour's MTK kernel is a device check.
 //!
+//! # Reading the level
+//!
+//! On the Libra Colour, `brightness` reads 0 while the light is on. On firmware
+//! 4.42.23303 the light was at 26 with `brightness` at 0 and `actual_brightness`
+//! at 26 (read over SSH after Nickel set it). [`SysfsFrontlight::open`] reads
+//! `actual_brightness` in the same folder first, and reads `brightness` only
+//! when that file is missing or unreadable. Writes still go to `brightness`.
+//!
 //! # Ramps
 //!
 //! A toggle is a [`Ramp`]: a list of timed writes. Nothing here sleeps.
@@ -33,9 +41,13 @@
 //!
 //! # Warmth at startup
 //!
-//! KOReader does not read the mixer back. It keeps the saved warmth in
-//! memory and writes it at startup (`powerd.lua:186-191`). [`SysfsFrontlight::open`]
-//! takes the saved value from the caller and does the same.
+//! KOReader keeps the saved warmth in memory and writes it at startup
+//! (`powerd.lua:186-191`). Kaia does not write at startup. The hardware wins:
+//! [`SysfsFrontlight::open`] reads the level and the mixer back, and the caller
+//! takes them with [`Frontlight::hardware_levels`]. The light stays as Nickel left
+//! it. A saved warmth is written only when the caller passes one to `open`.
+//! The read-back warmth uses KOReader's inverse mapping (`powerd.lua:235-237`):
+//! mixer color 1 on the Libra Colour is warmth 90.
 
 use std::io;
 use std::time::Duration;
@@ -105,7 +117,8 @@ impl MixerNode {
 /// Paths and scales for one frontlight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontlightConfig {
-    /// White LED brightness file (`device.lua:547`).
+    /// White LED brightness file (`device.lua:547`). Writes go here. The level
+    /// is read from `actual_brightness` in the same folder when that file exists.
     pub intensity_path: String,
     /// Colour mixer file that warmth writes go to (`device.lua:548`).
     pub mixer_path: String,
@@ -257,10 +270,26 @@ impl Ramp {
     }
 }
 
+/// The level and warmth the hardware reported when the light opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HardwareLevels {
+    /// The white LED level, 0 to 100. 0 when the light is off.
+    pub intensity: u8,
+    /// The warmth from the colour mixer, 0 to 100. `None` when the mixer file
+    /// cannot be read.
+    pub warmth: Option<u8>,
+}
+
 /// Frontlight control in the Kaia shape.
 pub trait Frontlight {
     /// Whether the light is on.
     fn is_on(&self) -> bool;
+    /// The levels the hardware reported when the light opened. `None` when the LED
+    /// level could not be read, as on the desktop. The app starts from these values
+    /// and does not write them back.
+    fn hardware_levels(&self) -> Option<HardwareLevels> {
+        None
+    }
     /// Whether the current fade ends with the light on, or its state without a fade.
     fn target_is_on(&self) -> bool {
         self.is_on()
@@ -322,6 +351,8 @@ pub struct SysfsFrontlight<W: SysfsWriter> {
     /// Whether intensity goes through the `ntx_io` ioctl.
     use_ioctl: bool,
     warmth_revision: u64,
+    /// What the hardware reported in [`SysfsFrontlight::open`]. `None` when nothing was read.
+    opened: Option<HardwareLevels>,
 }
 
 impl<W: SysfsWriter> SysfsFrontlight<W> {
@@ -340,33 +371,38 @@ impl<W: SysfsWriter> SysfsFrontlight<W> {
             ramping: None,
             use_ioctl: false,
             warmth_revision: 0,
+            opened: None,
         }
     }
 
-    /// Reads the current brightness under `root`, probes the `ntx_io` node, and
-    /// writes `saved_warmth` to the mixer when given. A brightness file that
-    /// cannot be read counts as 0.
+    /// Reads the current level and the mixer under `root`, probes the `ntx_io`
+    /// node, and writes `saved_warmth` to the mixer when given.
     ///
-    /// The mixer is not read back. The caller holds the saved warmth, as
-    /// KOReader's settings do (`powerd.lua:186-191`, `setWarmth(self.fl_warmth, true)`).
-    /// With `None` the warmth reads 0 and the mixer is left alone until the
-    /// caller calls [`Frontlight::set_warmth`]. KOReader writes the saved value
-    /// only when the light is on at startup. Kaia writes it in both cases so the
-    /// mixer is right when the light comes on later. A failed write keeps the
-    /// value in memory.
+    /// The level comes from `actual_brightness` beside the brightness file, or
+    /// from the brightness file when that cannot be read. The warmth comes from
+    /// the mixer file, mapped back with KOReader's inverse (see [`warmth_from_mixer`]).
+    /// Both are kept as [`Frontlight::hardware_levels`]. A level that cannot be read
+    /// counts as 0 in the light state, and `hardware_levels` is `None`.
+    ///
+    /// Opening writes nothing unless `saved_warmth` is given. A light that is on stays
+    /// on, and the mixer keeps its value. Kaia's startup passes `None`. A passed
+    /// `saved_warmth` is written to the mixer. A failed write keeps the value in memory.
     ///
     /// With `cfg.select_mixer` set, the mixer is chosen first with
-    /// [`MixerNode::select`], so the warmth write goes to the node that exists.
+    /// [`MixerNode::select`], so the warmth read and write go to the node that exists.
     pub fn open(mut cfg: FrontlightConfig, writer: W, root: &Root, saved_warmth: Option<u8>) -> Self {
         if cfg.select_mixer {
             cfg.use_mixer(MixerNode::select(root));
         }
-        let hw = root
-            .read_int(&cfg.intensity_path)
-            .and_then(|v| u8::try_from(v).ok())
-            .map(|v| v.min(100))
-            .unwrap_or(0);
-        let mut light = Self::new(cfg, writer, hw, saved_warmth.unwrap_or(0));
+        let led = read_level(root, &actual_brightness_path(&cfg.intensity_path))
+            .or_else(|| read_level(root, &cfg.intensity_path));
+        let mixer = read_level(root, &cfg.mixer_path)
+            .map(|file| warmth_from_mixer(file, cfg.nl_max, cfg.nl_inverted));
+        let mut light = Self::new(cfg, writer, led.unwrap_or(0), saved_warmth.or(mixer).unwrap_or(0));
+        light.opened = led.map(|intensity| HardwareLevels {
+            intensity,
+            warmth: mixer,
+        });
         if let Some(path) = light.cfg.ntx_io_path.clone() {
             light.use_ioctl = light.writer.ntx_available(&path);
         }
@@ -431,15 +467,55 @@ impl<W: SysfsWriter> SysfsFrontlight<W> {
     }
 }
 
+/// The read-back file beside a brightness file: `actual_brightness` in the
+/// same folder. It holds the level the LED shows.
+fn actual_brightness_path(brightness_path: &str) -> String {
+    match brightness_path.rsplit_once('/') {
+        Some((dir, _)) => format!("{dir}/actual_brightness"),
+        None => "actual_brightness".to_string(),
+    }
+}
+
+/// A brightness value from a sysfs file, clamped to 0 to 100. `None` when the
+/// file is missing or does not start with a number.
+fn read_level(root: &Root, device_path: &str) -> Option<u8> {
+    root.read_int(device_path)
+        .and_then(|v| u8::try_from(v).ok())
+        .map(|v| v.min(100))
+}
+
 /// Maps a 0 to 100 warmth to the native scale, rounding half up. `powerd.lua:231-233`.
 fn warmth_to_native(warmth: u8, nl_max: u8) -> u8 {
     let native = (u32::from(warmth) * u32::from(nl_max) + 50) / 100;
     native.min(u32::from(nl_max)) as u8
 }
 
+/// The warmth 0 to 100 that a mixer file value means. The inverse of
+/// [`SysfsFrontlight::set_warmth`]: an inverted mixer holds `nl_max - native`, and
+/// the native value scales back with `round(native * 100 / nl_max)`, half up
+/// (`powerd.lua:235-237`, `sysfs_light.lua:79-86`). On the Libra Colour (`nl_max`
+/// 10, inverted), color 1 is native 9 and warmth 90.
+pub fn warmth_from_mixer(file: u8, nl_max: u8, inverted: bool) -> u8 {
+    if nl_max == 0 {
+        return 0;
+    }
+    let nl_max = u32::from(nl_max);
+    let native = if inverted {
+        nl_max.saturating_sub(u32::from(file))
+    } else {
+        u32::from(file).min(nl_max)
+    };
+    let warmth = (2 * native * 100 + nl_max) / (2 * nl_max);
+    warmth.min(100) as u8
+}
+
 impl<W: SysfsWriter> Frontlight for SysfsFrontlight<W> {
     fn is_on(&self) -> bool {
         self.on
+    }
+
+    fn hardware_levels(&self) -> Option<HardwareLevels> {
+        self.opened
     }
 
     fn target_is_on(&self) -> bool {
@@ -662,12 +738,61 @@ mod tests {
     }
 
     #[test]
-    fn open_does_not_read_warmth_back_from_the_mixer() {
-        // The mixer file says 9. With no saved value, warmth stays 0 and nothing is written.
+    fn open_reads_the_warmth_back_from_the_mixer_and_writes_nothing() {
+        // The mixer file says 9, which is native 1 on the inverted scale: warmth 10.
         let fl = open(Rec::default(), "20\n", None);
-        assert_eq!(fl.warmth(), 0);
+        assert_eq!(fl.warmth(), 10);
         assert!(fl.writer().writes.is_empty());
         assert_eq!(fl.intensity(), 20);
+    }
+
+    #[test]
+    fn hardware_levels_are_what_open_read() {
+        let fl = open(Rec::default(), "20\n", None);
+        assert_eq!(
+            fl.hardware_levels(),
+            Some(HardwareLevels {
+                intensity: 20,
+                warmth: Some(10),
+            })
+        );
+    }
+
+    #[test]
+    fn hardware_levels_are_none_when_the_led_cannot_be_read() {
+        let dir = tree("20\n", "9\n");
+        std::fs::remove_file(dir.path().join(BRIGHTNESS.trim_start_matches('/'))).unwrap();
+        let fl = SysfsFrontlight::open(
+            FrontlightConfig::monza(),
+            Rec::default(),
+            &Root::new(dir.path()),
+            None,
+        );
+        assert_eq!(fl.hardware_levels(), None);
+        assert_eq!(fl.intensity(), 0);
+    }
+
+    #[test]
+    fn desktop_has_no_hardware_levels() {
+        assert_eq!(desktop_frontlight().hardware_levels(), None);
+    }
+
+    #[test]
+    fn mixer_color_1_reads_as_warmth_90_on_the_libra_colour() {
+        // Monza: nl_max 10, inverted. Native 9 is written as 1, and reads back as 90.
+        assert_eq!(warmth_from_mixer(1, 10, true), 90);
+        assert_eq!(warmth_from_mixer(9, 10, true), 10);
+        assert_eq!(warmth_from_mixer(0, 10, true), 100);
+        assert_eq!(warmth_from_mixer(10, 10, true), 0);
+    }
+
+    #[test]
+    fn mixer_read_back_inverts_the_write_mapping() {
+        for warmth in (0..=100).step_by(10) {
+            let native = warmth_to_native(warmth, 10);
+            let file = 10 - native;
+            assert_eq!(warmth_from_mixer(file, 10, true), warmth, "warmth {warmth}");
+        }
     }
 
     #[test]

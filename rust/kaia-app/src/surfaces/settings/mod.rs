@@ -31,7 +31,7 @@ use kaia_ui::{Theme, WidgetPod, Window};
 
 use crate::services::Services;
 use crate::surface::{Nav, Outcome, Surface, SurfaceEnv};
-use crate::surfaces::common::{body, button, page, root_window as window, title};
+use crate::surfaces::common::{body, button, fill, page, root_window as window, title};
 use crate::surfaces::Route;
 use commands::{Command, SECTIONS};
 use section::SettingsSectionSurface;
@@ -278,6 +278,8 @@ fn root_window(services: &Services, screen: Size, root: &SettingsRoot) -> Window
                 services,
                 tr_format(&tr("No setting matches \u{201c}%1\u{201d}."), &[&root.query]),
             ));
+            // No list to fill the page. The space keeps the nav bar at the bottom.
+            children.push(fill());
         } else {
             let items: Vec<RootItem> = hits
                 .into_iter()
